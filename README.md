@@ -375,12 +375,26 @@ BACKEND=nextpnr  STAGES=48 WCT=48 scripts/remote_build.sh   # openXC7 (yosys+nex
 BACKEND=f4pga    STAGES=48 WCT=48 scripts/remote_build.sh   # F4PGA/VPR (default; soft mult, no DSP/MMCM)
 ```
 - **`vivado`** (`scripts/vmbuild_vivado.sh` + `rtl/build_vivado.tcl`) infers **26 DSP48E1 + 32 RAMB36E1** (~50% LUTs),
-  critical path ~19.5 ns → the committed RTL runs **÷3 / 32 kHz**. Needs Vivado under `/opt/Xilinx`.
+  critical path ~18.5 ns → the committed RTL runs **÷3 / 32 kHz**. Needs Vivado under `/opt/Xilinx`.
 - **`nextpnr`** (`scripts/vmbuild_nextpnr.sh`, `rtl/basys3_nextpnr.xdc`, `regymm/openxc7` image) is
   fully open, infers BRAM, prints a real Fmax — but can't route the DSP `CARRYCASCIN` pin.
 - **`f4pga`**/`nextpnr` (soft multipliers, ~40 ns) require the **÷4 / 28 kHz** variant (revert the
   `top.v` clock-enable + `synth.x` `BASE_INC` to the 28 kHz values); the committed defaults target
   the DSP (Vivado) backend.
+
+**Committed Vivado build — resource utilization** (`xc7a35t`, from `report_utilization`, pulled back as `build/util.rpt`):
+
+| Resource | Used | Fabric | % | Note |
+|---|---:|---:|---:|---|
+| Slice LUTs | **10,483** | 20,800 | **50.4%** | ROMs/muxes inferred into BRAM |
+| Slice Registers | 17,445 | 41,600 | 41.9% | headroom |
+| F7 / F8 muxes | 297 / 18 | — | ~2% | vs **6,685 MUXF6** on F4PGA — mux trees collapsed |
+| **Block RAM** | **32× RAMB36 + 1× RAMB18** | 50 | **65%** | binding resource (the 16K×16 effects/reverb buffers) |
+| DSP48E1 | **26** | 90 | 28.9% | every `×` inferred off the fabric |
+| Engine critical path | **~18.5 ns** | — | — | runs ÷3 (30 ns budget) → true **32 kHz** |
+
+On F4PGA (soft multipliers, no BRAM/DSP inference) the same design is instead **slice-bound (~90%)** —
+see [FPGA resource usage](DEVELOPMENT.md#fpga-resource-usage-f4pga-vs-vivado).
 
 **One-time VM setup** (set your VM name/zone/project via the `GCE_VM` / `GCE_ZONE` /
 `GCE_PROJECT` env vars, or edit the defaults near the top of `remote_build.sh`):
