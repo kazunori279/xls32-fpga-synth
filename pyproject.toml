@@ -1,0 +1,36 @@
+[project]
+name = "xls-synth"
+version = "0.1.0"
+description = "Verify the Basys 3 XLS synthesizer over USB"
+requires-python = ">=3.10"
+# Core verify/analysis is stdlib-only (termios); analysis uses math/statistics.
+# RUNTIME (run/demo the synth: web UI server, host tools, tests). Everything here has wheels on
+# common platforms so `uv sync` works on any Mac. The heavy preset-generation tools live in the
+# optional [presetgen] extra below (dawdreamer etc. lack wheels on some platforms and aren't
+# needed to run the synth) -> install those only for dev work with `uv sync --extra presetgen`.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "numpy>=2.0.2",
+    "sounddevice>=0.5.5",       # LOCAL play: host audio out (ships prebuilt wheels — no compiler)
+    "mido>=1.3.3",              # MIDI message helpers
+    "midigen-lib>=1.1.0",       # /api/demo procedural composer
+    "soundfile>=0.13.1",        # capture/record WAVs
+    "pillow>=11.3.0",           # test-suite caption cards
+]
+
+[project.optional-dependencies]
+# LOCAL-mode host MIDI input. python-rtmidi builds from C++ source, which some locked-down
+# machines block (e.g. Santa on corp Macs). It's NOT needed for WEB mode or LOCAL audio-out —
+# only for reading a MIDI keyboard plugged into the host. Install where a compiler is allowed:
+#   uv sync --extra localmidi
+localmidi = ["python-rtmidi>=1.5.8"]
+# Preset generation / search / optimization (presetgen/). Not needed to run or demo the synth.
+presetgen = [
+    "dawdreamer>=0.8.3",
+    "pedalboard>=0.9.19",
+    "pyfluidsynth>=1.3.6",
+    "numba>=0.60.0",
+    "cma>=4.4.4",
+    "scipy>=1.13.1",
+]

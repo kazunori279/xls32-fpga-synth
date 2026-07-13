@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XLS32 — FPGA Synthesizer</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css?v70-label">
+</head>
+<body>
+<div id="synth">
+  <div class="cheek left"></div>
+  <div class="body">
+
+    <header class="brand">
+      <div class="logo">
+        <span class="mark">XLS32</span>
+        <span class="sub">POLYPHONIC · FPGA SYNTHESIZER <span class="ver" id="ver"></span></span>
+      </div>
+      <div class="head-right">
+        <div class="status" id="status"><span class="dot" id="dot"></span><span id="statustext">off</span></div>
+        <select id="audioout" class="audioout" title="LOCAL play: host audio output device"></select>
+        <button id="playmode" class="power" title="WEB: audio streams to this browser · LOCAL: server plays audio + reads a MIDI keyboard on the host machine (lower latency)">🔊 WEB</button>
+        <div id="mvol" class="mvol" title="Master output volume (final mix)"><div class="knob" id="mvolknob"></div><div class="mvollabel">VOL</div></div>
+        <button id="power" class="power">POWER</button>
+      </div>
+    </header>
+
+    <div class="topbar">
+    <section class="presets">
+      <div class="pbar">
+        <div class="plabel">PATCH</div>
+        <button id="prev" class="pstep" title="previous">‹</button>
+        <button id="browse" class="pcur">
+          <span class="pcur-cat" id="curcat">Lead</span>
+          <span class="pcur-name" id="curname">Super Saw</span>
+        </button>
+        <button id="next" class="pstep" title="next">›</button>
+      </div>
+      <div class="pactions">
+        <button id="demo" class="pbtn ghost">▶ DEMO</button>
+        <button id="save" class="pbtn ghost">SAVE ▸ USER</button>
+        <button id="init" class="pbtn ghost">INIT</button>
+      </div>
+    </section>
+    <section class="partbar">
+      <div class="plabel">PART</div>
+      <div id="parts" class="parts"></div>
+    </section>
+    </div>
+
+    <div id="demobox" class="browser hidden">
+      <div class="bwin">
+        <div class="bhead">
+          <div class="dtitle">DEMO SONGS<span class="dhint"> — play, tweak each PART's tone, then save</span></div>
+          <button id="demosave" class="pbtn ghost" title="save the 4 parts' current tones to the playing song">💾 TONES</button>
+          <button id="demostop" class="pbtn ghost">■ STOP</button>
+          <button id="democlose" class="bclose" title="close">✕</button>
+        </div>
+        <div class="bbody"><div id="demolist" class="blist"></div></div>
+      </div>
+    </div>
+
+    <div id="browser" class="browser hidden">
+      <div class="bwin">
+        <div class="bhead">
+          <div class="btabs" id="btabs"></div>
+          <input id="bsearch" class="bsearch" type="search" placeholder="search…" autocomplete="off">
+          <button id="bclose" class="bclose" title="close">✕</button>
+        </div>
+        <div class="bbody">
+          <div id="bcats" class="bcats"></div>
+          <div id="blist" class="blist"></div>
+        </div>
+      </div>
+    </div>
+
+    <main id="panel" class="panel"></main>
+
+    <section class="keyzone">
+      <div class="wheels">
+        <div class="wheel-wrap"><div class="wheel" id="pitchwheel"><div class="wnub"></div></div><span>PITCH</span></div>
+        <div class="wheel-wrap"><div class="wheel" id="modwheel"><div class="wnub"></div></div><span>MOD</span></div>
+      </div>
+      <div class="keyboard" id="keyboard"></div>
+    </section>
+
+    <footer class="foot">
+      <span>MIDI: on-screen · computer keys (A–L, W E T Y U) · Z/X octave &nbsp;·&nbsp; Parts: click = edit + play (layer) · double-click = disable</span>
+      <span id="octlabel">oct 4</span>
+      <span id="dbg"></span>
+    </footer>
+
+  </div>
+  <div class="cheek right"></div>
+</div>
+<script src="app.js?v70-label"></script>
+</body>
+</html>

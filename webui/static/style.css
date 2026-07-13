@@ -1,0 +1,211 @@
+:root{
+  --wood1:#6b3f22; --wood2:#3d2412; --panel:#d9cdb8; --panel2:#cabda5;
+  --ink:#1c1a17; --cream:#efe7d6;
+  --accent:#b6301f; --accent2:#c9a24b; --led:#ff5a3c; --ledoff:#5b2018;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:#15130f radial-gradient(circle at 50% -10%,#2a2620,#100e0b 70%);
+  font-family:"Helvetica Neue",Arial,sans-serif;color:#1c1a17;
+  display:flex;align-items:flex-start;justify-content:center;padding:24px;min-height:100%;
+}
+#synth{display:flex;box-shadow:0 24px 60px rgba(0,0,0,.6);border-radius:8px;max-width:1180px;width:100%}
+/* iOS/iPadOS: stop tap-to-select highlight, long-press callout, tap flash on the instrument */
+#synth,#synth *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent}
+#synth input{-webkit-user-select:text;user-select:text}   /* keep the search box editable */
+.wkey,.bkey{touch-action:none}                            /* keys: no selection/scroll gesture */
+.cheek{width:34px;background:linear-gradient(90deg,#7a4a29,#4a2c16);border-radius:8px 0 0 8px;
+  box-shadow:inset -6px 0 12px rgba(0,0,0,.5)}
+.cheek.right{border-radius:0 8px 8px 0;background:linear-gradient(90deg,#4a2c16,#7a4a29);
+  box-shadow:inset 6px 0 12px rgba(0,0,0,.5)}
+.body{flex:1;background:linear-gradient(#ded2bd,#cfc2a9);padding:16px 22px 22px}
+
+/* header / brand */
+.brand{display:flex;justify-content:space-between;align-items:flex-end;
+  border-bottom:2px solid rgba(0,0,0,.25);padding-bottom:10px;margin-bottom:12px}
+.logo .mark{font-weight:800;font-size:30px;letter-spacing:2px;color:#1c1a17;
+  text-shadow:0 1px 0 #f3ecdd}
+.logo .sub{display:block;font-size:10px;letter-spacing:4px;color:#6d6455;margin-top:2px}
+.ver{letter-spacing:0;color:#b6301f;font-weight:700}
+.head-right{display:flex;align-items:center;gap:14px}
+.status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:1px;color:#5f5647;text-transform:uppercase}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--ledoff);box-shadow:inset 0 0 3px #000}
+.dot.on{background:var(--led);box-shadow:0 0 8px var(--led),inset 0 0 3px #a00}
+.power{font-weight:700;letter-spacing:2px;font-size:12px;padding:9px 16px;border-radius:5px;cursor:pointer;
+  background:linear-gradient(#3a3630,#211e19);color:#e9dcc2;border:1px solid #000;box-shadow:0 2px 0 #000}
+.power.on{background:linear-gradient(#8a2418,#5c130b);color:#ffd;box-shadow:0 0 10px rgba(255,80,50,.5)}
+/* uniform height for every top-bar button/control */
+.power,.pbtn,.pstep,.partchip,.pcur,.audioout{height:36px;box-sizing:border-box}
+.power,.pbtn,.pstep{display:inline-flex;align-items:center;justify-content:center}
+.pcur{display:inline-flex;flex-direction:column;justify-content:center}
+.power.local{background:linear-gradient(#1c5a3a,#0e3221);color:#dfffe9;box-shadow:0 0 10px rgba(60,220,130,.45)}
+#playmode{margin-right:8px}
+.audioout{margin-right:8px;background:linear-gradient(#3a3630,#211e19);color:#e9dcc2;border:1px solid #000;
+  border-radius:5px;font-size:11px;line-height:1;padding:0 8px;max-width:160px;cursor:pointer;
+  appearance:none;-webkit-appearance:none;vertical-align:middle;box-shadow:0 2px 0 #000}   /* match the buttons' raised lip */
+.mvol{display:flex;flex-direction:row;align-items:center;gap:6px;height:36px}
+.mvol .knob{width:28px;height:28px}
+.mvollabel{font-size:9px;letter-spacing:.5px;color:#b8ac95;font-weight:700}
+
+/* presets */
+.topbar{display:flex;align-items:stretch;gap:14px;margin-bottom:14px}
+.presets{display:flex;justify-content:flex-start;align-items:center;gap:16px;flex:0 0 auto;
+  background:linear-gradient(#2b2721,#1c1915);border-radius:6px;padding:10px 14px}
+.plabel{font-size:9px;letter-spacing:3px;color:#9b8f76;margin-bottom:6px}
+.prow{display:flex;gap:7px;margin-bottom:6px}
+.pbtn,.seg,.slot{font-family:inherit}
+.slot{min-width:104px;text-align:left;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:11px;
+  background:linear-gradient(#efe7d6,#d7cbb3);border:1px solid #000;color:#241f18;
+  display:flex;flex-direction:column;gap:1px}
+.slot .n{font-size:8px;letter-spacing:1px;color:#8a7f68}
+.slot .t{font-weight:700;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.slot.active{background:linear-gradient(#e8b24a,#c98a1f);box-shadow:0 0 10px rgba(230,170,60,.6)}
+.slot.empty .t{color:#a89b83;font-style:italic;font-weight:500}
+.pactions{display:flex;flex-direction:row;gap:8px}   /* horizontal -> one-row patch panel (shorter) */
+.pbtn{padding:8px 12px;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;font-weight:700;
+  background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000}
+.pbtn.ghost:hover{background:linear-gradient(#5b5548,#332f28)}
+
+/* preset bar */
+.pbar{display:flex;align-items:center;gap:8px}
+.pstep{width:26px;height:36px;border-radius:4px;cursor:pointer;font-size:16px;font-weight:700;
+  background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000;font-family:inherit}
+.pstep:hover{background:linear-gradient(#5b5548,#332f28)}
+.pcur{min-width:230px;text-align:left;padding:6px 12px;border-radius:4px;cursor:pointer;
+  background:linear-gradient(#efe7d6,#d7cbb3);border:1px solid #000;color:#241f18;
+  display:flex;flex-direction:column;gap:1px;font-family:inherit}
+.pcur:hover{background:linear-gradient(#f5eede,#e0d5be)}
+.pcur-cat{font-size:8px;letter-spacing:2px;color:#8a7f68;text-transform:uppercase}
+.pcur-name{font-weight:700;letter-spacing:.3px;font-size:13px}
+
+/* preset browser overlay */
+.browser{position:fixed;inset:0;background:rgba(10,8,6,.6);display:flex;align-items:center;
+  justify-content:center;z-index:50}
+.browser.hidden{display:none}
+.bwin{width:min(760px,92vw);height:min(70vh,560px);display:flex;flex-direction:column;
+  background:linear-gradient(#efe7d6,#ddd0b6);border:1px solid #000;border-radius:8px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+.bhead{display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:linear-gradient(#2b2721,#1c1915)}
+.dtitle{flex:1;font-size:11px;font-weight:700;letter-spacing:.5px;color:#e9e3d6}
+.dhint{font-weight:400;color:#8a8272}
+.bitem.demoitem{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drep{background:#2a2620;border:1px solid #4a453a;color:#c9b98a;border-radius:4px;cursor:pointer;
+  font-size:12px;padding:1px 7px;flex:none}
+.drep:hover{background:#3a352c;color:#fff}
+.btabs{display:flex;gap:6px}
+.btab{padding:6px 14px;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;
+  font-weight:700;font-family:inherit;background:linear-gradient(#4a453c,#2a2620);
+  color:#c9bda3;border:1px solid #000}
+.btab.on{background:linear-gradient(#e8b24a,#c98a1f);color:#241109}
+/* multitimbral part selector */
+.partbar{display:flex;align-items:center;gap:12px;padding:10px 14px;flex:1 1 auto;
+  background:linear-gradient(#2b2721,#1c1915);border-radius:6px}   /* to the right of the patch panel */
+.parts{display:flex;gap:6px}
+/* each part = one chip. click = edit + play, double-click = disable. led shows play state. */
+.partchip{display:inline-flex;align-items:center;gap:7px;height:36px;box-sizing:border-box;
+  padding:0 13px 0 9px;border-radius:5px;border:1px solid #000;cursor:pointer;font:inherit;
+  background:linear-gradient(#4a453c,#2a2620)}
+.partchip.editing{background:linear-gradient(#e8b24a,#c98a1f)}
+.partled{width:12px;height:12px;border-radius:50%;border:1px solid #000;
+  background:radial-gradient(circle at 40% 35%,#3a352d,#141210);box-shadow:inset 0 0 2px #000}
+.partled.on{background:radial-gradient(circle at 40% 35%,#7fe6a0,#1c9b52);box-shadow:0 0 6px rgba(70,220,130,.8),inset 0 0 2px #063}
+.partname{font-size:10px;letter-spacing:1px;font-weight:700;color:#c9bda3;white-space:nowrap}
+.partchip.editing .partname{color:#241109}
+.bsearch{flex:1;min-width:0;padding:7px 10px;border-radius:4px;border:1px solid #000;
+  font-family:inherit;font-size:12px;background:#f5efe1;color:#241f18}
+.bclose{width:30px;height:30px;border-radius:4px;cursor:pointer;font-size:14px;font-weight:700;
+  background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000;font-family:inherit}
+.bbody{flex:1;display:flex;min-height:0}
+.bcats{width:150px;overflow-y:auto;border-right:1px solid rgba(0,0,0,.2);padding:6px;flex:none}
+.bcat{padding:8px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;
+  letter-spacing:.5px;color:#3a3226}
+.bcat:hover{background:rgba(0,0,0,.06)}
+.bcat.on{background:linear-gradient(#e8b24a,#c98a1f);color:#241109}
+.blist{flex:1;overflow-y:auto;padding:6px;display:grid;grid-template-columns:1fr 1fr;
+  gap:5px;align-content:start;grid-auto-rows:minmax(2.2em,auto)}  /* floor row height: else a
+  long (128-item) list overflows and the auto rows collapse to ~16px, clipping the text */
+.bitem{padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;
+  background:linear-gradient(#f3ecdb,#e2d7be);border:1px solid rgba(0,0,0,.25);color:#241f18;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bitem:hover{background:linear-gradient(#f8f2e3,#e8ddc6)}
+.bitem.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10}
+.bitem.empty{color:#a89b83;font-style:italic}
+
+/* panel grid */
+.panel{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+.sec{background:linear-gradient(#e4dac6,#d3c6ad);border:1px solid rgba(0,0,0,.18);
+  border-radius:6px;padding:8px 10px 12px;box-shadow:inset 0 1px 0 #f3ecdd,0 1px 2px rgba(0,0,0,.15)}
+.sec h3{margin:0 0 10px;font-size:10px;letter-spacing:3px;color:#efe7d6;text-transform:uppercase;
+  background:#211e19;border-radius:3px;padding:4px 8px;text-align:center}
+/* two compact rows: [Osc | Filter | Envelopes] then [LFO | Unison | Cross-Mod | Effects] */
+.sec-oscillators{grid-column:span 4}
+.sec-filter{grid-column:span 3}
+.sec-envelopes{grid-column:span 5}
+.sec-lfo{grid-column:span 2}          /* narrow -> Rate/Depth on row 1, Tremolo wraps to row 2 */
+.sec-unison{grid-column:span 2}
+.sec-cross-mod{grid-column:span 3}
+.sec-effects{grid-column:span 5}
+.ctrls{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-around}
+.rowbreak{flex-basis:100%;width:100%;height:0}   /* forces the next control onto a new row */
+/* merged Filter-env + Amp-env: fixed 5 columns -> filter row on top, amp row below */
+.sec-envelopes .ctrls{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center;row-gap:14px}
+/* column grids: shared tracks make row 2 line up under row 1 (auto tracks -> no overflow in
+   the narrow panels; space-around keeps the spread-out look) */
+.sec-lfo .ctrls,.sec-cross-mod .ctrls{
+  display:grid;grid-template-columns:repeat(2,auto);justify-content:space-around;justify-items:center;row-gap:14px;column-gap:12px}
+.sec-unison .ctrls{                       /* single column: Voices on row 1, Glide on row 2 */
+  display:grid;grid-template-columns:auto;grid-template-rows:78px auto;align-items:start;
+  justify-content:space-around;justify-items:center;row-gap:14px}   /* row1=78px (knob-row height) so Glide aligns with other panels' 2nd rows */
+.sec-cross-mod .sel-xratio{grid-column:1/-1;justify-self:center}   /* X-Ratio spans + centers on its row */
+.sec-effects .ctrls{
+  display:grid;grid-template-columns:repeat(3,auto);justify-content:space-around;justify-items:center;row-gap:14px;column-gap:12px}
+
+/* knob */
+.ctl{display:flex;flex-direction:column;align-items:center;gap:5px;width:60px}
+.knob{width:46px;height:46px;border-radius:50%;position:relative;cursor:ns-resize;touch-action:none;
+  background:radial-gradient(circle at 38% 32%,#4a453d,#141210 70%);
+  border:2px solid #0b0a08;box-shadow:0 2px 4px rgba(0,0,0,.5),inset 0 1px 1px rgba(255,255,255,.15)}
+.knob::after{content:"";position:absolute;left:50%;top:5px;width:2px;height:15px;margin-left:-1px;
+  background:#efe7d6;border-radius:1px;transform-origin:50% 18px}
+.knob .ring{position:absolute;inset:-6px;border-radius:50%}
+.clabel{font-size:9px;letter-spacing:.5px;color:#332f27;text-transform:uppercase;text-align:center;font-weight:600}
+.ctl.global .clabel,.sel.global .clabel{color:#332f27}   /* effects labels: same black as other panels */
+.cval{font-size:9px;color:#7a7062;font-variant-numeric:tabular-nums;height:11px}
+
+/* select (rotary switch look) */
+.sel{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:70px}
+/* buttons laid out as a grid so siblings share one fixed width (set per-group in equalizeSegs) */
+.segs{display:grid;gap:3px;justify-content:center}
+.seg{padding:4px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.4px;cursor:pointer;
+  background:linear-gradient(#efe7d6,#cdbfa6);border:1px solid #0b0a08;color:#3a342a;
+  text-align:center;white-space:nowrap;box-sizing:border-box}
+.seg.on{background:linear-gradient(#c9302a,#8f1c16);color:#ffe;box-shadow:0 0 6px rgba(200,50,40,.6)}
+
+/* keyboard + wheels */
+.keyzone{display:flex;gap:14px;margin-top:16px;align-items:flex-end;
+  background:#1c1915;border-radius:6px;padding:12px}
+.wheels{display:flex;gap:10px}
+.wheel-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+.wheel-wrap span{font-size:8px;letter-spacing:1px;color:#9b8f76}
+.wheel{width:24px;height:96px;border-radius:12px;background:linear-gradient(#2a2620,#0e0c0a);
+  border:1px solid #000;position:relative;cursor:ns-resize;touch-action:none;box-shadow:inset 0 0 6px #000}
+.wnub{position:absolute;left:2px;right:2px;height:14px;border-radius:6px;top:41px;
+  background:linear-gradient(#c9b78e,#8a7a55);box-shadow:0 1px 2px #000}
+.keyboard{position:relative;flex:1;height:120px;display:flex;user-select:none}
+.wkey{flex:1;background:linear-gradient(#fff,#e9e3d6);border:1px solid #3a352c;border-radius:0 0 4px 4px;
+  position:relative;cursor:pointer}
+.wkey.down{background:linear-gradient(#e8b24a,#d69a2c)}
+.bkey{position:absolute;top:0;width:calc(100%/14*0.62);height:62%;background:linear-gradient(#2a2620,#000);
+  border:1px solid #000;border-radius:0 0 3px 3px;z-index:2;cursor:pointer}
+.bkey.down{background:linear-gradient(#b6301f,#7c1a12)}
+
+.foot{display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#6d6455;letter-spacing:.5px}
+
+@media (max-width:900px){
+  .panel{grid-template-columns:repeat(6,1fr)}
+  .sec[class*="sec-"]{grid-column:span 6}
+}
