@@ -1,20 +1,37 @@
-build/
-.venv/
+# --- OS / editor ---
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# --- Python ---
 __pycache__/
-test/out/
-webui/certs/
-*.ir
-*.opt.ir
-*.vvp
-*.wav
-*.mp4
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+.env
+
+# --- build / generated RTL ---
+build/
 engine.v
 engine.ir
 engine.opt.ir
+*.ir
+*.opt.ir
+*.vvp
+
+# --- captures / media (regenerated) ---
+media/
+test/out/
+*.wav
+*.mp4
+
+# --- local secrets / certs / large corpora (never commit) ---
+webui/certs/
 presetgen/.freesound_token
+presetgen/.freesound_account
 presetgen/targets_freesound/
+presetgen/targets_soundfont/
 presetgen/demo_out/
 presetgen/__pycache__/
-presetgen/.freesound_account
-media/
-presetgen/targets_soundfont/

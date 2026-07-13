@@ -2,6 +2,7 @@
 name = "xls-synth"
 version = "0.1.0"
 description = "Verify the Basys 3 XLS synthesizer over USB"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 # Core verify/analysis is stdlib-only (termios); analysis uses math/statistics.
 # RUNTIME (run/demo the synth: web UI server, host tools, tests). Everything here has wheels on
