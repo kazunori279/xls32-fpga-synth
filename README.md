@@ -73,7 +73,7 @@ history and the hard-won toolchain frictions behind it live in the companion
 | **HDL** | Google XLS (DSLX) → Verilog, plus a thin Verilog shell (UART + effects) |
 | **Target** | Basys 3 — Xilinx Artix-7 `xc7a35t`, single 100 MHz clock |
 | **Toolchain** | F4PGA (VPR) · openXC7 (nextpnr-xilinx) · Vivado — all scriptable |
-| **FPGA resources** | 18× DSP48E1 + 16× RAMB36E1 (Vivado backend) |
+| **FPGA resources** | Vivado (`xc7a35t`): ~50% LUTs · 26× DSP48E1 · 32× RAMB36E1 · ~42% FF |
 | **Verification** | 130+ scored end-to-end cases over USB (FFT / spectrogram) |
 
 ## The technologies
@@ -374,7 +374,7 @@ BACKEND=vivado   STAGES=48 WCT=48 scripts/remote_build.sh   # Vivado ML Standard
 BACKEND=nextpnr  STAGES=48 WCT=48 scripts/remote_build.sh   # openXC7 (yosys+nextpnr-xilinx): open, BRAM, no DSP
 BACKEND=f4pga    STAGES=48 WCT=48 scripts/remote_build.sh   # F4PGA/VPR (default; soft mult, no DSP/MMCM)
 ```
-- **`vivado`** (`scripts/vmbuild_vivado.sh` + `rtl/build_vivado.tcl`) infers **18 DSP48E1 + 16 RAMB36E1**,
+- **`vivado`** (`scripts/vmbuild_vivado.sh` + `rtl/build_vivado.tcl`) infers **26 DSP48E1 + 32 RAMB36E1** (~50% LUTs),
   critical path ~19.5 ns → the committed RTL runs **÷3 / 32 kHz**. Needs Vivado under `/opt/Xilinx`.
 - **`nextpnr`** (`scripts/vmbuild_nextpnr.sh`, `rtl/basys3_nextpnr.xdc`, `regymm/openxc7` image) is
   fully open, infers BRAM, prints a real Fmax — but can't route the DSP `CARRYCASCIN` pin.

@@ -26,6 +26,8 @@ SECONDS=0
 vivado -mode batch -notrace -source build_vivado.tcl -log vivado.log -journal vivado.jou
 echo "== build wall: ${SECONDS}s =="
 cp $W/top.bit ~/build/top.bit
+cp $W/util.rpt ~/build/util.rpt 2>/dev/null || true          # full utilization report (pulled back)
+cp $W/timing.rpt ~/build/timing.rpt 2>/dev/null || true      # full timing summary (pulled back)
 echo "== utilisation (DSP/BRAM/slice) ==" | tee ~/build/timing.txt
 grep -iE "DSP48|Block RAM|RAMB|Slice LUTs|Slice Registers|CLB LUTs|CARRY" $W/util.rpt 2>/dev/null | head -30 | tee -a ~/build/timing.txt
 echo "== timing (critical path) ==" | tee -a ~/build/timing.txt

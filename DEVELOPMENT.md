@@ -29,7 +29,7 @@ milestone, and the hard-won friction logs & learnings from the XLS / F4PGA / Bas
   - [M7 + M8 — hardware I/O (DIN MIDI + I2S DAC)](#milestone-7--8--hardware-io-din-midi-in--i2s-dac-out-built-hardware-pending)
 - [Friction logs & learnings](#friction-logs--learnings)
   - [Integrating Basys 3 + F4PGA + XLS](#integrating-basys-3--f4pga--xls-the-frictions)
-  - [FPGA resource usage](#fpga-resource-usage--logic-is-the-ceiling-not-ffbram)
+  - [FPGA resource usage](#fpga-resource-usage-f4pga-vs-vivado)
   - [Backends for DSP48/BRAM (openXC7 vs Vivado)](#backends-for-dsp48bram-openxc7-nextpnr-vs-vivado--the-migration-learnings)
   - [Unlocking DSP48 & MMCM/PLL](#unlocking-dsp48--mmcmpll-backend-upgrade-path)
   - [XLS / DSLX](#xls--dslx)
@@ -909,10 +909,12 @@ Three tools that don't know about each other, stacked: **XLS** (HLS, DSLX → Ve
   (openFPGALoader) and **channel B = UART** (`/dev/cu.usbserial-…1`) — MIDI in + audio out
   run full-duplex on that one UART. `openFPGALoader` is native arm64 (no emulation).
 
-## FPGA resource usage — logic is the ceiling, not FF/BRAM
+## FPGA resource usage (F4PGA vs Vivado)
 
-Measured from the VPR pack/place report for the current 4-part + MIDI/I2S bitstream (`build/timing.txt`
-build). The takeaway shaped the whole roadmap: **slices are ~90% full while everything else idles.**
+The resource picture depends heavily on the backend. **On F4PGA** (soft multipliers, no BRAM/DSP
+inference) logic is the ceiling: measured from the VPR pack/place report, **slices are ~90% full**
+while everything else idles (this shaped the early roadmap). **On the shipped Vivado build the story
+flips** — LUTs drop to **~50%** and block RAM becomes the most-used resource (second table below).
 
 | Resource | Used | Fabric* | % | Note |
 |---|---:|---:|---:|---|
@@ -930,30 +932,37 @@ build). The takeaway shaped the whole roadmap: **slices are ~90% full while ever
 is the a50t.) VPR's own `Device Utilization: 0.19` is whole-grid tile occupancy (mostly empty
 routing/IO) — **not** the meaningful figure; slice occupancy is.
 
-**After the DSP48 migration (Vivado backend), measured (`report_utilization`/`report_timing`):**
+**The shipped Vivado build (DSP48 + BRAM), measured against the real `xc7a35t`
+(`report_utilization` / `report_timing`):**
 
-| Resource | F4PGA (soft mult) | Vivado (DSP48) | Change |
-|---|---:|---:|---|
-| DSP48E1 | 0 / 120 | **18** / 120 | every `×` off the fabric |
-| RAMB36E1 | 16 | 16 (+1× RAMB18) | delay lines (inferred) |
-| Engine critical path | ~40 ns | **~19.5 ns** | multiply left the path |
-| Clock-enable | ÷4 (40 ns) | **÷3 (30 ns, ~10 ns margin)** | → true **32 kHz** |
+| Resource | Used | Fabric | % | Note |
+|---|---:|---:|---:|---|
+| Slice LUTs | **10,483** | 20,800 | **50.4%** | ~half the F4PGA count — ROMs/muxes moved to BRAM |
+| Slice Registers | 17,445 | 41,600 | 41.9% | headroom |
+| F7 / F8 muxes | 297 / 18 | — | ~2% | vs **6,685 MUXF6** on F4PGA — the mux trees collapsed |
+| **Block RAM** | **32× RAMB36 + 1× RAMB18** | 50 | **65%** | now the binding resource (the 16K×16 effects/reverb buffers) |
+| DSP48E1 | **26** | 90 | 28.9% | every `×` inferred off the fabric |
+| Engine critical path | **~18.5 ns** | — | — | runs ÷3 (30 ns budget) → true **32 kHz** |
 
-The headline isn't the ~10–15% of LUTs the 18 DSPs reclaim (the mux trees still dominate slices);
-it's that the **multiply-bound critical path halved (40 → 19.5 ns)**, which (a) restored a real 32 kHz
-stream (÷3) and (b) **eliminated the "4-parts-at-40.02 ns / placement-roulette" fragility** — the
-path now has ~10 ns of margin instead of −0.02.
+Vivado infers the ROMs/delay memories into **32 BRAM** and the multiplies into **26 DSP48**, which
+collapses the mux trees (**6,685 → ~300**) and halves the critical path (~40 → ~18.5 ns). Net effect:
+**LUTs fall to ~50% and block RAM (65%) becomes the most-used resource — logic is no longer the
+ceiling.** It also restored a real 32 kHz stream (÷3) and eliminated the "4-parts-at-40.02 ns /
+placement-roulette" fragility (~10 ns of margin now). *(Vivado reports the raw 100 MHz constraint as
+failing — expected: the engine runs on the ÷3 clock-enable, a multicycle the tool isn't told about.)*
 
 Learnings:
-- **Slices fill before FFs/LUT-capacity because of packing density, not raw count.** The datapath is
+- **On F4PGA, slices fill before FFs/LUT-capacity because of packing density.** The datapath is
   dominated by **wide combinational mux trees** (the 256-point sine LUT, per-voice/per-part selects) —
-  **6,685 MUXF6** instances pin LUTs to fixed slice positions and force *low* slice packing. That's
-  why slices hit 90% while FFs sit at 27%. Same congestion that drives the ~40 ns critical path.
+  **6,685 MUXF6** instances pin LUTs to fixed slice positions and force *low* slice packing, so slices
+  hit ~90% while FFs sit at ~27%. **Vivado sidesteps this** by inferring those ROMs/memories into BRAM
+  (muxes collapse to ~300), which is why its LUT use is ~half and BRAM becomes the ceiling instead.
 - **Soft multipliers are the *other* slice hog.** With no DSP48, every `×` is LUT+CARRY4 — so more
   synthesis features (FM, filters) cost slices twice: logic *and* timing.
-- **Growth hits slices first.** A 5th part / deeper polyphony / more effects will exhaust slices
-  before any other resource — so the levers are **reduce mux width** and **move multiplies to DSP**
-  (backend permitting), *not* add state. This is the physical basis for the "4 parts is at the edge"
+- **Growth hits slices first on F4PGA, BRAM first on Vivado.** On F4PGA a 5th part / deeper
+  polyphony / more effects exhausts slices before anything else — levers are **reduce mux width** and
+  **move multiplies to DSP**. On Vivado the delay/reverb buffers already use 65% of BRAM, so *more
+  effects* is the resource risk there. This is the physical basis for the "4 parts is at the edge"
   and loss-roadmap "watch soft-multiplier count" notes.
 
 ## Backends for DSP48/BRAM: openXC7 (nextpnr) vs Vivado — the migration learnings
@@ -978,7 +987,7 @@ Getting DSP48 required leaving F4PGA/VPR. Two backends were added alongside it (
   (`f & 0x1FFF`) or cast through a tight type (`pmod as s16`, `amp as s24`). Behavior-preserving,
   and it drops each product to a single 25×18 DSP.
 - **Vivado ML Standard closes DSP48 cleanly.** `read_verilog` + `synth_design`/`place`/`route` infers
-  **18 DSP48E1 + 16 RAMB36E1** from the identical RTL, reads the normal Vivado `-dict` XDC, and gives
+  **26 DSP48E1 + 32 RAMB36E1** from the identical RTL, reads the normal Vivado `-dict` XDC, and gives
   real STA. It "fails" the 10 ns clock (we run ÷3, 30 ns) so `write_bitstream -force` past the
   timing/UCIO DRCs. Cost: it's closed-source (breaks the fully-open ethos) and a ~19 GB device-limited
   install (pick Artix-7 only in the batch config; the full SFD is ~100 GB).
@@ -1004,8 +1013,8 @@ Getting DSP48 required leaving F4PGA/VPR. Two backends were added alongside it (
 > **routes, infers BRAM, and Fmax-reports cleanly (~32 MHz)**, and yosys *does* infer DSP48 — but
 > this nextpnr build can't route the DSP `CARRYCASCIN` constant pin (a real 7-series maturity gap),
 > so DSP is blocked there. The **Vivado ML Standard** backend (`scripts/vmbuild_vivado.sh`,
-> `rtl/build_vivado.tcl`) closes it: **18 DSP48E1 + 16 RAMB36E1 inferred**, and the engine critical
-> path drops **~40 ns → ~19.5 ns**. That headroom let the clock-enable move **÷4 → ÷3** and restore
+> `rtl/build_vivado.tcl`) closes it: **26 DSP48E1 + 32 RAMB36E1 inferred**, and the engine critical
+> path drops **~40 ns → ~18.5 ns**. That headroom let the clock-enable move **÷4 → ÷3** and restore
 > a **true 32 kHz** real-time stream with correct pitch (hardware-verified; ÷2 was tried but latched
 > the SVF under stress). Net effect beyond speed: the old "4-parts-at-40.02 ns / placement-roulette"
 > fragility is **gone** — the path now sits at 19.5 ns with ~10 ns of margin. The narrowing needed
