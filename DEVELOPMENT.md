@@ -496,20 +496,7 @@ shared 16K delay BRAM (still 8× RAMB36E1); the shell FSM does one BRAM read+wri
 cycle across ~10 states per audio sample. The reset buffer-clear (M13) keeps the comb
 feedback from railing on power-up garbage.
 
-```mermaid
-flowchart LR
-  IN["input /8"] --> C1["comb 810"]
-  IN --> C2["comb 878"]
-  IN --> C3["comb 940"]
-  IN --> C4["comb 1012"]
-  C1 --> SUM["Σ"]
-  C2 --> SUM
-  C3 --> SUM
-  C4 --> SUM
-  SUM --> AP1["all-pass 348"]
-  AP1 --> AP2["all-pass 116"]
-  AP2 --> WET["wet out"]
-```
+![M14 reverb topology: 4 parallel comb filters (810/878/940/1012) summed, then 2 series all-pass diffusers (348/116) to the wet output](docs/dsp_reverb_m14.svg)
 
 **Room size (CC91):** each comb's feedback `g` is a real Q15 multiply, selected by room
 size — `room` 0.671 (~0.4 s) · `hall` 0.793 · `large` 0.885 · `cathedral` 0.952 (~3.5 s

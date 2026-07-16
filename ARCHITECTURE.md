@@ -6,18 +6,22 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 [README §4](README.md#4-architecture--design), and for the milestone-by-milestone rationale
 (why each block is the way it is) see [DEVELOPMENT.md](DEVELOPMENT.md).
 
-> **Rendering note.** Dataflow diagrams are [Mermaid](https://mermaid.js.org/) (rendered by
+> **Rendering note.** Plain dataflow diagrams are [Mermaid](https://mermaid.js.org/) (rendered by
 > GitHub). Timing charts are pre-rendered [WaveDrom](https://wavedrom.com/) **SVGs** in
 > [`docs/`](docs) so they display everywhere, including GitHub; the WaveDrom source for each is
 > kept in a collapsible block beneath it. To regenerate after editing a source:
 > `npx wavedrom-cli -i chart.json -s docs/wd_name.svg` (then re-add a white background rect).
+> The DSP **signal-flow** diagrams (Part D effects — z⁻ᴰ delay blocks, gain triangles, summing
+> junctions, which Mermaid can't express) are [schemdraw](https://schemdraw.readthedocs.io/)-drawn
+> `docs/dsp_*.svg`, generated from [`docs/gen_dsp_diagrams.py`](docs/gen_dsp_diagrams.py):
+> `uv sync --extra docs && uv run python docs/gen_dsp_diagrams.py`.
 
 ## Contents
 
 - [Conventions](#conventions) — fixed-point formats, the execution model, source-file map
 - [End-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out) — the full picture: MIDI in → pipeline → audio out
 - [Part A — Engine skeleton & scheduling](#part-a--engine-skeleton--scheduling)
-  - [A1 The `engine` proc](#a1-the-engine-proc) · [A2 Voice ring & allocation](#a2-voice-ring--allocation) · [A3 Multitimbral parts](#a3-multitimbral-parts)
+  - [A1 The `engine` proc](#a1-the-engine-proc) · [A2 Voice ring & allocation](#a2-voice-ring--allocation) · [A3 Multitimbral parts](#a3-multitimbral-parts) · [A4 Per-slice parameter supply](#a4-per-slice-parameter-supply)
 - [Part B — Per-voice datapath](#part-b--per-voice-datapath)
   - [B1 Oscillator / DDS](#b1-oscillator--dds) · [B2 Waveforms](#b2-waveforms) · [B3 PWM](#b3-pwm) · [B4 Detuned dual oscillator](#b4-detuned-dual-oscillator) · [B5 Sub-oscillator](#b5-sub-oscillator) · [B6 Cross-osc FM / ring-mod](#b6-cross-oscillator-fm--ring-mod) · [B7 State-variable filter](#b7-state-variable-filter) · [B8 ADSR envelopes](#b8-adsr-envelopes) · [B9 VCA](#b9-vca) · [B10 LFO](#b10-lfo) · [B11 Pitch expression](#b11-pitch-expression) · [B12 Unison](#b12-unison) · [B13 Mixing](#b13-mixing)
 - [Part C — The Verilog shell](#part-c--the-verilog-shell)
@@ -302,6 +306,54 @@ the noise LFSR and the shell effects are global; everything else — including e
 soft-multiplier backends ~0.2 ns over the ÷4 budget (see the README "4 parts is at the edge"
 note); on the DSP48/Vivado ÷3 build it has ~10 ns of margin.
 
+## A4 Per-slice parameter supply
+
+**What it does.** Because one shared datapath serves all 32 voices, every enabled cycle has to
+*re-supply* a full parameter set to `process_voice()` for whichever voice is at slot 0. Those
+parameters arrive from **three sources**, assembled inline in `next()` right before the call:
+
+1. **Per-voice mutable state — the ring.** `let cur = voices1[u32:0]` reads the live `Voice`
+   (phase/`ph2`, `env`/`fenv` + their states, `note`, `vel`, filter state `flo`/`fbnd`, `cinc`,
+   `uni`, `part`). This is state the *previous* pass over this voice wrote; `process_voice`
+   returns `v2` and `rotate_in` writes it back ([A2](#a2-voice-ring--allocation)). The ring
+   rotation **is** the parameter-supply mechanism — it presents a different voice to the fixed
+   logic each cycle.
+2. **Per-part patch — a 4:1 mux.** `let p = parts1[cur.part]` selects the voice's timbre patch
+   (all the CC-set knobs: `wave`, `cutoff`, `reso`, ADSR, cross-osc, …). Read-only during
+   processing, shared by every voice of that part ([A3](#a3-multitimbral-parts)).
+3. **Per-cycle derived modulation — computed on the spot.** The shared `noise` (from the global
+   LFSR) and the part-LFO products `lfo_mod`, `vib`+`bend`→`pmod`, `tg` (tremolo), `pwthr` (PWM)
+   are recomputed each cycle from `p`'s LFO phase and passed as scalar args (details in
+   [B10](#b10-lfo), [B11](#b11-pitch-expression), [B3](#b3-pwm)).
+
+**How it's built** ([`rtl/synth.x:332`](rtl/synth.x)) — read voice, mux patch, derive mod, call:
+
+```rust
+let cur = voices1[u32:0];                              // (1) per-voice state
+let p   = parts1[cur.part];                            // (2) per-part patch (4:1 mux)
+let lfo_raw = SINE[p.lfo_ph[24:32]];                   // (3) derive modulation ...
+let lfo_mod = ((lfo_raw as s32) * (p.lfo_depth as s32)) >> u32:8;
+let pmod    = clampx(vib + (p.bend as s32), s32:2047);  // vib from p.vibsel·lfo_raw, + pitch bend
+let tg      = /* tremolo gain from lfoU · p.trdep */;
+let pwthr   = /* PWM threshold from p.pw + lfo_mod */;
+let (v2, amp) = process_voice(cur, p.wave, p.cutoff, p.reso, lfo_mod, p.fdepth,
+                              noise, p.fmode, p.subsel, pwthr, p.detsel, pmod, p.portsel,
+                              p.xmode, p.xdepth, p.xratio, tg,
+                              p.a_att, p.a_dec, p.a_sus, p.a_rel,
+                              p.f_att, p.f_dec, p.f_sus, p.f_rel);
+let voices2 = rotate_in(voices1, v2);                  // write the voice back into the ring
+```
+
+Note there is **no per-voice register file read** by index — slot 0 is a constant-index wire, and
+the only true mux on the parameter path is the small 4:1 part select. MIDI writes happen *earlier*
+in the same `next()`: note-on/off edit the ring (`apply_on`/`apply_off`), CC edits the patch
+(`parts1 = update(st.parts, ch, ep1)`) — so knob changes land in the shared patch, never in a
+single voice.
+
+**Gotcha.** `inc` (phase increment) is **not** among the supplied parameters — it's recomputed
+from `cur.note` *inside* `process_voice` every cycle ([B1](#b1-oscillator--dds)), deliberately, to
+keep the `Voice` ring narrow (ring width is the F4PGA packing budget — [A2](#a2-voice-ring--allocation)).
+
 ---
 
 # Part B — Per-voice datapath
@@ -309,18 +361,7 @@ note); on the DSP48/Vivado ÷3 build it has ~10 ns of margin.
 Everything below runs inside `process_voice()` ([`rtl/synth.x:184`](rtl/synth.x)), once per
 enabled cycle for the slot-0 voice. The chain is: oscillators → sub → cross-mod → filter → VCA.
 
-```mermaid
-flowchart LR
-  OSC["DDS osc(s)<br/>+ waveform"] --> XM["cross-mod<br/>FM / ring"]
-  XM --> SUB["+ sub-osc"]
-  SUB --> SVF["resonant SVF<br/>per-voice"]
-  SVF --> VCA["VCA<br/>env·vel·trem"]
-  VCA --> MIX["serialized mix"]
-  AENV["amp ADSR"] --> VCA
-  FENV["filter ADSR"] --> SVF
-  LFO["part LFO"] --> SVF
-  LFO --> OSC
-```
+![Per-voice datapath overview: DDS oscillators → cross-mod → sub-osc → resonant SVF → VCA → serialized mix, with amp/filter ADSR and the part LFO as modulation inputs](docs/dsp_datapath.svg)
 
 ## B1 Oscillator / DDS
 
@@ -501,15 +542,7 @@ let main = voice_wave(wave, phase_n + fmoff, noise, pw);   // FM = modulate the 
 let ring = (((main as s32) * (modsig as s32)) >> u32:11) as s16;   // ring = amplitude product
 ```
 
-```mermaid
-flowchart LR
-  MOD["ph2 modulator<br/>SINE[ph2]"] -->|"× depth (FM index)"| PH["carrier phase<br/>+ fmoff"]
-  PH --> CAR["voice_wave (carrier)"]
-  MOD -->|"× main (ring)"| RING["ring product"]
-  CAR --> BLEND{"xmode"}
-  RING --> BLEND
-  BLEND --> OUT["o12"]
-```
+![Cross-osc FM/ring signal flow: the ph2 modulator drives an FM index (× depth) into the carrier phase and a ring product (× main), blended by xmode into o12](docs/dsp_crossmod.svg)
 
 **Gotcha.** Cross-mod costs **two soft-multiplies** (FM index + ring product) — the things that
 had to fit the ÷4 40 ns budget. An earlier *shift*-based FM index reached only β ≈ 0.1 rad (far
@@ -552,18 +585,7 @@ let (lo, bd, lp, hp, bp) = svf(v.flo as s32, v.fbnd as s32, amp >> u32:2, f & s3
 let filt = match fmode { u2:0 => lp, u2:1 => hp, u2:2 => bp, _ => lp + hp };  // LP/HP/BP/notch
 ```
 
-```mermaid
-flowchart LR
-  X["input x<br/>(amp ÷4)"] --> HP["high = x − low − q·band"]
-  HP -->|"f·high"| BAND["band += f·high"]
-  BAND -->|"f·band"| LOW["low += f·band"]
-  LOW --> HP
-  LOW --> LP["LP out"]
-  HP --> HPo["HP out"]
-  BAND --> BP["BP out"]
-  LP --> NOTCH["notch = LP+HP"]
-  HPo --> NOTCH
-```
+![Chamberlin state-variable filter: an input summing junction (HP) feeds two cascaded integrators (BP then LP) with resonance (×q) and damping (low) fed back to the input — LP/HP/BP/notch all fall out](docs/dsp_svf.svg)
 
 **Gotcha.** Two fixed-point traps, both fixed here: (1) at high resonance the state grows ~Q×input
 and sticks on the clamp rails (silence) — hence the 4× input attenuation for headroom; (2) bright
@@ -760,6 +782,28 @@ fn scale_mix(acc: s32) -> u16 {
 }
 ```
 
+**Accumulate → emit → reset.** `mixacc` lives in the `Eng` state, so the sum **persists
+cycle-to-cycle**: each voice adds its `amp·compv` term, so after 32 cycles the accumulator holds
+the full 32-voice sum. On the ring's last slot (`vidx == 31`) that total is scaled out and the
+accumulator is cleared for the next sample — the emit/reset gate lives in the proc's `next()`
+([`rtl/synth.x:360`](rtl/synth.x), see the [A1 schedule](#a1-the-engine-proc)):
+
+```rust
+let last = st.vidx == u5:31;
+send_if(tok, audio_out, last, scale_mix(mix1));   // emit ONE sample, only on voice 31
+...
+mixacc: if last { s32:0 } else { mix1 },          // reset after emit, else carry the running sum
+```
+
+So over one 32-cycle sample window the accumulator builds up and pops once:
+
+```
+cycle:    v0     v1       v2      …     v30        v31
+amp·comp: a0     a1       a2      …     a30        a31
+mixacc:   a0   a0+a1   a0+a1+a2   …   Σa0..30   Σa0..31 ──► scale_mix ──► audio_out
+                                                    └────────────────────► reset to 0
+```
+
 **Gotcha.** Accumulating **one voice per clock** (not a 32-wide adder tree) keeps the critical
 path short and makes voice count a one-constant change. Saturation is essential: a wrap is a huge
 discontinuity → a broadband click. Output is offset-binary (`+32768`); the shell subtracts it back
@@ -809,6 +853,22 @@ always @(posedge clk100) sdiv <= rst ? 16'd0 : (stick ? 16'd0 : sdiv + 1);
 ```
 
 </details>
+
+**Why the effects run at ÷6 (slower than the engine).** Three reasons, and none is throughput:
+
+1. **A longer combinational path per step.** An effects step is *BRAM read → feedback arithmetic →
+   write-back* — the block RAM's registered read latency plus the **multiply-heavy** comb/all-pass
+   feedback (Q15 gain multiplies on the fed-back sample, [D5](#d5-reverb)). That path doesn't close at
+   30 ns but sits comfortably inside 60 ns. The engine's per-voice step is the SVF datapath, tuned to
+   *fit* 30 ns — so the two datapaths have genuinely different natural speeds.
+2. **There's a huge clock surplus, so slowing them is free.** The effects use only **28 × 6 = 168**
+   of the 3125 master clocks per sample ([D2 gotcha](#d2-bram-layout)); the engine's voice scan is
+   ~96. Together a few hundred of 3125 — thousands to spare. Because throughput isn't the constraint,
+   halving the effects rate costs nothing and buys timing margin on that long path. (If throughput
+   *were* tight you'd be forced to speed them up and fight timing closure; here you're not.)
+3. **Free phase-alignment.** `ce8` fires on `cec==0`, a strict subset of `ce` (`cec==0`||`cec==3`),
+   so every effects tick lands on an engine tick — picking ÷6 (a clean divisor of the mod-6 counter
+   that already exists for ÷3) makes the alignment automatic: no second counter, no clock crossing.
 
 **Gotcha.** `ce8` is a strict subset of `ce` (same phase), so the ÷3 sample-consume handshake and
 the ÷6 effects FSM never collide on the shared `dst` state. The DSP48/Vivado build runs ÷3 (30 ns,
@@ -926,6 +986,31 @@ decorrelated ([Part D](#part-d--block-ram-effects)).
 All effects live in the shell, downstream of the engine, and run on the `ce8` (÷6) enable. One
 arithmetic datapath is time-shared **L then R** by the FSM, so there's no second multiplier.
 
+**Why here and not in `synth.x`?** The effects are the one part of the synth that XLS/DSLX is the
+wrong tool for — two concrete walls push them into the Verilog shell:
+
+1. **Block RAM needs a *synchronous* read; XLS emits *async* reads.** The delay/reverb lines are
+   four **16K×16 circular buffers** — far too large to hold in fabric registers/LUTs, so they
+   *must* map to `RAMB36E1` block RAM. But a BRAM only exists as a hardware primitive with a
+   **registered** read (address in on one edge, data out the next), and yosys/Vivado only infer one
+   from that pattern. A DSLX array access compiles to a **combinational** read, which never infers to
+   BRAM — it becomes a mux instead (exactly why the engine's 256-word sine table stays a 256:1 mux,
+   [B2](#b2-waveforms)). A 256-word mux is survivable; four 16K buffers are not. See the
+   [D2 gotcha](#d2-bram-layout).
+2. **The effects are memory-port scheduling, not pipelined math.** They do **one BRAM read+write
+   per step** across a 28-state FSM per sample ([D1](#d1-effects-fsm)), time-sharing the limited
+   BRAM ports across echo, chorus, and 12 reverb delay lines, with feedback whose read-latency must
+   be placed by hand. That manual port/latency choreography is precisely what XLS's `proc` scheduler
+   abstracts away — you'd be fighting the tool for control it doesn't expose, while gaining none of
+   its arithmetic-pipelining strength.
+
+This is the project's XLS division of labor (see the [README](README.md#why-xls-not-hand-written-verilog)):
+**pure DSP math → DSLX** (oscillators, SVF, ADSR, mixer — where the compiler's pipelining and
+bit-width narrowing pay off); **timed memory + bit-level control → the Verilog shell** (these
+effects, the clock-enable multicycle, UART, I/O). The milestone friction logs
+([DEVELOPMENT.md M13/M14](DEVELOPMENT.md#milestone-13--effects-chorus--delay-via-block-ram-done-hardware-verified))
+record where that seam first showed up.
+
 ## D1 Effects FSM
 
 **What it does.** A 28-state machine (`dst` 1→28) that does **one BRAM read+write per step**:
@@ -1008,7 +1093,42 @@ sweep zeroes all four buffers (all 16384 addresses) before normal operation
 ([`rtl/top.v:302`](rtl/top.v)). XLS's *async*-read ROMs never map to BRAM — only a hand-written
 sync-read RAM like this does.
 
+**The one primitive underneath all three effects: a circular delay line.** Chorus, echo, and every
+comb/all-pass in the reverb are the *same* building block — a **delay line**: a ring buffer where a
+**write pointer** `waddr` advances one slot per sample (writing the newest input) and a **read tap**
+sits `D` slots behind it, so `read = buffer[waddr − D]` returns the sample from `D` samples ago. The
+delay `D` is just the distance between the two pointers; nothing is shifted, only the pointers move.
+
+![The delay-line primitive: a BRAM circular buffer written at waddr and read D samples behind it, giving y[n] = x[n−D]](docs/dsp_delayline.svg)
+
+The three effects differ only in **how they pick `D` and what they write back**:
+
+| Effect | Delay `D` | Write-back | BRAM |
+|---|---|---|---|
+| **Chorus** ([D3](#d3-chorus)) | *short, LFO-swept* (~300–556 samples) | just the dry input (shares echo's buffer) | `dmemL/R` |
+| **Echo** ([D4](#d4-echo--delay)) | *long, fixed by CC82* (~128–16256) | input **+ feedback** of the delayed sample | `dmemL/R` |
+| **Reverb** ([D5](#d5-reverb)) | *many short fixed taps* (combs 810–1230, all-pass 163–403) | input + damped/all-pass feedback | `dmem2L/R` regions |
+
+So "how the effect interacts with BRAM" is, in every case: **set the read tap → wait one clock for
+the registered read → do the effect's arithmetic → write the result back at the write pointer.** The
+per-effect sections below just fill in the tap math and the write-back.
+
 ## D3 Chorus
+
+**The algorithm.** Chorus fakes "many instruments playing the same part" by mixing the dry signal
+with a copy delayed by a *slowly changing* few-millisecond delay. As the delay sweeps, the
+dry+delayed sum forms a **comb filter whose notches slide up and down** — the shimmering, thickening
+character. The sweep is a slow triangle **LFO**; running the L and R taps **anti-phase** makes the
+two channels decorrelate, widening the stereo image. (There's no feedback — chorus only *reads* the
+delay line; it doesn't write its output back.)
+
+**How BRAM is used.** It's the [delay-line primitive](#d2-bram-layout) with a *moving* read tap and
+**no feedback write** — it piggybacks on the echo buffer (`dmemL/R`), reading the recent dry history
+that echo writes there. The tap `D = ctiL` is swept by the triangle `clfo`, kept in **Q3 (⅛-sample)**
+so the fractional part drives a linear interpolation between two adjacent reads (`s0` at `waddr−cti`,
+`s1` at `waddr−cti−1`) — an integer-only tap would jump a whole sample per step and each jump clicks.
+
+![Chorus signal flow: a triangle LFO sweeps a short BRAM read tap, scaled by CC94 depth into the wet output; no feedback](docs/dsp_chorus.svg)
 
 **What it does.** A short delay tap swept by a triangle LFO, L/R in anti-phase, linearly
 interpolated to a fractional sample so the sweep doesn't click.
@@ -1029,6 +1149,20 @@ click (zipper noise). Depth is CC94.
 
 ## D4 Echo / delay
 
+**The algorithm.** Echo is a **feedback delay line**: each repeat is the input plus an attenuated
+copy of what came out one delay-time ago, so `y[n] = x[n] + g·y[n−D]`. With `g = 0.5` each repeat is
+half as loud → a decaying train of echoes. The twist here is **ping-pong**: instead of feeding a
+channel back into *itself*, each side writes the *other* channel's delayed sample, so the echoes
+bounce L→R→L across the stereo field. Long `D` (CC82, ~4–508 ms) vs. chorus's short swept tap is the
+whole difference — same primitive, different pointer distance and a feedback write.
+
+**How BRAM is used.** [Delay-line primitive](#d2-bram-layout) with a **long fixed tap and a feedback
+write**, in the shared `dmemL/R`. Read at `waddr − edly` (set at `dst1`, latched at `dst2`); at
+`dst4` write `dry + ½·(other channel's delayed sample)` back at `waddr`, then `waddr += 1`. `edly` is
+floored at 128 samples so the read tap can never coincide with the write pointer.
+
+![Echo signal flow: a feedback delay line — input summed with the ½-scaled delayed tap; in stereo each channel writes the other's delayed sample (ping-pong)](docs/dsp_echo.svg)
+
 **What it does.** A long delay tap with feedback that **ping-pongs L↔R**. Time is CC82, depth CC95.
 
 **How it's built** — the delay length ([`rtl/top.v:168`](rtl/top.v)) and the cross-fed write
@@ -1047,6 +1181,38 @@ with the write pointer. Each effect is **depth-gated** (`echo_on = echodep != 0`
 byte.
 
 ## D5 Reverb
+
+**The algorithm (Freeverb).** A real room's reverb is thousands of overlapping reflections that get
+denser and quieter over time. [Freeverb](https://ccrma.stanford.edu/~jos/pasp/Freeverb.html)
+approximates that with two kinds of delay line:
+
+- **Feedback comb filter** — a delay line that feeds its own output back: `y[n] = x[n] + g·y[n−D]`.
+  That's echo (D4) with a *short* `D`, so instead of discrete repeats you get a dense metallic ring
+  that decays at a rate set by `g`. **8 combs in parallel** with **coprime-ish** delays (810…1230
+  samples) so their rings don't line up into a pitch. A one-pole **low-pass in the feedback loop**
+  ("damping") makes each repeat duller than the last — like air/wall absorption.
+- **All-pass diffuser** — `y[n] = −g·x[n] + x[n−D] + g·y[n−D]`. It passes all frequencies equally
+  (no coloration) but **smears transients in time**, turning the combs' regular ring into a smooth,
+  diffuse wash. **4 in series** (delays 163…403).
+
+Sum the 8 combs, run the result through the 4 all-passes, and you have one channel's reverb tail. Do
+it again for R with every delay **+23 samples** (the Freeverb "stereo spread") so L and R decorrelate.
+**Room size (CC91)** is just the comb feedback gain `g` (0.671 room → 0.952 cathedral) → decay time.
+
+**How BRAM is used.** All 12 delay lines per channel live as **regions of one tank** (`dmem2L/R`,
+[D2 layout](#d2-bram-layout)): 8 comb regions `RB0…RB7`, 4 all-pass regions `RA0…RA3`. Each region
+has its **own circular pointer** (`cpNL`, `apNpL`) that advances once per sample. The FSM walks the
+tank **one region per step**, sharing a *single* read/write port pair and *one* multiplier: read
+`region_base + pointer`, wait a clock, do the comb (damp → `g·y` multiply → add input) or all-pass
+butterfly, write back. Combs `dst5–12`, all-pass `dst13–16` for L; `dst17–24`, `dst25–28` for R;
+pointers advance at `dst28` ([D1](#d1-effects-fsm)).
+
+The two filter kernels the FSM runs, each on its own tank region (`z⁻ᴰ` = one BRAM comb/all-pass
+region addressed by its circular pointer):
+
+![Reverb feedback comb filter: input summed with the delayed tap after a one-pole low-pass damp and the room-size gain g, then written back and sent to the comb sum](docs/dsp_comb.svg)
+
+![Reverb Schroeder all-pass diffuser: the delayed tap and input combined through ±½ feedforward and feedback butterflies](docs/dsp_allpass.svg)
 
 **What it does.** A full [Freeverb](https://ccrma.stanford.edu/~jos/pasp/Freeverb.html): 8 parallel
 feedback comb filters + 4 series all-pass diffusers **per channel**, with the Freeverb stereo
@@ -1071,14 +1237,9 @@ wire [14:0] rvg = (rsize==2'd0) ? 15'd22000 :   // 0.671  room      (~0.4 s)
                                   15'd31200;    // 0.952  cathedral (~3.5 s)
 ```
 
-```mermaid
-flowchart LR
-  IN["send /64"] --> C0["comb 0"] & C1["comb 1"] & CN["… 8 combs"]
-  C0 --> SUM["Σ /4"]
-  C1 --> SUM
-  CN --> SUM
-  SUM --> A0["all-pass 0"] --> A1["all-pass 1"] --> A2["all-pass 2"] --> A3["all-pass 3"] --> WET["wet (CC93)"]
-```
+The full per-channel topology — 8 combs in parallel, summed and ÷4, then 4 all-passes in series:
+
+![Freeverb topology: the send fans out to 8 parallel comb filters, summed and scaled by ÷4, then through 4 series all-pass diffusers to the CC93 wet output](docs/dsp_freeverb.svg)
 
 **Gotcha.** The tail took several fixed-point lessons (all in [DEVELOPMENT.md → M14](DEVELOPMENT.md#milestone-14--reverb-done-hardware-verified)):
 damping must be `(old+new)/2` (a small-step shift both crushes the band and can wrap the state →

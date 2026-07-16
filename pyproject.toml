@@ -26,6 +26,10 @@ dependencies = [
 # only for reading a MIDI keyboard plugged into the host. Install where a compiler is allowed:
 #   uv sync --extra localmidi
 localmidi = ["python-rtmidi>=1.5.8"]
+# Docs: regenerate the DSP signal-flow SVGs in docs/ from docs/gen_dsp_diagrams.py.
+# Only needed to re-render the diagrams (the committed docs/dsp_*.svg display without it):
+#   uv sync --extra docs && uv run python docs/gen_dsp_diagrams.py
+docs = ["schemdraw>=0.19"]
 # Preset generation / search / optimization (presetgen/). Not needed to run or demo the synth.
 presetgen = [
     "dawdreamer>=0.8.3",
