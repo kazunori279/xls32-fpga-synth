@@ -237,7 +237,9 @@ def crossmod():
         d += dsp.Line().at(mbox.E).to(m.center)
         d += dsp.Arrow().at([-1.3, 0]).to(mbox.W).label("ph2", "left")
         # FM branch: modsig × depth → + carrier phase → voice_wave → main
-        gd = d.add(dsp.Amp().at(m.center).right().label("× depth\n(FM index)", "top", ofst=0.1))
+        # (start the gain triangle a little past the branch dot so they don't overlap)
+        gd = d.add(dsp.Amp().at([m.center[0] + 0.5, 0]).right().label("× depth\n(FM index)", "top", ofst=0.1))
+        d += dsp.Line().at(m.center).to(gd.input)
         ps = d.add(dsp.Sum().at([gd.out[0] + 1.0, 0]).anchor("W"))
         d += dsp.Arrow().at(gd.out).to(ps.W)
         d += dsp.Arrow().at([ps.N[0], ps.N[1] + 1.2]).to(ps.N)
