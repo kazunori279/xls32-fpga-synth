@@ -88,7 +88,7 @@ def chorus():
 def echo():
     with schemdraw.Drawing(file=out("dsp_echo.svg"), show=False) as d:
         d.config(fontsize=13)
-        s = d.add(dsp.Sum().at([0, 0]).anchor("center").label("+", "NW", ofst=0.05))
+        s = d.add(dsp.Sum().at([0, 0]).anchor("center"))
         d += dsp.Arrow().at([-1.4, 0]).to(s.W).label("x", "left")
         d += dsp.Arrow().at(s.E).to([1.3, 0])
         b = d.add(dsp.Box(w=3.0, h=1.1).anchor("W").at([1.3, 0]).label("z⁻ᴰ  (BRAM)\nlong tap, CC82"))
@@ -112,7 +112,7 @@ def echo():
 def comb():
     with schemdraw.Drawing(file=out("dsp_comb.svg"), show=False) as d:
         d.config(fontsize=13)
-        s = d.add(dsp.Sum().at([0, 0]).anchor("center").label("+", "NW", ofst=0.05))
+        s = d.add(dsp.Sum().at([0, 0]).anchor("center"))
         d += dsp.Arrow().at([-1.4, 0]).to(s.W).label("in", "left")
         d += dsp.Arrow().at(s.E).to([1.3, 0])
         b = d.add(dsp.Box(w=3.0, h=1.1).anchor("W").at([1.3, 0]).label("z⁻ᴰ  (BRAM tank)\ncomb 810…1230"))
@@ -135,12 +135,12 @@ def allpass():
         d.config(fontsize=12)
         d += dsp.Line().right().length(0.9).label("x", "left")
         node = d.add(dsp.Dot())
-        s1 = d.add(dsp.Sum().right().anchor("W").at(node.center).label("+", "lft", ofst=0.05))
+        s1 = d.add(dsp.Sum().right().anchor("W").at(node.center))
         d += dsp.Arrow().right().length(0.9).at(s1.E)
         b = d.add(dsp.Box(w=2.4, h=1.0).anchor("W").label("z⁻ᴰ (BRAM)\n163…403"))
         dtap = d.add(dsp.Dot().at(b.E))
         d += dsp.Arrow().right().length(0.9).at(dtap.center)
-        s2 = d.add(dsp.Sum().anchor("W").label("+", "rgt", ofst=0.05))
+        s2 = d.add(dsp.Sum().anchor("W"))
         d += dsp.Arrow().right().length(1.3).at(s2.E).label("y", "right")
         # feedforward: x -> ×(−g) -> s2 (top input)
         d += dsp.Line().up().at(node.center).length(1.7)
@@ -190,7 +190,7 @@ def svf():
     with schemdraw.Drawing(file=out("dsp_svf.svg"), show=False) as d:
         d.config(fontsize=13)
         # main path: Σ(=HP) → ×f → ∫₁(=BP) → ×f → ∫₂(=LP)
-        s = d.add(dsp.Sum().at([0, 0]).anchor("center").label("Σ", "center", ofst=0))
+        s = d.add(dsp.Sum().at([0, 0]).anchor("center"))
         d += dsp.Arrow().at([-1.6, 0]).to(s.W).label("x (in ÷4)", "left")
         hp = d.add(dsp.Dot().at([s.E[0] + 0.7, 0]))
         d += dsp.Line().at(s.E).to(hp.center)
@@ -209,7 +209,7 @@ def svf():
         d += dsp.Arrow().at(lp.center).to([lp.center[0] + 1.3, 0]).label("LP", "right")
         # feedback merge: fb = low + q·band, subtracted at the input sum
         yb = -2.4
-        fb = d.add(dsp.Sum().at([s.center[0], yb]).anchor("center").label("Σ", "center", ofst=0))
+        fb = d.add(dsp.Sum().at([s.center[0], yb]).anchor("center"))
         d += dsp.Arrow().at(fb.N).to(s.S).label("−", "right", ofst=0.05)
         # resonance: q·band  (BP → ×q → fb.E)
         d += dsp.Line().at(bp.center).to([bp.center[0], yb])
@@ -238,7 +238,7 @@ def crossmod():
         d += dsp.Arrow().at([-1.3, 0]).to(mbox.W).label("ph2", "left")
         # FM branch: modsig × depth → + carrier phase → voice_wave → main
         gd = d.add(dsp.Amp().at(m.center).right().label("× depth\n(FM index)", "top", ofst=0.1))
-        ps = d.add(dsp.Sum().at([gd.out[0] + 1.0, 0]).anchor("W").label("Σ", "center", ofst=0))
+        ps = d.add(dsp.Sum().at([gd.out[0] + 1.0, 0]).anchor("W"))
         d += dsp.Arrow().at(gd.out).to(ps.W)
         d += dsp.Arrow().at([ps.N[0], ps.N[1] + 1.2]).to(ps.N)
         d += elm.Label().at([ps.N[0] + 1.0, ps.N[1] + 0.9]).label("carrier phase\n(main osc)")
