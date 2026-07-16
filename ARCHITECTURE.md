@@ -109,24 +109,28 @@ flowchart LR
 | audio frame out | ~20 µs | ~2000 | 4 bytes (`Llo Lhi Rlo Rhi`) @ 2 Mbaud |
 | **sample period** | **31.25 µs** | **3125** (`SAMPDIV`) | one 32 kHz stereo sample |
 
-**Timing** — one 32 kHz sample period, MIDI-in through audio-out (sequence, not to scale):
+**Timing** — a clock-cycle view around the sample tick, showing the ÷3 (`ce`) and ÷6 (`ce8`)
+cadences: `stick` is a 1-clock pulse, the sample is pulled on the next `ce`, and the effects FSM
+advances on `ce8`. The long runs (effects tail, the ~2000-clock UART TX, the ~861-clock idle tail)
+are **snipped** (‖), so the visible columns are real 100 MHz cycles:
 
-![End-to-end timing — one sample period from the 32 kHz tick through engine, effects, and UART TX](docs/wd_e2e.svg)
+![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/wd_e2e.svg)
 
 <details><summary>WaveDrom source</summary>
 
 ```wavedrom
 { "signal": [
-  {"name": "stick (32 kHz sample tick)",        "wave": "10........|10.."},
-  {"name": "midi_in byte (async, xfer on ce)",  "wave": "0=0.......|....", "data": ["byte"]},
-  {"name": "engine → sample (avld)",            "wave": "010.......|010."},
-  {"name": "audio pull (ardy, on ce)",          "wave": "0010......|0010"},
-  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000=..0...|...=", "data": ["echo→combs→AP","…"]},
-  {"name": "sampL/R ready (pend=4)",            "wave": "00000010..|...."},
-  {"name": "UART TX out",                       "wave": "0000000=..|....", "data": ["Llo Lhi Rlo Rhi"]}
+  {"name": "clk (100 MHz)",            "wave": "ppppppp|.|ppp"},
+  {"name": "ce  (÷3, engine)",         "wave": "1001001|0|100"},
+  {"name": "ce8 (÷6, effects)",        "wave": "1000001|0|100"},
+  {},
+  {"name": "stick (32 kHz pulse)",     "wave": "1000000|0|100"},
+  {"name": "audio pull (ardy, on ce)", "wave": "0001000|0|000"},
+  {"name": "effects FSM (dst, on ce8)","wave": "000=...|0|000", "data": ["dst 1→28"]},
+  {"name": "UART TX out",              "wave": "0000000|=|000", "data": ["TX"]}
 ],
-  "head": {"text": "one 32 kHz sample period + start of the next — sequence, not to scale"},
-  "foot": {"text": "the tick is a 1-clock pulse every 3125 clk; the break skips the idle tail (~861 clk)"}
+  "head": {"text": "clock-cycle view around the tick — long runs snipped (‖)"},
+  "foot": {"text": "engine on ce (÷3), effects on ce8 (÷6); ‖ skips UART TX + idle (~2900 clk)"}
 }
 ```
 
