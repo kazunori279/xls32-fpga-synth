@@ -125,7 +125,8 @@ def comb():
         d += dsp.Line().at(tap.center).to([tap.center[0], yb])          # vertical drop to the corner
         lp = d.add(dsp.Box(w=2.4, h=0.9).anchor("E").at([tap.center[0] - 0.4, yb]).label("LP damp\n½old+½new"))
         d += dsp.Line().at([tap.center[0], yb]).to(lp.E)                # horizontal into the LP box
-        g = d.add(dsp.Amp().anchor("input").at(lp.W).left().label("× g  (CC91, DSP48)", "bottom", ofst=0.12))
+        g = d.add(dsp.Amp().anchor("input").at([lp.W[0] - 0.5, lp.W[1]]).left().label("× g  (CC91, DSP48)", "bottom", ofst=0.12))
+        d += dsp.Line().at(lp.W).to(g.input)                           # gap between the LP box and the gain
         d += dsp.Line().at(g.out).to([0, yb])
         d += dsp.Arrow().at([0, yb]).to(s.S)
 
