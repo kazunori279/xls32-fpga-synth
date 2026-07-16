@@ -139,6 +139,29 @@ slower soft-multiplier backends (`ce` = ÷4) still work but only sustain ~28 kHz
 grows past what ÷4 can retire inside 3125 clocks. MIDI in is decoupled from all of this: bytes are
 accepted whenever they arrive (on the next `ce`), independent of the sample cadence.
 
+**The real ceiling is the UART frame, not the compute.** Of the 3125-clock period, the compute
+pipeline uses only ~264 clocks; the **audio frame out costs ~2000 clocks** (4 bytes × 10-bit 8N1 ×
+50 clk/bit at 2 Mbaud — see the [timescales table](#end-to-end-timing-midi-in--pipeline--audio-out)).
+So the streaming path — not the DSP — is what caps the sample rate: even with a perfect
+compute-∥-TX pipeline the floor is `max(compute, TX) = 2000` clocks → ~50 kHz over this link. This
+also means the engine has generous room to *grow* (more voices, deeper per-voice DSP, more effects)
+without touching the sample rate — the binding resources there are **BRAM and timing closure**, not
+the clock budget ([E5 floorplan](#e5-chip-floorplan-rough-resource-map)).
+
+**Future improvements — lifting the streaming ceiling.** To raise the *UART* sample rate you attack
+the 2000-clock frame, not the compute:
+- **Raise the baud.** The Basys 3's FTDI **FT2232HQ** bridge tops out at **12 Mbaud**; the FPGA UART
+  wants an integer `BAUD = 100 MHz / baud` (currently 50). The clean next step is **4 Mbaud**
+  (`BAUD = 25`, a native FTDI rate, comfortable for the macOS VCP driver) → the frame halves to
+  **1000 clocks**, doubling the ceiling to ~100 kHz. 5/10 Mbaud (`BAUD` = 20/10) are the next integer
+  points; the practical reliable max on a given **Mac + cable** is ~4–6 Mbaud (driver/signal-limited,
+  below the chip's 12 Mbaud) and is best found empirically. Changing it touches the `BAUD` localparam
+  in [`rtl/top.v`](rtl/top.v) and the matching baud in [`host/uartaudio.py`](host/uartaudio.py).
+- **Send fewer bytes** (mono, or packed 12-bit) — fewer bytes/frame directly shrinks the 2000.
+- **Bypass the UART for listening.** The [I2S DAC path (E1)](#e1-i2s-dac-out) clocks samples out at
+  its own ~48.8 kHz and is *not* bound by the 2 Mbaud link — the UART's frame cost only exists because
+  it doubles as the headless verify/stream path.
+
 ---
 
 # Part A — Engine skeleton & scheduling
