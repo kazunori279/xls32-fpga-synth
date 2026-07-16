@@ -37,8 +37,9 @@ multitimbral selector, preset browser, and demo player.*
 3. [Builder's guide](#3-builders-guide) — build the bitstream, flash, verify, simulate, test.
 4. [Architecture & design](#4-architecture--design) — how the synth works today.
 
-The milestone-by-milestone build history (M1 → M19 + Web UI) and the toolchain friction logs &
-learnings live in the companion **[DEVELOPMENT.md](DEVELOPMENT.md)**.
+A per-block implementation deep-dive (code, dataflow, and timing diagrams for every block) lives
+in **[ARCHITECTURE.md](ARCHITECTURE.md)**; the milestone-by-milestone build history (M1 → M19 +
+Web UI) and the toolchain friction logs & learnings live in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ---
 
@@ -479,6 +480,10 @@ original M1 plan; the actual engine evolved into a time-multiplexed pipeline (M6
 per-voice filtering (M6b) and block-RAM effects in the shell (M13–M15). Milestone sections
 in [§4](DEVELOPMENT.md#development-history-milestones) carry the detailed rationale; this section is the
 consolidated current view.
+
+> For a **per-block implementation deep-dive** — the real code, a dataflow diagram, and a timing
+> chart for every block (oscillators, filter, VCA, envelopes, LFO, unison, effects, clocking,
+> I/O) — see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Signal chain (conceptual model)
 
