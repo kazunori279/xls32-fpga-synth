@@ -428,8 +428,10 @@ sub-osc):
 ```wavedrom
 { "signal": [
   {"name": "phase (u32)", "wave": "=======", "data": ["p","p+inc","+2inc","+3inc","… wrap","+inc","+2inc"]},
-  {"name": "wrap (overflow)", "wave": "0...10.."}
-]}
+  {"name": "wrap (overflow)", "wave": "0...10."}
+],
+  "config": {"hscale": 2}
+}
 ```
 
 </details>
