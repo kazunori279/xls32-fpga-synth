@@ -96,8 +96,9 @@ def echo():
         d += dsp.Arrow().at(tap.center).to([b.E[0] + 1.9, 0]).label("echo out\n(× CC95)", "right")
         # feedback loop: down, ×½, up into the sum
         yb = -2.0
-        d += dsp.Line().at(tap.center).to([tap.center[0], yb])
-        g = d.add(dsp.Amp().anchor("input").at([tap.center[0], yb]).left().label("× ½", "bottom", ofst=0.12))
+        d += dsp.Line().at(tap.center).to([tap.center[0], yb])          # vertical drop to the corner
+        g = d.add(dsp.Amp().anchor("input").at([tap.center[0] - 0.5, yb]).left().label("× ½", "bottom", ofst=0.12))
+        d += dsp.Line().at([tap.center[0], yb]).to(g.input)             # horizontal into the gain's flat side
         d += dsp.Line().at(g.out).to([0, yb])
         d += dsp.Arrow().at([0, yb]).to(s.S)
         d += elm.Label().at([b.center[0], yb - 1.35]).label(
@@ -121,8 +122,9 @@ def comb():
         d += dsp.Arrow().at(tap.center).to([b.E[0] + 1.7, 0]).label("y  (→ Σ)", "right")
         # feedback loop: down, LP damp, ×g, up into the sum
         yb = -2.2
-        d += dsp.Line().at(tap.center).to([tap.center[0], yb])
-        lp = d.add(dsp.Box(w=2.4, h=0.9).anchor("E").at([tap.center[0], yb]).label("LP damp\n½old+½new"))
+        d += dsp.Line().at(tap.center).to([tap.center[0], yb])          # vertical drop to the corner
+        lp = d.add(dsp.Box(w=2.4, h=0.9).anchor("E").at([tap.center[0] - 0.4, yb]).label("LP damp\n½old+½new"))
+        d += dsp.Line().at([tap.center[0], yb]).to(lp.E)                # horizontal into the LP box
         g = d.add(dsp.Amp().anchor("input").at(lp.W).left().label("× g  (CC91, DSP48)", "bottom", ofst=0.12))
         d += dsp.Line().at(g.out).to([0, yb])
         d += dsp.Arrow().at([0, yb]).to(s.S)
@@ -146,13 +148,17 @@ def allpass():
         s2 = d.add(dsp.Sum().anchor("W"))
         d += dsp.Arrow().right().length(1.3).at(s2.E).label("y", "right")
         # feedforward: x -> ×(−g) -> s2 (top input)
-        d += dsp.Line().up().at(node.center).length(1.7)
-        ff = d.add(dsp.Amp().right().anchor("input").label("×(−½)", "top", ofst=0.05))
+        yf = node.center[1] + 1.7
+        d += dsp.Line().up().at(node.center).length(1.7)               # vertical rise to the corner
+        ff = d.add(dsp.Amp().right().anchor("input").at([node.center[0] + 0.5, yf]).label("×(−½)", "top", ofst=0.05))
+        d += dsp.Line().at([node.center[0], yf]).to(ff.input)          # horizontal into the gain's flat side
         d += dsp.Line().right().at(ff.out).tox(s2.N)
         d += dsp.Arrow().down().toy(s2.N)
         # feedback: delayed d -> ×g -> s1 (bottom input)
-        d += dsp.Line().down().at(dtap.center).length(1.7)
-        fb = d.add(dsp.Amp().left().anchor("input").label("×½", "bottom", ofst=0.05))
+        yfb = dtap.center[1] - 1.7
+        d += dsp.Line().down().at(dtap.center).length(1.7)            # vertical drop to the corner
+        fb = d.add(dsp.Amp().left().anchor("input").at([dtap.center[0] - 0.5, yfb]).label("×½", "bottom", ofst=0.05))
+        d += dsp.Line().at([dtap.center[0], yfb]).to(fb.input)        # horizontal into the gain's flat side
         d += dsp.Line().left().at(fb.out).tox(s1.S)
         d += dsp.Arrow().up().toy(s1.S)
 
@@ -217,8 +223,9 @@ def svf():
         fb = d.add(dsp.Sum().at([s.center[0], yb]).anchor("center"))
         d += dsp.Arrow().at(fb.N).to(s.S).label("−", "right", ofst=0.05)
         # resonance: q·band  (BP → ×q → fb.E)
-        d += dsp.Line().at(bp.center).to([bp.center[0], yb])
-        q = d.add(dsp.Amp().at([bp.center[0], yb]).left().label("× q", "bottom", ofst=0.1))
+        d += dsp.Line().at(bp.center).to([bp.center[0], yb])           # vertical drop to the corner
+        q = d.add(dsp.Amp().anchor("input").at([bp.center[0] - 0.5, yb]).left().label("× q", "bottom", ofst=0.1))
+        d += dsp.Line().at([bp.center[0], yb]).to(q.input)            # horizontal into the gain's flat side
         d += dsp.Arrow().at(q.out).to(fb.E)
         # damping: low  (LP → down → left → fb.W)
         yl = yb - 1.5
