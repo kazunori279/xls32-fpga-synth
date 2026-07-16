@@ -220,6 +220,37 @@ flowchart LR
 last voice, so the shell paces the whole engine purely by *back-pressure* on `audio_out`
 ([C3](#c3-engine-handshake)) — there is no free-running counter inside the proc.
 
+**Time-multiplexing vs. pipelining — two separate mechanisms.** "Time-multiplexed pipeline"
+bundles two distinct ideas; only one is *pipelining*:
+
+- **Time-multiplexing = resource sharing.** There is **one** physical voice datapath
+  (`process_voice`), reused for all 32 voices — one voice per engine cycle, selected by the
+  rotating ring ([A2](#a2-voice-ring--allocation)). This is iteration over shared hardware, not
+  pipelining.
+- **Pipelining = register stages.** XLS compiles the `engine` proc with
+  `--generator=pipeline --pipeline_stages=48` ([E4](#e4-luts--fix_verilogpy)), inserting **48
+  register stages** through the datapath so many voices are in flight at once (one enters and one
+  finishes each engine cycle). `--worst_case_throughput=48` lets the recurrent `Eng` state feed
+  back across the full pipeline; the actual initiation interval is far below that, so ~one voice
+  retires per engine cycle and all 32 finish in **~96 master clocks** — deep inside the 3125-clock
+  sample budget ([end-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out)).
+
+**What rides the 48-stage pipeline:** everything inside the proc — MIDI parse → voice
+alloc (`apply_on`/`off`/`cc`) → ring rotate → the per-voice DSP chain (DDS osc → waveform →
+cross-mod → sub-osc → per-voice [SVF](#b7-state-variable-filter) → [VCA](#b9-vca), with 2× ADSR,
+LFO, unison) → the serialized [mixer](#b13-mixing).
+
+**What does *not*:** the Verilog shell ([Part C](#part-c--the-verilog-shell), [Part D](#part-d--block-ram-effects))
+— UART RX/TX and the block-RAM effects are hand-written **sequential FSMs** (the 28-state effects
+machine does one BRAM read+write per step), *not* XLS pipelines — see
+["memory-port scheduling, not pipelined math"](#part-d--block-ram-effects).
+
+**How it's clocked (the subtle part).** All 48 stage registers are gated by a **single ÷3
+clock-enable**, so the whole pipeline advances together every 3rd master clock, giving each stage a
+30 ns budget (critical path ~18.5–19.5 ns on the Vivado build). `fix_verilog.py` produces this by
+gating XLS's one `always @(posedge clk) … else …` with `ce` — see the [E4 gotcha](#e4-luts--fix_verilogpy)
+and [C1 clocking](#c1-clocking).
+
 ## A2 Voice ring & allocation
 
 **What it does.** 32 voices live in a ring that is **rotated by one each cycle**, so the voice
