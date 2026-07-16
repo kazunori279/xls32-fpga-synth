@@ -113,28 +113,31 @@ flowchart LR
 cadences. Note the engine's output is **already valid** (`avld` high) *before* the tick — the engine
 free-runs and computes the sample ahead of time ([C3](#c3-engine-handshake)) — so `stick` (a 1-clock
 pulse) just pulls it on the next `ce`; there's no "engine computes now" step between them, only the
-ready/valid handshake. The effects FSM then advances on `ce8`. The long runs (effects tail, the
-~2000-clock UART TX, the ~861-clock idle tail) are **snipped** (‖), so the visible columns are real
-100 MHz cycles:
+ready/valid handshake. After the pull, the engine **immediately scans the next sample's 32 voices**
+(96 clk on `ce`) *in parallel* with the effects FSM (on `ce8`) and the UART TX — that's why the scan
+needs no snip of its own: it overlaps the runs already snipped, and `avld` goes high again the moment
+it finishes. The long runs (the 96-clock scan, the effects tail, the ~2000-clock UART TX, the
+~861-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles:
 
-![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/wd_e2e.svg)
+![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/wd_e2e.svg)
 
 <details><summary>WaveDrom source</summary>
 
 ```wavedrom
 { "signal": [
-  {"name": "clk (100 MHz)",             "wave": "ppppppp|.|ppp"},
-  {"name": "ce  (÷3, engine)",          "wave": "10.10.1|0|10."},
-  {"name": "ce8 (÷6, effects)",         "wave": "10....1|0|10."},
+  {"name": "clk (100 MHz)",              "wave": "ppppppp|.|ppp"},
+  {"name": "ce  (÷3, engine)",           "wave": "10.10.1|0|10."},
+  {"name": "ce8 (÷6, effects)",          "wave": "10....1|0|10."},
   {},
-  {"name": "engine sample ready (avld)","wave": "1...0..|.|1.."},
-  {"name": "stick (32 kHz pulse)",      "wave": "10.....|0|10."},
-  {"name": "audio pull (ardy, on ce)",  "wave": "0..10..|0|0.."},
-  {"name": "effects FSM (dst, on ce8)", "wave": "0..=...|0|0..", "data": ["dst 1→28"]},
-  {"name": "UART TX out",               "wave": "0......|=|0..", "data": ["TX"]}
+  {"name": "engine sample ready (avld)", "wave": "1...0..|1|1.."},
+  {"name": "engine 32-voice scan (ce)",  "wave": "0...1..|0|0.."},
+  {"name": "stick (32 kHz pulse)",       "wave": "10.....|0|10."},
+  {"name": "audio pull (ardy, on ce)",   "wave": "0..10..|0|0.."},
+  {"name": "effects FSM (dst, on ce8)",  "wave": "0..=...|0|0..", "data": ["dst 1→28"]},
+  {"name": "UART TX out",                "wave": "0......|=|0..", "data": ["TX"]}
 ],
   "head": {"text": "clock-cycle view around the tick — long runs snipped (‖)"},
-  "foot": {"text": "engine on ce (÷3), effects on ce8 (÷6); ‖ skips UART TX + idle (~2900 clk)"}
+  "foot": {"text": "engine scans the next sample (96 clk) in parallel with effects+TX; ‖ skips ~2900 clk"}
 }
 ```
 
