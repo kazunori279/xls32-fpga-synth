@@ -475,124 +475,31 @@ video, each test preceded by a caption card + its spectrogram), and per-test `.w
 
 # 4. Architecture & design
 
-This section describes how the shipped synth works. The **conceptual model** below is the
-original M1 plan; the actual engine evolved into a time-multiplexed pipeline (M6a) with
-per-voice filtering (M6b) and block-RAM effects in the shell (M13–M15). Milestone sections
-in [§4](DEVELOPMENT.md#development-history-milestones) carry the detailed rationale; this section is the
-consolidated current view.
+The consolidated overview of how the shipped synth works. For the **per-block implementation
+deep-dive** — real code, a dataflow diagram, and a timing chart for every block (oscillators,
+filter, VCA, envelopes, LFO, unison, effects, clocking, I/O) — see
+**[ARCHITECTURE.md](ARCHITECTURE.md)**. The milestone-by-milestone rationale lives in
+[DEVELOPMENT.md](DEVELOPMENT.md#development-history-milestones).
 
-> For a **per-block implementation deep-dive** — the real code, a dataflow diagram, and a timing
-> chart for every block (oscillators, filter, VCA, envelopes, LFO, unison, effects, clocking,
-> I/O) — see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+## How it works
 
-## Signal chain (conceptual model)
+The core is a **time-multiplexed pipelined voice engine** (an XLS `proc` in `rtl/synth.x`):
+32 voices live in a **rotating ring**, so the current voice is always at slot 0 (constant-index —
+no 32:1 mux). **One voice is processed per engine cycle; one 16-bit sample is emitted every 32.**
+Per voice the datapath is oscillator(s) → optional sub-osc → per-voice resonant [SVF](https://en.wikipedia.org/wiki/State_variable_filter) →
+[VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier) (envelope × velocity × [tremolo](https://en.wikipedia.org/wiki/Tremolo)), with 2× ADSR and a per-part LFO. MIDI in and audio
+out are ready/valid channels driven by a thin Verilog shell (`rtl/top.v`).
 
-```mermaid
-flowchart LR
-  MIDI["MIDI in"] -->|"31250 baud"| RX["uart_rx"]
-  RX -->|bytes| MP["midi_parser"]
-  MP -->|"NoteEvent (0x90 / 0x80)"| SY["synth engine<br/>N-voice DDS + ADSR + mix"]
-  SY -->|"s16 sample"| OUT["output"]
-  OUT -->|"PWM pin"| SPK["speaker (+ RC filter)"]
-  OUT -->|"UART dump"| VER["host verify (FFT)"]
-```
+The engine is **mono; the shell creates the stereo image** with block-RAM effects downstream —
+per-channel [chorus](https://en.wikipedia.org/wiki/Chorus_%28audio_effect%29) (anti-phase taps), ping-pong echo/delay, and an 8-comb [Freeverb](https://en.wikipedia.org/wiki/Reverberation) reverb, each
+**depth-gated** by CC. Everything runs on one 100 MHz clock: the engine advances on a **÷3
+clock-enable** (30 ns budget) and the effects FSM on ÷6, sustaining a true **32 kHz** stream on the
+committed DSP48/Vivado build (the open F4PGA / nextpnr fallbacks run ÷4 / 28 kHz). The clock-enable
+multicycle rationale and every block's internals are in
+[ARCHITECTURE.md](ARCHITECTURE.md#c1-clocking).
 
-**Pure functions (the easy majority)**
-- `note_to_inc(note) -> u32` — DDS phase increment per MIDI note (`u32[128]` LUT).
-- `sine(idx: u8) -> s16` — quarter/full sine `s16[256]` LUT via top phase bits.
-- `adsr(voice, params) -> voice` — one envelope step (arithmetic + `match` on stage).
-- `mix(voices) -> s16` — `for`-reduce sum + scale.
-
-**State types**
-```rust
-enum Env { OFF, ATTACK, DECAY, SUSTAIN, RELEASE }
-struct Voice { note: u7, phase: u32, inc: u32, level: u16, env: Env, gate: bool }
-struct Synth { voices: Voice[N] }        // N parametric: 8, 16, …
-```
-
-The `Env` enum is a per-voice state machine, stepped once per sample tick:
-
-```mermaid
-stateDiagram-v2
-  [*] --> OFF
-  OFF --> ATTACK: note-on (gate=1)
-  ATTACK --> DECAY: peak reached
-  DECAY --> SUSTAIN: sustain level
-  SUSTAIN --> RELEASE: note-off (gate=0)
-  ATTACK --> RELEASE: note-off
-  DECAY --> RELEASE: note-off
-  RELEASE --> OFF: level 0
-```
-
-**Procs (the stateful minority)**
-1. `uart_rx` — MIDI pin bit-stream → `u8` bytes (oversampled RX).
-2. `midi_parser` — bytes → `NoteEvent{on/off,note,vel}`; state `(count,status,data1)`.
-3. `synth` — per sample tick: `recv_non_blocking` a NoteEvent, allocate/release a
-   voice (first free voice), run ADSR + DDS on all voices, `mix`, emit one sample.
-
-**Output** — 1-bit PWM / [sigma-delta](https://en.wikipedia.org/wiki/Delta-sigma_modulation) to a pin (+ RC filter → speaker); no external
-DAC. The same samples are teed over UART for headless verification.
-
-> The shipped `Voice` struct grew well beyond the sketch above (per-voice filter state,
-> filter envelope, glided increment, [unison](https://en.wikipedia.org/wiki/Unison) slot, …); see [M6b](DEVELOPMENT.md#milestone-6b--per-voice-resonant-filter-done-hardware-verified)
-> and [M15](DEVELOPMENT.md#milestone-15--unison-done-hardware-verified). MIDI-DIN input (M7) and the I2S DAC
-> output (M8) are **built and timing-closed but not yet hardware-tested** (parts on order) — see
-> [M7+M8](DEVELOPMENT.md#milestone-7--8--hardware-io-din-midi-in--i2s-dac-out-built-hardware-pending); audio and
-> MIDI otherwise flow over the USB UART.
-
-## The shipped engine (M6a onward)
-
-The core is a **time-multiplexed pipelined voice engine** — an XLS `proc` built with
-`--generator=pipeline`. Recurrent state is `Voice[32]` + a mix accumulator + the MIDI
-parser. **One voice is processed per engine cycle; a sample is emitted every 32 cycles.**
-Voices live in a **rotating ring** so the "current" voice is always at slot 0 →
-constant-index read/write, avoiding the 32:1 dynamic mux that was the original timing wall.
-MIDI in / audio out are ready/valid **channels** the Verilog shell drives. Per-voice, the
-datapath is: oscillator(s) → optional sub-osc → per-voice resonant SVF → VCA (envelope ×
-velocity × [tremolo](https://en.wikipedia.org/wiki/Tremolo)) → serialized mix. Full detail: [M6a](DEVELOPMENT.md#milestone-6a--pipelined-voice-engine-hi-fi-restored-done-hardware-verified),
-[M6b](DEVELOPMENT.md#milestone-6b--per-voice-resonant-filter-done-hardware-verified).
-
-The per-voice datapath (run once per engine cycle, one voice at a time):
-
-```mermaid
-flowchart LR
-  OSC["oscillator(s)<br/>DDS + waveform"] --> SUB["+ sub-osc"]
-  SUB --> SVF["resonant SVF<br/>per-voice, Q13"]
-  SVF --> VCA["VCA<br/>env × velocity × tremolo"]
-  VCA --> MIX["serialized mix"]
-  AENV["amp ADSR"] --> VCA
-  FENV["filter ADSR"] --> SVF
-  LFO["LFO"] --> SVF
-  LFO --> OSC
-```
-
-## The Verilog shell & block-RAM effects
-
-`rtl/top.v` is a thin shell. It runs the UART at 2 Mbaud (MIDI in on `RsRx`, audio out on
-`RsTx`), drives the engine's clock-enable and ready/valid handshakes, and hosts the **stereo
-effects** downstream of the engine.
-
-The voice engine is mono; **the effects create the stereo image**. The dry signal sits centered
-(identical L/R) and each wet is decorrelated. Per-channel **16K×16-bit circular delay buffers**
-(synchronous read+write) feed [chorus](https://en.wikipedia.org/wiki/Chorus_%28audio_effect%29) (L/R LFO taps in anti-phase) and echo/delay (feedback
-ping-pongs L↔R); a separate per-channel **reverb tank** holds a full [Freeverb](https://en.wikipedia.org/wiki/Reverberation) — **8 combs +
-4 all-pass per channel**, with the Freeverb stereo spread (right-channel delays = left + 23 samples).
-
-Each effect is **depth-gated** (on when its knob > 0), so there's no mode byte: chorus depth (CC94),
-echo/delay depth (CC95) + time (CC82), and reverb wet (CC93) + room size (CC91) are sniffed from the
-MIDI stream by the shell. (The old CC83 dry/chorus/delay/both mode is now unused.) Full detail:
-[M13](DEVELOPMENT.md#milestone-13--effects-chorus--delay-via-block-ram-done-hardware-verified),
-[M14](DEVELOPMENT.md#milestone-14--reverb-done-hardware-verified).
-
-> **Effects run on their own clock-enable, slower than the engine's.** The effects FSM uses only
-> ~17 of the ~3,500 clocks per sample, so it advances on a ÷6 enable (`ce8`, 60 ns/step) while the
-> engine runs ÷3 (30 ns) on the **DSP/Vivado backend** — there the reverb's comb-feedback multiply
-> maps to a **DSP48**, so it closes timing with margin and **reverb is fully working and
-> hardware-verified** (stereo, all room sizes). Earlier, under the F4PGA soft-multiplier backend,
-> that multiply railed on the congested 4-part fabric (the logic is provably correct in a full-RTL
-> iverilog sim, `rtl/tb_fx_stub.v` — it was a synthesis/timing artifact, not a logic bug), so
-> reverb was temporarily pulled from the UI; the DSP48 fixed it. On the soft-mult fallback the
-> effects run ÷8 (80 ns) and reverb still rails, but chorus/echo are clean there.
+MIDI-DIN input (M7) and the I2S DAC output (M8) are **built and timing-closed but not yet
+hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART.
 
 End to end, the shell wraps the engine and the effects between the two UART directions:
 
@@ -611,31 +518,6 @@ flowchart LR
   MIDI["MIDI in"] --> RX
   TX --> AUD["16-bit PCM out"]
 ```
-
-## Clocking: the clock-enable multicycle
-
-F4PGA has no DSP48, no BRAM inference for XLS's async ROMs, and no MMCM/[PLL](https://en.wikipedia.org/wiki/Phase-locked_loop), and it won't
-let logic drive a BUFG — so you can neither synthesize nor divide the clock, and the design
-floors at ~15–34 ns depending on features. Everything therefore runs on the 100 MHz clock
-but the engine **advances every Nth cycle via a global clock-enable** (`ce`, injected by
-`rtl/fix_verilog.py`), giving each register path N×10 ns. N has grown with features:
-÷2 (M6a, 50 MHz) → ÷3 (M6b, ~33 MHz) → **÷4 (M14/M15, 40 ns budget)**. Throughput is
-unaffected (the actual initiation interval is far below the budget). The full rationale and
-the "timing must be reasoned, not read from the (failing) VPR report" caveat are in
-[§6 frictions](DEVELOPMENT.md#integrating-basys-3--f4pga--xls-the-frictions).
-
-> **Real-time streaming rate: 28 kHz at ÷4, true 32 kHz at ÷3 (DSP backend).** At ÷4 the per-sample
-> audio-pull + effect FSM + TX chain overruns the 32 kHz sample budget, so the engine back-pressures
-> and streams only ~28–30 k samples/s — clean, but ~1 semitone flat in real time. (Recorded captures
-> play fine at 32 kHz, which is why it hid so long.) The soft-multiplier fix ran the DSP at **28 kHz**
-> (`SAMPDIV=3571`, `BASE_INC` rescaled).
->
-> With the **DSP48 (Vivado) backend** the engine critical path drops ~40 → ~19.5 ns, so it runs
-> **÷3 (30 ns budget)** — fast enough to sustain a **true 32 kHz** stream with correct pitch
-> (`SAMPDIV=3125`, `BASE_INC` at 32 kHz, `SR=32000`). ÷2 also builds but latches the SVF under stress
-> (~0.5 ns margin), so ÷3 is the reliable choice. The filter/reverb constants were always
-> 32 kHz-native, so they're now correct too. The soft-multiplier F4PGA/nextpnr fallbacks stay at
-> ÷4 / 28 kHz.
 
 ## MIDI CC map (current)
 
@@ -671,30 +553,21 @@ sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-b
 
 ## Multitimbral — 4 parts (done, hardware-verified)
 
-The engine is **4-part multitimbral**: **MIDI channels 1–4** (low 2 bits of the channel nibble)
-select one of 4 independent **parts**, each with its own patch. `rtl/synth.x` factors the patch
-into a `Part` struct (`parts: Part[4]` in `Eng`), and each `Voice` carries a 2-bit `part`.
+The engine is **4-part multitimbral**: MIDI channels 1–4 select one of 4 independent **parts**,
+each with its own patch (a `Part` struct; every voice carries a 2-bit `part` tag). The **32-voice
+pool is shared/dynamic** across parts, and each part has its own LFO, so the 4 timbres wobble at
+independent speeds; only the noise LFSR and the post-mix shell effects are global. Note-off matches
+note **and** part, so one channel can't cut another. The routing and per-voice 4:1 patch mux are in
+[ARCHITECTURE.md → Multitimbral parts](ARCHITECTURE.md#a3-multitimbral-parts).
 
-Note-on tags voices with the event's channel (and uses that part's unison); note-off matches
-**note *and* part** (so a note-off on ch1 can't cut ch2); CCs/pitch-bend route to the event's part
-(`apply_cc`). The processed voice reads **its** part's patch through a 4:1 mux before
-`process_voice`.
-
-The **32-voice pool is shared/dynamic** across parts. Each part has its **own LFO oscillator**
-(phase + CC76 rate), so the 4 timbres can wobble at independent speeds. Global (not per-part): the
-noise LFSR, and the shell effects (chorus/echo/reverb are post-mix, one for the whole mix).
-Everything else is per-part, including vibrato/tremolo/LFO-depth and pitch bend.
-
-The web UI has a **Part 1–4 selector**: the selected part is what the on-screen/computer keyboard
-plays and the knobs edit; each part keeps its own patch; all 4 play simultaneously from an
-external controller/DAW on channels 1–4.
-
-Verified on hardware: the same note on two channels renders two distinct timbres (e.g. 320 Hz
-dark sine vs 2.4 kHz bright saw), and a note-off on one part doesn't cut another.
+The web UI has a **Part 1–4 selector**: the selected part is what the on-screen keyboard plays and
+the knobs edit; all 4 play simultaneously from an external controller/DAW on channels 1–4. Verified
+on hardware: the same note on two channels renders two distinct timbres, and a note-off on one part
+doesn't cut another.
 
 > **⚠ Timing note — 4 parts is at the edge (soft-multiplier backends only).** On the committed
 > **Vivado/DSP48 build (÷3)** this is a non-issue: the path sits at ~19.5 ns with ~10 ns of margin
-> (see [Clocking](#clocking-the-clock-enable-multicycle)). It only bites the **F4PGA / nextpnr ÷4**
+> (see [ARCHITECTURE.md → Clocking](ARCHITECTURE.md#c1-clocking)). It only bites the **F4PGA / nextpnr ÷4**
 > backends, where the 4× patch state + per-voice part mux push the SVF path to
 > `Final critical path delay ≈ 40.2 ns` — **~0.2 ns over** the 40 ns budget. (The `f×band` multiply
 > is already trimmed to 12-bit; the residual is mux congestion, not the multiply.)
