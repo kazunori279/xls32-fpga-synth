@@ -25,7 +25,7 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 - [Part D — Block-RAM effects](#part-d--block-ram-effects)
   - [D1 Effects FSM](#d1-effects-fsm) · [D2 BRAM layout](#d2-bram-layout) · [D3 Chorus](#d3-chorus) · [D4 Echo / delay](#d4-echo--delay) · [D5 Reverb](#d5-reverb)
 - [Part E — Hardware I/O & build glue](#part-e--hardware-io--build-glue)
-  - [E1 I2S DAC out](#e1-i2s-dac-out) · [E2 DIN MIDI in](#e2-din-midi-in) · [E3 LED comet](#e3-led-comet) · [E4 LUTs & `fix_verilog.py`](#e4-luts--fix_verilogpy)
+  - [E1 I2S DAC out](#e1-i2s-dac-out) · [E2 DIN MIDI in](#e2-din-midi-in) · [E3 LED comet](#e3-led-comet) · [E4 LUTs & `fix_verilog.py`](#e4-luts--fix_verilogpy) · [E5 Chip floorplan](#e5-chip-floorplan-rough-resource-map)
 
 ---
 
@@ -1221,6 +1221,31 @@ Only synthesis/P&R differs:
 once. VPR still reports the sub-`ce` paths as failing (it can't see the multicycle), so timing here
 is **reasoned, not read from the report**. Full toolchain frictions:
 [DEVELOPMENT.md → friction logs](DEVELOPMENT.md#friction-logs--learnings).
+
+## E5 Chip floorplan (rough resource map)
+
+**What it does.** A one-glance picture of how the design lands on the Artix-7 `xc7a35t`: which
+blocks live in general **CLB fabric** (LUT/FF), which multiplies map to the **DSP48** slices, and
+which memories fill the **block RAMs** — plus the I/O on the die edge.
+
+![Rough resource floorplan of the Artix-7 xc7a35t](docs/floorplan.svg)
+
+Block → resource, on the committed Vivado build (utilization from
+[DEVELOPMENT.md → FPGA resource usage](DEVELOPMENT.md#fpga-resource-usage-f4pga-vs-vivado)):
+
+| Block | Primary resource | Notes |
+|-------|------------------|-------|
+| Engine pipeline (`synth.x`) — DDS, waveforms, SVF, ADSR, VCA, LFO, unison, mix | **CLB** (LUT/FF) | ~50 % LUT, ~42 % FF; the rotating 32-voice ring |
+| All multiplies — SVF `f·band`/`q·band`/`f·high`, VCA, FM index, ring, pitch-mod, mix, reverb `g·y` | **DSP48 ×26** | 29 % of 90; kept narrow (≤25×18) to fit one DSP each |
+| Delay + reverb memories — `dmemL/R`, `dmem2L/R` (4 × 16K×16) | **BRAM ×32** (RAMB36) | 65 % of 50 — the *binding* resource |
+| Inferred sine / note-increment ROMs | **BRAM** | Vivado infers these; on F4PGA they stay LUT muxes ([E4](#e4-luts--fix_verilogpy)) |
+| Shell (`top.v`) — UART RX×2/TX, `ce`/`ce8`, 28-state effects FSM, LED PWM, I2S | **CLB** | small vs the engine |
+| clk (W5), UART, LEDs ×16, Pmod JA1 (DIN), Pmod JB1–3 (I2S) | **I/O banks** | pinned in [`rtl/basys3.xdc`](rtl/basys3.xdc) |
+
+**Gotcha.** This is a **schematic resource map, not the actual placement** — real place-and-route
+positions vary per build (and per backend: the open F4PGA flow has no DSP/BRAM inference, so there
+*everything* is CLB fabric and the design is slice-bound ~90%). For the true die view, open the
+`.dcp` from a Vivado build in the Vivado GUI (Window → Device).
 
 ---
 

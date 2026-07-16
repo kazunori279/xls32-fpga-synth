@@ -519,6 +519,13 @@ flowchart LR
   TX --> AUD["16-bit PCM out"]
 ```
 
+And roughly how those blocks lay out on the FPGA — engine + shell in CLB fabric, every multiply in
+the 26 DSP48 slices, and the delay/reverb buffers + ROMs in the 32 block RAMs:
+
+![Rough resource floorplan of the Artix-7 xc7a35t: engine and shell logic in CLB fabric, all multiplies mapped to 26 DSP48, delay/reverb buffers and inferred ROMs in 32 block RAMs, I/O on the die edge](docs/floorplan.svg)
+
+*Rough resource map (schematic — which fabric each block maps to, not exact place-and-route). Block-by-block detail in [ARCHITECTURE.md → Chip floorplan](ARCHITECTURE.md#e5-chip-floorplan-rough-resource-map).*
+
 ## MIDI CC map (current)
 
 The engine parses `0x9n` note-on / `0x8n` note-off / `0xBn` CC / `0xE0` pitch bend. The **channel
