@@ -3,6 +3,16 @@
 The long-form companion to the [README](README.md): how the synth was built, milestone by
 milestone, and the hard-won friction logs & learnings from the XLS / F4PGA / Basys 3 toolchain.
 
+**How to read this doc.** Two parts, two purposes:
+- **[Development history](#development-history-milestones)** — the build in chronological
+  order. The [roadmap table](#milestone-roadmap) is the skim index; each milestone opens with
+  a one-line **What changed** summary, so you can scan the arc and dive in only where you need
+  the detail.
+- **[Friction logs & learnings](#friction-logs--learnings)** — the reusable, toolchain-level
+  lessons. **Read these before extending the synth or porting the toolchain** — the first one
+  ([Integrating Basys 3 + F4PGA + XLS](#integrating-basys-3--f4pga--xls-the-frictions)) caps
+  what you can build.
+
 **Contents**
 
 - [Development history (milestones)](#development-history-milestones)
@@ -84,6 +94,9 @@ roadmap table is the index; the sections that follow are in chronological build 
 
 ## Milestone 1 — single-voice DDS sine + ADSR (done, hardware-verified)
 
+**What changed:** First sound — one voice (DDS sine + linear ADSR, auto-gated), streamed
+8-bit/4 kHz over UART and verified from afar.
+
 The de-risking MVP: prove the oscillator + envelope produce a correct waveform on
 real silicon, using only the pipeline we already have.
 
@@ -111,12 +124,15 @@ envelope peak-to-peak: max=246, min=0   # ADSR cycles with the auto-gate
 PASS
 ```
 DSLX tests 8/8, iverilog sim PASS, hardware PASS. (Build/verify/listen commands are in the
-[How-to guide](README.md#3-how-to-guide).) Listening to a 6 s capture (`record_wav.py` → `afplay`)
+[Builder's guide](README.md#3-builders-guide).) Listening to a 6 s capture (`record_wav.py` → `afplay`)
 gives a pulsing **A4 (~440 Hz)** tone with the ADSR envelope (~7 note cycles in 6 s). It's
 telephone-grade (8-bit / 4 kHz) by design — hi-fi audio (16-bit / higher rate via PWM) is
 milestone 5. A sample capture was uploaded to Google Drive via `gws drive files create --upload`.
 
 ## Milestone 2 — polyphony (done)
+
+**What changed:** 1 voice → 4 (`Voice[4]`), summed and scaled to play an Amaj7 chord;
+verified by DFT peaks in the UART capture.
 
 Four voices (`Voice[4]`), each its own DDS phase accumulator + ADSR; a shared
 auto-gate triggers/releases an **Amaj7 chord** (A4 440 / C#5 554 / E5 659 /
@@ -141,6 +157,9 @@ audio (`record_wav.py` → `chord.wav`) uploaded to Drive as an MP4.
   stdlib) shows one peak for a single voice, N peaks for a chord.
 
 ## Milestone 3 — MIDI input (done)
+
+**What changed:** Real MIDI in — a UART receiver + MIDI parser + voice allocation replace
+the hardcoded chord; the host plays notes over USB and FFT-verifies the pitches.
 
 `tick(St, rx)` gained a **UART receiver** (host → FPGA on `RsRx`/B18, 115200), a
 **MIDI parser** (0x9n note-on / 0x8n note-off, running status), and **voice
@@ -177,6 +196,9 @@ PASS** for Amaj7, C-major, and single notes. A MIDI-driven melody demo
 
 ## Milestone 4 — hi-fi + expressive voice (done)
 
+**What changed:** 16-bit/32 kHz audio over a 1 Mbaud UART, velocity→amplitude, and
+CC70-selectable waveforms (sine/saw/square/triangle).
+
 Upgraded for sound quality and musicality, all still verified over USB:
 - **16-bit samples at 32 kHz**, streamed over a **1 Mbaud** UART (2 bytes/sample).
   At 32 kHz no MIDI note aliases ([Nyquist](https://en.wikipedia.org/wiki/Nyquist_frequency) 16 kHz), and 16-bit kills the 8-bit hiss.
@@ -211,6 +233,9 @@ uv run host/demos/demo.py demo.wav && scripts/make_mp4.sh demo.wav   # record + 
 
 ## Milestone 5 — 32-voice polyphony (done)
 
+**What changed:** `Voice[4]` → `Voice[32]` with a **serialized** mixer, run at an effective
+20 MHz via a ÷5 clock-enable (the design was too slow for 100 MHz).
+
 Bumped `Voice[4]` → `Voice[32]`. The mix is **serialized** (accumulate one voice per
 clock over 32 of the 1000 clocks/sample) so it isn't a 32-wide combinational tree.
 Even so, the design's critical path is ~41 ns (Fmax ~24 MHz) — too slow for 100 MHz —
@@ -243,6 +268,9 @@ Verified on hardware: a 12-note cluster reads back as **12 simultaneous FFT peak
 
 ## Milestone 6 — resonant filter + LFO (done)
 
+**What changed:** A master resonant SVF + cutoff-modulating LFO on the mixed output (MIDI-CC
+controlled) — at the cost of a ÷10 low-fi clock. A dead end that M6a/M6b supersede.
+
 A master **resonant low-pass filter** (Chamberlin state-variable, Q13 fixed-point)
 on the mixed output, with an **LFO** that modulates the cutoff (auto-wah). All
 controlled by MIDI CC: **CC74 cutoff, CC71 resonance, CC76 LFO rate, CC77 LFO
@@ -270,6 +298,10 @@ To fit the filter's feedback multiplies the synth clock drops to **/10 = 10 MHz
   don't flush once audio is flowing.
 
 ## Milestone 6a — pipelined voice engine, hi-fi restored (done, hardware-verified)
+
+**What changed:** The core is rewritten as a time-multiplexed **pipelined proc** (one voice
+per cycle) — the prerequisite for per-voice filtering — with hi-fi 32 kHz restored. Runs at an
+effective 50 MHz (÷2 clock-enable).
 
 The master filter (M6) is a dead end for *per-voice* filtering, and its /10 clock
 threw away the hi-fi. M6a rewrites the core as a **time-multiplexed pipelined voice
@@ -304,6 +336,9 @@ uv run host/record_wav.py 3 m6a.wav && scripts/spectro.sh m6a.wav   # clean spec
 
 ## Milestone 6b — per-voice resonant filter (done, hardware-verified)
 
+**What changed:** Every voice gets its own resonant SVF — with key-tracking and a 2nd (filter)
+envelope — filtering its oscillator *before* the mix. Clock drops to an effective ÷3.
+
 The payoff of the M6a rewrite: **every voice now has its own resonant low-pass**,
 filtering its oscillator *before* the mix — impossible with the old single master
 filter (M6), which could only filter the summed output.
@@ -337,6 +372,9 @@ uv run host/demos/demo_m6b.py demo.wav && scripts/make_mp4.sh demo.wav       # f
 
 ## Milestone 9 — noise + multimode filter + sub-osc (done, hardware-verified)
 
+**What changed:** Three cheap analog staples — LFSR **noise**, **multimode** filter
+(LP/HP/BP/notch), and a **sub-oscillator** an octave down.
+
 *Analog-feature priority: ⭐ quick wins — noise (impact High · ease ★★★★★), multimode filter (Med · ★★★★★), sub-osc (Med · ★★★★). Cheap, immediate new timbres.*
 
 Three cheap analog-staple additions, all verified on the board:
@@ -356,6 +394,9 @@ multiply). Lesson: on F4PGA, watch total soft-multiplier count and ring-state wi
 not just the critical path. Path 22.5 ns, within the ÷3 30 ns budget.
 
 ## Milestone 10 — fat oscillators: PWM + detuned dual osc (done, hardware-verified)
+
+**What changed:** Analog thickness — variable-width **PWM** pulse and a **detuned 2nd
+oscillator** on its own accumulator (beating/fatness).
 
 *Analog-feature priority: ⭐ fat oscillators — PWM (impact High · ease ★★★★), detuned dual osc (V.High · ★★★); the signature analog thickness — the biggest single upgrade.*
 
@@ -386,6 +427,9 @@ MIDI CC map so far: 70 wave(0–4) · 71 reso · 72 filter-mode · 73 sub-level 
 
 ## Milestone 11 — pitch expression: vibrato + pitch bend + portamento (done, hardware-verified)
 
+**What changed:** Three pitch modulators — **vibrato** (mod wheel), **pitch bend** (±2 st),
+and **portamento**/glide — all folded into the oscillator increment.
+
 *Analog-feature priority: ⭐ pitch expression — vibrato (impact High · ease ★★★), portamento (High · ★★★), pitch bend (Med · ★★★★).*
 
 All three modulate the oscillator increment; the shared trick is `inc*(1+pmod/4096)`
@@ -408,6 +452,9 @@ MIDI CC map: 1 vibrato · 5 portamento · 70 wave(0–4) · 71 reso · 72 filter
 79 filter-env; **0xE0** pitch bend.
 
 ## Milestone 13 — effects: chorus + delay via block RAM (done, hardware-verified)
+
+**What changed:** First use of **block RAM** — a 16K×16 circular delay line in the Verilog
+shell drives **chorus** and **echo/delay**.
 
 *Analog-feature priority: ⭐ effects — chorus (impact V.High · ease ★★), delay/echo (High · ★★); the BRAM delay-line experiment (also proves out RAM for future work).*
 
@@ -436,6 +483,9 @@ MIDI CC map: 1 vibrato · 5 portamento · 70 wave · 71 reso · 72 filter-mode �
 91 reverb room size (room/hall/large/**cathedral**) · 92 tremolo; 0xE0 pitch bend.
 
 ## Milestone 14 — reverb (done, hardware-verified)
+
+**What changed:** A **Schroeder/Freeverb reverb** (4 feedback combs + 2 all-pass) with
+room→cathedral size, in the shell's BRAM; the multiply-heavy feedback drops the clock to ÷4.
 
 *Analog-feature priority: reverb (impact High · ease ★ — the hardest: multiply-heavy comb feedback).*
 
@@ -486,6 +536,9 @@ The multiply pushed the effect path to ~37 ns, so the engine clock-enable droppe
 
 ## Milestone 15 — unison (done, hardware-verified)
 
+**What changed:** **Voice-stacking** unison (2/3/4 voices per note) with fixed detune + phase
+decorrelation for a thick super-saw; max polyphony becomes 32/N.
+
 *Analog-feature priority: ⭐ unison (impact Med · ease ★★★).*
 
 **Voice-stacking** unison (CC80): a note-on grabs **N of the 32 physical voices** instead
@@ -511,6 +564,9 @@ voice count (envelope CV 2% → 17.5% → 26.3% → 37.4% for off→2→3→4), 
 (0.5 → 2.5 Hz), level stays matched, no railing.
 
 ## Web UI — a browser synth panel (done, hardware-verified)
+
+**What changed:** A browser analog-panel front-end that plays the real board live — MIDI in +
+audio out over a WebSocket — plus the ADSR-over-CC firmware change it needed.
 
 A browser front-end styled like a classic analog polysynth that plays the real board: it is a live
 **MIDI input** (on-screen keyboard, computer keys, or a Web-MIDI hardware controller — all
@@ -585,6 +641,9 @@ vs **Sub Bass** (fast attack) shows the audible amplitude swell of the new ADSR 
 
 ## Standalone LED "comet" — per-voice envelope on the 16 board LEDs (done, hardware-verified)
 
+**What changed:** The 16 board LEDs become a live voice display — a note advances a "comet"
+cursor and each LED's brightness tracks the real per-voice ADSR envelope.
+
 The Basys 3's 16 LEDs are a live voice display: **each new note advances a cursor to the next
 LED** (a sliding comet that moves faster the more notes you strike at once), and **each LED's
 brightness tracks the real ADSR envelope** of the voice that lit it, so notes swell and fade
@@ -601,6 +660,9 @@ behind the moving head. It's driven by the *actual* per-voice envelope, not a sh
 
 ## Stereo effects — mono dry, decorrelated wet (done, hardware-verified)
 
+**What changed:** The mono engine gains a **stereo image** built entirely in the shell —
+decorrelated wet (Freeverb spread, ping-pong echo, anti-phase chorus) over a centered dry.
+
 The voice engine stays mono; the **shell effects create the stereo image**. Two per-channel
 16K delay buffers (`dmemL`/`dmemR`), and a single arithmetic datapath (one reverb multiply) is
 **time-shared L-then-R** by the FSM — so no second multiplier and the ÷4 budget holds
@@ -612,6 +674,9 @@ with a **1-bit channel marker** in each low byte's LSB (L=0, R=1) so the browser
 fractional read position (L/R phase-locked).
 
 ## Milestone 19 — cross-oscillator FM / ring-mod (built)
+
+**What changed:** The 2nd oscillator doubles as a **modulator** — **FM** or **ring-mod** — so
+the engine can finally *create* inharmonic (bell/metallic) timbres, not just filter them.
 
 *Analog-feature priority: ⭐ FM / ring-mod (impact V.High · ease ★★) — the missing synthesis method.*
 
@@ -671,6 +736,9 @@ loop.
 
 ## Preset browser & AI-matched preset banks (inverse synthesis)
 
+**What changed:** A Serum/Vital-style **preset browser** backed by banks built through *inverse
+synthesis* — a CMA-ES search over the CC space minimizing a spectrogram loss against real target
+sounds, run on a fast software model of the engine.
 
 The web UI has a Serum/Vital-style **preset browser** (Factory/User tabs, a category rail, a
 scrollable list, search) backed by **128-slot** banks; `webui/synthspec.py` concatenates every
@@ -787,6 +855,10 @@ constraints, not the search itself.
   become milliseconds each.
 
 ## Milestone 7 + 8 — hardware I/O: DIN MIDI in + I2S DAC out (built; hardware pending)
+
+**What changed:** The two interfaces that make it a **standalone** instrument — DIN MIDI-in
+(opto-isolated) and I2S DAC line-out — built and timing-closed, but hardware-pending (parts on
+order).
 
 Until now the synth has been a *headless* instrument: MIDI arrives and audio leaves over the one
 USB UART (great for autonomous verification, but it means a computer is always in the loop). M7+M8

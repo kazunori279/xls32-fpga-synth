@@ -1,14 +1,15 @@
 # XLS32 — a polyphonic HLS/FPGA synthesizer, built end-to-end with AI coding agents
 
 A **[polyphonic](https://en.wikipedia.org/wiki/Polyphony_and_monophony_in_instruments) [MIDI](https://en.wikipedia.org/wiki/MIDI) synthesizer built entirely in [FPGA](https://en.wikipedia.org/wiki/Field-programmable_gate_array) fabric** — the oscillators,
-filters, envelopes, and effects all run as digital logic on the chip, not as software on
-a CPU. It's written in **[Google XLS (DSLX)](https://google.github.io/xls/)** rather than hand-written [Verilog](https://en.wikipedia.org/wiki/Verilog), targets a
-**[Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start)** board, and — because it was
-developed headlessly over a network — every feature is verified automatically over USB.
-Notably, **not a single line of it was written by hand**: the whole design was built by
-[Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) — the AI coding agent —
-through [loop engineering](https://addyosmani.com/blog/loop-engineering/): prompts in, a
-self-verifying build → measure → revise loop out.
+filters, envelopes, and effects all run as digital logic on the chip, not as software on a CPU.
+It's written in **[Google XLS (DSLX)](https://google.github.io/xls/)**, not hand-written [Verilog](https://en.wikipedia.org/wiki/Verilog), and targets a
+**[Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start)** board.
+
+Because it was developed headlessly over a network, every feature is verified automatically
+over USB. And **not a single line of it was written by hand**: the whole design was built by
+[Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8), the AI coding agent, through
+[loop engineering](https://addyosmani.com/blog/loop-engineering/) — prompts in, a self-verifying
+build → measure → revise loop out.
 
 ![The XLS32 browser front-end — an analog-style panel driving the FPGA synth live over USB](docs/webui.png)
 
@@ -20,14 +21,23 @@ multitimbral selector, preset browser, and demo player.*
 
 *▶️ **[Demo video](https://youtu.be/2ROr9M_ZlVY)** — the web UI driving the Basys 3 board live, with the synth's own audio (click to watch on YouTube).*
 
+## At a glance
+
+- **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
+- **Hardware** — a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) board (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`), one 100 MHz clock. The whole synth is a literal circuit that computes one audio sample per tick.
+- **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a thin Verilog shell for UART and the block-RAM effects. No hand-written datapath.
+- **Play it** — a browser analog-style panel drives the board live over USB (or drive it from Python); MIDI in, 16-bit stereo audio out.
+- **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 130+ scored end-to-end tests over USB.
+- **Start here** — [Quickstart](#2-quickstart-guide) flashes the prebuilt board and plays it (no toolchain); the [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works. Build history + toolchain friction logs live in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
+
 ## Contents
 
-1. [Overview](#1-overview) — what it is, the spec table, the repo layout.
+1. [Overview](#1-overview) — what it is, the spec table, background & rationale, the repo layout.
 2. [Quickstart guide](#2-quickstart-guide) — flash the prebuilt board, run and play the web UI.
 3. [Builder's guide](#3-builders-guide) — build the bitstream, flash, verify, simulate, test.
 4. [Architecture & design](#4-architecture--design) — how the synth works today.
 
-The milestone-by-milestone build history (M1 → M15 + Web UI) and the toolchain friction logs &
+The milestone-by-milestone build history (M1 → M19 + Web UI) and the toolchain friction logs &
 learnings live in the companion **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ---
@@ -37,18 +47,14 @@ learnings live in the companion **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 ## What it is
 
 A polyphonic MIDI synthesizer implemented in Google XLS (DSLX) and run on a Basys 3
-(Artix-7), built through open-source (F4PGA / openXC7) or Xilinx Vivado flows. The whole datapath is expressed
-in DSLX; a thin Verilog shell handles UART and the block-RAM effects. Because the board
-is developed remotely, **every feature is checked over the USB UART** — audio is teed out
-as a sample stream and verified on the host by FFT / spectrogram, and MIDI is driven in
-over the same port.
+(Artix-7), built through open-source (F4PGA / openXC7) or Xilinx Vivado flows. The whole
+datapath is expressed in DSLX; a thin Verilog shell handles UART and the block-RAM effects.
 
-Today it is a **32-voice** [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth (oscillators → per-voice resonant filter
-→ [VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier), envelopes, [LFO](https://en.wikipedia.org/wiki/Low-frequency_oscillation), effects) played either headlessly from Python or live from a
-browser **analog-style** front-end. This README is a developer's guide: it covers the big
-picture, then how to run and build it, then the design. The milestone-by-milestone
-history and the hard-won toolchain frictions behind it live in the companion
-**[DEVELOPMENT.md](DEVELOPMENT.md)**.
+Because the board is developed remotely, **every feature is checked over the USB UART**: audio
+is teed out as a sample stream and verified on the host by FFT / spectrogram, and MIDI is driven
+in over the same port. Today it is a **32-voice** [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth (oscillators → per-voice
+resonant filter → [VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier), envelopes, [LFO](https://en.wikipedia.org/wiki/Low-frequency_oscillation), effects), played headlessly from Python or live from a
+browser **analog-style** front-end.
 
 **Synth spec**
 
@@ -76,7 +82,12 @@ history and the hard-won toolchain frictions behind it live in the companion
 | **FPGA resources** | Vivado (`xc7a35t`): ~50% LUTs · 26× DSP48E1 · 32× RAMB36E1 · ~42% FF |
 | **Verification** | 130+ scored end-to-end cases over USB (FFT / spectrogram) |
 
-## The technologies
+## Background & rationale
+
+*Why this design — the technologies, the trade-offs, and the build method. Skip to
+[Quickstart](#2-quickstart-guide) if you just want to run it.*
+
+### The technologies
 
 Three technologies do the heavy lifting; here's what each is and why it's here.
 
@@ -94,22 +105,23 @@ Three technologies do the heavy lifting; here's what each is and why it's here.
   or **openXC7** (nextpnr-xilinx), or **Xilinx Vivado** — the last builds the committed 32 kHz/DSP48
   bitstream. [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) then flashes it over JTAG; the whole build is scriptable.
 
-## Why XLS, not hand-written Verilog?
+### Why XLS, not hand-written Verilog?
 
-The DSP here ([DDS](https://en.wikipedia.org/wiki/Direct_digital_synthesis) oscillators, [ADSR](https://en.wikipedia.org/wiki/Envelope_(music))
-math, a [state-variable filter](https://en.wikipedia.org/wiki/State_variable_filter), a mixer) is naturally expressed as functions over numbers.
-In DSLX that's a few lines with unit tests that run in milliseconds, and the compiler
-handles pipelining, register insertion, and bit-width narrowing. The Verilog equivalent
-means hand-managing pipeline registers, valid/ready handshakes, and [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) widths
-yourself. XLS trades some low-level control for a much tighter write-test loop — and where
-you *do* need that control (the block-RAM effects, the clock-enable multicycle), a thin
-Verilog shell provides it. This project is partly a candid stress test of that trade-off;
-the [friction log](DEVELOPMENT.md#friction-logs--learnings) documents exactly where the seams leak.
+The DSP here — [DDS](https://en.wikipedia.org/wiki/Direct_digital_synthesis) oscillators, [ADSR](https://en.wikipedia.org/wiki/Envelope_(music)) math, a [state-variable filter](https://en.wikipedia.org/wiki/State_variable_filter), a mixer — is naturally
+expressed as functions over numbers. In DSLX that's a few lines with unit tests that run in
+milliseconds, and the compiler handles pipelining, register insertion, and bit-width narrowing.
+The Verilog equivalent means hand-managing pipeline registers, valid/ready handshakes, and
+[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) widths yourself.
 
-## Why an FPGA, not Web Audio?
+XLS trades some low-level control for a much tighter write-test loop. Where you *do* need that
+control — the block-RAM effects, the clock-enable multicycle — a thin Verilog shell provides it.
+This project is partly a candid stress test of that trade-off; the
+[friction log](DEVELOPMENT.md#friction-logs--learnings) documents exactly where the seams leak.
+
+### Why an FPGA, not Web Audio?
 
 You *could* synthesize these voices in a few lines of JavaScript with the
-[Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) API — the question is what that costs you. Pushing the DSP into hardware
+[Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) API. The question is what that costs you. Pushing the DSP into hardware
 buys three concrete things:
 - **Deterministic, tiny latency.** The FPGA computes one sample per clock in a fixed-length
   pipeline, so the delay through the datapath is a fixed handful of clock cycles —
@@ -130,19 +142,18 @@ buys three concrete things:
   or hardware MIDI directly with no OS/driver round-trip. It's a real instrument, not a
   browser tab.
 
-## Loop engineering with FPGA and AI coding agents
+### Loop engineering with FPGA and AI coding agents
 
-This whole board was brought up
-*remotely and headlessly* by an AI coding agent — no one watching LEDs, listening to a
-speaker, or pressing buttons. That works because the project is built for
-*loop engineering*: the practice of
-designing a tight, self-verifying edit → build → run → observe cycle and letting the agent
-iterate *inside* it, instead of hand-prompting each step. The load-bearing ingredient is
-**autonomous verification** — every feature emits a signal a machine can grade without human
-senses: audio is teed out over USB and checked by [FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)/[spectrogram](https://en.wikipedia.org/wiki/Spectrogram), and the end-to-end suite
-scores each test 0–100 and fails on a regression. Give the agent that objective pass/fail
-and the loop runs unattended: change the DSLX, build, flash, measure, read the number,
-revise.
+This whole board was brought up *remotely and headlessly* by an AI coding agent — no one
+watching LEDs, listening to a speaker, or pressing buttons. That works because the project is
+built for *loop engineering*: you design a tight, self-verifying edit → build → run → observe
+cycle and let the agent iterate *inside* it, instead of hand-prompting each step.
+
+The load-bearing ingredient is **autonomous verification** — every feature emits a signal a
+machine can grade without human senses. Audio is teed out over USB and checked by
+[FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)/[spectrogram](https://en.wikipedia.org/wiki/Spectrogram); the end-to-end suite scores each test 0–100 and fails on a regression.
+Give the agent that objective pass/fail and the loop runs unattended: change the DSLX, build,
+flash, measure, read the number, revise.
 - **Fast builds keep the loop tight.** A loop is only as good as its cycle time, and FPGA
   place-and-route is the slow step. Building F4PGA under x86 *emulation* on an Apple-Silicon
   Mac takes ~8–10 min per iteration; offloading the build to a **native x86 [GCE](https://cloud.google.com/products/compute) VM** in the
@@ -160,7 +171,7 @@ flowchart LR
   CHECK -->|regression| EDIT
 ```
 
-## Design principle
+### Design principle
 
 One clock, one sample rate. Everything is either a **pure function** (the DSP
 math — XLS's sweet spot) or a small **proc** (the stateful/streaming stages). No
@@ -310,16 +321,18 @@ stop it before running the `host/` tools above. See the
 > HOST=0.0.0.0 SSL_CERT=cert.pem SSL_KEY=key.pem uv run python webui/server.py
 > ```
 
-The **🔊 WEB / 💻 LOCAL** toggle (next to POWER) picks where audio + live MIDI run. **WEB**
-streams PCM to the browser (play from any device on the network). **LOCAL** makes the *host*
-(the machine running `server.py`, wired to the board) play the audio on its own output device
-(pick which one from the dropdown next to the toggle — switchable live) and read a MIDI keyboard
-plugged into it directly — skipping the WebSocket + AudioWorklet
-round-trip for **much lower play latency**; the browser stays the control + demo surface. LOCAL
-audio-out works out of the box (`sounddevice`, a runtime dep); reading a MIDI keyboard plugged
-into the *host* additionally needs `python-rtmidi` (`uv sync --extra localmidi`) — without it,
-LOCAL still plays audio, you just drive it from the browser (on-screen/computer/Web-MIDI keys or
-the demos). The toggle hides itself entirely if no host audio backend is present.
+The **🔊 WEB / 💻 LOCAL** toggle (next to POWER) picks where audio + live MIDI run:
+
+- **WEB** streams PCM to the browser — play from any device on the network.
+- **LOCAL** makes the *host* (the machine running `server.py`, wired to the board) play the audio on
+  its own output device (pick which from the dropdown next to the toggle — switchable live) and read
+  a MIDI keyboard plugged into it directly. This skips the WebSocket + AudioWorklet round-trip for
+  **much lower play latency**; the browser stays the control + demo surface.
+
+LOCAL audio-out works out of the box (`sounddevice`, a runtime dep). Reading a host-plugged MIDI
+keyboard additionally needs `python-rtmidi` (`uv sync --extra localmidi`); without it, LOCAL still
+plays audio — you just drive it from the browser (on-screen/computer/Web-MIDI keys or the demos).
+The toggle hides itself entirely if no host audio backend is present.
 
 ### Record a demo video (web UI + board webcam + sound)
 
@@ -550,18 +563,19 @@ flowchart LR
 
 ## The Verilog shell & block-RAM effects
 
-`rtl/top.v` is a thin shell that: runs the UART at 2 Mbaud (MIDI in on `RsRx`, audio out
-on `RsTx`), drives the engine's clock-enable and ready/valid handshakes, and hosts the
-**stereo effects** downstream of the engine. The voice engine is mono; **the effects create
-the stereo image** — the dry signal sits centered (identical L/R) and each wet is decorrelated.
-Per-channel **16K×16-bit circular delay buffers** (synchronous read+write) feed
-[chorus](https://en.wikipedia.org/wiki/Chorus_%28audio_effect%29) (L/R LFO taps in anti-phase)
-and echo/delay (feedback ping-pongs L↔R), and a separate per-channel **reverb tank** holds a full
-[Freeverb](https://en.wikipedia.org/wiki/Reverberation) — **8 combs + 4 all-pass per channel**
-with the Freeverb stereo spread (right-channel delays = left + 23 samples). Each effect is
-**depth-gated** (on when its knob > 0), so there is no mode byte: chorus depth (CC94), echo/delay
-depth (CC95) + time (CC82), and reverb wet (CC93) + room size (CC91) are sniffed from the MIDI
-stream by the shell. (The old CC83 dry/chorus/delay/both mode is now unused.) Full detail:
+`rtl/top.v` is a thin shell. It runs the UART at 2 Mbaud (MIDI in on `RsRx`, audio out on
+`RsTx`), drives the engine's clock-enable and ready/valid handshakes, and hosts the **stereo
+effects** downstream of the engine.
+
+The voice engine is mono; **the effects create the stereo image**. The dry signal sits centered
+(identical L/R) and each wet is decorrelated. Per-channel **16K×16-bit circular delay buffers**
+(synchronous read+write) feed [chorus](https://en.wikipedia.org/wiki/Chorus_%28audio_effect%29) (L/R LFO taps in anti-phase) and echo/delay (feedback
+ping-pongs L↔R); a separate per-channel **reverb tank** holds a full [Freeverb](https://en.wikipedia.org/wiki/Reverberation) — **8 combs +
+4 all-pass per channel**, with the Freeverb stereo spread (right-channel delays = left + 23 samples).
+
+Each effect is **depth-gated** (on when its knob > 0), so there's no mode byte: chorus depth (CC94),
+echo/delay depth (CC95) + time (CC82), and reverb wet (CC93) + room size (CC91) are sniffed from the
+MIDI stream by the shell. (The old CC83 dry/chorus/delay/both mode is now unused.) Full detail:
 [M13](DEVELOPMENT.md#milestone-13--effects-chorus--delay-via-block-ram-done-hardware-verified),
 [M14](DEVELOPMENT.md#milestone-14--reverb-done-hardware-verified).
 
@@ -605,16 +619,18 @@ unaffected (the actual initiation interval is far below the budget). The full ra
 the "timing must be reasoned, not read from the (failing) VPR report" caveat are in
 [§6 frictions](DEVELOPMENT.md#integrating-basys-3--f4pga--xls-the-frictions).
 
-> **Real-time streaming rate: 28 kHz at ÷4 → true 32 kHz at ÷3 (DSP backend).** At ÷4 the
-> per-sample audio-pull + effect FSM + TX chain overruns the 32 kHz sample budget, so the engine
-> back-pressures and streams only ~28–30 k samples/s — clean but ~1 semitone flat in real time
-> (recorded captures play fine at 32 kHz, which is why it hid so long). The soft-multiplier fix ran
-> the DSP at **28 kHz** (`SAMPDIV=3571`, `BASE_INC` rescaled). With the **DSP48 (Vivado) backend**
-> the engine critical path drops ~40 → ~19.5 ns, so it runs **÷3 (30 ns budget)** — fast enough to
-> sustain a **true 32 kHz** stream in real time with correct pitch (`SAMPDIV=3125`, `BASE_INC` at
-> 32 kHz, `SR=32000`). (÷2 also builds but latches the SVF under stress — ~0.5 ns margin — so ÷3 is
-> the reliable choice.) The filter/reverb constants were always 32 kHz-native, so they're now correct
-> too. The soft-multiplier F4PGA/nextpnr fallbacks stay at ÷4 / 28 kHz.
+> **Real-time streaming rate: 28 kHz at ÷4, true 32 kHz at ÷3 (DSP backend).** At ÷4 the per-sample
+> audio-pull + effect FSM + TX chain overruns the 32 kHz sample budget, so the engine back-pressures
+> and streams only ~28–30 k samples/s — clean, but ~1 semitone flat in real time. (Recorded captures
+> play fine at 32 kHz, which is why it hid so long.) The soft-multiplier fix ran the DSP at **28 kHz**
+> (`SAMPDIV=3571`, `BASE_INC` rescaled).
+>
+> With the **DSP48 (Vivado) backend** the engine critical path drops ~40 → ~19.5 ns, so it runs
+> **÷3 (30 ns budget)** — fast enough to sustain a **true 32 kHz** stream with correct pitch
+> (`SAMPDIV=3125`, `BASE_INC` at 32 kHz, `SR=32000`). ÷2 also builds but latches the SVF under stress
+> (~0.5 ns margin), so ÷3 is the reliable choice. The filter/reverb constants were always
+> 32 kHz-native, so they're now correct too. The soft-multiplier F4PGA/nextpnr fallbacks stay at
+> ÷4 / 28 kHz.
 
 ## MIDI CC map (current)
 
@@ -652,14 +668,17 @@ sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-b
 
 The engine is **4-part multitimbral**: **MIDI channels 1–4** (low 2 bits of the channel nibble)
 select one of 4 independent **parts**, each with its own patch. `rtl/synth.x` factors the patch
-into a `Part` struct (`parts: Part[4]` in `Eng`); each `Voice` carries a 2-bit `part`; note-on
-tags voices with the event's channel (and uses that part's unison), note-off matches **note *and*
-part** (so a note-off on ch1 can't cut ch2), and CCs/pitch-bend route to the event's part
+into a `Part` struct (`parts: Part[4]` in `Eng`), and each `Voice` carries a 2-bit `part`.
+
+Note-on tags voices with the event's channel (and uses that part's unison); note-off matches
+**note *and* part** (so a note-off on ch1 can't cut ch2); CCs/pitch-bend route to the event's part
 (`apply_cc`). The processed voice reads **its** part's patch through a 4:1 mux before
-`process_voice`. The **32-voice pool is shared/dynamic** across parts. Each part has its **own LFO
-oscillator** (phase + CC76 rate), so the 4 timbres can wobble at independent speeds. Global (not
-per-part): the noise LFSR, and the shell effects (chorus/echo/reverb are post-mix, one for the
-whole mix). Per-part everything else, including vibrato/tremolo/LFO-depth and pitch bend.
+`process_voice`.
+
+The **32-voice pool is shared/dynamic** across parts. Each part has its **own LFO oscillator**
+(phase + CC76 rate), so the 4 timbres can wobble at independent speeds. Global (not per-part): the
+noise LFSR, and the shell effects (chorus/echo/reverb are post-mix, one for the whole mix).
+Everything else is per-part, including vibrato/tremolo/LFO-depth and pitch bend.
 
 The web UI has a **Part 1–4 selector**: the selected part is what the on-screen/computer keyboard
 plays and the knobs edit; each part keeps its own patch; all 4 play simultaneously from an
@@ -668,15 +687,17 @@ external controller/DAW on channels 1–4.
 Verified on hardware: the same note on two channels renders two distinct timbres (e.g. 320 Hz
 dark sine vs 2.4 kHz bright saw), and a note-off on one part doesn't cut another.
 
-> **⚠ Timing note — 4 parts is at the edge.** The 4× patch state + per-voice part mux add routing
-> congestion to the SVF path: `Final critical path delay ≈ 40.2 ns` (the `f×band` multiply is
-> already trimmed to 12-bit; the residual is mux congestion, not the multiply) — **~0.2 ns over**
-> the ÷4 40 ns model.
+> **⚠ Timing note — 4 parts is at the edge (soft-multiplier backends only).** On the committed
+> **Vivado/DSP48 build (÷3)** this is a non-issue: the path sits at ~19.5 ns with ~10 ns of margin
+> (see [Clocking](#clocking-the-clock-enable-multicycle)). It only bites the **F4PGA / nextpnr ÷4**
+> backends, where the 4× patch state + per-voice part mux push the SVF path to
+> `Final critical path delay ≈ 40.2 ns` — **~0.2 ns over** the 40 ns budget. (The `f×band` multiply
+> is already trimmed to 12-bit; the residual is mux congestion, not the multiply.)
 >
-> Unlike a normal setup miss (which would be a 1-sample glitch), here a violation can land on a
-> *control* path and **wedge the engine → no UART output → dead/silent** (observed: one STAGES=48
-> placement came out dead, another streamed fine). So **which build works is placement roulette** —
-> a given bitstream is either fine or dead, and a rebuild is a gamble. The committed bitstream is
-> hardware-verified working, but **treat rebuilds as needing a re-check** (does it stream?). For a
-> strictly-reliable build, **drop to 2 parts** (halves the mux → comfortably under 40 ns with full
-> per-part everything), or reduce the per-part field count (e.g. shared LFO).
+> Unlike a normal setup miss (a 1-sample glitch), a violation there can land on a *control* path and
+> **wedge the engine → no UART output → dead/silent** (observed: one STAGES=48 placement came out
+> dead, another streamed fine). So on those backends **which build works is placement roulette** — a
+> given bitstream is either fine or dead. **Treat soft-mult rebuilds as needing a re-check** (does it
+> stream?). For a strictly-reliable soft-mult build, **drop to 2 parts** (halves the mux →
+> comfortably under 40 ns with full per-part everything), or reduce the per-part field count (e.g.
+> shared LFO).
