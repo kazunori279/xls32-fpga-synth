@@ -35,3 +35,6 @@ presetgen/targets_freesound/
 presetgen/targets_soundfont/
 presetgen/demo_out/
 presetgen/__pycache__/
+
+# stray screenshots
+Screenshot*.png
