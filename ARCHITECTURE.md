@@ -117,16 +117,16 @@ flowchart LR
 
 ```wavedrom
 { "signal": [
-  {"name": "stick (32 kHz sample tick)",        "wave": "10........"},
-  {"name": "midi_in byte (async, xfer on ce)",  "wave": "0=0.......", "data": ["byte"]},
-  {"name": "engine → sample (avld)",            "wave": "010......."},
-  {"name": "audio pull (ardy, on ce)",          "wave": "0010......"},
-  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000=..0...", "data": ["echo→combs→AP"]},
-  {"name": "sampL/R ready (pend=4)",            "wave": "00000010.."},
-  {"name": "UART TX out",                       "wave": "0000000=..", "data": ["Llo Lhi Rlo Rhi"]}
+  {"name": "stick (32 kHz sample tick)",        "wave": "10........|10.."},
+  {"name": "midi_in byte (async, xfer on ce)",  "wave": "0=0.......|....", "data": ["byte"]},
+  {"name": "engine → sample (avld)",            "wave": "010.......|010."},
+  {"name": "audio pull (ardy, on ce)",          "wave": "0010......|0010"},
+  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000=..0...|...=", "data": ["echo→combs→AP","…"]},
+  {"name": "sampL/R ready (pend=4)",            "wave": "00000010..|...."},
+  {"name": "UART TX out",                       "wave": "0000000=..|....", "data": ["Llo Lhi Rlo Rhi"]}
 ],
-  "head": {"text": "one 32 kHz sample period — sequence, not to scale"},
-  "foot": {"text": "MIDI in is async; the tick paces engine → effects → TX"}
+  "head": {"text": "one 32 kHz sample period + start of the next — sequence, not to scale"},
+  "foot": {"text": "the tick is a 1-clock pulse every 3125 clk; the break skips the idle tail (~861 clk)"}
 }
 ```
 
