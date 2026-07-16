@@ -15,6 +15,7 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 ## Contents
 
 - [Conventions](#conventions) — fixed-point formats, the execution model, source-file map
+- [End-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out) — the full picture: MIDI in → pipeline → audio out
 - [Part A — Engine skeleton & scheduling](#part-a--engine-skeleton--scheduling)
   - [A1 The `engine` proc](#a1-the-engine-proc) · [A2 Voice ring & allocation](#a2-voice-ring--allocation) · [A3 Multitimbral parts](#a3-multitimbral-parts)
 - [Part B — Per-voice datapath](#part-b--per-voice-datapath)
@@ -64,6 +65,75 @@ emitted every **32** cycles. At 100 MHz the engine advances on a ÷3 clock-enabl
 Every DSLX multiply is deliberately kept **narrow** (operands range-limited by casts/masks) so
 it maps to a single Artix-7 **DSP48** on the Vivado backend — and stays a small soft-multiplier
 on the open F4PGA flow. The "Gotchas" notes below flag where that shaped the code.
+
+---
+
+## End-to-end timing: MIDI in → pipeline → audio out
+
+The whole synth runs on one 100 MHz clock but juggles three cadences: the **engine** advances on
+`ce` (÷3), the **effects FSM** on `ce8` (÷6), and a **32 kHz sample tick** paces the whole thing.
+This section is the full picture — how a MIDI byte becomes an audio sample, and the timescales
+involved. (Per-stage detail: [engine schedule](#a1-the-engine-proc), [clocking](#c1-clocking),
+[UART](#c2-uart), [handshake](#c3-engine-handshake), [effects FSM](#d1-effects-fsm),
+[stereo framing](#c4-stereo-framing).)
+
+**The path.** A MIDI byte arrives *asynchronously* over UART (2 Mbaud host, or 31250-baud DIN) and
+is handed to the engine on a `ce` cycle. The engine free-runs through its 32 voices (one per `ce`)
+and, when the 32 kHz tick pulls a sample, `send_if` delivers it. The shell then runs the 28-state
+effects FSM (on `ce8`), and streams the finished 16-bit stereo sample back out as 4 UART bytes.
+
+```mermaid
+flowchart LR
+  H["host / DIN keyboard"] -->|"UART bytes<br/>~5 µs/byte, async"| RX["UART RX"]
+  RX -->|"midi_in — xfer on ce"| ENG["engine<br/>32 voices, 1 per ce (30 ns)"]
+  TICK["32 kHz tick<br/>every 3125 clk"] -. paces .-> ENG
+  ENG -->|"1 sample / 32 voices"| FX["effects FSM<br/>28 steps, 1 per ce8 (60 ns)"]
+  FX -->|"4 bytes/frame"| TX["UART TX<br/>~20 µs/frame"]
+  TX -->|"16-bit stereo PCM"| OUT["host player / I2S DAC"]
+```
+
+**Timescales** (all derived from the single 100 MHz clock):
+
+| Cadence | Period | Clocks @100 MHz | What happens |
+|---|---|---:|---|
+| master clock | 10 ns | 1 | everything |
+| `ce` (engine) | 30 ns | 3 | one voice processed |
+| `ce8` (effects) | 60 ns | 6 | one effects-FSM step |
+| MIDI byte in | ~5 µs | ~500 | one 10-bit UART frame @ 2 Mbaud |
+| 32-voice scan | ~1 µs | ~96 | a full pass of the voice ring |
+| effects pass | ~1.7 µs | 168 (28×6) | full stereo Freeverb (echo/chorus + combs + all-pass) |
+| audio frame out | ~20 µs | ~2000 | 4 bytes (`Llo Lhi Rlo Rhi`) @ 2 Mbaud |
+| **sample period** | **31.25 µs** | **3125** (`SAMPDIV`) | one 32 kHz stereo sample |
+
+**Timing** — one 32 kHz sample period, MIDI-in through audio-out (sequence, not to scale):
+
+![End-to-end timing — one sample period from the 32 kHz tick through engine, effects, and UART TX](docs/wd_e2e.svg)
+
+<details><summary>WaveDrom source</summary>
+
+```wavedrom
+{ "signal": [
+  {"name": "stick (32 kHz sample tick)",        "wave": "10........"},
+  {"name": "midi_in byte (async, xfer on ce)",  "wave": "0=0.......", "data": ["byte"]},
+  {"name": "engine → sample (avld)",            "wave": "010......."},
+  {"name": "audio pull (ardy, on ce)",          "wave": "0010......"},
+  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000===0...", "data": ["echo/chorus","L: combs+AP","R: combs+AP"]},
+  {"name": "sampL/R ready (pend=4)",            "wave": "00000010.."},
+  {"name": "UART TX out",                       "wave": "0000000=..", "data": ["Llo Lhi Rlo Rhi"]}
+],
+  "head": {"text": "one 32 kHz sample period (~3125 × 10 ns — sequence, not to scale)"},
+  "foot": {"text": "MIDI in is asynchronous; the sample tick paces engine → effects → TX each period"}
+}
+```
+
+</details>
+
+**The budget.** The engine's voice scan (~96 clocks) and the effects pass (168 clocks) together use
+only **~264 of the 3125** clocks per sample — the pipeline finishes with ~90 % of the period to
+spare. That headroom is why real-time 32 kHz holds on the DSP48/Vivado build (`ce` = ÷3), and why the
+slower soft-multiplier backends (`ce` = ÷4) still work but only sustain ~28 kHz — the per-sample work
+grows past what ÷4 can retire inside 3125 clocks. MIDI in is decoupled from all of this: bytes are
+accepted whenever they arrive (on the next `ce`), independent of the sample cadence.
 
 ---
 
