@@ -317,13 +317,25 @@ fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
 }
 ```
 
-The noise source is a 16-bit Galois LFSR advanced once per sample in the proc
-([`rtl/synth.x:329`](rtl/synth.x)):
+The noise source is a 16-bit [Galois LFSR](https://en.wikipedia.org/wiki/Linear-feedback_shift_register)
+advanced once per sample in the proc ([`rtl/synth.x:329`](rtl/synth.x)):
 
 ```rust
 let lfsr1 = (st.lfsr >> u16:1) ^ (if (st.lfsr & u16:1) == u16:1 { u16:0xB400 } else { u16:0 });
 let noise = (st.lfsr[0:12] as s16) - s16:2048;            // ~+-2048 white noise
 ```
+
+Each step shifts the 16-bit state right by one; if the bit shifted out (`lfsr & 1`) was a `1`,
+the tap mask **`0xB400`** is XORed back in. That mask sets the taps for a *maximal-length*
+polynomial, so the register visits **all 65535 nonzero states** before repeating (~2 s at
+32 kHz) — a broadband, effectively-white sequence from one shift + one conditional XOR (no
+multiply, no LUT). The state must never be zero (zero is a fixed point), so `Eng` seeds it to
+`u16:0xACE1` at init ([`rtl/synth.x:309`](rtl/synth.x)). The low 12 bits, centered by
+`- 2048`, become the `noise` sample.
+
+It's a **single shared/global generator** (it lives in `Eng`, not per-`Part`), and it does
+double duty: besides the noise waveform, its value seeds each unison voice's decorrelated start
+phase ([B12](#b12-unison)) — one cheap entropy source for both jobs.
 
 **Gotcha.** `voice_wave` returns `s16` (|v| ≤ 2048) on purpose: the narrow return type gives the
 optimizer a tight range bound, so the downstream amplitude multiply narrows to ~16×7 instead of a
@@ -864,7 +876,27 @@ else if (dst==6'd5)  begin ... accL<=cbn;      raddr2<=RB1+{3'd0,cp1L}; dst<=6'd
 else if (dst==6'd28) begin ... sampL <= sat18(ecwL + rwetL) + 16'sd32768; ... pend<=3'd4; dst<=6'd0; end
 ```
 
-**Timing** — the per-sample phase map:
+**Timing** — one arithmetic datapath, time-shared **L then R** across the 28 states (on `ce8`):
+
+![Effects FSM — one datapath time-shared L then R across the 28-state machine](docs/wd_effects_fsm.svg)
+
+<details><summary>WaveDrom source</summary>
+
+```wavedrom
+{ "signal": [
+  {"name": "ce8 (÷6 tick)",             "wave": "pppppp"},
+  {"name": "dst",                       "wave": "======", "data": ["1–4","5–12","13–16","17–24","25–28","idle"]},
+  {"name": "FSM phase",                 "wave": "======", "data": ["echo+chorus","L: 8 combs","L: 4 all-pass","R: 8 combs","R: 4 all-pass","—"]},
+  {"name": "chan (shared datapath)",    "wave": "0..1.x", "data": ["L","R"]},
+  {"name": "sampL / sampR",             "wave": "0...=x", "data": ["L+R ready"]}
+],
+  "head": {"text": "one arithmetic datapath, time-shared L then R across the 28-state FSM (on ce8)"}
+}
+```
+
+</details>
+
+The exact per-sample phase map:
 
 | `dst` | phase | BRAM |
 |------:|-------|------|
