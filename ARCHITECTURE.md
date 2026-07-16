@@ -121,12 +121,12 @@ flowchart LR
   {"name": "midi_in byte (async, xfer on ce)",  "wave": "0=0.......", "data": ["byte"]},
   {"name": "engine → sample (avld)",            "wave": "010......."},
   {"name": "audio pull (ardy, on ce)",          "wave": "0010......"},
-  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000===0...", "data": ["echo/chorus","L: combs+AP","R: combs+AP"]},
+  {"name": "effects FSM (dst 1→28, on ce8)",    "wave": "000=..0...", "data": ["echo→combs→AP"]},
   {"name": "sampL/R ready (pend=4)",            "wave": "00000010.."},
   {"name": "UART TX out",                       "wave": "0000000=..", "data": ["Llo Lhi Rlo Rhi"]}
 ],
-  "head": {"text": "one 32 kHz sample period (~3125 × 10 ns — sequence, not to scale)"},
-  "foot": {"text": "MIDI in is asynchronous; the sample tick paces engine → effects → TX each period"}
+  "head": {"text": "one 32 kHz sample period — sequence, not to scale"},
+  "foot": {"text": "MIDI in is async; the tick paces engine → effects → TX"}
 }
 ```
 
@@ -1041,11 +1041,12 @@ else if (dst==6'd28) begin ... sampL <= sat18(ecwL + rwetL) + 16'sd32768; ... pe
 { "signal": [
   {"name": "ce8 (÷6 tick)",             "wave": "pppppp"},
   {"name": "dst",                       "wave": "======", "data": ["1–4","5–12","13–16","17–24","25–28","idle"]},
-  {"name": "FSM phase",                 "wave": "======", "data": ["echo+chorus","L: 8 combs","L: 4 all-pass","R: 8 combs","R: 4 all-pass","—"]},
+  {"name": "FSM phase",                 "wave": "======", "data": ["echo/ch","L combs","L a-pass","R combs","R a-pass","idle"]},
   {"name": "chan (shared datapath)",    "wave": "0..1.x", "data": ["L","R"]},
   {"name": "sampL / sampR",             "wave": "0...=x", "data": ["L+R ready"]}
 ],
-  "head": {"text": "one arithmetic datapath, time-shared L then R across the 28-state FSM (on ce8)"}
+  "head": {"text": "one arithmetic datapath, time-shared L then R across the 28-state FSM (on ce8)"},
+  "config": {"hscale": 3}
 }
 ```
 
@@ -1282,7 +1283,7 @@ end
 { "signal": [
   {"name": "i2s_bclk", "wave": "pppppppppppppppp"},
   {"name": "i2s_ws",   "wave": "0.......1......."},
-  {"name": "i2s_sd",   "wave": "0.=======0.=====", "data": ["L: MSB..LSB","R: MSB..LSB"]}
+  {"name": "i2s_sd",   "wave": "0.=......0.=....", "data": ["L: MSB..LSB","R: MSB..LSB"]}
 ]}
 ```
 
