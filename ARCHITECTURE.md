@@ -6,11 +6,11 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 [README §4](README.md#4-architecture--design), and for the milestone-by-milestone rationale
 (why each block is the way it is) see [DEVELOPMENT.md](DEVELOPMENT.md).
 
-> **Rendering note.** Timing charts are [WaveDrom](https://wavedrom.com/) diagrams in
-> ` ```wavedrom ` blocks and dataflow diagrams are [Mermaid](https://mermaid.js.org/). Mermaid
-> renders on GitHub; **WaveDrom does not render on GitHub** — paste a chart into the
-> [WaveDrom editor](https://wavedrom.com/editor.html), or view this file in a WaveDrom-aware
-> renderer (VS Code WaveDrom/Markdown Preview Enhanced, mdBook, Docsify, etc.).
+> **Rendering note.** Dataflow diagrams are [Mermaid](https://mermaid.js.org/) (rendered by
+> GitHub). Timing charts are pre-rendered [WaveDrom](https://wavedrom.com/) **SVGs** in
+> [`docs/`](docs) so they display everywhere, including GitHub; the WaveDrom source for each is
+> kept in a collapsible block beneath it. To regenerate after editing a source:
+> `npx wavedrom-cli -i chart.json -s docs/wd_name.svg` (then re-add a white background rect).
 
 ## Contents
 
@@ -128,6 +128,10 @@ flowchart LR
 
 **Timing** — one voice per enabled cycle; a sample every 32 (columns = enabled engine cycles):
 
+![Engine schedule — one voice per enabled cycle; a sample emitted every 32](docs/wd_engine_schedule.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "engine step (÷3)", "wave": "==========", "data": ["v0","v1","v2","…","v30","v31","v0","v1","v2","…"]},
@@ -135,6 +139,8 @@ flowchart LR
   {"name": "audio_out send",    "wave": "0....10..."}
 ]}
 ```
+
+</details>
 
 **Gotcha.** MIDI is read with `recv_non_blocking` and the audio `send_if` fires only on the
 last voice, so the shell paces the whole engine purely by *back-pressure* on `audio_out`
@@ -273,12 +279,18 @@ let phase_n = v.phase + inc;         // inc = note increment (+ pitch mod + unis
 **Timing** — the accumulator ramps; a `u32` overflow marks one oscillator period (used by the
 sub-osc):
 
+![DDS phase accumulator ramping and wrapping](docs/wd_dds_phase.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "phase (u32)", "wave": "=======", "data": ["p","p+inc","+2inc","+3inc","… wrap","+inc","+2inc"]},
   {"name": "wrap (overflow)", "wave": "0...10.."}
 ]}
 ```
+
+</details>
 
 **Gotcha.** `inc(n+12) == 2·inc(n)`, so keeping only the lowest octave and barrel-shifting by
 `note/12` replaces a 128:1 32-bit LUT mux (~15 ns, un-pipelineable — an array index is one atomic
@@ -521,6 +533,10 @@ stateDiagram-v2
 
 **Timing** — envelope level vs gate across the stages:
 
+![ADSR envelope level vs gate across the stages](docs/wd_adsr.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "gate",      "wave": "01.....0.."},
@@ -528,6 +544,8 @@ stateDiagram-v2
   {"name": "env level", "wave": "=.=.=.==.=", "data": ["0","↑max","↓sus","sus","↓","0"]}
 ]}
 ```
+
+</details>
 
 **Gotcha.** Compares are done in `u32` so a high sustain (~65024) plus a large decay step can't
 wrap `u16`. Rates map through `TIME_INC` (an 8-entry LUT, index `cc>>4`), spanning ~3 ms to ~2 s
@@ -695,6 +713,10 @@ always @(posedge clk100) sdiv <= rst ? 16'd0 : (stick ? 16'd0 : sdiv + 1);
 
 **Timing** — two full mod-6 periods:
 
+![Clocking — mod-6 counter driving ce (÷3, engine) and ce8 (÷6, effects)](docs/wd_clocking.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "clk100",           "wave": "pppppppppppp"},
@@ -703,6 +725,8 @@ always @(posedge clk100) sdiv <= rst ? 16'd0 : (stick ? 16'd0 : sdiv + 1);
   {"name": "ce8 (÷6 effects)", "wave": "100000100000"}
 ]}
 ```
+
+</details>
 
 **Gotcha.** `ce8` is a strict subset of `ce` (same phase), so the ÷3 sample-consume handshake and
 the ÷6 effects FSM never collide on the shared `dst` state. The DSP48/Vivado build runs ÷3 (30 ns,
@@ -734,11 +758,17 @@ end else rxd <= rxd - 1;
 
 **Timing** — one 8-N-1 UART byte (idle-high, start bit low, 8 data LSB-first, stop bit high):
 
+![UART 8-N-1 byte frame](docs/wd_uart_frame.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "RsRx", "wave": "10========1", "data": ["d0","d1","d2","d3","d4","d5","d6","d7"]}
 ]}
 ```
+
+</details>
 
 **Gotcha.** Each receiver arms on the falling start bit and samples at `BAUD + BAUD/2 - 1` (mid-bit
 of bit 0), then every `BAUD-1` after — the classic "sample in the middle" rule. 2 Mbaud is chosen
@@ -790,11 +820,17 @@ frame <= {1'b1, (pend==3'd4 ? {sampL[7:1],1'b0} : pend==3'd3 ? sampL[15:8]
 
 **Timing** — the 4-byte interleaved frame:
 
+![Stereo 4-byte interleaved frame (Llo Lhi Rlo Rhi)](docs/wd_stereo_frame.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "TX byte", "wave": "=.=.=.=.", "data": ["Llo (LSB=0)","Lhi","Rlo (LSB=1)","Rhi"]}
 ]}
 ```
+
+</details>
 
 **Gotcha.** A single dropped UART byte would otherwise flip the 16-bit phase for the rest of the
 stream (silence → DC, tone → buzzy saw). The LSB marker + the host's periodic re-lock heal a
@@ -975,6 +1011,10 @@ end
 
 **Timing** — BCLK = 100 MHz/32 = 3.125 MHz; 64 BCLK/frame → Fs ≈ 48.8 kHz; WS low = left:
 
+![I2S Philips frame — BCLK, WS (L/R), SD](docs/wd_i2s_frame.svg)
+
+<details><summary>WaveDrom source</summary>
+
 ```wavedrom
 { "signal": [
   {"name": "i2s_bclk", "wave": "pppppppppppppppp"},
@@ -982,6 +1022,8 @@ end
   {"name": "i2s_sd",   "wave": "0.=======0.=====", "data": ["L: MSB..LSB","R: MSB..LSB"]}
 ]}
 ```
+
+</details>
 
 **Gotcha.** The UDA1334A needs no MCLK (internal PLL locks to BCLK/WS), which is *why* it was
 chosen — F4PGA has no MMCM to synthesize an MCLK. `sampL/R` are offset-binary, so the MSB is
