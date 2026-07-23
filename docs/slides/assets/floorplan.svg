@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440" font-family="Helvetica,Arial,sans-serif">
+  <rect x="0" y="0" width="760" height="440" fill="#ffffff"/>
+  <text x="380" y="22" text-anchor="middle" font-size="15" font-weight="bold" fill="#222">Xilinx Artix-7 xc7a35t — rough resource floorplan</text>
+  <text x="380" y="40" text-anchor="middle" font-size="11" fill="#777">schematic: which fabric resource each block maps to (committed Vivado build) — not exact place-and-route</text>
+
+  <!-- die outline -->
+  <rect x="15" y="55" width="730" height="355" rx="6" fill="#fafafa" stroke="#999" stroke-width="1.5"/>
+
+  <!-- top I/O ring -->
+  <rect x="25" y="63" width="710" height="34" rx="3" fill="#f0f0f0" stroke="#bbb"/>
+  <text x="380" y="84" text-anchor="middle" font-size="11" fill="#444">I/O banks — clk W5 (100 MHz, BUFG) · UART RsRx/RsTx · LEDs ×16 · Pmod JA1 (DIN MIDI) · Pmod JB1–3 (I2S DAC)</text>
+
+  <!-- CLB-A : engine -->
+  <rect x="25" y="105" width="210" height="270" rx="3" fill="#eef3fb" stroke="#8aa6d0"/>
+  <text x="130" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#233">CLB fabric — Engine</text>
+  <text x="130" y="142" text-anchor="middle" font-size="10" fill="#556">(rtl/synth.x)</text>
+  <text x="130" y="168" text-anchor="middle" font-size="11" fill="#233"><tspan x="130" dy="0">DDS oscillators · waveforms</tspan><tspan x="130" dy="16">per-voice SVF · ADSR ×2</tspan><tspan x="130" dy="16">VCA · LFO · unison</tspan><tspan x="130" dy="16">rotating 32-voice ring</tspan><tspan x="130" dy="16">serialized mixer</tspan></text>
+  <text x="130" y="360" text-anchor="middle" font-size="10" fill="#667">~50% LUT · ~42% FF</text>
+
+  <!-- DSP column -->
+  <rect x="245" y="105" width="110" height="270" rx="3" fill="#fdeee9" stroke="#d59a86"/>
+  <text x="300" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#322">DSP48 ×26</text>
+  <text x="300" y="160" text-anchor="middle" font-size="10" fill="#433"><tspan x="300" dy="0">every multiply:</tspan><tspan x="300" dy="15">SVF f·band,</tspan><tspan x="300" dy="15">q·band, f·high</tspan><tspan x="300" dy="15">VCA gain</tspan><tspan x="300" dy="15">FM index · ring</tspan><tspan x="300" dy="15">pitch-mod</tspan><tspan x="300" dy="15">mix amp·comp</tspan><tspan x="300" dy="15">reverb g·y</tspan></text>
+  <text x="300" y="360" text-anchor="middle" font-size="10" fill="#766">29% of 90</text>
+
+  <!-- BRAM column -->
+  <rect x="365" y="105" width="150" height="270" rx="3" fill="#eaf6ee" stroke="#88bd98"/>
+  <text x="440" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#232">Block RAM ×32</text>
+  <text x="440" y="142" text-anchor="middle" font-size="10" fill="#565">(RAMB36E1)</text>
+  <text x="440" y="168" text-anchor="middle" font-size="10" fill="#232"><tspan x="440" dy="0">dmemL / dmemR</tspan><tspan x="440" dy="15">(echo + chorus)</tspan><tspan x="440" dy="15">dmem2L / dmem2R</tspan><tspan x="440" dy="15">(Freeverb tank)</tspan><tspan x="440" dy="15">4 × 16K×16 buffers</tspan><tspan x="440" dy="15">+ inferred sine /</tspan><tspan x="440" dy="15">note-inc ROMs</tspan></text>
+  <text x="440" y="360" text-anchor="middle" font-size="10" fill="#676">65% of 50 (binding)</text>
+
+  <!-- CLB-B : shell -->
+  <rect x="525" y="105" width="210" height="270" rx="3" fill="#eef3fb" stroke="#8aa6d0"/>
+  <text x="630" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#233">CLB fabric — Shell</text>
+  <text x="630" y="142" text-anchor="middle" font-size="10" fill="#556">(rtl/top.v)</text>
+  <text x="630" y="168" text-anchor="middle" font-size="11" fill="#233"><tspan x="630" dy="0">UART RX ×2 · TX</tspan><tspan x="630" dy="16">clock-enable (ce ÷3, ce8 ÷6)</tspan><tspan x="630" dy="16">28-state effects FSM</tspan><tspan x="630" dy="16">stereo L/R time-share</tspan><tspan x="630" dy="16">LED PWM · I2S master</tspan></text>
+
+  <!-- flow arrows -->
+  <text x="380" y="400" text-anchor="middle" font-size="10" fill="#999">data path: MIDI in → Engine (CLB+DSP, reads ROMs in BRAM) → mix → Shell FSM (CLB) ↔ delay/reverb (BRAM), reverb mult (DSP) → UART TX / I2S</text>
+</svg>

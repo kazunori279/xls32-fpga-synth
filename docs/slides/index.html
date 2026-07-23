@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XLS32 — Building an FPGA Synthesizer with AI Coding Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #0b57d0;          /* section divider / accents */
+    --blue-bright: #1a73e8;   /* labels, numbers */
+    --blue-soft: #e8f0fe;     /* light section bg, pills */
+    --blue-chip: #d2e3fc;     /* table header */
+    --green: #188038;
+    --yellow: #f9ab00;
+    --red: #d93025;
+    --bg: #f6f7f9;            /* slide canvas */
+    --ink: #202124;           /* near-black titles */
+    --ink-2: #3c4043;         /* slide headings */
+    --ink-3: #5f6368;         /* body gray */
+    --hairline: #dadce0;
+    --font: 'Google Sans', 'Product Sans', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'Roboto Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #202124; overflow: hidden; }
+  body { font-family: var(--font); }
+
+  /* ---------- deck chrome ---------- */
+  #stage { position: fixed; inset: 0; overflow: hidden; }
+  #frame { width: 1280px; height: 720px; position: absolute; left: 50%; top: 50%;
+           transform: translate(-50%, -50%); transform-origin: center center;
+           box-shadow: 0 12px 48px rgba(0,0,0,.5); border-radius: 6px; overflow: hidden; }
+  #hud { position: fixed; right: 18px; bottom: 12px; color: #9aa0a6; font-size: 13px;
+         font-family: var(--mono); z-index: 50; user-select: none; }
+  #help { position: fixed; left: 18px; bottom: 12px; color: #5f6368; font-size: 12px; z-index: 50; user-select: none; }
+  @media (max-width: 720px), (max-height: 480px) { #help { display: none; } }
+
+  /* ---------- slide base ---------- */
+  .slide { position: absolute; inset: 0; width: 1280px; height: 720px; background: var(--bg);
+           display: none; padding: 64px 64px 56px; }
+  .slide.active { display: block; }
+  .slide:not(.active) { display: none !important; }
+  .slide.active.statement, .slide.active.thanks { display: flex; }
+
+  .pageno { position: absolute; left: 40px; bottom: 26px; color: #bdc1c6; font-size: 12px; }
+
+  h1.cover { font-size: 88px; font-weight: 500; color: var(--ink); letter-spacing: -3px; line-height: 1.06; }
+  .cover-sub { margin-top: 26px; font-size: 26px; color: var(--ink-3); font-weight: 400; }
+  .footerbar { position: absolute; left: 40px; right: 40px; bottom: 26px; display: flex;
+               align-items: center; justify-content: space-between; font-size: 15px; color: var(--ink-3); }
+  .pill { border: 1px solid #9aa0a6; border-radius: 999px; padding: 10px 22px; color: var(--ink-2); background: transparent; }
+
+  /* headings for content slides */
+  .h { font-size: 40px; font-weight: 400; color: var(--ink-2); letter-spacing: -.5px; }
+  .hsub { margin-top: 10px; font-size: 19px; color: var(--ink-3); }
+  .body { margin-top: 44px; font-size: 21px; color: var(--ink-2); line-height: 1.55; max-width: 760px; }
+  .body p + p, .body p + ul, .body ul + p { margin-top: 22px; }
+  ul.dots { list-style: none; }
+  ul.dots li { padding-left: 26px; position: relative; margin: 9px 0; }
+  ul.dots li::before { content: "●"; position: absolute; left: 2px; top: 1px; font-size: 11px; color: var(--ink-2); }
+  .mut { color: var(--ink-3); }
+  .em  { color: var(--blue-bright); font-weight: 500; }
+  code, .code { font-family: var(--mono); font-size: .88em; background: #eef1f4; border-radius: 5px; padding: 2px 7px; color: #174ea6; }
+
+  /* agenda */
+  .agenda { display: grid; grid-template-columns: 380px 1fr; height: 100%; align-items: center; }
+  .agenda .h-big { font-size: 62px; font-weight: 400; color: var(--ink-2); letter-spacing: -1px; }
+  .agenda ol { list-style: none; }
+  .agenda li { display: flex; align-items: baseline; gap: 26px; margin: 25px 0; }
+  .agenda .num { color: var(--blue-bright); font-weight: 700; font-size: 25px; width: 44px; }
+  .agenda .txt { font-size: 27px; color: var(--ink-2); }
+  .agenda .min { margin-left: auto; margin-right: 120px; font-size: 17px; color: #9aa0a6; }
+
+  /* section dividers */
+  .divider { background: var(--blue); color: #fff; }
+  .divider .num  { position: absolute; top: 72px; left: 64px; font-size: 44px; font-weight: 500; opacity: .95; }
+  .divider .name { position: absolute; top: 128px; left: 64px; font-size: 56px; font-weight: 400; color: #d2e3fc; letter-spacing: -1px; max-width: 1000px; line-height: 1.15; }
+  .divider .kick { position: absolute; left: 64px; bottom: 88px; font-size: 22px; color: #aecbfa; max-width: 860px; line-height: 1.5; }
+
+  .divider-light { background: var(--blue-soft); text-align: center; }
+  .divider-light .num { margin-top: 208px; color: var(--ink-2); font-weight: 700; font-size: 26px; }
+  .divider-light .name { margin-top: 30px; color: var(--blue); font-size: 66px; font-weight: 400; letter-spacing: -1px; }
+
+  /* statement */
+  .statement { display: flex; align-items: center; justify-content: center; text-align: center; }
+  .statement .txt { font-size: 52px; font-weight: 500; color: var(--ink-2); line-height: 1.35; letter-spacing: -1px; max-width: 1060px; }
+  .statement .hl-b { background: var(--blue-soft); border-radius: 4px; padding: 0 8px; }
+  .statement .hl-g { background: #e6f4ea; border-radius: 4px; padding: 0 8px; }
+  .statement .cap { display:block; margin-top: 40px; font-size: 20px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+
+  /* quote */
+  .quote .qtxt { margin-top: 96px; font-size: 58px; font-weight: 500; color: var(--ink); line-height: 1.28; letter-spacing: -1.5px; max-width: 1000px; }
+  .quote .who { margin-top: 56px; font-size: 19px; color: var(--ink-2); font-weight: 700; }
+  .quote .role { font-size: 17px; color: var(--ink-3); font-style: italic; margin-top: 4px; }
+
+  /* content + image */
+  .split { display: grid; grid-template-columns: 560px 1fr; gap: 56px; margin-top: 40px; align-items: start; }
+  .split .body { margin-top: 0; font-size: 19.5px; max-width: none; }
+  .imgcard { background: #fff; border: 1px solid var(--hairline); border-radius: 22px; padding: 18px;
+             display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .imgcard img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  .imgcap { text-align: center; font-size: 14px; color: #80868b; margin-top: 12px; }
+
+  /* big ideas — label rows */
+  .rows { margin-top: 52px; display: grid; grid-template-columns: 300px 1fr; row-gap: 40px; column-gap: 40px; max-width: 1120px; }
+  .rows .lbl { color: var(--blue-bright); font-size: 24px; font-weight: 500; }
+  .rows ul.dots li { font-size: 19.5px; color: var(--ink-2); margin: 7px 0; }
+
+  /* big ideas — columns */
+  .cols { margin-top: 60px; display: grid; gap: 56px; }
+  .cols.c3 { grid-template-columns: repeat(3, 1fr); }
+  .cols.c4 { grid-template-columns: repeat(4, 1fr); gap: 40px; }
+  .cols .lbl { color: var(--blue-bright); font-size: 24px; font-weight: 500; margin-bottom: 22px; }
+  .cols p { font-size: 18px; color: var(--ink-2); line-height: 1.6; }
+  .cols p.small { font-size: 16.5px; color: var(--ink-3); margin-top: 12px; }
+
+  /* table */
+  table.gt { width: 100%; border-collapse: collapse; margin-top: 44px; font-size: 17.5px; }
+  table.gt thead th { background: var(--blue-chip); text-align: left; color: var(--ink); font-weight: 700;
+                      padding: 14px 18px; }
+  table.gt thead th:first-child { border-radius: 6px 0 0 6px; }
+  table.gt thead th:last-child { border-radius: 0 6px 6px 0; }
+  table.gt tbody td { padding: 13px 18px; border-bottom: 1px solid #e3e5e8; color: var(--ink-3); vertical-align: top; }
+  table.gt tbody td:first-child { color: var(--ink); font-weight: 700; white-space: nowrap; }
+  table.gt .ric { vertical-align: -8px; margin-right: 14px; }
+  table.gt .ok { color: var(--green); font-weight: 700; }
+  table.gt .no { color: var(--red); font-weight: 700; }
+
+  /* timeline circles (next steps) */
+  .steps { margin-top: 110px; display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
+  .steps::before { content: ""; position: absolute; top: 15px; left: 12%; right: 12%; height: 1.5px; background: var(--hairline); }
+  .step { text-align: center; position: relative; padding: 0 22px; }
+  .step .dot { width: 30px; height: 30px; border-radius: 50%; border: 5px solid; background: var(--bg);
+               margin: 0 auto; position: relative; z-index: 1; }
+  .step.b .dot{border-color:#4285f4} .step.y .dot{border-color:#fbbc04}
+  .step.g .dot{border-color:#34a853} .step.r .dot{border-color:#ea4335}
+  .step .t { margin-top: 26px; font-size: 20px; font-weight: 700; color: var(--ink-2); }
+  .step .d { margin-top: 10px; font-size: 16.5px; color: var(--ink-3); line-height: 1.5; }
+
+  /* workflow pills */
+  .flow { margin-top: 84px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .fphase .pillhead { background: #c9dcfa; color: #174ea6; font-weight: 700; font-size: 19px;
+      padding: 20px 10px 20px 30px; border-radius: 0 999px 999px 0; position: relative; text-align: center; }
+  .fphase .pillhead::before { content: ""; position: absolute; left: -12px; top: 0; bottom: 0; width: 26px;
+      background: var(--bg); border-radius: 999px; }
+  .fphase:first-child .pillhead::before { display: none; }
+  .fphase .fd { margin-top: 24px; font-size: 15.5px; color: var(--ink-3); line-height: 1.55; padding: 0 6px; }
+  .fphase .fd b { color: var(--ink-2); }
+
+  .flow.c4 { grid-template-columns: repeat(4, 1fr); }
+  .fphase .viz { margin-top: 22px; background: #fff; border: 1px solid var(--hairline);
+                 border-radius: 14px; height: 104px; display: flex; align-items: center;
+                 justify-content: center; padding: 8px 14px; }
+  .fphase .viz svg { width: 100%; height: 100%; }
+
+  /* slide-point icons */
+  .cols .cico { height: 52px; display: flex; align-items: flex-end; margin-bottom: 16px; }
+  .lico { vertical-align: -7px; margin-right: 12px; }
+  .fphase .ficon { height: 44px; display: flex; align-items: center; justify-content: center; margin-top: 18px; }
+  .fphase .ficon + .fd { margin-top: 12px; }
+
+  /* build-options ladder */
+  .ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-top: 44px; }
+  .opt { background: #fff; border: 1px solid var(--hairline); border-radius: 16px;
+         padding: 16px 16px 14px; position: relative; }
+  .opt.hl { border: 2px solid var(--blue-bright); }
+  .opt .badge { position: absolute; top: -12px; right: 12px; background: var(--blue-bright);
+                color: #fff; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  .opt .oico { height: 58px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .opt .ot { font-size: 17px; font-weight: 700; color: var(--ink-2); }
+  .opt .ou { font-size: 13px; color: #80868b; margin-top: 5px; line-height: 1.45; min-height: 38px; }
+  .opt .op { font-size: 13px; color: var(--green); margin-top: 9px; line-height: 1.45; }
+  .opt .om { font-size: 13px; color: var(--red); margin-top: 5px; line-height: 1.45; }
+  .lbar { margin-top: 28px; }
+  .lbar .grad { height: 5px; border-radius: 3px;
+                background: linear-gradient(90deg, #c6dafc, #1a73e8); }
+  .lbar .ends { display: flex; justify-content: space-between; margin-top: 8px;
+                font-size: 13.5px; color: var(--ink-3); }
+
+  /* demo setup diagram */
+  .dgbox { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; padding: 18px 26px; }
+  .dgbox .dgt { color: var(--blue-bright); font-weight: 500; font-size: 21px; }
+  .dgbox .dgt small { color: #9aa0a6; font-weight: 400; font-size: 14px; margin-left: 10px; }
+  .dgbox .dgd { color: var(--ink-3); font-size: 15.5px; margin-top: 6px; line-height: 1.5; }
+  .dgarr { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+           padding: 12px 26px; font-size: 14.5px; color: #80868b; }
+  .dgarr .dn { color: #1a73e8; font-weight: 500; }
+  .dgarr .md { text-align: center; font-weight: 500; color: var(--ink-2); }
+  .dgarr .up { color: #188038; font-weight: 500; text-align: right; }
+
+  /* code card */
+  .codecard { background: #fff; border: 1px solid var(--hairline); border-radius: 22px;
+              padding: 30px 34px; overflow: hidden; }
+  .codecard pre { font-family: var(--mono); font-size: 15.5px; line-height: 1.7; color: #37474f; }
+  .codecard .kw { color: #1967d2; font-weight: 500; }
+  .codecard .ty { color: #188038; }
+  .codecard .cm { color: #9aa0a6; }
+  .codecard .fn { color: #b06000; }
+
+  /* icon graphs (progress bars) */
+  .bars { margin-top: 70px; max-width: 980px; }
+  .bar { display: grid; grid-template-columns: 320px 1fr 110px; align-items: center; gap: 26px; margin: 34px 0; }
+  .bar .bl { font-size: 19px; color: var(--ink-2); }
+  .bar .bl small { display: block; color: #9aa0a6; font-size: 14px; margin-top: 3px; }
+  .bar .track { height: 14px; background: #e3e5e8; border-radius: 7px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 7px; }
+  .bar .pv { font-size: 27px; font-weight: 500; color: var(--ink); text-align: right; }
+  .f-blue{background:#1a73e8} .f-green{background:#188038} .f-yellow{background:#f9ab00} .f-red{background:#d93025}
+
+  /* month-bar timeline */
+  .mtl { margin-top: 60px; position: relative; height: 420px; }
+  .mtl .bar-months { position: absolute; top: 188px; left: 0; right: 0; height: 42px; background: var(--blue);
+      border-radius: 999px; display: grid; grid-template-columns: repeat(7, 1fr); align-items: center; }
+  .mtl .bar-months span { color: #fff; font-weight: 700; font-size: 15.5px; text-align: center; letter-spacing: .3px; }
+  .mtl .ev { position: absolute; width: 200px; font-size: 15px; color: var(--ink-3); line-height: 1.45; }
+  .mtl .ev b { color: var(--ink-2); display: block; margin-bottom: 4px; font-size: 15.5px; }
+  .mtl .ev::before { content: ""; position: absolute; width: 2px; background: var(--blue); left: 0; }
+  .mtl .ev.up { bottom: 254px; } .mtl .ev.up::before { bottom: -24px; height: 24px; }
+  .mtl .ev.dn { top: 254px; }    .mtl .ev.dn::before { top: -24px; height: 24px; }
+  .mtl .ev .pad { padding-left: 12px; }
+
+  /* thank you */
+  .thanks { background: var(--blue); display: flex; align-items: center; }
+  .thanks .inner { padding: 0 64px; }
+  .thanks h1 { color: #fff; font-size: 96px; font-weight: 500; letter-spacing: -2px; }
+  .thanks p { color: #aecbfa; font-size: 25px; margin-top: 30px; }
+  .thanks .links { margin-top: 56px; font-size: 19px; color: #d2e3fc; line-height: 2; }
+  .thanks .links b { color: #fff; font-weight: 500; }
+
+  kbd { font-family: var(--mono); font-size: 11px; border: 1px solid #5f6368; border-radius: 4px; padding: 1px 5px; color: #9aa0a6; }
+</style>
+</head>
+<body>
+
+<div id="stage"><div id="frame">
+
+<!-- ============ 1 · COVER ============ -->
+<section class="slide">
+  <div style="margin-top:196px;">
+    <h1 class="cover">XLS32: an FPGA synth,<br>built entirely by AI agents</h1>
+    <div class="cover-sub">A 32-voice polyphonic synthesizer in Google XLS (DSLX) — designed, built,
+    and hardware-verified end-to-end by an AI coding agent through loop engineering.</div>
+  </div>
+  <div class="footerbar">
+    <span class="pill">XLS32 · HLS / FPGA synth</span>
+    <span>Jul 2026 · 50 min</span>
+  </div>
+</section>
+
+<!-- ============ 2 · AGENDA ============ -->
+<section class="slide">
+  <div class="agenda">
+    <div class="h-big">Agenda</div>
+    <ol>
+      <li><span class="num">01</span><span class="txt">What is XLS32</span><span class="min">8 min</span></li>
+      <li><span class="num">02</span><span class="txt">The technology stack</span><span class="min">16 min</span></li>
+      <li><span class="num">03</span><span class="txt">Loop engineering with AI agents</span><span class="min">9 min</span></li>
+      <li><span class="num">04</span><span class="txt">Architecture deep-dive</span><span class="min">8 min</span></li>
+      <li><span class="num">05</span><span class="txt">Frictions &amp; learnings</span><span class="min">5 min</span></li>
+      <li><span class="num">06</span><span class="txt">Wrap-up + Q&amp;A</span><span class="min">4 min</span></li>
+    </ol>
+  </div></section>
+
+<!-- ============ SECTION 01 · WHAT IS XLS32 ============ -->
+<section class="slide divider">
+  <div class="num">01</div>
+  <div class="name">What is XLS32</div>
+  <div class="kick">Meet the instrument — what it is, and the browser panel driving the real board
+  over USB: oscillators, filter, envelopes, effects, and the 4-part demo songs.</div>
+</section>
+
+<!-- ============ WHAT IS XLS32 ============ -->
+<section class="slide">
+  <div class="h">What is XLS32?</div>
+  <div class="split">
+    <div class="body">
+      <p>A <b>32-voice, 4-part multitimbral subtractive synthesizer</b> —
+      a literal circuit clocked at 100 MHz that computes one audio sample per tick.</p>
+      <ul class="dots">
+        <li>Written in <b>Google XLS (DSLX)</b>, not hand-written Verilog</li>
+        <li>Runs on a <b>Basys 3</b> board (Xilinx Artix-7 <code>xc7a35t</code>)</li>
+        <li>Played live from a <b>browser analog-style panel</b> over USB</li>
+        <li>MIDI in, 16-bit stereo audio out — plus I2S DAC and DIN MIDI</li>
+        <li>Open source: Apache-2.0 on GitHub</li>
+      </ul>
+      <p class="mut">Because the board was developed remotely, every feature is checked
+      over the USB UART — audio verified on the host by FFT and spectrogram.</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:430px;"><img src="assets/webui.png" alt="XLS32 browser front-end"></div>
+      <div class="imgcap">The web UI driving the FPGA synth live over USB</div>
+    </div>
+  </div></section>
+
+<!-- ============ DEMO ============ -->
+<section class="slide">
+  <div class="h">Demo: the web UI plays the board</div>
+  <div class="split" style="grid-template-columns: 560px 1fr; margin-top: 48px;">
+    <div>
+      <div class="dgbox">
+        <div class="dgt">Browser UI <small>any device on the network</small></div>
+        <div class="dgd">Analog-style panel — knobs send MIDI CCs; play via on-screen keys,
+        computer keys, or a Web-MIDI controller</div>
+      </div>
+      <div class="dgarr">
+        <span class="dn">▼ MIDI</span><span class="md">WebSocket</span><span class="up">PCM frames ▲</span>
+      </div>
+      <div class="dgbox">
+        <div class="dgt">Web server <small>webui/server.py — the host Mac</small></div>
+        <div class="dgd">FastAPI bridge — owns the serial port, byte-aligns the audio stream,
+        forwards MIDI down and audio up</div>
+      </div>
+      <div class="dgarr">
+        <span class="dn">▼ MIDI bytes</span><span class="md">USB UART · 2 Mbaud</span><span class="up">16-bit stereo ▲</span>
+      </div>
+      <div class="dgbox">
+        <div class="dgt">Basys 3 board <small>the synth circuit</small></div>
+        <div class="dgd">Flashed with the prebuilt <code>firmware/top.bit</code> — the FPGA computes
+        every sample; no toolchain needed to demo</div>
+      </div>
+    </div>
+    <div>
+      <div class="imgcard" id="ytbox" style="height:340px; padding:0; overflow:hidden; position:relative;"></div>
+      <div class="imgcap">Demo video — the web UI driving the board, with the synth's own audio<br>
+      <span style="color:#9aa0a6">youtu.be/2ROr9M_ZlVY</span></div>
+    </div>
+  </div></section>
+
+<!-- ============ STATEMENT ============ -->
+<section class="slide statement">
+  <div class="txt">Not a single line of it<br>was <span class="hl-b">written by hand</span> —
+  and every feature is <span class="hl-g">verified by machine</span>
+  <span class="cap">The whole design was built by Claude Code (<b>Opus 4.8</b>) through a self-verifying
+  build → measure → revise loop, over a network, with no human watching the board —
+  and <b>almost all features were developed from a smartphone, during a one-week trip</b>.</span></div></section>
+
+<!-- ============ SECTION 02 · TECH STACK ============ -->
+<section class="slide divider">
+  <div class="num">02</div>
+  <div class="name">The technology stack</div>
+  <div class="kick">Why put a synth in FPGA fabric — and the three technologies that make it possible:
+  the board, the language, and the toolchain.</div>
+</section>
+
+<!-- ============ SYNTH 101 ============ -->
+<section class="slide">
+  <div class="h">Subtractive synth 101</div>
+  <div class="hsub">Start with a harmonically rich wave, then carve away. Every block on this slide exists as a circuit in XLS32.</div>
+  <div class="flow c4" style="margin-top:44px;">
+    <div class="fphase"><div class="pillhead">Oscillators</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <polyline points="8,64 48,20 48,64 88,20 88,64 128,20 128,64 168,20 168,64 208,20"
+          stroke="#1a73e8" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg></div>
+      <div class="fd">Generate <b>raw, harmonically rich waves</b> — saw, square, triangle, noise.
+      Detune and unison thicken the sound.</div></div>
+    <div class="fphase"><div class="pillhead">Filter</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <path d="M 8 32 L 108 32 Q 136 32 143 17 Q 149 4 156 24 Q 166 60 188 70 L 208 74"
+          stroke="#188038" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="147" y1="8" x2="147" y2="78" stroke="#9aa0a6" stroke-width="1.5" stroke-dasharray="4 4"/>
+      </svg></div>
+      <div class="fd">The <b>"subtractive"</b> part: a resonant filter carves the spectrum —
+      sweep the cutoff and the timbre moves.</div></div>
+    <div class="fphase"><div class="pillhead">Amplifier</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <polyline points="8,76 52,10 84,42 150,42 208,76"
+          stroke="#f9ab00" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <text x="22" y="36" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">A</text>
+        <text x="63" y="22" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">D</text>
+        <text x="112" y="34" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">S</text>
+        <text x="182" y="52" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">R</text>
+      </svg></div>
+      <div class="fd">An <b>ADSR envelope</b> (attack · decay · sustain · release) shapes loudness —
+      pluck, pad, or organ is mostly this curve.</div></div>
+    <div class="fphase"><div class="pillhead">Effects</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="18"  y="14" width="9" height="62" rx="4.5" fill="#d93025"/>
+        <rect x="58"  y="30" width="9" height="46" rx="4.5" fill="#d93025" opacity=".75"/>
+        <rect x="98"  y="42" width="9" height="34" rx="4.5" fill="#d93025" opacity=".55"/>
+        <rect x="138" y="52" width="9" height="24" rx="4.5" fill="#d93025" opacity=".38"/>
+        <rect x="178" y="60" width="9" height="16" rx="4.5" fill="#d93025" opacity=".24"/>
+      </svg></div>
+      <div class="fd"><b>Chorus, delay, reverb</b> add width and space — the difference
+      between a tone and an instrument.</div></div>
+  </div>
+  <div class="body" style="margin-top:38px; max-width:1150px; font-size:18px;">
+    <p><b>Modulation makes it move:</b> envelopes and LFOs wiggle pitch, cutoff, and amplitude.
+    A <span class="em">patch</span> is just a setting for every block — in XLS32, each one is a MIDI CC.</p>
+    <p style="margin-top:12px;" class="mut"><b>Other synthesis families:</b> sampling · wavetable · FM ·
+    additive · physical modeling · analog modeling (virtual analog). XLS32 is subtractive at heart —
+    with a taste of FM from its cross-oscillator mod.</p>
+  </div></section>
+
+<!-- ============ SPEC TABLE ============ -->
+<section class="slide">
+  <div class="h">The synth, by the numbers</div>
+  <table class="gt">
+    <thead><tr><th style="width:260px;"></th><th>Spec</th><th style="width:400px;">Notes</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="12" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".4"/>
+        <rect x="5" y="7" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".65"/>
+        <rect x="8" y="2" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2"/>
+      </svg>Polyphony</td><td>32 voices, time-multiplexed — one voice per engine cycle</td><td>4-part multitimbral (MIDI ch 1–4), shared dynamic voice pool</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <path d="M 2 10 Q 6.5 1 11 10 T 20 10 T 29 10" stroke="#34a853" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M 2 20 Q 6.5 11 11 20 T 20 20 T 29 20" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" opacity=".5"/>
+      </svg>Oscillators</td><td>2 per voice + sub-osc → up to 64 across the 32 voices</td><td>5 waveforms, PWM, cross-osc ring / FM / FM+ (8 ratios)</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <path d="M 2 10 L 14 10 Q 18 10 19.5 6 Q 21 2.5 22.5 9 Q 24.5 18 28 22" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>Filter</td><td>Per-voice resonant state-variable — LP / HP / BP / notch</td><td>Key-tracking + filter envelope + LFO cutoff modulation</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <polyline points="2,24 9,4 14,13 20,13 28,24" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Modulation</td><td>2× ADSR per voice, per-part LFO, bend, portamento, unison</td><td>All controlled over MIDI CC — the web UI is just CCs</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <rect x="3" y="4" width="4" height="20" rx="2" fill="#4285f4"/>
+        <rect x="11" y="9" width="4" height="15" rx="2" fill="#4285f4" opacity=".6"/>
+        <rect x="19" y="14" width="4" height="10" rx="2" fill="#4285f4" opacity=".4"/>
+        <rect x="25.5" y="18" width="4" height="6" rx="2" fill="#4285f4" opacity=".25"/>
+      </svg>Effects</td><td>Stereo chorus, ping-pong delay, 8-comb Freeverb reverb</td><td>Block-RAM delay lines in the Verilog shell</td></tr>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="11" stroke="#f9ab00" stroke-width="2.2"/>
+        <path d="M 14 8 L 14 14 L 18.5 17" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Sample rate</td><td>32 kHz · 16-bit stereo PCM over USB UART</td><td>Vivado / DSP48 backend; open backends run 28 kHz</td></tr>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="11" stroke="#34a853" stroke-width="2.2"/>
+        <path d="M 9 14.5 L 12.5 18 L 19.5 10.5" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>Verification</td><td>130+ scored end-to-end hardware tests over USB</td><td>FFT / spectrogram graded 0–100, report video generated</td></tr>
+    </tbody>
+  </table></section>
+
+<!-- ============ HOW SYNTHS ARE BUILT ============ -->
+<section class="slide">
+  <div class="h">How synths are built</div>
+  <div class="hsub">Five ways to make an oscillator — ordered from easiest to hardest to build.</div>
+  <div class="ladder">
+    <div class="opt">
+      <div class="oico"><svg width="52" height="46" viewBox="0 0 52 46" fill="none">
+        <rect x="2" y="3" width="48" height="40" rx="5" stroke="#4285f4" stroke-width="2.5"/>
+        <line x1="2" y1="13" x2="50" y2="13" stroke="#4285f4" stroke-width="2.5"/>
+        <circle cx="8" cy="8" r="1.6" fill="#4285f4"/><circle cx="14" cy="8" r="1.6" fill="#4285f4"/>
+        <path d="M 8 30 Q 14 20 20 30 T 32 30 T 44 30" stroke="#4285f4" stroke-width="2.5" stroke-linecap="round"/>
+      </svg></div>
+      <div class="ot">Web Audio</div>
+      <div class="ou">Browser toys &amp; education — Chrome Music Lab, online demos</div>
+      <div class="op">+ Zero install, runs anywhere, a few lines of JS</div>
+      <div class="om">− Best-effort timing: ~10–40 ms buffers, glitches under load</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="54" height="46" viewBox="0 0 54 46" fill="none">
+        <rect x="7" y="2" width="40" height="28" rx="3" stroke="#34a853" stroke-width="2.5"/>
+        <path d="M 2 38 L 52 38 L 47 32 L 7 32 Z" stroke="#34a853" stroke-width="2.5" stroke-linejoin="round"/>
+        <path d="M 14 20 L 19 12 L 24 20 L 29 12 L 34 20 L 39 12" stroke="#34a853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="ot">Software synth</div>
+      <div class="ou">Most music production — Serum, Vital, DAW instruments</div>
+      <div class="op">+ Rich features, fast iteration, huge ecosystem</div>
+      <div class="om">− Shares the CPU with the OS; latency = the audio buffer</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="56" height="46" viewBox="0 0 56 46" fill="none">
+        <path d="M 2 14 L 10 14 L 13 8 L 19 20 L 25 8 L 31 20 L 34 14 L 42 14" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="42" cy="33" r="9" stroke="#f9ab00" stroke-width="2.5"/>
+        <line x1="42" y1="33" x2="47" y2="27" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="33" r="9" stroke="#f9ab00" stroke-width="2.5"/>
+        <line x1="14" y1="33" x2="14" y2="25.5" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round"/>
+      </svg></div>
+      <div class="ot">Discrete analog</div>
+      <div class="ou">Moog &amp; Eurorack — op-amps, VCOs, real voltage</div>
+      <div class="op">+ The analog sound, feel, and hands-on control</div>
+      <div class="om">− Hand-built electronics; drift, tuning, one voice costs real money</div>
+    </div>
+    <div class="opt hl">
+      <div class="badge">this project</div>
+      <div class="oico"><svg width="48" height="46" viewBox="0 0 48 46" fill="none">
+        <rect x="6" y="5" width="36" height="36" rx="4" stroke="#1a73e8" stroke-width="2.5"/>
+        <line x1="18" y1="5" x2="18" y2="41" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="30" y1="5" x2="30" y2="41" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="6" y1="17" x2="42" y2="17" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="6" y1="29" x2="42" y2="29" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="12" y1="1" x2="12" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="24" y1="1" x2="24" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="36" y1="1" x2="36" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="12" y1="41" x2="12" y2="45" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="24" y1="41" x2="24" y2="45" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="36" y1="41" x2="36" y2="45" stroke="#1a73e8" stroke-width="2"/>
+      </svg></div>
+      <div class="ot">FPGA</div>
+      <div class="ou">Hybrid hardware synths — Novation Peak, UDO Super 6</div>
+      <div class="op">+ Hardware determinism, jitter-free, reconfigurable</div>
+      <div class="om">− HDL + timing closure: the hardest dev loop (what this talk attacks)</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="52" height="46" viewBox="0 0 52 46" fill="none">
+        <rect x="10" y="9" width="32" height="28" rx="3" stroke="#5f6368" stroke-width="2.5"/>
+        <rect x="20" y="17" width="12" height="12" stroke="#5f6368" stroke-width="2"/>
+        <g stroke="#5f6368" stroke-width="2">
+          <line x1="16" y1="9" x2="16" y2="3"/><line x1="26" y1="9" x2="26" y2="3"/><line x1="36" y1="9" x2="36" y2="3"/>
+          <line x1="16" y1="37" x2="16" y2="43"/><line x1="26" y1="37" x2="26" y2="43"/><line x1="36" y1="37" x2="36" y2="43"/>
+          <line x1="10" y1="18" x2="4" y2="18"/><line x1="10" y1="28" x2="4" y2="28"/>
+          <line x1="42" y1="18" x2="48" y2="18"/><line x1="42" y1="28" x2="48" y2="28"/>
+        </g>
+      </svg></div>
+      <div class="ot">ASIC</div>
+      <div class="ou">Classic chips at scale — Yamaha DX7 FM chips, the C64 SID</div>
+      <div class="op">+ Cheapest per unit, lowest power, fully custom</div>
+      <div class="om">− Millions in NRE, months per spin, no do-overs after tape-out</div>
+    </div>
+  </div>
+  <div class="lbar">
+    <div class="grad"></div>
+    <div class="ends"><span>Easiest to build</span><span>Hardest to build</span></div>
+  </div>
+  <div class="body" style="margin-top:22px; max-width:1150px; font-size:17.5px;">
+    <p class="mut">XLS32 takes the <b>FPGA</b> path — hardware guarantees without ASIC economics —
+    and attacks its weakness: the development loop.</p>
+  </div></section>
+
+<!-- ============ WHY FPGA ============ -->
+<section class="slide">
+  <div class="h">Why an FPGA, not Web Audio?</div>
+  <div class="cols c3">
+    <div>
+      <div class="cico"><svg width="40" height="44" viewBox="0 0 40 44" fill="none">
+        <circle cx="20" cy="26" r="15" stroke="#4285f4" stroke-width="2.2"/>
+        <path d="M 20 26 L 20 15" stroke="#4285f4" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="15" y1="3" x2="25" y2="3" stroke="#4285f4" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="20" y1="3" x2="20" y2="9" stroke="#4285f4" stroke-width="2.4"/>
+      </svg></div>
+      <div class="lbl">Deterministic, tiny latency</div>
+      <p>A fixed-length pipeline computes one sample per clock — delay through the datapath is a
+      fixed handful of cycles: <b>sub-millisecond and jitter-free</b>.</p>
+      <p class="small">Web Audio renders 128-sample blocks on top of a ~10–40 ms OS buffer,
+      sharing the CPU with the UI and the garbage collector.</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="44" height="34" viewBox="0 0 44 34" fill="none">
+        <path d="M 5 30 A 17 17 0 0 1 39 30" stroke="#34a853" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="22" y1="30" x2="31" y2="17" stroke="#34a853" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="22" cy="30" r="2.6" fill="#34a853"/>
+      </svg></div>
+      <div class="lbl">Hard-real-time datapath</div>
+      <p>32 voices time-multiplex through one pipeline — all finished inside every sample tick.
+      The per-sample work is a <b>fixed cycle budget that always completes</b>, regardless of the patch.</p>
+      <p class="small">A CPU's timing is best-effort and degrades as polyphony and load grow.</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="42" height="40" viewBox="0 0 42 40" fill="none">
+        <line x1="2" y1="7" x2="40" y2="7" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="29" cy="7" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+        <line x1="2" y1="20" x2="40" y2="20" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="12" cy="20" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+        <line x1="2" y1="33" x2="40" y2="33" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="34" cy="33" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+      </svg></div>
+      <div class="lbl">Customizable to the bit</div>
+      <p>Arbitrary fixed-point widths, a bespoke oscillator/filter topology, sample-accurate
+      modulation routing — and the same design drives a DAC or hardware MIDI
+      <b>with no OS/driver round-trip</b>.</p>
+      <p class="small">It's a real instrument, not a browser tab.</p>
+    </div>
+  </div></section>
+
+<!-- ============ FPGA 101 ============ -->
+<section class="slide">
+  <div class="h">FPGA 101</div>
+  <div class="hsub">A field-programmable gate array — a grid of logic you wire up into any digital circuit, then rewire by reflashing.</div>
+  <div style="display:grid; grid-template-columns: 680px 1fr; gap:52px; margin-top:26px; align-items:start;">
+    <div class="imgcard" style="padding:14px 18px;">
+      <svg viewBox="0 0 640 306" style="width:100%;">
+        <defs>
+          <pattern id="gatepat" width="27" height="24" patternUnits="userSpaceOnUse">
+            <g stroke="#7baaf7" stroke-width="1.3" fill="none">
+              <path d="M 8 6 L 12 6 A 6 6 0 0 1 12 18 L 8 18 Z"/>
+              <line x1="4" y1="9" x2="8" y2="9"/><line x1="4" y1="15" x2="8" y2="15"/>
+              <line x1="18.2" y1="12" x2="22" y2="12"/>
+            </g>
+          </pattern>
+          <g id="mram" stroke="#e37400" stroke-width="1.3" fill="none">
+            <rect x="1" y="0" width="14" height="17" rx="2"/>
+            <line x1="4.5" y1="4.5" x2="11.5" y2="4.5"/>
+            <line x1="4.5" y1="8.5" x2="11.5" y2="8.5"/>
+            <line x1="4.5" y1="12.5" x2="11.5" y2="12.5"/>
+          </g>
+          <g id="mcalc">
+            <rect x="1" y="0" width="14" height="18" rx="2" stroke="#188038" stroke-width="1.3" fill="none"/>
+            <rect x="3.6" y="2.6" width="8.8" height="3.6" rx="0.8" stroke="#188038" stroke-width="1.1" fill="none"/>
+            <g fill="#188038">
+              <circle cx="5" cy="10.5" r="1"/><circle cx="8" cy="10.5" r="1"/><circle cx="11" cy="10.5" r="1"/>
+              <circle cx="5" cy="14.5" r="1"/><circle cx="8" cy="14.5" r="1"/><circle cx="11" cy="14.5" r="1"/>
+            </g>
+          </g>
+        </defs>
+        <!-- package + I/O ring -->
+        <rect x="70" y="8" width="562" height="244" rx="10" fill="#fff" stroke="#5f6368" stroke-width="2"/>
+        <rect x="96" y="34" width="510" height="192" rx="4" fill="none" stroke="#bdc1c6" stroke-width="1.4" stroke-dasharray="5 4"/>
+        <text x="351" y="26" text-anchor="middle" font-size="12.5" fill="#80868b" font-family="Roboto, sans-serif">I/O ring — UART · JTAG · LEDs · Pmod pins</text>
+        <!-- LUT fabric: a sea of logic gates -->
+        <rect x="100" y="38" width="502" height="184" fill="url(#gatepat)"/>
+        <!-- BRAM stripes: mini RAM chips -->
+        <g>
+          <rect x="199" y="38" width="28" height="184" fill="#fef3d6" stroke="#f9ab00" stroke-width="1.6"/>
+          <rect x="459" y="38" width="28" height="184" fill="#fef3d6" stroke="#f9ab00" stroke-width="1.6"/>
+          <use href="#mram" x="205" y="43"/><use href="#mram" x="205" y="69"/><use href="#mram" x="205" y="95"/>
+          <use href="#mram" x="205" y="121"/><use href="#mram" x="205" y="147"/><use href="#mram" x="205" y="173"/>
+          <use href="#mram" x="205" y="199"/>
+          <use href="#mram" x="465" y="43"/><use href="#mram" x="465" y="69"/><use href="#mram" x="465" y="95"/>
+          <use href="#mram" x="465" y="121"/><use href="#mram" x="465" y="147"/><use href="#mram" x="465" y="173"/>
+          <use href="#mram" x="465" y="199"/>
+        </g>
+        <!-- DSP stripes: mini calculators -->
+        <g>
+          <rect x="299" y="38" width="28" height="184" fill="#e9f6ec" stroke="#34a853" stroke-width="1.6"/>
+          <rect x="379" y="38" width="28" height="184" fill="#e9f6ec" stroke="#34a853" stroke-width="1.6"/>
+          <use href="#mcalc" x="305" y="44"/><use href="#mcalc" x="305" y="74"/><use href="#mcalc" x="305" y="104"/>
+          <use href="#mcalc" x="305" y="134"/><use href="#mcalc" x="305" y="164"/><use href="#mcalc" x="305" y="194"/>
+          <use href="#mcalc" x="385" y="44"/><use href="#mcalc" x="385" y="74"/><use href="#mcalc" x="385" y="104"/>
+          <use href="#mcalc" x="385" y="134"/><use href="#mcalc" x="385" y="164"/><use href="#mcalc" x="385" y="194"/>
+        </g>
+        <!-- bitstream in -->
+        <text x="2" y="116" font-family="Roboto Mono, monospace" font-size="13" fill="#d93025">1011</text>
+        <path d="M 4 130 L 62 130 M 62 130 l -6 -4.5 M 62 130 l -6 4.5" stroke="#d93025" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="64" y="119" width="12" height="22" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+        <g stroke="#d93025" stroke-width="1.6" stroke-dasharray="5 4" opacity=".75" fill="none">
+          <path d="M 80 130 L 160 78"/>
+          <path d="M 80 130 L 196 138"/>
+          <path d="M 80 130 L 296 190"/>
+        </g>
+        <!-- legend: same pictograms as the notes at right -->
+        <g font-size="14" fill="#5f6368" font-family="Roboto, sans-serif">
+          <g stroke="#4285f4" stroke-width="1.5" fill="none">
+            <path d="M 104 272 L 108 272 A 6.5 6.5 0 0 1 108 285 L 104 285 Z"/>
+            <line x1="100" y1="275" x2="104" y2="275"/><line x1="100" y1="282" x2="104" y2="282"/>
+            <line x1="114.8" y1="278.5" x2="119" y2="278.5"/>
+          </g>
+          <text x="126" y="284">LUT fabric (logic)</text>
+          <use href="#mram" x="262" y="270"/>
+          <text x="284" y="284">Block RAM stripe</text>
+          <use href="#mcalc" x="418" y="270"/>
+          <text x="440" y="284">DSP stripe</text>
+          <text x="524" y="284" fill="#d93025" font-family="Roboto Mono, monospace" font-size="13">1011→</text>
+          <text x="572" y="284">bitstream</text>
+        </g>
+      </svg>
+    </div>
+    <div>
+      <div class="lbl" style="font-size:20px;"><svg class="lico" width="30" height="26" viewBox="0 0 30 26" fill="none">
+        <path d="M 8 4 L 14 4 A 9 9 0 0 1 14 22 L 8 22 Z" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="2" y1="9" x2="8" y2="9" stroke="#4285f4" stroke-width="2"/>
+        <line x1="2" y1="17" x2="8" y2="17" stroke="#4285f4" stroke-width="2"/>
+        <line x1="23" y1="13" x2="29" y2="13" stroke="#4285f4" stroke-width="2"/>
+      </svg>LUT fabric</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">Thousands of
+      <b>look-up tables + flip-flops</b>; programmable routing wires them into any logic.</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="2" width="18" height="22" rx="3" stroke="#34a853" stroke-width="2"/>
+        <rect x="8" y="5.5" width="10" height="4.5" rx="1" stroke="#34a853" stroke-width="1.6"/>
+        <g fill="#34a853">
+          <circle cx="9" cy="14.5" r="1.4"/><circle cx="13" cy="14.5" r="1.4"/><circle cx="17" cy="14.5" r="1.4"/>
+          <circle cx="9" cy="19.5" r="1.4"/><circle cx="13" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/>
+        </g>
+      </svg>DSP slices</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">Hardened
+      <b>multiply-accumulate</b> blocks in vertical stripes — fast math off the fabric.</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="28" height="26" viewBox="0 0 28 26" fill="none">
+        <rect x="5" y="2" width="18" height="22" rx="3" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="9.5" y1="8" x2="18.5" y2="8" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9.5" y1="13" x2="18.5" y2="13" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9.5" y1="18" x2="18.5" y2="18" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="2" y1="7" x2="5" y2="7" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="2" y1="13" x2="5" y2="13" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="2" y1="19" x2="5" y2="19" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="7" x2="26" y2="7" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="13" x2="26" y2="13" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="19" x2="26" y2="19" stroke="#f9ab00" stroke-width="2"/>
+      </svg>Block RAM</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">Dedicated
+      <b>on-chip memories</b>, also in stripes — buffers and tables, with clocked reads.</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="42" height="26" viewBox="0 0 42 26" fill="none">
+        <text x="0" y="18" font-family="Roboto Mono, monospace" font-size="14" fill="#d93025">1011</text>
+        <path d="M 33 13 L 41 13 M 41 13 l -4 -3.5 M 41 13 l -4 3.5" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>The bitstream</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">The "program":
+      a <b>circuit description</b> loaded at power-up — your design <i>becomes</i> the chip.</p>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns: 1fr 360px; gap:48px; margin-top:16px; align-items:center;">
+    <div class="body" style="margin-top:0; max-width:none;">
+      <p class="mut">XLS32's Artix-7 <code>xc7a35t</code>: 20,800 LUTs · 90 DSP slices ·
+      36 Kb × 50 block RAMs · one 100 MHz clock — the synth is a literal circuit computing
+      one audio sample per tick.</p>
+    </div>
+    <div style="display:grid; grid-template-columns: 170px 1fr; gap:14px; align-items:center;">
+      <div class="imgcard" style="height:110px; padding:0; overflow:hidden;">
+        <img src="assets/artix7.jpg" alt="Xilinx Artix-7 XC7A35T on a PCB" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="imgcap" style="margin-top:0; font-size:12px; text-align:left;">The exact chip: an Artix-7
+      <b>XC7A35T</b> on a board — photo by Pedant01, Wikimedia Commons, CC BY-SA 3.0</div>
+    </div>
+  </div></section>
+
+<!-- ============ FPGA REAL-WORLD USES ============ -->
+<section class="slide">
+  <div class="h">Where FPGAs run in the real world</div>
+  <div class="hsub">Anywhere the deadline is set by physics and latency is measured in micro- or nanoseconds.</div>
+  <div class="cols c4" style="margin-top:40px; gap:32px;">
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/levorg.jpg" alt="Subaru Levorg (2nd generation)" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">Automotive</div>
+      <p style="font-size:15px; line-height:1.5;">The Subaru Levorg's <b>EyeSight</b> ADAS: stereo-camera
+      vision on a Zynq UltraScale+ — <b>one FPGA-SoC per car</b>, across millions of Subarus.</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.businesswire.com/news/home/20200819005691/en/Subaru-Selects-Xilinx-to-Power-New-Generation-EyeSight-System"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">Subaru selects Xilinx —
+      press release ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">Photo: Tokumeigakarinoaoshima, Wikimedia Commons, CC BY-SA 4.0</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/digico.jpg" alt="DiGiCo SD5 digital mixing console" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">Audio &amp; video</div>
+      <p style="font-size:15px; line-height:1.5;">DiGiCo's SD consoles mix on Stealth <b>"Super FPGA"</b>
+      engines — up to <b>256 audio paths</b> per console at ~1–2 ms latency.</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://digico.biz/stealth-core-2/"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">DiGiCo Stealth Core 2:
+      FPGA processing ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">Photo: The Blackbird Academy, Wikimedia Commons, CC BY-SA 2.0</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/f35.jpg" alt="F-35 Lightning II variants in flight" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">Aerospace &amp; defense</div>
+      <p style="font-size:15px; line-height:1.5;">F-35 avionics: Lockheed Martin buys Xilinx FPGAs
+      <b>by the tens of thousands</b> across the fleet — deterministic radar and sensor processing.</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.militaryaerospace.com/commercial-aerospace/article/14227038/tens-of-thousands-of-xilinx-fpgas-to-be-supplied-by-lockheed-martin-for-f-35-joint-strike-fighter-avionics"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">Tens of thousands of FPGAs —
+      Military Aerospace ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">Photo: U.S. Air Force / SSgt. K. Slivinske, public domain</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:10px; overflow:hidden;">
+        <img src="assets/ul3524.png" alt="AMD Alveo UL3524 accelerator card" style="width:100%; height:100%; object-fit:contain; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">High-frequency trading</div>
+      <p style="font-size:15px; line-height:1.5;">Market makers and prop traders run the
+      <b>tick-to-trade path in FPGA logic</b> — parse the feed, fire the order,
+      <b>wire-to-wire in under a microsecond</b>.</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.amd.com/en/newsroom/press-releases/2023-9-27-amd-unveils-purpose-built-fpga-based-accelerator-.html"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">AMD's purpose-built trading
+      FPGA — press release ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">Image © Advanced Micro Devices, Inc., amd.com</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:34px; max-width:1150px; font-size:18px;">
+    <p class="mut">Different industries, one reason: <b>when the deadline is physics, the logic goes
+    into hardware.</b> XLS32 borrows the same superpower for music.</p>
+  </div></section>
+
+<!-- ============ VERILOG + DEV FLOW ============ -->
+<section class="slide">
+  <div class="h">Verilog and the standard dev flow</div>
+  <div class="hsub">A hardware description language: you describe the circuit register-by-register, wire-by-wire, clock-by-clock.</div>
+  <div class="flow" style="margin-top:38px;">
+    <div class="fphase"><div class="pillhead">Write RTL</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="8" y="34" font-family="Roboto Mono, monospace" font-size="13.5" fill="#1a73e8">always @(posedge clk)</text>
+        <text x="8" y="58" font-family="Roboto Mono, monospace" font-size="13.5" fill="#3c4043">&#160;&#160;q &lt;= d &amp; en;</text>
+      </svg></div>
+      <div class="fd">Registers, wires, <code>always</code> blocks — plus pipeline stages, handshakes,
+      and bit widths, <b>all managed by hand</b>.</div></div>
+    <div class="fphase"><div class="pillhead">Simulate</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="4" y="28" font-size="11" fill="#9aa0a6" font-family="Roboto, sans-serif">clk</text>
+        <text x="4" y="64" font-size="11" fill="#9aa0a6" font-family="Roboto, sans-serif">q</text>
+        <path d="M 26 32 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16"
+          stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M 26 52 H 70 L 82 70 H 130 L 142 52 H 206 M 26 70 H 70 L 82 52 H 130 L 142 70 H 206"
+          stroke="#5f6368" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="fd">A <b>testbench</b> drives the design (iverilog, Verilator) — cycle-accurate,
+      but only as good as the testbench you wrote.</div></div>
+    <div class="fphase"><div class="pillhead">Synthesize</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M 48 10 L 62 10 A 11 11 0 0 1 62 32 L 48 32 Z"/>
+          <line x1="36" y1="16" x2="48" y2="16"/><line x1="36" y1="26" x2="48" y2="26"/>
+          <path d="M 48 52 L 62 52 A 11 11 0 0 1 62 74 L 48 74 Z"/>
+          <line x1="36" y1="58" x2="48" y2="58"/><line x1="36" y1="68" x2="48" y2="68"/>
+          <path d="M 128 28 C 134 36 134 48 128 56 C 146 56 158 52 168 42 C 158 32 146 28 128 28 Z"/>
+          <path d="M 73 21 h 16 v 15 h 40"/>
+          <path d="M 73 63 h 16 v -15 h 40"/>
+          <line x1="168" y1="42" x2="188" y2="42"/>
+        </g>
+      </svg></div>
+      <div class="fd">yosys / Vivado map the RTL onto <b>LUTs, DSPs, and BRAMs</b> —
+      a netlist of real chip primitives.</div></div>
+    <div class="fphase"><div class="pillhead">Place &amp; Route</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="14" y="6" width="192" height="72" rx="5" stroke="#d93025" stroke-width="2"/>
+        <g fill="#fce8e6" stroke="#d93025" stroke-width="1.6">
+          <rect x="28" y="16" width="36" height="22" rx="2"/>
+          <rect x="84" y="46" width="32" height="20" rx="2"/>
+          <rect x="138" y="14" width="38" height="24" rx="2"/>
+          <rect x="168" y="50" width="26" height="16" rx="2"/>
+        </g>
+        <g stroke="#d93025" stroke-width="1.6" fill="none" stroke-linejoin="round">
+          <polyline points="46,38 46,56 84,56"/>
+          <polyline points="116,56 126,56 126,26 138,26"/>
+          <polyline points="176,38 181,38 181,50"/>
+        </g>
+      </svg></div>
+      <div class="fd">Fit the netlist onto the die and <b>check timing</b> —
+      the slow step: minutes to hours per iteration.</div></div>
+    <div class="fphase"><div class="pillhead">Flash &amp; test</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g font-family="Roboto Mono, monospace" font-size="17" fill="#4285f4">
+          <text x="8" y="48" opacity=".3">1</text>
+          <text x="24" y="48" opacity=".5">0</text>
+          <text x="40" y="48" opacity=".7">1</text>
+          <text x="56" y="48" opacity=".9">1</text>
+        </g>
+        <path d="M 70 42 L 116 42 M 116 42 l -7 -5 M 116 42 l -7 5" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="128" y="14" width="70" height="56" rx="5" stroke="#4285f4" stroke-width="2.2"/>
+        <g stroke="#4285f4" stroke-width="1.4" opacity=".6">
+          <line x1="151" y1="14" x2="151" y2="70"/><line x1="175" y1="14" x2="175" y2="70"/>
+          <line x1="128" y1="33" x2="198" y2="33"/><line x1="128" y1="51" x2="198" y2="51"/>
+        </g>
+      </svg></div>
+      <div class="fd">Program the bitstream over <b>JTAG</b> and verify on
+      real hardware.</div></div>
+  </div>
+  <div class="body" style="margin-top:42px; max-width:1120px;">
+    <p>Fail timing and you're back to editing RTL. <b>This loop is the iteration cost</b> that
+    XLS32's whole methodology — HLS plus cloud builds plus machine-graded verification — is built to shrink.</p>
+  </div></section>
+
+<!-- ============ XLS / DSLX 101 ============ -->
+<section class="slide">
+  <div class="h">Google XLS 101: hardware as software</div>
+  <div class="split" style="grid-template-columns: 520px 1fr; margin-top: 24px;">
+    <div class="body">
+      <img src="assets/xls_logo.svg" alt="Google XLS logo" style="height:74px; display:block; margin: 4px 0 26px -8px;">
+      <ul class="dots">
+        <li><b>High-Level Synthesis (HLS)</b>: compile a software-style description of
+        <i>behavior</i> into a hardware circuit — the compiler writes the RTL for you
+        <a href="https://en.wikipedia.org/wiki/High-level_synthesis" target="_blank" rel="noopener"
+        style="color:#1a73e8; text-decoration:none;">(Wikipedia ↗)</a></li>
+        <li>XLS is Google's <b>open-source HLS toolkit</b>; you write <b>DSLX</b> — a Rust-like
+        language of pure functions and small stateful <b>procs</b></li>
+        <li>Scheduling, <b>pipeline-register insertion</b>, and bit-width narrowing are automatic</li>
+        <li>Unit tests run <b>in milliseconds</b> in the interpreter — no testbench,
+        no simulator, no build</li>
+      </ul>
+      <p class="mut">Most iterations never touch the FPGA tools at all — that's what makes
+      the agent loop fast.</p>
+    </div>
+    <div style="padding-top:6px;">
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="44" height="48" viewBox="0 0 44 48" fill="none" style="justify-self:center;">
+          <path d="M 22 4 a 13 13 0 0 1 8 23 c -2 2 -3 4 -3 7 h -10 c 0 -3 -1 -5 -3 -7 a 13 13 0 0 1 8 -23 Z" stroke="#4285f4" stroke-width="2.2" stroke-linejoin="round"/>
+          <line x1="17" y1="39" x2="27" y2="39" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+          <line x1="18.5" y1="44" x2="25.5" y2="44" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">What you want to build</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">A synth voice: oscillator → filter → envelope — as math</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0;">▼</div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="42" height="46" viewBox="0 0 42 46" fill="none" style="justify-self:center;">
+          <rect x="4" y="2" width="34" height="42" rx="4" stroke="#34a853" stroke-width="2.2"/>
+          <text x="21" y="30" text-anchor="middle" font-size="22" font-style="italic" font-family="Georgia, serif" fill="#34a853">ƒ</text>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">DSLX — describe the behavior</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">Pure functions and procs; unit-test in milliseconds</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0; position:relative;">▼<span
+        style="position:absolute; left:86px; top:9px; font-size:11px; white-space:nowrap;">codegen</span></div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="46" height="44" viewBox="0 0 46 44" fill="none" style="justify-self:center;">
+          <rect x="8" y="4" width="30" height="36" rx="3" stroke="#f9ab00" stroke-width="2.2"/>
+          <path d="M 8 28 l 7 5 l -7 5" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+          <text x="15" y="18" font-size="12" fill="#f9ab00" font-family="Roboto, sans-serif">D</text>
+          <text x="26" y="18" font-size="12" fill="#f9ab00" font-family="Roboto, sans-serif">Q</text>
+          <line x1="2" y1="12" x2="8" y2="12" stroke="#f9ab00" stroke-width="2"/>
+          <line x1="38" y1="12" x2="44" y2="12" stroke="#f9ab00" stroke-width="2"/>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">Verilog — the compiler emits RTL</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">Scheduled, pipelined, bit-width-narrowed — for you</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0; position:relative;">▼<span
+        style="position:absolute; left:86px; top:9px; font-size:11px; white-space:nowrap;">synth + P&amp;R</span></div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="52" height="44" viewBox="0 0 52 44" fill="none" style="justify-self:center;">
+          <g stroke="#d93025" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M 10 6 L 17 6 A 8 8 0 0 1 17 22 L 10 22 Z"/>
+            <line x1="4" y1="10" x2="10" y2="10"/><line x1="4" y1="18" x2="10" y2="18"/>
+            <path d="M 10 26 L 17 26 A 8 8 0 0 1 17 42 L 10 42 Z"/>
+            <line x1="4" y1="30" x2="10" y2="30"/><line x1="4" y1="38" x2="10" y2="38"/>
+            <path d="M 25 14 h 6 v 10 h 8 M 25 34 h 6 v -10 h 8"/>
+            <path d="M 36 18 C 40 22 40 26 36 30 C 44 30 48 27 50 24 C 48 21 44 18 36 18 Z"/>
+          </g>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">Gates on the chip</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">Synthesis + place &amp; route map it onto LUTs, DSPs, BRAM</div></div>
+      </div>
+    </div>
+  </div></section>
+
+<!-- ============ DSLX VS VERILOG COMPARISON ============ -->
+<section class="slide">
+  <div class="h">From synth.x to engine.v</div>
+  <div class="hsub">The same oscillator logic, before and after the compiler — abridged from the real code.</div>
+  <div style="display:grid; grid-template-columns: 1fr 52px 1fr; align-items:start; margin-top:22px;">
+    <div>
+      <div style="font-size:13.5px; color:#5f6368; margin:0 0 6px 4px;"><b>synth.x</b> — what you write (DSLX)</div>
+      <div class="codecard" style="padding:18px 22px;"><pre style="font-size:13px;"><span class="cm">// One oscillator sample: turn the phase into a wave.</span>
+<span class="cm">// Bit-widths are types: u3/u32 unsigned, s16 signed wires.</span>
+<span class="kw">fn</span> <span class="fn">voice_wave</span>(wave: <span class="ty">u3</span>, phase: <span class="ty">u32</span>,
+              noise: <span class="ty">s16</span>) -&gt; <span class="ty">s16</span> {
+    <span class="kw">let</span> t = phase[24:32];  <span class="cm">// cycle position 0..255</span>
+    <span class="kw">match</span> wave {
+        <span class="ty">u3</span>:0 =&gt; SINE[t],                        <span class="cm">// sine</span>
+        <span class="ty">u3</span>:1 =&gt; (t <span class="kw">as</span> <span class="ty">s16</span>) * <span class="ty">s16</span>:16 - <span class="ty">s16</span>:2048, <span class="cm">// saw</span>
+        <span class="ty">u3</span>:4 =&gt; noise,                          <span class="cm">// noise</span>
+        _    =&gt; SINE[t],
+    }
+}</pre></div>
+      <p style="font-size:14.5px; color:var(--green); margin-top:14px; line-height:1.5;">+ <b>Write pure
+      functions, as usual</b> — code reads top-to-bottom, composes, and unit-tests like software.</p>
+      <p style="font-size:14.5px; color:var(--green); margin-top:6px; line-height:1.5;">+ <b>The tool does
+      the state management and scheduling</b> — which value lands in which register on which cycle
+      (48 stages here) is the compiler's problem.</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− Where cycle-exact
+      control matters (BRAM ports, I/O), you still drop to the Verilog shell.</p>
+    </div>
+    <div style="text-align:center; color:#9aa0a6; font-size:28px; margin-top:180px;">→</div>
+    <div>
+      <div style="font-size:13.5px; color:#5f6368; margin:0 0 6px 4px;"><b>engine.v</b> — what the compiler emits</div>
+      <div class="codecard" style="padding:18px 22px;"><pre style="font-size:13px;"><span class="cm">// pipeline registers p0/p1/p2 — inserted for you</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
+  p0_t   &lt;= phase[31:24];
+
+  p1_sin &lt;= SINE[p0_t];        <span class="cm">// 256-entry ROM</span>
+  p1_saw &lt;= {p0_t, 4'h0}
+            - 16'd2048;        <span class="cm">// shift &amp; offset</span>
+
+  p2_out &lt;= (wave == 3'd0) ? p1_sin
+          : (wave == 3'd1) ? p1_saw
+          : p1_noise;          <span class="cm">// wave-select mux</span>
+<span class="kw">end</span></pre></div>
+      <p style="font-size:14.5px; color:var(--green); margin-top:14px; line-height:1.5;">+ <b>Full
+      control</b> over every register, port, and clock cycle — when you truly need it.</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− <b>Everything
+      happens in parallel</b>: every <code>always</code> block fires on every clock, all at once —
+      nothing reads top-to-bottom.</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− <b>It's all state
+      management and scheduling, by hand</b>: which value is in which register on which cycle is
+      <i>your</i> problem — the classic wall for software engineers.</p>
+    </div>
+  </div></section>
+
+<!-- ============ 11 · BUILD PIPELINE ============ -->
+<section class="slide">
+  <div class="h">DSLX to bitstream — the build pipeline</div>
+  <div class="flow" style="margin-top:44px;">
+    <div class="fphase"><div class="pillhead">DSLX</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="8" y="30" font-family="Roboto Mono, monospace" font-size="13" fill="#1a73e8">fn voice_wave(wave: u3,</text>
+        <text x="8" y="50" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">&#160;&#160;phase: u32) -&gt; s16 {</text>
+        <text x="8" y="70" font-family="Roboto Mono, monospace" font-size="13" fill="#9aa0a6">&#160;&#160;&#160;&#160;… }</text>
+      </svg></div>
+      <div class="fd"><b>synth.x</b> — the whole engine in one 378-line proc. Unit tests run in
+      milliseconds via the interpreter.</div></div>
+    <div class="fphase"><div class="pillhead">XLS codegen</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g stroke="#34a853" stroke-width="2">
+          <rect x="14" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="92" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="170" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="42" y="30" width="34" height="24" rx="6" fill="none"/>
+          <rect x="120" y="30" width="34" height="24" rx="6" fill="none"/>
+          <line x1="26" y1="42" x2="42" y2="42"/><line x1="76" y1="42" x2="92" y2="42"/>
+          <line x1="104" y1="42" x2="120" y2="42"/><line x1="154" y1="42" x2="170" y2="42"/>
+          <line x1="2" y1="42" x2="14" y2="42"/><line x1="182" y1="42" x2="196" y2="42"/>
+        </g>
+        <g font-size="13" font-style="italic" font-family="Georgia, serif" fill="#188038" text-anchor="middle">
+          <text x="59" y="47">ƒ</text><text x="137" y="47">ƒ</text>
+        </g>
+        <text x="110" y="16" text-anchor="middle" font-size="10.5" fill="#9aa0a6" font-family="Roboto, sans-serif">logic between pipeline registers</text>
+      </svg></div>
+      <div class="fd"><b>ir_converter → opt → codegen</b> with <code>--generator=pipeline</code>,
+      48 stages → <b>engine.v</b>.</div></div>
+    <div class="fphase"><div class="pillhead">Fix-ups</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="4" y="18" width="212" height="22" rx="3" fill="#fce8e6"/>
+        <text x="10" y="33" font-family="Roboto Mono, monospace" font-size="12.5" fill="#c5221f">- end else begin</text>
+        <rect x="4" y="46" width="212" height="22" rx="3" fill="#e6f4ea"/>
+        <text x="10" y="61" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038">+ end else if (ce) begin</text>
+      </svg></div>
+      <div class="fd"><b>fix_verilog.py</b> injects the global clock-enable and unrolls
+      generate loops the open flow rejects.</div></div>
+    <div class="fphase"><div class="pillhead">Synth + P&amp;R</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="14" y="6" width="192" height="72" rx="5" stroke="#d93025" stroke-width="2"/>
+        <g fill="#fce8e6" stroke="#d93025" stroke-width="1.6">
+          <rect x="28" y="16" width="36" height="22" rx="2"/>
+          <rect x="84" y="46" width="32" height="20" rx="2"/>
+          <rect x="138" y="14" width="38" height="24" rx="2"/>
+          <rect x="168" y="50" width="26" height="16" rx="2"/>
+        </g>
+        <g stroke="#d93025" stroke-width="1.6" fill="none" stroke-linejoin="round">
+          <polyline points="46,38 46,56 84,56"/>
+          <polyline points="116,56 126,56 126,26 138,26"/>
+          <polyline points="176,38 181,38 181,50"/>
+        </g>
+      </svg></div>
+      <div class="fd"><b>yosys → VPR</b> (F4PGA), <b>nextpnr</b> (openXC7), or <b>Vivado</b> —
+      selected by <code>BACKEND=</code>.</div></div>
+    <div class="fphase"><div class="pillhead">Flash</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g font-family="Roboto Mono, monospace" font-size="17" fill="#4285f4">
+          <text x="8" y="48" opacity=".3">1</text>
+          <text x="24" y="48" opacity=".5">0</text>
+          <text x="40" y="48" opacity=".7">1</text>
+          <text x="56" y="48" opacity=".9">1</text>
+        </g>
+        <path d="M 70 42 L 116 42 M 116 42 l -7 -5 M 116 42 l -7 5" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="128" y="14" width="70" height="56" rx="5" stroke="#4285f4" stroke-width="2.2"/>
+        <g stroke="#4285f4" stroke-width="1.4" opacity=".6">
+          <line x1="151" y1="14" x2="151" y2="70"/><line x1="175" y1="14" x2="175" y2="70"/>
+          <line x1="128" y1="33" x2="198" y2="33"/><line x1="128" y1="51" x2="198" y2="51"/>
+        </g>
+      </svg></div>
+      <div class="fd"><b>openFPGALoader</b> over JTAG — SRAM for iteration, SPI flash for
+      standalone boot.</div></div>
+  </div>
+  <div class="body" style="margin-top:40px; max-width:1100px;">
+    <p class="mut">One command end to end: <code>STAGES=48 WCT=48 scripts/remote_build.sh</code> —
+    push sources to a GCE VM, build, pull back <code>top.bit</code> <b>plus the timing report</b>.
+    Never trust a build you haven't measured.</p>
+  </div></section>
+
+<!-- ============ 12 · SECTION 03 ============ -->
+<section class="slide divider">
+  <div class="num">03</div>
+  <div class="name">Loop engineering<br>with AI agents</div>
+  <div class="kick">This whole board was brought up remotely and headlessly — no one watching LEDs,
+  listening to a speaker, or pressing buttons.</div>
+</section>
+
+<!-- ============ 13 · QUOTE ============ -->
+<section class="slide quote">
+  <div class="qtxt">"Design a tight, self-verifying edit → build → run → observe cycle, and let
+  the agent iterate <i>inside</i> it."</div>
+  <div class="who">Loop engineering</div>
+  <div class="role">instead of hand-prompting each step</div></section>
+
+<!-- ============ 14 · THE LOOP ============ -->
+<section class="slide">
+  <div class="h">The loop</div>
+  <div class="hsub">Give the agent an objective pass/fail, and the loop runs unattended.</div>
+  <div class="steps">
+    <div class="step b"><div class="dot"></div><div class="t">Edit</div>
+      <div class="d">The agent changes <code>synth.x</code> (DSLX) — new feature, fix, or timing tweak.</div></div>
+    <div class="step y"><div class="dot"></div><div class="t">Build</div>
+      <div class="d">Bitstream on a native x86 GCE VM, ~6 min — timing report teed back with it.</div></div>
+    <div class="step g"><div class="dot"></div><div class="t">Flash + drive</div>
+      <div class="d"><code>openFPGALoader</code> over JTAG, then MIDI in / audio captured over the same USB cable.</div></div>
+    <div class="step r"><div class="dot"></div><div class="t">Verify</div>
+      <div class="d">FFT / spectrogram scored 0–100. Pass → milestone done. Regression → back to Edit.</div></div>
+  </div></section>
+
+<!-- ============ 15 · AUTONOMOUS VERIFICATION ============ -->
+<section class="slide">
+  <div class="h">The load-bearing ingredient: autonomous verification</div>
+  <div class="split" style="grid-template-columns: 600px 1fr;">
+    <div class="body">
+      <p>Every feature emits a signal <b>a machine can grade without human senses</b>:</p>
+      <ul class="dots">
+        <li>Audio is teed out over USB as a sample stream</li>
+        <li>Pitches verified by <b>FFT</b> — a chord is N simultaneous peaks</li>
+        <li>Timbre and stability verified by <b>spectrogram</b> — haze, clipping, and dropouts are obvious</li>
+        <li><b>130+ scored e2e tests</b>: basic features, combinations, stress — each 0–100, failing on regression</li>
+      </ul>
+      <p class="mut">Lesson: a single FFT peak-check once passed while the audio was corrupted.
+      Render the whole capture as a spectrogram, not one clean slice.</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:400px;"><img src="assets/m6b_filter_sweep.png" alt="Filter sweep spectrogram"></div>
+      <div class="imgcap">A cutoff sweep, verified as a spectrogram — the machine reads this, not a person</div>
+    </div>
+  </div></section>
+
+<!-- ============ 16 · CYCLE TIME ============ -->
+<section class="slide">
+  <div class="h">A loop is only as good as its cycle time</div>
+  <div class="hsub">FPGA place-and-route is the slow step — so the build was moved to the cloud.</div>
+  <div class="bars">
+    <div class="bar"><div class="bl">Apple Silicon Mac<small>F4PGA under x86 emulation (Docker)</small></div>
+      <div class="track"><div class="fill f-red" style="width:100%"></div></div><div class="pv">~10 min</div></div>
+    <div class="bar"><div class="bl">Native x86 GCE VM<small>scripts/remote_build.sh — sources up, bitstream + timing back</small></div>
+      <div class="track"><div class="fill f-blue" style="width:60%"></div></div><div class="pv">~6 min</div></div>
+    <div class="bar"><div class="bl">DSLX unit tests<small>the inner loop — most iterations never need a build</small></div>
+      <div class="track"><div class="fill f-green" style="width:2.5%"></div></div><div class="pv">ms</div></div>
+  </div>
+  <div class="body" style="max-width:1100px;">
+    <p class="mut">The agent gets its verdict sooner and fits more iterations into an hour —
+    and the laptop stays free. Prototype in a software model first; spend builds only to confirm.</p>
+  </div></section>
+
+<!-- ============ 17 · MILESTONES ============ -->
+<section class="slide">
+  <div class="h">Built in verifiable increments — M1 to M19</div>
+  <div class="mtl">
+    <div class="bar-months">
+      <span>M1</span><span>M3</span><span>M6a</span><span>M6b</span><span>M13–14</span><span>WEB UI</span><span>M19</span>
+    </div>
+    <div class="ev up" style="left:1%;"><div class="pad"><b>First sound</b>One DDS sine + ADSR, verified over UART from afar.</div></div>
+    <div class="ev dn" style="left:15.5%;"><div class="pad"><b>Real MIDI in</b>UART RX + parser + voice allocation; FFT confirms the pitches.</div></div>
+    <div class="ev up" style="left:30%;"><div class="pad"><b>Pipelined engine</b>Rewrite: time-multiplexed 32-voice proc — one voice per cycle.</div></div>
+    <div class="ev dn" style="left:44.5%;"><div class="pad"><b>Per-voice filter</b>Every voice gets its own resonant SVF + key-tracking.</div></div>
+    <div class="ev up" style="left:59%;"><div class="pad"><b>BRAM effects</b>Chorus, ping-pong delay, and Freeverb reverb in block RAM.</div></div>
+    <div class="ev dn" style="left:73.5%;"><div class="pad"><b>Browser panel</b>Serum-style UI, presets by inverse synthesis (CMA-ES).</div></div>
+    <div class="ev up" style="left:87%;"><div class="pad"><b>Cross-osc FM</b>Ring / FM — inharmonic bells; the de-latch fix hardens the SVF.</div></div>
+  </div></section>
+
+<!-- ============ 18 · SECTION 04 ============ -->
+<section class="slide divider">
+  <div class="num">04</div>
+  <div class="name">Architecture deep-dive</div>
+  <div class="kick">One clock, one sample rate. Everything is either a pure function or a small proc —
+  and the synth emits one audio sample per tick.</div>
+</section>
+
+<!-- ============ 19 · ENGINE ============ -->
+<section class="slide">
+  <div class="h">The engine: one voice per cycle, one sample per 32</div>
+  <div class="split" style="grid-template-columns: 540px 1fr;">
+    <div class="body">
+      <ul class="dots">
+        <li>32 voices live in a <b>rotating ring</b> — the current voice is always slot 0
+        (constant index, <b>no 32:1 mux</b>)</li>
+        <li>One shared datapath: oscillators → sub-osc → per-voice resonant SVF → VCA,
+        with 2× ADSR and a per-part LFO</li>
+        <li>XLS compiles it with <b>48 pipeline stages</b> — many voices in flight at once,
+        ~one retires per engine cycle</li>
+        <li>All 32 voices finish in ~96 clocks of the 3,125-clock sample budget</li>
+      </ul>
+      <p class="mut">Every multiply is deliberately kept narrow so it maps to a single
+      DSP48 slice — or stays a small soft multiplier on the open flow.</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:420px; background:#fff;"><img src="assets/dsp_datapath.svg" alt="Per-voice datapath"></div>
+      <div class="imgcap">The per-voice datapath — run once per enabled cycle for the slot-0 voice</div>
+    </div>
+  </div></section>
+
+<!-- ============ 20 · TIMING ============ -->
+<section class="slide">
+  <div class="h">One clock, three cadences</div>
+  <table class="gt">
+    <thead><tr><th style="width:280px;">Cadence</th><th style="width:180px;">Period</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+      </svg>Master clock</td><td>10 ns</td><td>Everything — one 100 MHz oscillator, no MMCM/PLL</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+      </svg>ce (engine, ÷3)</td><td>30 ns</td><td>One voice processed; every pipeline register gated by one clock-enable</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h6 v-12 h4 v12 h24 v-12 h4" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      </svg>ce8 (effects, ÷6)</td><td>60 ns</td><td>One step of the 28-state effects FSM — one BRAM read+write per step</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 12 Q 12 -2 21 12 T 40 12" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>Sample period</td><td>31.25 µs</td><td>One 32 kHz stereo sample — 3,125 master clocks</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="max-width:1120px; margin-top:36px;">
+    <p>The compute uses only <span class="em">~264 of 3,125 clocks</span> per sample — the pipeline finishes
+    with ~90% of the period to spare. The real ceiling is the <b>UART frame (~2,000 clocks)</b>, not the DSP —
+    so the engine has generous room to grow.</p>
+  </div></section>
+
+<!-- ============ 21 · DIVISION OF LABOR ============ -->
+<section class="slide">
+  <div class="h">The division of labor: DSLX vs the Verilog shell</div>
+  <div class="rows" style="grid-template-columns: 340px 1fr;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="13" cy="13" r="11.5" stroke="#4285f4" stroke-width="2"/>
+      <text x="13" y="18" text-anchor="middle" font-size="15" font-style="italic" font-family="Georgia, serif" fill="#4285f4">ƒ</text>
+    </svg>Pure DSP math → DSLX</div>
+    <ul class="dots">
+      <li>Oscillators, SVF, ADSR, LFO, unison, mixer — the compiler's pipelining and bit-width narrowing pay off</li>
+      <li>Unit-testable in milliseconds, no handshakes to manage</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="4" y="2" width="18" height="22" rx="3" stroke="#188038" stroke-width="2"/>
+      <line x1="8.5" y1="8" x2="17.5" y2="8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8.5" y1="13" x2="17.5" y2="13" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8.5" y1="18" x2="17.5" y2="18" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+    </svg>Timed memory + control → Verilog</div>
+    <ul class="dots">
+      <li>Block RAM needs a <b>synchronous read</b>; XLS emits async reads that never infer to BRAM</li>
+      <li>The effects are <b>memory-port scheduling, not pipelined math</b> — a 28-state FSM time-shares one multiplier, L then R</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="2" y="3" width="4" height="20" rx="2" fill="#f9ab00"/>
+      <rect x="9.5" y="8" width="4" height="15" rx="2" fill="#f9ab00" opacity=".65"/>
+      <rect x="17" y="13" width="4" height="10" rx="2" fill="#f9ab00" opacity=".4"/>
+    </svg>The effects chain</div>
+    <ul class="dots">
+      <li>Mono engine; the shell builds the stereo image — anti-phase chorus, ping-pong echo, 8-comb Freeverb with the +23-sample stereo spread</li>
+      <li>Four 16K×16 circular buffers = 32 block RAMs — the chip's binding resource</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 22 · RESOURCES ============ -->
+<section class="slide">
+  <div class="h">Where it lands on the chip</div>
+  <div class="hsub">Committed Vivado build, Artix-7 xc7a35t — from report_utilization.</div>
+  <div class="split" style="grid-template-columns: 640px 1fr; margin-top: 8px;">
+    <div class="bars" style="margin-top:44px;">
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">Block RAM<small>the binding resource</small></div>
+        <div class="track"><div class="fill f-blue" style="width:65%"></div></div><div class="pv">65%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">Slice LUTs</div>
+        <div class="track"><div class="fill f-blue" style="width:50%"></div></div><div class="pv">50%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">Registers</div>
+        <div class="track"><div class="fill f-blue" style="width:42%"></div></div><div class="pv">42%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">DSP48 slices<small>26 of 90 — every × off the fabric</small></div>
+        <div class="track"><div class="fill f-blue" style="width:29%"></div></div><div class="pv">29%</div></div>
+    </div>
+    <div>
+      <div class="imgcard" style="height:400px; background:#fff;"><img src="assets/floorplan.svg" alt="Resource floorplan"></div>
+      <div class="imgcap">Engine + shell in CLB fabric, multiplies in DSP48, delay lines in BRAM</div>
+    </div>
+  </div></section>
+
+<!-- ============ 23 · BACKENDS ============ -->
+<section class="slide">
+  <div class="h">Three interchangeable P&amp;R backends</div>
+  <table class="gt">
+    <thead><tr><th style="width:190px;">Backend</th><th style="width:120px;">DSP48</th><th style="width:120px;">BRAM</th><th style="width:190px;">Clock / rate</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#5f6368" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 10 0 v 3" stroke="#5f6368" stroke-width="2"/>
+      </svg>Vivado</td><td class="ok">✓ 26</td><td class="ok">✓ 32</td><td>÷3 · 32 kHz</td>
+        <td>The shipped bitstream — ~18.5 ns critical path, ~10 ns margin. Closed-source.</td></tr>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#188038" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 9.6 -1.8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      </svg>openXC7</td><td class="no">✗</td><td class="ok">✓</td><td>÷4 · 28 kHz</td>
+        <td>Fully open, real Fmax report — but nextpnr can't route the DSP's CARRYCASCIN pin (yet).</td></tr>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#188038" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 9.6 -1.8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      </svg>F4PGA / VPR</td><td class="no">✗</td><td class="no">✗</td><td>÷4 · 28 kHz</td>
+        <td>Fully open; soft multipliers, slice-bound ~90%. Where this project started — and what shaped the design.</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="max-width:1120px; margin-top:36px;">
+    <p><b>XLS was never the blocker — the P&amp;R backend was.</b> The identical RTL infers
+    26 DSP48 + 32 BRAM on Vivado, halving the critical path (~40 → ~18.5 ns) and restoring true 32 kHz.</p>
+  </div></section>
+
+<!-- ============ 24 · SECTION 05 ============ -->
+<section class="slide divider">
+  <div class="num">05</div>
+  <div class="name">Frictions &amp; learnings</div>
+  <div class="kick">Three tools that don't know about each other, stacked. Every seam leaks —
+  here's what actually bit, and what it taught.</div>
+</section>
+
+<!-- ============ 25 · F4PGA LIMITS ============ -->
+<section class="slide">
+  <div class="h">The open flow's hard limits shaped the whole design</div>
+  <div class="rows" style="grid-template-columns: 360px 1fr; row-gap: 34px;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="3" y="3" width="20" height="20" rx="4" stroke="#9aa0a6" stroke-width="2"/>
+      <path d="M 9.5 9.5 L 16.5 16.5 M 16.5 9.5 L 9.5 16.5" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>No DSP48 inference</div>
+    <ul class="dots">
+      <li>Every multiply becomes a LUT+carry soft multiplier → <b>keep multipliers tiny</b>: narrow operand types so XLS's narrowing pass shrinks them</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="5" y="2" width="16" height="22" rx="3" stroke="#9aa0a6" stroke-width="2"/>
+      <line x1="9" y1="8" x2="17" y2="8" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="13" x2="17" y2="13" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="18" x2="17" y2="18" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>No BRAM from async reads</div>
+    <ul class="dots">
+      <li>XLS ROMs stay giant muxes; only a hand-written <b>sync-read RAM</b> in the shell maps to block RAM</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="13" cy="13" r="10.5" stroke="#9aa0a6" stroke-width="2"/>
+      <path d="M 13 7 L 13 13 L 17.5 16" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>No MMCM, no clock dividers</div>
+    <ul class="dots">
+      <li>You can't make a slower clock → run everything at 100 MHz and advance on a <b>global clock-enable</b> (the multicycle trick)</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="28" height="26" viewBox="0 0 28 26" fill="none">
+      <path d="M 2 13 Q 14 1 26 13 Q 14 25 2 13 Z" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="14" cy="13" r="4" stroke="#f9ab00" stroke-width="2"/>
+    </svg>Timing must be reasoned</div>
+    <ul class="dots">
+      <li>The tools can't see the multicycle and report those paths as failing — <b>tee the real report, measure every build</b>, and leave margin: placement is noisy</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 26 · FIXED POINT ============ -->
+<section class="slide">
+  <div class="h">Fixed-point warfare — the bugs floating-point sims never show</div>
+  <div class="cols c3">
+    <div>
+      <div class="cico"><svg width="48" height="38" viewBox="0 0 48 38" fill="none">
+        <line x1="2" y1="6" x2="46" y2="6" stroke="#bdc1c6" stroke-width="1.6" stroke-dasharray="4 4"/>
+        <line x1="2" y1="32" x2="46" y2="32" stroke="#bdc1c6" stroke-width="1.6" stroke-dasharray="4 4"/>
+        <path d="M 2 26 Q 6 10 10 6 L 20 6 Q 25 32 29 32 L 39 32 Q 43 16 46 10" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      </svg></div>
+      <div class="lbl">The filter that latched</div>
+      <p>At high resonance the SVF state sticks on the clamp rails — silence. Under bright polyphonic FM
+      it locked into a full-scale limit cycle, <b>96% of playtime railed</b>.</p>
+      <p class="small">Fix: leaky integrators (~1%/sample) pull the poles inside the unit circle —
+      any self-oscillation decays. The float sim never showed it; only hardware did.</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="46" height="38" viewBox="0 0 46 38" fill="none">
+        <path d="M 2 34 Q 20 32 30 20 Q 37 11 40 4" stroke="#f9ab00" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <path d="M 40 4 l -7 1 M 40 4 l -1 7" stroke="#f9ab00" stroke-width="2.4" stroke-linecap="round"/>
+      </svg></div>
+      <div class="lbl">The reverb that ran away</div>
+      <p>A small-step damping shift crushed the audio band <i>and</i> could wrap the 16-bit state —
+      sign flip → runaway feedback.</p>
+      <p class="small">Fix: damping as (old+new)/2 — inherently overflow-safe, band preserved.
+      And clear the BRAM at reset: power-up garbage seeds the loop.</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="48" height="38" viewBox="0 0 48 38" fill="none">
+        <path d="M 2 19 Q 7 4 12 19 T 22 19 T 32 19" stroke="#34a853" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <circle cx="40" cy="14" r="7" stroke="#34a853" stroke-width="2.2"/>
+        <path d="M 37 14 l 2.2 2.2 L 43.5 11.5" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="lbl">Saturate, never wrap</div>
+      <p>A wrap is a huge discontinuity — a broadband click. The mixer clamps;
+      demos keep big chords at moderate velocity.</p>
+      <p class="small">And verify with a spectrogram of the whole capture — one clean FFT slice
+      passed while the audio was actually corrupted.</p>
+    </div>
+  </div></section>
+
+<!-- ============ 27 · AGENT LEARNINGS ============ -->
+<section class="slide">
+  <div class="h">What made the agent loop actually work</div>
+  <div class="rows" style="grid-template-columns: 360px 1fr; row-gap: 36px;">
+    <div class="lbl"><svg class="lico" width="28" height="24" viewBox="0 0 28 24" fill="none">
+      <path d="M 3 21 A 12 12 0 0 1 25 21" stroke="#4285f4" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="21" x2="20" y2="12" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="14" cy="21" r="2.2" fill="#4285f4"/>
+    </svg>Objective pass / fail</div>
+    <ul class="dots">
+      <li>Every feature graded 0–100 by machine — no "sounds about right". The agent reads the number and revises</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 9 2 h 8 M 11 2 v 7 L 4.5 20.5 A 2.6 2.6 0 0 0 6.9 24 h 12.2 a 2.6 2.6 0 0 0 2.4 -3.5 L 15 9 V 2"
+        stroke="#188038" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="8" y1="17" x2="18" y2="17" stroke="#188038" stroke-width="2"/>
+    </svg>Prototype before you build</div>
+    <ul class="dots">
+      <li>A NumPy/numba model of the engine mirrors the RTL — FM strength, reverb damping, and preset search were all proven in sim first, <b>then</b> spent a 6-minute build</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <line x1="2" y1="7" x2="24" y2="7" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="17" cy="7" r="3.4" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2"/>
+      <line x1="2" y1="19" x2="24" y2="19" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="9" cy="19" r="3.4" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2"/>
+    </svg>Calibrate sim to silicon</div>
+    <ul class="dots">
+      <li>A probe compares the same patches on sim and board — matched presets are sim-optimal until board-validated; captures are nondeterministic, so best-of-N and reflash</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="11" cy="11" r="8" stroke="#d93025" stroke-width="2"/>
+      <line x1="17" y1="17" x2="24" y2="24" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>When the format changes, audit every consumer</div>
+    <ul class="dots">
+      <li>The board went stereo; the host still read mono — every tone an octave low, and a relative pitch check hid it</li>
+    </ul>
+  </div></section>
+
+<!-- ============ SECTION 06 ============ -->
+<section class="slide divider">
+  <div class="num">06</div>
+  <div class="name">Wrap-up &amp; Q&amp;A</div>
+  <div class="kick">Takeaways, where to find everything — and your questions.</div>
+</section>
+
+<!-- ============ TAKEAWAYS ============ -->
+<section class="slide">
+  <div class="agenda">
+    <div class="h-big">Takeaways</div>
+    <ol>
+      <li><span class="num">01</span><span class="txt" style="font-size:23px;">HLS makes DSP hardware feel like software — with a thin shell where control matters</span></li>
+      <li><span class="num">02</span><span class="txt" style="font-size:23px;">Agents can build real hardware when every feature emits a machine-gradable signal</span></li>
+      <li><span class="num">03</span><span class="txt" style="font-size:23px;">Cycle time is the leverage: fast builds + a software model = more iterations per hour</span></li>
+      <li><span class="num">04</span><span class="txt" style="font-size:23px;">Measure, don't trust — timing reports, spectrograms, and sim↔board calibration</span></li>
+      <li><span class="num">05</span><span class="txt" style="font-size:23px;">The seams between tools are where the friction lives — log them; they're the reusable asset</span></li>
+    </ol>
+  </div></section>
+
+<!-- ============ 31 · RESOURCES ============ -->
+<section class="slide">
+  <div class="h">Resources</div>
+  <div class="rows" style="margin-top:56px; grid-template-columns: 320px 1fr;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 2 8 a 2 2 0 0 1 2 -2 h 6 l 3 3 h 9 a 2 2 0 0 1 2 2 v 9 a 2 2 0 0 1 -2 2 H 4 a 2 2 0 0 1 -2 -2 Z"
+        stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+    </svg>The project</div>
+    <ul class="dots">
+      <li>github.com/kazunori279/xls32-fpga-synth — Apache-2.0, prebuilt bitstream included</li>
+      <li>Demo video: youtu.be/2ROr9M_ZlVY</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 5 2 h 11 l 5 5 v 17 H 5 Z" stroke="#188038" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M 16 2 v 5 h 5" stroke="#188038" stroke-width="2" stroke-linejoin="round"/>
+      <line x1="9" y1="13" x2="17" y2="13" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="18" x2="17" y2="18" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+    </svg>Docs in the repo</div>
+    <ul class="dots">
+      <li><code>ARCHITECTURE.md</code> — per-block deep-dive: code, dataflow, timing charts</li>
+      <li><code>DEVELOPMENT.md</code> — milestone history + the toolchain friction logs</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 13 2 L 24 8 L 13 14 L 2 8 Z" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M 2 13 l 11 6 l 11 -6" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" fill="none"/>
+      <path d="M 2 18 l 11 6 l 11 -6" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" fill="none"/>
+    </svg>The stack</div>
+    <ul class="dots">
+      <li>Google XLS — google.github.io/xls</li>
+      <li>F4PGA — f4pga.org · openXC7 · openFPGALoader</li>
+      <li>Basys 3 — digilent.com</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 32 · THANK YOU ============ -->
+<section class="slide thanks">
+  <div class="inner">
+    <h1>Thank you</h1>
+    <p>Questions?</p>
+    <div class="links">
+      <b>github.com/kazunori279/xls32-fpga-synth</b>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div id="hud">1 / 32</div>
+<div id="help"><kbd>←</kbd> <kbd>→</kbd> navigate &nbsp; <kbd>f</kbd> fullscreen</div>
+
+<script>
+(() => {
+  const slides = [...document.querySelectorAll('.slide')];
+  const hud = document.getElementById('hud');
+  const frame = document.getElementById('frame');
+  let cur = Math.min(Math.max((parseInt(location.hash.slice(1), 10) || 1) - 1, 0), slides.length - 1);
+
+  function show(i) {
+    cur = Math.min(Math.max(i, 0), slides.length - 1);
+    slides.forEach((s, j) => s.classList.toggle('active', j === cur));
+    hud.textContent = (cur + 1) + ' / ' + slides.length;
+    history.replaceState(null, '', '#' + (cur + 1));
+    slides.forEach((s, j) => {
+      const n = s.querySelector('.pageno');
+      if (n) n.textContent = j + 1;
+    });
+  }
+
+  function fit() {
+    const vw = (window.visualViewport && visualViewport.width) || innerWidth;
+    const vh = (window.visualViewport && visualViewport.height) || innerHeight;
+    const s = Math.min(vw / 1280, vh / 720) * 0.96;
+    frame.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  });
+  addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    show(e.clientX > innerWidth / 2 ? cur + 1 : cur - 1);
+  });
+  addEventListener('resize', fit);
+  addEventListener('orientationchange', fit);
+  if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+
+  let tx = null, ty = null;
+  addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchend', e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) show(dx < 0 ? cur + 1 : cur - 1);
+    tx = ty = null;
+  }, { passive: true });
+
+  addEventListener('hashchange', () => {
+    const n = (parseInt(location.hash.slice(1), 10) || 1) - 1;
+    if (n !== cur) show(n);
+  });
+
+  // YouTube embed: real iframe over http(s); from file:// YouTube blocks embeds
+  // (error 153, missing referer), so fall back to a click-through thumbnail.
+  const ytbox = document.getElementById('ytbox');
+  if (ytbox) {
+    const id = '2ROr9M_ZlVY';
+    if (location.protocol === 'file:') {
+      ytbox.innerHTML =
+        '<a href="https://youtu.be/' + id + '" target="_blank" rel="noopener" ' +
+        'style="display:block;width:100%;height:100%;position:relative;">' +
+        '<img src="https://img.youtube.com/vi/' + id + '/maxresdefault.jpg" ' +
+        'onerror="this.onerror=null;this.src=\'https://img.youtube.com/vi/' + id + '/hqdefault.jpg\'" ' +
+        'style="width:100%;height:100%;object-fit:cover;display:block;">' +
+        '<svg viewBox="0 0 68 48" style="position:absolute;left:50%;top:50%;width:78px;' +
+        'transform:translate(-50%,-50%);filter:drop-shadow(0 2px 8px rgba(0,0,0,.4));">' +
+        '<path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/>' +
+        '<path d="M45 24 27 14v20z" fill="#fff"/></svg></a>';
+    } else {
+      ytbox.innerHTML =
+        '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '" title="XLS32 demo video" ' +
+        'style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; ' +
+        'encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+    }
+  }
+
+  fit(); show(cur);
+})();
+</script>
+</body>
+</html>
