@@ -10,7 +10,7 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 > GitHub). Timing charts are pre-rendered [WaveDrom](https://wavedrom.com/) **SVGs** in
 > [`docs/`](docs) so they display everywhere, including GitHub; the WaveDrom source for each is
 > kept in a collapsible block beneath it. To regenerate after editing a source:
-> `npx wavedrom-cli -i chart.json -s docs/wd_name.svg` (then re-add a white background rect).
+> `npx wavedrom-cli -i chart.json -s docs/assets/wd_name.svg` (then re-add a white background rect).
 > The DSP **signal-flow** diagrams (Part D effects — z⁻ᴰ delay blocks, gain triangles, summing
 > junctions, which Mermaid can't express) are [schemdraw](https://schemdraw.readthedocs.io/)-drawn
 > `docs/dsp_*.svg`, generated from [`docs/gen_dsp_diagrams.py`](docs/gen_dsp_diagrams.py):
@@ -119,7 +119,7 @@ needs no snip of its own: it overlaps the runs already snipped, and `avld` goes 
 it finishes. The long runs (the 96-clock scan, the effects tail, the ~2000-clock UART TX, the
 ~861-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles:
 
-![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/wd_e2e.svg)
+![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/assets/wd_e2e.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -236,7 +236,7 @@ flowchart LR
 
 **Timing** — one voice per enabled cycle; a sample every 32 (columns = enabled engine cycles):
 
-![Engine schedule — one voice per enabled cycle; a sample emitted every 32](docs/wd_engine_schedule.svg)
+![Engine schedule — one voice per enabled cycle; a sample emitted every 32](docs/assets/wd_engine_schedule.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -426,7 +426,7 @@ keep the `Voice` ring narrow (ring width is the F4PGA packing budget — [A2](#a
 Everything below runs inside `process_voice()` ([`rtl/synth.x:184`](rtl/synth.x)), once per
 enabled cycle for the slot-0 voice. The chain is: oscillators → sub → cross-mod → filter → VCA.
 
-![Per-voice datapath overview: DDS oscillators → cross-mod → sub-osc → resonant SVF → VCA → serialized mix, with amp/filter ADSR and the part LFO as modulation inputs](docs/dsp_datapath.svg)
+![Per-voice datapath overview: DDS oscillators → cross-mod → sub-osc → resonant SVF → VCA → serialized mix, with amp/filter ADSR and the part LFO as modulation inputs](docs/assets/dsp_datapath.svg)
 
 ## B1 Oscillator / DDS
 
@@ -455,7 +455,7 @@ let phase_n = v.phase + inc;         // inc = note increment (+ pitch mod + unis
 **Timing** — the accumulator ramps; a `u32` overflow marks one oscillator period (used by the
 sub-osc):
 
-![DDS phase accumulator ramping and wrapping](docs/wd_dds_phase.svg)
+![DDS phase accumulator ramping and wrapping](docs/assets/wd_dds_phase.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -609,7 +609,7 @@ let main = voice_wave(wave, phase_n + fmoff, noise, pw);   // FM = modulate the 
 let ring = (((main as s32) * (modsig as s32)) >> u32:11) as s16;   // ring = amplitude product
 ```
 
-![Cross-osc FM/ring signal flow: the ph2 modulator drives an FM index (× depth) into the carrier phase and a ring product (× main), blended by xmode into o12](docs/dsp_crossmod.svg)
+![Cross-osc FM/ring signal flow: the ph2 modulator drives an FM index (× depth) into the carrier phase and a ring product (× main), blended by xmode into o12](docs/assets/dsp_crossmod.svg)
 
 **Gotcha.** Cross-mod costs **two soft-multiplies** (FM index + ring product) — the things that
 had to fit the ÷4 40 ns budget. An earlier *shift*-based FM index reached only β ≈ 0.1 rad (far
@@ -652,7 +652,7 @@ let (lo, bd, lp, hp, bp) = svf(v.flo as s32, v.fbnd as s32, amp >> u32:2, f & s3
 let filt = match fmode { u2:0 => lp, u2:1 => hp, u2:2 => bp, _ => lp + hp };  // LP/HP/BP/notch
 ```
 
-![Chamberlin state-variable filter: an input summing junction (HP) feeds two cascaded integrators (BP then LP) with resonance (×q) and damping (low) fed back to the input — LP/HP/BP/notch all fall out](docs/dsp_svf.svg)
+![Chamberlin state-variable filter: an input summing junction (HP) feeds two cascaded integrators (BP then LP) with resonance (×q) and damping (low) fed back to the input — LP/HP/BP/notch all fall out](docs/assets/dsp_svf.svg)
 
 **Gotcha.** Two fixed-point traps, both fixed here: (1) at high resonance the state grows ~Q×input
 and sticks on the clamp rails (silence) — hence the 4× input attenuation for headroom; (2) bright
@@ -704,7 +704,7 @@ stateDiagram-v2
 
 **Timing** — envelope level vs gate across the stages:
 
-![ADSR envelope level vs gate across the stages](docs/wd_adsr.svg)
+![ADSR envelope level vs gate across the stages](docs/assets/wd_adsr.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -906,7 +906,7 @@ always @(posedge clk100) sdiv <= rst ? 16'd0 : (stick ? 16'd0 : sdiv + 1);
 
 **Timing** — two full mod-6 periods:
 
-![Clocking — mod-6 counter driving ce (÷3, engine) and ce8 (÷6, effects)](docs/wd_clocking.svg)
+![Clocking — mod-6 counter driving ce (÷3, engine) and ce8 (÷6, effects)](docs/assets/wd_clocking.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -967,7 +967,7 @@ end else rxd <= rxd - 1;
 
 **Timing** — one 8-N-1 UART byte (idle-high, start bit low, 8 data LSB-first, stop bit high):
 
-![UART 8-N-1 byte frame](docs/wd_uart_frame.svg)
+![UART 8-N-1 byte frame](docs/assets/wd_uart_frame.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -1029,7 +1029,7 @@ frame <= {1'b1, (pend==3'd4 ? {sampL[7:1],1'b0} : pend==3'd3 ? sampL[15:8]
 
 **Timing** — the 4-byte interleaved frame:
 
-![Stereo 4-byte interleaved frame (Llo Lhi Rlo Rhi)](docs/wd_stereo_frame.svg)
+![Stereo 4-byte interleaved frame (Llo Lhi Rlo Rhi)](docs/assets/wd_stereo_frame.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -1100,7 +1100,7 @@ else if (dst==6'd28) begin ... sampL <= sat18(ecwL + rwetL) + 16'sd32768; ... pe
 
 **Timing** — one arithmetic datapath, time-shared **L then R** across the 28 states (on `ce8`):
 
-![Effects FSM — one datapath time-shared L then R across the 28-state machine](docs/wd_effects_fsm.svg)
+![Effects FSM — one datapath time-shared L then R across the 28-state machine](docs/assets/wd_effects_fsm.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -1167,7 +1167,7 @@ comb/all-pass in the reverb are the *same* building block — a **delay line**: 
 sits `D` slots behind it, so `read = buffer[waddr − D]` returns the sample from `D` samples ago. The
 delay `D` is just the distance between the two pointers; nothing is shifted, only the pointers move.
 
-![The delay-line primitive: a BRAM circular buffer written at waddr and read D samples behind it, giving y[n] = x[n−D]](docs/dsp_delayline.svg)
+![The delay-line primitive: a BRAM circular buffer written at waddr and read D samples behind it, giving y[n] = x[n−D]](docs/assets/dsp_delayline.svg)
 
 The three effects differ only in **how they pick `D` and what they write back**:
 
@@ -1196,7 +1196,7 @@ that echo writes there. The tap `D = ctiL` is swept by the triangle `clfo`, kept
 so the fractional part drives a linear interpolation between two adjacent reads (`s0` at `waddr−cti`,
 `s1` at `waddr−cti−1`) — an integer-only tap would jump a whole sample per step and each jump clicks.
 
-![Chorus signal flow: a triangle LFO sweeps a short BRAM read tap, scaled by CC94 depth into the wet output; no feedback](docs/dsp_chorus.svg)
+![Chorus signal flow: a triangle LFO sweeps a short BRAM read tap, scaled by CC94 depth into the wet output; no feedback](docs/assets/dsp_chorus.svg)
 
 **What it does.** A short delay tap swept by a triangle LFO, L/R in anti-phase, linearly
 interpolated to a fractional sample so the sweep doesn't click.
@@ -1229,7 +1229,7 @@ write**, in the shared `dmemL/R`. Read at `waddr − edly` (set at `dst1`, latch
 `dst4` write `dry + ½·(other channel's delayed sample)` back at `waddr`, then `waddr += 1`. `edly` is
 floored at 128 samples so the read tap can never coincide with the write pointer.
 
-![Echo signal flow: a feedback delay line — input summed with the ½-scaled delayed tap; in stereo each channel writes the other's delayed sample (ping-pong)](docs/dsp_echo.svg)
+![Echo signal flow: a feedback delay line — input summed with the ½-scaled delayed tap; in stereo each channel writes the other's delayed sample (ping-pong)](docs/assets/dsp_echo.svg)
 
 **What it does.** A long delay tap with feedback that **ping-pongs L↔R**. Time is CC82, depth CC95.
 
@@ -1278,9 +1278,9 @@ pointers advance at `dst28` ([D1](#d1-effects-fsm)).
 The two filter kernels the FSM runs, each on its own tank region (`z⁻ᴰ` = one BRAM comb/all-pass
 region addressed by its circular pointer):
 
-![Reverb feedback comb filter: input summed with the delayed tap after a one-pole low-pass damp and the room-size gain g, then written back and sent to the comb sum](docs/dsp_comb.svg)
+![Reverb feedback comb filter: input summed with the delayed tap after a one-pole low-pass damp and the room-size gain g, then written back and sent to the comb sum](docs/assets/dsp_comb.svg)
 
-![Reverb Schroeder all-pass diffuser: the delayed tap and input combined through ±½ feedforward and feedback butterflies](docs/dsp_allpass.svg)
+![Reverb Schroeder all-pass diffuser: the delayed tap and input combined through ±½ feedforward and feedback butterflies](docs/assets/dsp_allpass.svg)
 
 **What it does.** A full [Freeverb](https://ccrma.stanford.edu/~jos/pasp/Freeverb.html): 8 parallel
 feedback comb filters + 4 series all-pass diffusers **per channel**, with the Freeverb stereo
@@ -1307,7 +1307,7 @@ wire [14:0] rvg = (rsize==2'd0) ? 15'd22000 :   // 0.671  room      (~0.4 s)
 
 The full per-channel topology — 8 combs in parallel, summed and ÷4, then 4 all-passes in series:
 
-![Freeverb topology: the send fans out to 8 parallel comb filters, summed and scaled by ÷4, then through 4 series all-pass diffusers to the CC93 wet output](docs/dsp_freeverb.svg)
+![Freeverb topology: the send fans out to 8 parallel comb filters, summed and scaled by ÷4, then through 4 series all-pass diffusers to the CC93 wet output](docs/assets/dsp_freeverb.svg)
 
 **Gotcha.** The tail took several fixed-point lessons (all in [DEVELOPMENT.md → M14](DEVELOPMENT.md#milestone-14--reverb-done-hardware-verified)):
 damping must be `(old+new)/2` (a small-step shift both crushes the band and can wrap the state →
@@ -1342,7 +1342,7 @@ end
 
 **Timing** — BCLK = 100 MHz/32 = 3.125 MHz; 64 BCLK/frame → Fs ≈ 48.8 kHz; WS low = left:
 
-![I2S Philips frame — BCLK, WS (L/R), SD](docs/wd_i2s_frame.svg)
+![I2S Philips frame — BCLK, WS (L/R), SD](docs/assets/wd_i2s_frame.svg)
 
 <details><summary>WaveDrom source</summary>
 
@@ -1457,7 +1457,7 @@ is **reasoned, not read from the report**. Full toolchain frictions:
 blocks live in general **CLB fabric** (LUT/FF), which multiplies map to the **DSP48** slices, and
 which memories fill the **block RAMs** — plus the I/O on the die edge.
 
-![Rough resource floorplan of the Artix-7 xc7a35t](docs/floorplan.svg)
+![Rough resource floorplan of the Artix-7 xc7a35t](docs/assets/floorplan.svg)
 
 Block → resource, on the committed Vivado build (utilization from
 [DEVELOPMENT.md → FPGA resource usage](DEVELOPMENT.md#fpga-resource-usage-f4pga-vs-vivado)):

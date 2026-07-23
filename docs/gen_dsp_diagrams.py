@@ -3,11 +3,11 @@
 
 These are proper signal-flow block diagrams (z^-D delay blocks, gain triangles, summing
 junctions) — the notation Mermaid can't express. They mirror the WaveDrom -> committed-SVG
-pattern: this script is the text source; the committed docs/dsp_*.svg display everywhere.
+pattern: this script is the text source; the committed docs/assets/dsp_*.svg display everywhere.
 
     uv sync --extra docs && uv run python docs/gen_dsp_diagrams.py
 
-Outputs (all under docs/):
+Outputs (all under docs/assets/):
     dsp_delayline.svg  the circular-delay-line primitive shared by all three effects
     dsp_chorus.svg     chorus: LFO-swept read tap, no feedback
     dsp_echo.svg       echo: feedback delay, ping-pong L<->R
@@ -28,10 +28,11 @@ from schemdraw import dsp
 schemdraw.use("svg")  # native SVG backend — no matplotlib dependency
 
 DOCS = os.path.dirname(os.path.abspath(__file__))
+ASSETS = os.path.join(DOCS, "assets")
 
 
 def out(name):
-    return os.path.join(DOCS, name)
+    return os.path.join(ASSETS, name)
 
 
 # ---------------------------------------------------------------------------

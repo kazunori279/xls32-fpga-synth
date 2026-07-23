@@ -318,7 +318,7 @@ engine** so every voice can later get its own filter (M6b) at full sample rate.
 - **Hi-fi restored:** 16-bit / **32 kHz** again, pristine 256-point sine.
 
 Verified on the board: `play.py` reads **4/4 chord tones** over UART and the
-**spectrogram is clean** (stable bands, no haze/dropouts/clipping — `docs/m6a_spectrogram.png`).
+**spectrogram is clean** (stable bands, no haze/dropouts/clipping — `docs/assets/m6a_spectrogram.png`).
 
 **It runs at an effective 50 MHz, not 100 MHz.** F4PGA/VPR floors this design at
 ~15–19 ns (wide MUXF6 mux trees; **no DSP48, no BRAM inference, no MMCM**). After
@@ -359,11 +359,11 @@ filter (M6), which could only filter the summed output.
 Verified on the board five ways:
 - **Static:** CC74=10 rolls off the highs, CC74=127 passes the full harmonic stack.
 - **Cutoff sweep** (`filter_demo.py`): the bright filter edge sweeps upward,
-  revealing the sawtooth harmonics — `docs/m6b_filter_sweep.png`.
+  revealing the sawtooth harmonics — `docs/assets/m6b_filter_sweep.png`.
 - **Key-tracking:** ascending octave saws at a *fixed* CC show the rolloff edge
-  stepping **up** with pitch — `docs/m6b_keytracking.png`.
+  stepping **up** with pitch — `docs/assets/m6b_keytracking.png`.
 - **Filter envelope:** repeated notes each show a bright attack decaying to a darker
-  sustain (a pluck); **LFO:** a held note shows the cutoff wobbling — `docs/m6b_modulation.png`.
+  sustain (a pluck); **LFO:** a held note shows the cutoff wobbling — `docs/assets/m6b_modulation.png`.
 
 ```bash
 uv run host/filter_demo.py sweep.wav 45 90 && scripts/spectro.sh sweep.wav   # cutoff sweep
@@ -496,7 +496,7 @@ shared 16K delay BRAM (still 8× RAMB36E1); the shell FSM does one BRAM read+wri
 cycle across ~10 states per audio sample. The reset buffer-clear (M13) keeps the comb
 feedback from railing on power-up garbage.
 
-![M14 reverb topology: 4 parallel comb filters (810/878/940/1012) summed, then 2 series all-pass diffusers (348/116) to the wet output](docs/dsp_reverb_m14.svg)
+![M14 reverb topology: 4 parallel comb filters (810/878/940/1012) summed, then 2 series all-pass diffusers (348/116) to the wet output](docs/assets/dsp_reverb_m14.svg)
 
 **Room size (CC91):** each comb's feedback `g` is a real Q15 multiply, selected by room
 size — `room` 0.671 (~0.4 s) · `hall` 0.793 · `large` 0.885 · `cathedral` 0.952 (~3.5 s

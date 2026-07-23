@@ -11,7 +11,7 @@ over USB. And **not a single line of it was written by hand**: the whole design 
 [loop engineering](https://addyosmani.com/blog/loop-engineering/) — prompts in, a self-verifying
 build → measure → revise loop out.
 
-![The XLS32 browser front-end — an analog-style panel driving the FPGA synth live over USB](docs/webui.png)
+![The XLS32 browser front-end — an analog-style panel driving the FPGA synth live over USB](docs/assets/webui.png)
 
 *The browser front-end (`webui/`): a Serum/Vital-style panel that drives the FPGA synth live over
 USB — oscillators, filter, envelopes, LFO, unison, cross-mod, and effects, plus a 4-part
@@ -214,7 +214,8 @@ The project is grouped into topical subdirectories:
   `test/README.md`.
 - **`firmware/`** — a committed prebuilt bitstream (`top.bit`) so a board can be flashed **without
   building** (see [Set up a board without building](#set-up-a-board-without-building)).
-- **`docs/`** — spectrogram PNGs; **`media/`** — captured .wav/.mp4/screenshots (gitignored);
+- **`docs/`** — diagrams & spectrogram PNGs (in `docs/assets/`) and the session slides
+  (`docs/slides/`); **`media/`** — captured .wav/.mp4/screenshots (gitignored);
   **`build/`** — bitstream build output; **`webui/certs/`** — local TLS cert (both gitignored).
 
 ---
@@ -522,7 +523,7 @@ flowchart LR
 And roughly how those blocks lay out on the FPGA — engine + shell in CLB fabric, every multiply in
 the 26 DSP48 slices, and the delay/reverb buffers + ROMs in the 32 block RAMs:
 
-![Rough resource floorplan of the Artix-7 xc7a35t: engine and shell logic in CLB fabric, all multiplies mapped to 26 DSP48, delay/reverb buffers and inferred ROMs in 32 block RAMs, I/O on the die edge](docs/floorplan.svg)
+![Rough resource floorplan of the Artix-7 xc7a35t: engine and shell logic in CLB fabric, all multiplies mapped to 26 DSP48, delay/reverb buffers and inferred ROMs in 32 block RAMs, I/O on the die edge](docs/assets/floorplan.svg)
 
 *Rough resource map (schematic — which fabric each block maps to, not exact place-and-route). Block-by-block detail in [ARCHITECTURE.md → Chip floorplan](ARCHITECTURE.md#e5-chip-floorplan-rough-resource-map).*
 
