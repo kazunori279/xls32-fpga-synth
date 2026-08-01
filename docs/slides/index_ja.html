@@ -89,6 +89,18 @@
   .divider .name { position: absolute; top: 128px; left: 64px; font-size: 46px; font-weight: 400; color: #d2e3fc; letter-spacing: 0; max-width: 1000px; line-height: 1.15; }
   .divider .kick { position: absolute; left: 64px; bottom: 88px; font-size: 22px; color: #aecbfa; max-width: 860px; line-height: 1.5; }
 
+  /* self-intro */
+  .me { display: grid; grid-template-columns: 280px 1fr; gap: 64px; margin-top: 62px; align-items: start; }
+  .me .avatar { width: 280px; height: 280px; border-radius: 50%; display: block; }
+  .me .mname { font-size: 46px; font-weight: 500; color: var(--ink); letter-spacing: -1px; }
+  .me .mhandle { margin-top: 12px; font-size: 20px; color: var(--ink-3); }
+  .me .mhandle a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .me .mhandle a:hover { text-decoration: underline; }
+  .me .mrole { margin-top: 22px; font-size: 24px; font-weight: 500; color: var(--blue-bright); }
+  .me ul.dots { margin-top: 26px; }
+  .me ul.dots li { font-size: 19.5px; color: var(--ink-2); line-height: 1.6; margin: 11px 0; }
+  .me .mdis { margin-top: 30px; font-size: 15px; color: #80868b; font-style: italic; }
+
   .divider-light { background: var(--blue-soft); text-align: center; }
   .divider-light .num { margin-top: 208px; color: var(--ink-2); font-weight: 700; font-size: 26px; }
   .divider-light .name { margin-top: 30px; color: var(--blue); font-size: 56px; font-weight: 400; letter-spacing: 0; }
@@ -127,6 +139,8 @@
                  background: #000; border-radius: 7px; }
   .vgrid.c2 .vcard video { aspect-ratio: 16 / 9; }
   .vcard .vcap { padding: 8px 4px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .vcard img.shot { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain;
+                    background: #f1f3f4; border-radius: 7px; }
   .vgrid.c2 .vcard .vcap { padding-top: 12px; font-size: 15.5px; line-height: 1.5; }
   .vnote { margin-top: 14px; font-size: 17px; color: var(--ink-3); max-width: 1200px; }
 
@@ -288,7 +302,8 @@
   <div class="agenda">
     <div class="h-big">アジェンダ</div>
     <ol>
-      <li><span class="num">01</span><span class="txt">XLS32とは</span><span class="min">8分</span></li>
+      <li><span class="num">00</span><span class="txt">自己紹介</span><span class="min">2分</span></li>
+      <li><span class="num">01</span><span class="txt">XLS32とは</span><span class="min">6分</span></li>
       <li><span class="num">02</span><span class="txt">技術スタック</span><span class="min">16分</span></li>
       <li><span class="num">03</span><span class="txt">AIエージェントとループエンジニアリング</span><span class="min">9分</span></li>
       <li><span class="num">04</span><span class="txt">アーキテクチャ詳解</span><span class="min">8分</span></li>
@@ -296,6 +311,63 @@
       <li><span class="num">06</span><span class="txt">まとめ + Q&amp;A</span><span class="min">4分</span></li>
     </ol>
   </div></section>
+
+<!-- ============ SECTION 00 · WHO'S TALKING ============ -->
+<section class="slide divider">
+  <div class="num">00</div>
+  <div class="name">自己紹介</div>
+  <div class="kick">まずは30秒だけ自己紹介を。そして2012年に手作りしたFPGAシンセの話 —
+  この発表で作り直すのは、実はそれと同じ楽器です。</div>
+</section>
+
+<!-- ============ SELF-INTRO ============ -->
+<section class="slide">
+  <div class="h">はじめまして</div>
+  <div class="me">
+    <img class="avatar" src="assets/me.jpg" alt="佐藤一憲">
+    <div>
+      <div class="mname">Kazunori Sato</div>
+      <div class="mhandle"><a href="https://x.com/kazunori_279" target="_blank" rel="noopener">@kazunori_279</a>
+      &nbsp;·&nbsp; 東京 &nbsp;·&nbsp; Xは2008年から</div>
+      <div class="mrole">Developer Advocate, Cloud AI — Google</div>
+      <ul class="dots">
+        <li>AIを中心に、登壇・デモ・サンプルコードを書く仕事をしています</li>
+        <li>週末はハードいじり。FPGA、MIDI、音の出るものなら何でも</li>
+        <li><b>XLS32</b> は個人のサイドプロジェクト。Apache-2.0で公開しています</li>
+        <li><code>github.com/kazunori279/xls32-fpga-synth</code></li>
+      </ul>
+      <div class="mdis">ここでの発言は私個人のものであり、所属組織の見解ではありません。</div>
+    </div>
+  </div></section>
+
+<!-- ============ ME AND FPGA (2012) ============ -->
+<section class="slide">
+  <div class="h">私とFPGA: 2012年の試作</div>
+  <div class="hsub">14年前、同じ楽器を手作りしていました。Altera DE0、手書きのVerilog、2週間で3本のブログ記事。</div>
+  <div class="vgrid" style="margin-top: 30px;">
+    <div class="vcard">
+      <div class="vlbl"><span>MIDIを手で解く</span><span class="dur">2012年12月15日</span></div>
+      <img class="shot" src="assets/fpga2012_midi.jpg" alt="FPGAにつないだSparkFunのMIDIブレイクアウト基板">
+      <div class="vcap">SparkFunのMIDIブレイクアウトをDE0へ。31.25kbpsの調歩同期シリアルを4倍オーバーサンプルする
+      ステートマシンをVerilogで書いて、まず <code>90h 3Ch 40h</code> がLEDに出たのが最初の一歩。</div>
+    </div>
+    <div class="vcard">
+      <div class="vlbl"><span>8音ポリフォニー</span><span class="dur">2012年12月19日</span></div>
+      <img class="shot" src="assets/fpga2012_poly.png" alt="8音ミックス出力のオシロスコープ波形">
+      <div class="vcap">サイン波のルックアップテーブルとノート番号→ステップ幅の変換表。8個のWaveGenがMIDIを
+      次段へ受け流してボイスを割り当てます。8bitで足すとクリップしたので、ミックスはDACの12bit側へ。</div>
+    </div>
+    <div class="vcard">
+      <div class="vlbl"><span>ブラウザのツマミ</span><span class="dur">2012年12月29日</span></div>
+      <img class="shot" src="assets/fpga2012_serial.png" alt="chrome.serialでシリアルポートを列挙するChrome DevTools">
+      <div class="vcap">ADSRはHDLのカウンタで、VCAはVerilog1行。FTDIケーブル経由921.6kbpsで、Chrome Packaged Appの
+      jQuery Knobのツマミが <code>chrome.serial</code> 越しに音を動かしていました。</div>
+    </div>
+  </div>
+  <div class="vnote">やりたいことは14年前と同じ。<b>2012年:</b> サイン波8音、手書きVerilog、1機能におよそ週末1回 —
+  そこで止まりました。<b>2026年:</b> 32音・4パート、フィルタもエフェクトもあり、実機テスト130本以上 —
+  しかも私は1行も書いていません。</div>
+</section>
 
 <!-- ============ SECTION 01 · WHAT IS XLS32 ============ -->
 <section class="slide divider">

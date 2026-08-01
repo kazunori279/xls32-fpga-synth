@@ -84,6 +84,18 @@
   .divider .name { position: absolute; top: 128px; left: 64px; font-size: 56px; font-weight: 400; color: #d2e3fc; letter-spacing: -1px; max-width: 1000px; line-height: 1.15; }
   .divider .kick { position: absolute; left: 64px; bottom: 88px; font-size: 22px; color: #aecbfa; max-width: 860px; line-height: 1.5; }
 
+  /* self-intro */
+  .me { display: grid; grid-template-columns: 280px 1fr; gap: 64px; margin-top: 62px; align-items: start; }
+  .me .avatar { width: 280px; height: 280px; border-radius: 50%; display: block; }
+  .me .mname { font-size: 46px; font-weight: 500; color: var(--ink); letter-spacing: -1px; }
+  .me .mhandle { margin-top: 12px; font-size: 20px; color: var(--ink-3); }
+  .me .mhandle a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .me .mhandle a:hover { text-decoration: underline; }
+  .me .mrole { margin-top: 22px; font-size: 24px; font-weight: 500; color: var(--blue-bright); }
+  .me ul.dots { margin-top: 26px; }
+  .me ul.dots li { font-size: 19.5px; color: var(--ink-2); line-height: 1.5; margin: 11px 0; }
+  .me .mdis { margin-top: 30px; font-size: 15px; color: #80868b; font-style: italic; }
+
   .divider-light { background: var(--blue-soft); text-align: center; }
   .divider-light .num { margin-top: 208px; color: var(--ink-2); font-weight: 700; font-size: 26px; }
   .divider-light .name { margin-top: 30px; color: var(--blue); font-size: 66px; font-weight: 400; letter-spacing: -1px; }
@@ -122,6 +134,8 @@
                  background: #000; border-radius: 7px; }
   .vgrid.c2 .vcard video { aspect-ratio: 16 / 9; }
   .vcard .vcap { padding: 8px 4px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .vcard img.shot { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain;
+                    background: #f1f3f4; border-radius: 7px; }
   .vgrid.c2 .vcard .vcap { padding-top: 12px; font-size: 16.5px; line-height: 1.5; }
   .vnote { margin-top: 26px; font-size: 17px; color: var(--ink-3); max-width: 1060px; }
 
@@ -280,7 +294,8 @@
   <div class="agenda">
     <div class="h-big">Agenda</div>
     <ol>
-      <li><span class="num">01</span><span class="txt">What is XLS32</span><span class="min">8 min</span></li>
+      <li><span class="num">00</span><span class="txt">Who's talking</span><span class="min">2 min</span></li>
+      <li><span class="num">01</span><span class="txt">What is XLS32</span><span class="min">6 min</span></li>
       <li><span class="num">02</span><span class="txt">The technology stack</span><span class="min">16 min</span></li>
       <li><span class="num">03</span><span class="txt">Loop engineering with AI agents</span><span class="min">9 min</span></li>
       <li><span class="num">04</span><span class="txt">Architecture deep-dive</span><span class="min">8 min</span></li>
@@ -288,6 +303,64 @@
       <li><span class="num">06</span><span class="txt">Wrap-up + Q&amp;A</span><span class="min">4 min</span></li>
     </ol>
   </div></section>
+
+<!-- ============ SECTION 00 · WHO'S TALKING ============ -->
+<section class="slide divider">
+  <div class="num">00</div>
+  <div class="name">Who's talking</div>
+  <div class="kick">Thirty seconds on me — and on the FPGA synthesizer I built by hand in 2012,
+  which is the same instrument this deck rebuilds without writing a line of it.</div>
+</section>
+
+<!-- ============ SELF-INTRO ============ -->
+<section class="slide">
+  <div class="h">Hello</div>
+  <div class="me">
+    <img class="avatar" src="assets/me.jpg" alt="Kazunori Sato">
+    <div>
+      <div class="mname">Kazunori Sato</div>
+      <div class="mhandle"><a href="https://x.com/kazunori_279" target="_blank" rel="noopener">@kazunori_279</a>
+      &nbsp;·&nbsp; Tokyo, Japan &nbsp;·&nbsp; on X since 2008</div>
+      <div class="mrole">Developer Advocate, Cloud AI — Google</div>
+      <ul class="dots">
+        <li>Talks, demos, and a lot of sample code — mostly about AI</li>
+        <li>Weekend hardware hacker: FPGAs, MIDI, and anything that makes a sound</li>
+        <li><b>XLS32</b> is a personal side project, open-sourced under Apache-2.0</li>
+        <li><code>github.com/kazunori279/xls32-fpga-synth</code></li>
+      </ul>
+      <div class="mdis">The opinions expressed here are my own, not those of my employer.</div>
+    </div>
+  </div></section>
+
+<!-- ============ ME AND FPGA (2012) ============ -->
+<section class="slide">
+  <div class="h">Me and FPGAs: the 2012 prototype</div>
+  <div class="hsub">Fourteen years ago I built this same instrument by hand — an Altera DE0, hand-written
+  Verilog, three blog posts over two weeks.</div>
+  <div class="vgrid" style="margin-top: 30px;">
+    <div class="vcard">
+      <div class="vlbl"><span>MIDI, by hand</span><span class="dur">Dec 15, 2012</span></div>
+      <img class="shot" src="assets/fpga2012_midi.jpg" alt="A SparkFun MIDI breakout board wired to an FPGA">
+      <div class="vcap">A SparkFun MIDI breakout into the DE0. 31.25 kbps async serial, oversampled 4× by a
+      Verilog state machine — the first win was <code>90h 3Ch 40h</code> showing up on the LEDs.</div>
+    </div>
+    <div class="vcard">
+      <div class="vlbl"><span>Eight voices</span><span class="dur">Dec 19, 2012</span></div>
+      <img class="shot" src="assets/fpga2012_poly.png" alt="Oscilloscope capture of the 8-voice mixed output">
+      <div class="vcap">A sine lookup table and a note→step-size table, with eight WaveGen modules passing
+      MIDI down a chain to allocate voices. Summing them clipped 8 bits, so the mix moved to the DAC's 12.</div>
+    </div>
+    <div class="vcard">
+      <div class="vlbl"><span>Knobs in the browser</span><span class="dur">Dec 29, 2012</span></div>
+      <img class="shot" src="assets/fpga2012_serial.png" alt="Chrome DevTools listing serial ports via chrome.serial">
+      <div class="vcap">ADSR as HDL counters, one line of Verilog for the VCA — driven over an FTDI cable at
+      921.6 kbps from a Chrome packaged app, jQuery Knob dials talking to <code>chrome.serial</code>.</div>
+    </div>
+  </div>
+  <div class="vnote">Same idea, fourteen years apart. <b>2012:</b> 8 sine voices, hand-written Verilog, roughly
+  a weekend per feature — and it stopped there. <b>2026:</b> 32 voices, 4 parts, filters and effects,
+  130+ scored hardware tests — and I wrote none of it.</div>
+</section>
 
 <!-- ============ SECTION 01 · WHAT IS XLS32 ============ -->
 <section class="slide divider">
