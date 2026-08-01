@@ -1,14 +1,16 @@
-"""Generate webui/static/demos.json — the DEMO player's song bank (4 songs, one per genre).
+"""Generate webui/static/demos.json — the DEMO player's song bank (7 songs).
 
-NOTE: demos.json is the SINGLE SOURCE OF TRUTH for the demo bank. The web UI's 💾 TONES
-button saves edited songs straight back into it (via /api/demo_save), so re-running this
-generator OVERWRITES those edits — regenerate only to re-bootstrap, then re-tune in the UI.
+demos.json is the live bank: the web UI's 💾 TONES button saves edited patches straight back
+into it (via /api/demo_save). Re-running this generator PRESERVES those edits — a song's tones
+(parts + effect amounts) are carried over by name, and only the notes are regenerated. Delete
+demos.json first if you want a clean re-bootstrap from the definitions here.
 
 Each song is authored FOR this synth: 4 multitimbral parts (MIDI ch 0-3), each with its own
 patch driving the synth's signature CCs (5 waveforms, PWM, sub, cross-osc ring/FM with 8
 ratios, LP/HP/BP/notch filter, per-part LFO, filter env), plus the shared effects amounts.
-Content is one public-domain classical theme + one procedural song per other genre, so it's
-clean to ship in a public repo. Timbres are drawn from a broad INSTRUMENT LIBRARY.
+Content is four complete public-domain classical pieces (notes in demo_scores.py) + one
+procedural song per other genre, so it's clean to ship in a public repo. Timbres are drawn
+from a broad INSTRUMENT LIBRARY.
 
 Format (demos.json):
   { "songs": [ {
@@ -17,6 +19,10 @@ Format (demos.json):
       "notes": [[t_beats, dur_beats, ch, midi, vel], ...] } ] }
 """
 import json, os
+try:
+    from . import demo_scores as SC        # note data for the four transcribed pieces
+except ImportError:
+    import demo_scores as SC
 
 def w(v): return (v & 7) << 4      # CC70 wave / CC83 fx / CC87 xratio  (3-bit @ bit4)
 def s(v): return (v & 3) << 5      # 2-bit selects
@@ -105,6 +111,8 @@ def song(name, genre, bpm, bars, fx, parts, notes):
     songs.append({"name": name, "genre": genre, "bpm": bpm, "bars": bars, "fx": fx, "parts": parts, "notes": notes})
 def mk(name, bpm, bars, fx, parts, notes):   # pure: RETURN a Classical song dict (reused by make_random)
     return {"name": name, "genre": "Classical", "bpm": bpm, "bars": bars, "fx": fx, "parts": parts, "notes": notes}
+def fx_amounts(sg, **kw):                    # override the genre's default effect amounts
+    sg.update(kw); return sg
 def prog_song(name, genre, bpm, fx, parts, prog, build):
     out = []
     for bari, (root, qual) in enumerate(prog): build(out, bari, root, qual, bari * 4.0)
@@ -119,25 +127,76 @@ def bass_root(out, ch, r, octv, t, mode, vel=104):
         for i, m in enumerate([n(r,octv), n(r,octv), n(r,octv)+7, n(r,octv)]): out.append([round(t+i,4), 0.9, ch, m, vel])
 
 
-# ==================== CLASSICAL (8) ====================  parts = [ch0, ch1, ch2, ch3]
+# ==================== CLASSICAL (12) ====================  parts = [ch0, ch1, ch2, ch3]
+def note_name(tok):                     # "C#4" / "Bb3" -> midi
+    return n(tok[:-1], int(tok[-1]))
+
 def bach_prelude():
-    bars = [[n("C",4),n("E",4),n("G",4),n("C",5),n("E",5)],[n("C",4),n("D",4),n("A",4),n("D",5),n("F",5)],
-            [n("B",3),n("D",4),n("G",4),n("D",5),n("F",5)],[n("C",4),n("E",4),n("G",4),n("C",5),n("E",5)],
-            [n("C",4),n("E",4),n("A",4),n("E",5),n("A",5)],[n("C",4),n("D",4),n("F#",4),n("A",4),n("D",5)],
-            [n("B",3),n("D",4),n("G",4),n("D",5),n("G",5)],[n("C",4),n("E",4),n("G",4),n("C",5),n("E",5)]]
+    """BWV 846 complete, all 35 bars. Nothing but the one broken-chord figure for 32 bars,
+    a two-bar written-out arpeggio, then the final chord — the whole piece is a chord chart."""
     out = []
-    for bi, notes in enumerate(bars):
-        t = bi * 4.0
+    for bi, spell in enumerate(SC.BWV846):
+        t, notes = bi * 4.0, [note_name(x) for x in spell.split()]
         # walking quarter-note bass: root + a chord tone (an octave down) instead of one whole note
         lo, mid = notes[0]-12, notes[2]-12
         for bq, (bp, bv) in enumerate([(lo,80),(mid,60),(lo,74),(mid,62)]):
             out.append([round(t+bq,4), 0.92, 2, bp, bv])
         hold(out, 1, notes[1:3], t, 4.0, 54)
-        fig = [notes[0],notes[2],notes[3],notes[4],notes[3],notes[2],notes[3],notes[4]]
+        fig = notes + notes[2:]                      # n1 n2 n3 n4 n5 n3 n4 n5, as Bach wrote it
         for half in range(2):
             for i, m in enumerate(fig): out.append([round(t+half*2+i*0.25,4), 0.24, 0, m, 82])
         hold(out, 3, [notes[4]], t, 4.0, 55)         # bell rings the chord's top note every bar
-    return mk("Bach · Prelude in C", 76, 8, CHORUS, [HARPSI(), STRINGS(), UPRIGHT(), BELL()], out)
+    for k, spell in enumerate(SC.BWV846_CODA):       # bars 33-34: the figure dissolves, C pedal below
+        t, notes = (32 + k) * 4.0, [note_name(x) for x in spell.split()]
+        for i, m in enumerate(notes): out.append([round(t+i*0.25,4), 0.24, 0, m, 82])
+        hold(out, 2, [notes[0]-12], t, 4.0, 78)
+        hold(out, 1, notes[2:4], t, 4.0, 54)
+        hold(out, 3, [notes[5]], t, 4.0, 55)
+    t = 34 * 4.0                                     # bar 35: the C major chord, let it ring
+    hold(out, 0, [n("C",3)] + chord("C", "maj", 4) + [n("C",5), n("E",5)], t, 4.0, 76)
+    hold(out, 1, chord("C", "maj", 4), t, 4.0, 54)
+    hold(out, 2, [n("C",2)], t, 4.0, 82)
+    hold(out, 3, [n("C",5)], t, 4.0, 58)
+    return mk("Bach · Prelude in C", 76, 35, CHORUS, [HARPSI(), STRINGS(), UPRIGHT(), BELL()], out)
+
+def goldberg_aria():
+    """Aria from the Goldberg Variations, first half (16 bars of 3/4). `bars` counts 4-beat
+    bars because that's what the web player loops on, so 48 beats -> 12."""
+    out = SC.unpack(SC.GOLDBERG_MEL, 0, 84, transpose=-12)
+    for bi, (root, qual) in enumerate(SC.GOLDBERG_HARM):
+        t = bi * 3.0
+        hold(out, 1, chord(root, qual, 3)[:3], t, 2.9, 44)          # pad on the ground-bass harmony
+        hold(out, 2, [note_name(SC.GOLDBERG_BASS[bi])], t, 1.9, 80)  # the bass the 30 variations share
+        out.append([round(t+2,4), 0.9, 2, note_name(SC.GOLDBERG_BASS[bi]) + 12, 58])
+        out.append([round(t+1,4), 1.0, 3, n(root, 5), 34])           # sarabande stress on beat 2
+    sg = mk("Bach · Goldberg Aria", 58, 12, CHORUS, [HARPSI(), WARMPAD(), UPRIGHT(), GLOCK()], out)
+    return fx_amounts(sg, reverb=96, room=s(2), chorusd=34)      # small room, a little shimmer
+
+def the_swan():
+    """Le cygne, 26 bars of 6/4 = 156 beats -> 39 player-bars. The cello sings from bar 2 over
+    the piano's rippling sixteenths, which is the whole point of the piece."""
+    bass = SC.unpack(SC.SWAN_BASS, 2, 66)
+    out  = SC.unpack(SC.SWAN_MEL, 0, 92)
+    out += SC.unpack(SC.SWAN_ARP, 1, 46)             # the water
+    out += bass
+    seen = set()                                     # pad: hold each bar's bass downbeat under it,
+    for t, _dur, _ch, midi, _vel in sorted(bass):    # except where the LH climbs out of the bass
+        bar = int(t // 6)                            # register (last bar) and there's nothing to hold
+        if bar not in seen:
+            seen.add(bar)
+            if midi <= n("G", 3): out.append([round(bar * 6.0, 4), 6.0, 3, midi, 36])
+    sg = mk("Saint-Saëns · Le Cygne", 70, 39, BOTH, [FLUTE(), HARP(), UPRIGHT(), WARMPAD()], out)
+    return fx_amounts(sg, reverb=118, room=s(3), chorusd=58, echod=44, dtime=80)   # big wet hall
+
+def vivaldi_winter():
+    """L'inverno II. Largo, all 18 bars. Solo violin over pizzicato rain — the pizzicato is a
+    double stop in the score, so it goes out as two voices (dropped an octave to clear the solo)."""
+    out  = SC.unpack(SC.WINTER_MEL, 0, 96)
+    out += SC.unpack(SC.WINTER_PIZ, 1, 62, transpose=-12)
+    out += SC.unpack(SC.WINTER_BASS, 2, 72)
+    out += SC.unpack(SC.WINTER_PIZ2, 3, 54, transpose=-12)
+    sg = mk("Vivaldi · Winter (Largo)", 44, 18, CHORUS, [SAWLEAD(), PLUCK(), UPRIGHT(), HARP()], out)
+    return fx_amounts(sg, reverb=104, room=s(2), chorusd=48)     # ensemble spread on the strings
 
 def ode_to_joy():
     mel = ["E","E","F","G","G","F","E","D","C","C","D","E","E","D","D",None,
@@ -258,8 +317,11 @@ def eine_kleine():
     return mk("Mozart · Eine kleine Nachtmusik", 132, 8, CHORUS, [SAWLEAD(), STRINGS(), UPRIGHT(), HARP()], out)
 
 # the public-domain rotation the classical "replace" pulls from (all verified consonant)
-CLASSICAL_PD = [bach_prelude, ode_to_joy, canon_in_d, fur_elise, moonlight, gymnopedie,
-                twinkle, beethoven5, eine_kleine]
+CLASSICAL_PD = [bach_prelude, goldberg_aria, the_swan, vivaldi_winter, ode_to_joy, canon_in_d,
+                fur_elise, moonlight, gymnopedie, twinkle, beethoven5, eine_kleine]
+
+# the four full transcriptions, shipped in the bank ahead of the procedural genre songs
+CLASSICAL_BANK = [bach_prelude, goldberg_aria, the_swan, vivaldi_winter]
 
 
 # ==================== TECHNO (8) ====================
@@ -499,15 +561,29 @@ def add_effects(sg):
         sg.setdefault(k, v)
     return sg
 
+# what the web UI's 💾 TONES button owns: the sound, not the score. Re-running the generator
+# keeps these as they are in demos.json and refreshes everything else.
+TONE_KEYS = ("parts", "fx", "reverb", "room", "chorusd", "echod", "dtime")
+def keep_tones(songs, path):
+    """Carry hand-tuned tones over from the existing demos.json, matched by song name."""
+    if not os.path.exists(path): return songs
+    old = {s_["name"]: s_ for s_ in json.load(open(path)).get("songs", [])}
+    for sg in songs:
+        prev = old.get(sg["name"])
+        if prev: sg.update({k: prev[k] for k in TONE_KEYS if k in prev})
+    return songs
+
 if __name__ == "__main__":
-    # 4 first-of-genre demos: one public-domain classical theme + the first procedural song per
-    # other genre. The seeds (5000/5050/5100) deterministically reproduce Frost Tide / Neon
-    # Nocturne / Ivory Orbit (_mg_song uses a per-call random.Random(seed)).
-    songs.append(bach_prelude())
+    # The bank: the four full classical transcriptions + the first procedural song per other
+    # genre. The seeds (5000/5050/5100) deterministically reproduce Frost Tide / Neon Nocturne
+    # / Ivory Orbit (_mg_song uses a per-call random.Random(seed)).
+    for _f in CLASSICAL_BANK:
+        songs.append(_f())
     for _gi, _g in enumerate(("Techno", "Pop", "Ambient")):
         songs.append(_mg_song(_g, 5000 + _gi * 50))
     for _sg in songs: add_effects(_sg)                       # attach per-genre effect amounts
     out_path = os.path.join(os.path.dirname(__file__), "..", "webui", "static", "demos.json")
+    keep_tones(songs, out_path)
     with open(out_path, "w") as f:
         json.dump({"songs": songs}, f, indent=1)
     by = {}

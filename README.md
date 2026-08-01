@@ -201,15 +201,18 @@ The project is grouped into topical subdirectories:
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI (`server.py` bridge, `synthspec.py` CC map/presets,
-  `static/` UI, a Serum/Vital-style **preset browser**, and a **DEMO player** — 4 authored
-  4-part songs (one per genre: classical/techno/pop/ambient) in `static/demos.json`, played live
+  `static/` UI, a Serum/Vital-style **preset browser**, and a **DEMO player** — 7 authored
+  4-part songs (classical/techno/pop/ambient) in `static/demos.json`, played live
   to the board, with a per-song "replace" that composes a fresh one on the fly (`/api/demo`). Classical
-  = public-domain themes; techno/pop/ambient use a **theory-aware composer** ([MidiGen](https://pypi.org/project/midigen-lib/)):
+  = four complete public-domain pieces arranged for the 4 parts (Bach's *Prelude in C* BWV 846 and
+  *Goldberg* Aria, Saint-Saëns' *Le Cygne*, Vivaldi's *Winter* Largo — notes in
+  `presetgen/demo_scores.py`); techno/pop/ambient use a **theory-aware composer** ([MidiGen](https://pypi.org/project/midigen-lib/)):
   an in-scale random-walk melody snapped to the bar's chord, over voice-led Roman-numeral
   extended-chord harmony (`presetgen/build_demos.py`). While a demo plays, its 4 part tones load
   into the multitimbral editor — tweak each part live and **💾 TONES** saves them straight back
   into `static/demos.json` (`/api/demo_save`), which is the **single source of truth** for the
-  bank (re-running `build_demos.py` overwrites tone edits). The matched preset banks live here as
+  bank (re-running `build_demos.py` regenerates the notes but carries tone edits over by song
+  name). The matched preset banks live here as
   `presets_*.json`. See the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
