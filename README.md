@@ -21,11 +21,6 @@ multitimbral selector, preset browser, and demo player.*
 
 *▶️ **[Demo video](https://youtu.be/2ROr9M_ZlVY)** — the web UI driving the Basys 3 board live, with the synth's own audio (click to watch on YouTube).*
 
-*🎞️ **Slide deck** — a 50-minute session on how this was built, with playable audio clips from each
-milestone: **[English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html)**
-· **[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)**.
-Sources live in [`docs/slides/`](docs/slides/) — self-contained HTML, no build step.*
-
 ### Hear it
 
 Two of the built-in 4-part demo songs, played by the board and recorded off its own audio output
@@ -69,6 +64,11 @@ The 50-minute talk that covers all of the above lives in **[`docs/slides/`](docs
 ---
 
 # 1. Overview
+
+*🎞️ **Slide deck** — a 50-minute session on how this was built, with playable audio clips from each
+milestone: **[English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html)**
+· **[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)**.
+Sources live in [`docs/slides/`](docs/slides/) — self-contained HTML, no build step.*
 
 ## What it is
 
