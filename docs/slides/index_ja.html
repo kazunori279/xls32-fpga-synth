@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XLS32 — AIコーディングエージェントでFPGAシンセサイザーを作る</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Roboto+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #0b57d0;          /* section divider / accents */
+    --blue-bright: #1a73e8;   /* labels, numbers */
+    --blue-soft: #e8f0fe;     /* light section bg, pills */
+    --blue-chip: #d2e3fc;     /* table header */
+    --green: #188038;
+    --yellow: #f9ab00;
+    --red: #d93025;
+    --bg: #f6f7f9;            /* slide canvas */
+    --ink: #202124;           /* near-black titles */
+    --ink-2: #3c4043;         /* slide headings */
+    --ink-3: #5f6368;         /* body gray */
+    --hairline: #dadce0;
+    /* Latin faces first so numbers/identifiers keep the original look;
+       Noto Sans JP picks up everything Japanese. */
+    --font: 'Google Sans', 'Product Sans', 'Roboto', 'Noto Sans JP',
+            'Hiragino Sans', 'Yu Gothic', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'Roboto Mono', 'SF Mono', Menlo, 'Noto Sans JP', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #202124; overflow: hidden; }
+  /* Japanese needs strict kinsoku and no Latin-style tracking. */
+  body { font-family: var(--font); line-break: strict; word-break: normal;
+         overflow-wrap: anywhere; letter-spacing: 0; }
+
+  /* ---------- deck chrome ---------- */
+  #stage { position: fixed; inset: 0; overflow: hidden; }
+  #frame { width: 1280px; height: 720px; position: absolute; left: 50%; top: 50%;
+           transform: translate(-50%, -50%); transform-origin: center center;
+           box-shadow: 0 12px 48px rgba(0,0,0,.5); border-radius: 6px; overflow: hidden; }
+  #hud { position: fixed; right: 18px; bottom: 12px; color: #9aa0a6; font-size: 13px;
+         font-family: var(--mono); z-index: 50; user-select: none; }
+  #help { position: fixed; left: 18px; bottom: 12px; color: #5f6368; font-size: 12px; z-index: 50; user-select: none; }
+  @media (max-width: 720px), (max-height: 480px) { #help { display: none; } }
+
+  /* ---------- slide base ---------- */
+  .slide { position: absolute; inset: 0; width: 1280px; height: 720px; background: var(--bg);
+           display: none; padding: 64px 64px 56px; }
+  .slide.active { display: block; }
+  .slide:not(.active) { display: none !important; }
+  .slide.active.statement, .slide.active.thanks { display: flex; }
+
+  .pageno { position: absolute; left: 40px; bottom: 26px; color: #bdc1c6; font-size: 12px; }
+
+  h1.cover { font-size: 68px; font-weight: 500; color: var(--ink); letter-spacing: 0; line-height: 1.3; }
+  .cover-sub { margin-top: 26px; font-size: 26px; color: var(--ink-3); font-weight: 400; }
+  .footerbar { position: absolute; left: 40px; right: 40px; bottom: 26px; display: flex;
+               align-items: center; justify-content: space-between; font-size: 15px; color: var(--ink-3); }
+  .pill { border: 1px solid #9aa0a6; border-radius: 999px; padding: 10px 22px; color: var(--ink-2); background: transparent; }
+
+  /* headings for content slides */
+  .h { font-size: 40px; font-weight: 400; color: var(--ink-2); letter-spacing: 0; }
+  .hsub { margin-top: 10px; font-size: 19px; color: var(--ink-3); }
+  .body { margin-top: 44px; font-size: 21px; color: var(--ink-2); line-height: 1.55; max-width: 760px; }
+  .body p + p, .body p + ul, .body ul + p { margin-top: 22px; }
+  ul.dots { list-style: none; }
+  ul.dots li { padding-left: 26px; position: relative; margin: 9px 0; }
+  ul.dots li::before { content: "●"; position: absolute; left: 2px; top: 1px; font-size: 11px; color: var(--ink-2); }
+  .mut { color: var(--ink-3); }
+  .em  { color: var(--blue-bright); font-weight: 500; }
+  code, .code { font-family: var(--mono); font-size: .88em; background: #eef1f4; border-radius: 5px; padding: 2px 7px; color: #174ea6; }
+
+  /* agenda */
+  .agenda { display: grid; grid-template-columns: 380px 1fr; height: 100%; align-items: center; }
+  .agenda .h-big { font-size: 56px; font-weight: 400; color: var(--ink-2); letter-spacing: 0; }
+  .agenda ol { list-style: none; }
+  .agenda li { display: flex; align-items: baseline; gap: 26px; margin: 25px 0; }
+  .agenda .num { color: var(--blue-bright); font-weight: 700; font-size: 25px; width: 44px; }
+  .agenda .txt { font-size: 27px; color: var(--ink-2); }
+  .agenda .min { margin-left: auto; margin-right: 120px; font-size: 17px; color: #9aa0a6; }
+
+  /* section dividers */
+  .divider { background: var(--blue); color: #fff; }
+  .divider .num  { position: absolute; top: 72px; left: 64px; font-size: 44px; font-weight: 500; opacity: .95; }
+  .divider .name { position: absolute; top: 128px; left: 64px; font-size: 46px; font-weight: 400; color: #d2e3fc; letter-spacing: 0; max-width: 1000px; line-height: 1.15; }
+  .divider .kick { position: absolute; left: 64px; bottom: 88px; font-size: 22px; color: #aecbfa; max-width: 860px; line-height: 1.5; }
+
+  .divider-light { background: var(--blue-soft); text-align: center; }
+  .divider-light .num { margin-top: 208px; color: var(--ink-2); font-weight: 700; font-size: 26px; }
+  .divider-light .name { margin-top: 30px; color: var(--blue); font-size: 56px; font-weight: 400; letter-spacing: 0; }
+
+  /* statement */
+  .statement { display: flex; align-items: center; justify-content: center; text-align: center; }
+  .statement .txt { font-size: 42px; font-weight: 500; color: var(--ink-2); line-height: 1.35; letter-spacing: 0; max-width: 1060px; }
+  .statement .hl-b { background: var(--blue-soft); border-radius: 4px; padding: 0 8px; }
+  .statement .hl-g { background: #e6f4ea; border-radius: 4px; padding: 0 8px; }
+  .statement .cap { display:block; margin-top: 40px; font-size: 20px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+
+  /* quote */
+  .quote .qtxt { margin-top: 96px; font-size: 46px; font-weight: 500; color: var(--ink); line-height: 1.28; letter-spacing: 0; max-width: 1000px; }
+  .quote .who { margin-top: 56px; font-size: 19px; color: var(--ink-2); font-weight: 700; }
+  .quote .role { font-size: 17px; color: var(--ink-3); font-style: italic; margin-top: 4px; }
+
+  /* content + image */
+  .split { display: grid; grid-template-columns: 560px 1fr; gap: 56px; margin-top: 40px; align-items: start; }
+  .split .body { margin-top: 0; font-size: 19.5px; max-width: none; }
+  .imgcard { background: #fff; border: 1px solid var(--hairline); border-radius: 22px; padding: 18px;
+             display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .imgcard img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  .imgcap { text-align: center; font-size: 14px; color: #80868b; margin-top: 12px; }
+
+  /* milestone clips — each card is a real capture off the board (spectrogram + audio) */
+  .vgrid { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr);
+           column-gap: 24px; row-gap: 12px; }
+  .vgrid.c2 { grid-template-columns: repeat(2, 1fr); column-gap: 44px; margin-top: 34px; }
+  .vcard { background: #fff; border: 1px solid var(--hairline); border-radius: 14px;
+           padding: 9px 9px 10px; }
+  .vcard .vlbl { display: flex; justify-content: space-between; align-items: baseline;
+                 padding: 0 4px 6px; font-family: var(--mono); font-size: 15px;
+                 font-weight: 700; color: var(--blue-bright); }
+  .vcard .vlbl .dur { font-family: var(--font); font-weight: 400; font-size: 13px; color: #80868b; }
+  .vcard video { display: block; width: 100%; aspect-ratio: 2.62 / 1; object-fit: contain;
+                 background: #000; border-radius: 7px; }
+  .vgrid.c2 .vcard video { aspect-ratio: 16 / 9; }
+  .vcard .vcap { padding: 8px 4px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .vgrid.c2 .vcard .vcap { padding-top: 12px; font-size: 15.5px; line-height: 1.5; }
+  .vnote { margin-top: 14px; font-size: 17px; color: var(--ink-3); max-width: 1200px; }
+
+  /* big ideas — label rows */
+  .rows { margin-top: 52px; display: grid; grid-template-columns: 300px 1fr; row-gap: 40px; column-gap: 40px; max-width: 1120px; }
+  .rows .lbl { color: var(--blue-bright); font-size: 24px; font-weight: 500; }
+  .rows ul.dots li { font-size: 19.5px; color: var(--ink-2); margin: 7px 0; }
+
+  /* big ideas — columns */
+  .cols { margin-top: 60px; display: grid; gap: 56px; }
+  .cols.c3 { grid-template-columns: repeat(3, 1fr); }
+  .cols.c4 { grid-template-columns: repeat(4, 1fr); gap: 40px; }
+  .cols .lbl { color: var(--blue-bright); font-size: 24px; font-weight: 500; margin-bottom: 22px; }
+  .cols p { font-size: 18px; color: var(--ink-2); line-height: 1.6; }
+  .cols p.small { font-size: 16.5px; color: var(--ink-3); margin-top: 12px; }
+
+  /* table */
+  table.gt { width: 100%; border-collapse: collapse; margin-top: 44px; font-size: 17.5px; }
+  table.gt thead th { background: var(--blue-chip); text-align: left; color: var(--ink); font-weight: 700;
+                      padding: 14px 18px; }
+  table.gt thead th:first-child { border-radius: 6px 0 0 6px; }
+  table.gt thead th:last-child { border-radius: 0 6px 6px 0; }
+  table.gt tbody td { padding: 13px 18px; border-bottom: 1px solid #e3e5e8; color: var(--ink-3); vertical-align: top; }
+  table.gt tbody td:first-child { color: var(--ink); font-weight: 700; white-space: nowrap; }
+  table.gt .ric { vertical-align: -8px; margin-right: 14px; }
+  /* Japanese wraps every cell of the 7-row spec table to two lines; tighten just that one. */
+  table.gt.compact { font-size: 16.5px; margin-top: 34px; }
+  table.gt.compact tbody td { padding: 9px 16px; }
+  table.gt .ok { color: var(--green); font-weight: 700; }
+  table.gt .no { color: var(--red); font-weight: 700; }
+
+  /* timeline circles (next steps) */
+  .steps { margin-top: 110px; display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
+  .steps::before { content: ""; position: absolute; top: 15px; left: 12%; right: 12%; height: 1.5px; background: var(--hairline); }
+  .step { text-align: center; position: relative; padding: 0 22px; }
+  .step .dot { width: 30px; height: 30px; border-radius: 50%; border: 5px solid; background: var(--bg);
+               margin: 0 auto; position: relative; z-index: 1; }
+  .step.b .dot{border-color:#4285f4} .step.y .dot{border-color:#fbbc04}
+  .step.g .dot{border-color:#34a853} .step.r .dot{border-color:#ea4335}
+  .step .t { margin-top: 26px; font-size: 20px; font-weight: 700; color: var(--ink-2); }
+  .step .d { margin-top: 10px; font-size: 16.5px; color: var(--ink-3); line-height: 1.5; }
+
+  /* workflow pills */
+  .flow { margin-top: 84px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .fphase .pillhead { background: #c9dcfa; color: #174ea6; font-weight: 700; font-size: 19px;
+      padding: 20px 10px 20px 30px; border-radius: 0 999px 999px 0; position: relative; text-align: center; }
+  .fphase .pillhead::before { content: ""; position: absolute; left: -12px; top: 0; bottom: 0; width: 26px;
+      background: var(--bg); border-radius: 999px; }
+  .fphase:first-child .pillhead::before { display: none; }
+  .fphase .fd { margin-top: 24px; font-size: 15.5px; color: var(--ink-3); line-height: 1.55; padding: 0 6px; }
+  .fphase .fd b { color: var(--ink-2); }
+
+  .flow.c4 { grid-template-columns: repeat(4, 1fr); }
+  .fphase .viz { margin-top: 22px; background: #fff; border: 1px solid var(--hairline);
+                 border-radius: 14px; height: 104px; display: flex; align-items: center;
+                 justify-content: center; padding: 8px 14px; }
+  .fphase .viz svg { width: 100%; height: 100%; }
+
+  /* slide-point icons */
+  .cols .cico { height: 52px; display: flex; align-items: flex-end; margin-bottom: 16px; }
+  .lico { vertical-align: -7px; margin-right: 12px; }
+  .fphase .ficon { height: 44px; display: flex; align-items: center; justify-content: center; margin-top: 18px; }
+  .fphase .ficon + .fd { margin-top: 12px; }
+
+  /* build-options ladder */
+  .ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-top: 44px; }
+  .opt { background: #fff; border: 1px solid var(--hairline); border-radius: 16px;
+         padding: 16px 16px 14px; position: relative; }
+  .opt.hl { border: 2px solid var(--blue-bright); }
+  .opt .badge { position: absolute; top: -12px; right: 12px; background: var(--blue-bright);
+                color: #fff; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  .opt .oico { height: 58px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .opt .ot { font-size: 17px; font-weight: 700; color: var(--ink-2); }
+  .opt .ou { font-size: 13px; color: #80868b; margin-top: 5px; line-height: 1.45; min-height: 38px; }
+  .opt .op { font-size: 13px; color: var(--green); margin-top: 9px; line-height: 1.45; }
+  .opt .om { font-size: 13px; color: var(--red); margin-top: 5px; line-height: 1.45; }
+  .lbar { margin-top: 28px; }
+  .lbar .grad { height: 5px; border-radius: 3px;
+                background: linear-gradient(90deg, #c6dafc, #1a73e8); }
+  .lbar .ends { display: flex; justify-content: space-between; margin-top: 8px;
+                font-size: 13.5px; color: var(--ink-3); }
+
+  /* demo setup diagram */
+  .dgbox { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; padding: 18px 26px; }
+  .dgbox .dgt { color: var(--blue-bright); font-weight: 500; font-size: 21px; }
+  .dgbox .dgt small { color: #9aa0a6; font-weight: 400; font-size: 14px; margin-left: 10px; }
+  .dgbox .dgd { color: var(--ink-3); font-size: 15.5px; margin-top: 6px; line-height: 1.5; }
+  .dgarr { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+           padding: 12px 26px; font-size: 14.5px; color: #80868b; }
+  .dgarr .dn { color: #1a73e8; font-weight: 500; }
+  .dgarr .md { text-align: center; font-weight: 500; color: var(--ink-2); }
+  .dgarr .up { color: #188038; font-weight: 500; text-align: right; }
+
+  /* code card */
+  .codecard { background: #fff; border: 1px solid var(--hairline); border-radius: 22px;
+              padding: 30px 34px; overflow: hidden; }
+  .codecard pre { font-family: var(--mono); font-size: 15.5px; line-height: 1.7; color: #37474f; }
+  .codecard .kw { color: #1967d2; font-weight: 500; }
+  .codecard .ty { color: #188038; }
+  .codecard .cm { color: #9aa0a6; }
+  .codecard .fn { color: #b06000; }
+
+  /* icon graphs (progress bars) */
+  .bars { margin-top: 70px; max-width: 980px; }
+  .bar { display: grid; grid-template-columns: 320px 1fr 110px; align-items: center; gap: 26px; margin: 34px 0; }
+  .bar .bl { font-size: 19px; color: var(--ink-2); }
+  .bar .bl small { display: block; color: #9aa0a6; font-size: 14px; margin-top: 3px; }
+  .bar .track { height: 14px; background: #e3e5e8; border-radius: 7px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 7px; }
+  .bar .pv { font-size: 27px; font-weight: 500; color: var(--ink); text-align: right; }
+  .f-blue{background:#1a73e8} .f-green{background:#188038} .f-yellow{background:#f9ab00} .f-red{background:#d93025}
+
+  /* month-bar timeline */
+  .mtl { margin-top: 60px; position: relative; height: 420px; }
+  .mtl .bar-months { position: absolute; top: 188px; left: 0; right: 0; height: 42px; background: var(--blue);
+      border-radius: 999px; display: grid; grid-template-columns: repeat(7, 1fr); align-items: center; }
+  .mtl .bar-months span { color: #fff; font-weight: 700; font-size: 15.5px; text-align: center; letter-spacing: .3px; }
+  .mtl .ev { position: absolute; width: 200px; font-size: 15px; color: var(--ink-3); line-height: 1.45; }
+  .mtl .ev b { color: var(--ink-2); display: block; margin-bottom: 4px; font-size: 15.5px; }
+  .mtl .ev::before { content: ""; position: absolute; width: 2px; background: var(--blue); left: 0; }
+  .mtl .ev.up { bottom: 254px; } .mtl .ev.up::before { bottom: -24px; height: 24px; }
+  .mtl .ev.dn { top: 254px; }    .mtl .ev.dn::before { top: -24px; height: 24px; }
+  .mtl .ev .pad { padding-left: 12px; }
+
+  /* thank you */
+  .thanks { background: var(--blue); display: flex; align-items: center; }
+  .thanks .inner { padding: 0 64px; }
+  .thanks h1 { color: #fff; font-size: 84px; font-weight: 500; letter-spacing: 0; }
+  .thanks p { color: #aecbfa; font-size: 25px; margin-top: 30px; }
+  .thanks .links { margin-top: 56px; font-size: 19px; color: #d2e3fc; line-height: 2; }
+  .thanks .links b { color: #fff; font-weight: 500; }
+
+  kbd { font-family: var(--mono); font-size: 11px; border: 1px solid #5f6368; border-radius: 4px; padding: 1px 5px; color: #9aa0a6; }
+</style>
+</head>
+<body>
+
+<div id="stage"><div id="frame">
+
+<!-- ============ 1 · COVER ============ -->
+<section class="slide">
+  <div style="margin-top:196px;">
+    <h1 class="cover">XLS32: AIエージェントだけで<br>作ったFPGAシンセサイザー</h1>
+    <div class="cover-sub">Google XLS（DSLX）で書かれた32音ポリフォニックシンセ。設計・実装・実機検証まで、
+    ループエンジニアリングによってAIコーディングエージェントが一貫して行いました。</div>
+  </div>
+  <div class="footerbar">
+    <span class="pill">XLS32 · HLS / FPGAシンセ</span>
+    <span>2026年7月 · 50分</span>
+  </div>
+</section>
+
+<!-- ============ 2 · AGENDA ============ -->
+<section class="slide">
+  <div class="agenda">
+    <div class="h-big">アジェンダ</div>
+    <ol>
+      <li><span class="num">01</span><span class="txt">XLS32とは</span><span class="min">8分</span></li>
+      <li><span class="num">02</span><span class="txt">技術スタック</span><span class="min">16分</span></li>
+      <li><span class="num">03</span><span class="txt">AIエージェントとループエンジニアリング</span><span class="min">9分</span></li>
+      <li><span class="num">04</span><span class="txt">アーキテクチャ詳解</span><span class="min">8分</span></li>
+      <li><span class="num">05</span><span class="txt">つまずきと学び</span><span class="min">5分</span></li>
+      <li><span class="num">06</span><span class="txt">まとめ + Q&amp;A</span><span class="min">4分</span></li>
+    </ol>
+  </div></section>
+
+<!-- ============ SECTION 01 · WHAT IS XLS32 ============ -->
+<section class="slide divider">
+  <div class="num">01</div>
+  <div class="name">XLS32とは</div>
+  <div class="kick">まずは楽器そのものの紹介です。USB越しに実機を鳴らすブラウザパネル —
+  オシレーター、フィルター、エンベロープ、エフェクト、そして4パートのデモ曲。</div>
+</section>
+
+<!-- ============ WHAT IS XLS32 ============ -->
+<section class="slide">
+  <div class="h">XLS32とは？</div>
+  <div class="split">
+    <div class="body">
+      <p><b>32音・4パートマルチティンバーの減算合成シンセサイザー</b>。
+      100 MHzで動く文字どおりの回路が、1クロックごとに1オーディオサンプルを計算します。</p>
+      <ul class="dots">
+        <li>手書きVerilogではなく<b>Google XLS（DSLX）</b>で記述</li>
+        <li><b>Basys 3</b>ボード上で動作（Xilinx Artix-7 <code>xc7a35t</code>）</li>
+        <li>USB経由で<b>ブラウザのアナログ風パネル</b>からライブ演奏</li>
+        <li>MIDI入力、16ビットステレオ音声出力 — I2S DACとDIN MIDIにも対応</li>
+        <li>オープンソース: GitHubでApache-2.0</li>
+      </ul>
+      <p class="mut">ボードをリモートで開発したため、あらゆる機能はUSB UART越しに確認 —
+      音声はホスト側でFFTとスペクトログラムによって検証しています。</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:430px;"><img src="assets/webui.png" alt="XLS32のブラウザUI"></div>
+      <div class="imgcap">USB越しにFPGAシンセをライブで鳴らすWeb UI</div>
+    </div>
+  </div></section>
+
+<!-- ============ DEMO ============ -->
+<section class="slide">
+  <div class="h">デモ: Web UIから実機を鳴らす</div>
+  <div class="split" style="grid-template-columns: 560px 1fr; margin-top: 48px;">
+    <div>
+      <div class="dgbox">
+        <div class="dgt">ブラウザUI <small>ネットワーク上のどの端末でも</small></div>
+        <div class="dgd">アナログ風パネル — つまみはMIDI CCを送信。画面上の鍵盤、PCのキーボード、
+        Web MIDIコントローラーのいずれからでも演奏可能</div>
+      </div>
+      <div class="dgarr">
+        <span class="dn">▼ MIDI</span><span class="md">WebSocket</span><span class="up">PCMフレーム ▲</span>
+      </div>
+      <div class="dgbox">
+        <div class="dgt">Webサーバー <small>webui/server.py — ホストのMac</small></div>
+        <div class="dgd">FastAPIのブリッジ — シリアルポートを占有し、音声ストリームのバイト境界を揃え、
+        MIDIを下流へ、音声を上流へ転送</div>
+      </div>
+      <div class="dgarr">
+        <span class="dn">▼ MIDIバイト列</span><span class="md">USB UART · 2 Mbaud</span><span class="up">16ビットステレオ ▲</span>
+      </div>
+      <div class="dgbox">
+        <div class="dgt">Basys 3ボード <small>シンセ回路そのもの</small></div>
+        <div class="dgd">ビルド済みの<code>firmware/top.bit</code>を書き込むだけ — FPGAが全サンプルを計算。
+        デモにツールチェーンは不要</div>
+      </div>
+    </div>
+    <div>
+      <div class="imgcard" id="ytbox" style="height:340px; padding:0; overflow:hidden; position:relative;"></div>
+      <div class="imgcap">デモ動画 — Web UIでボードを鳴らす様子、音はシンセ本体の出力<br>
+      <span style="color:#9aa0a6">youtu.be/2ROr9M_ZlVY</span></div>
+    </div>
+  </div></section>
+
+<!-- ============ STATEMENT ============ -->
+<section class="slide statement">
+  <div class="txt">一行たりとも<span class="hl-b">手書きしていない</span>。<br>
+  そしてすべての機能を<span class="hl-g">機械が検証している</span>
+  <span class="cap">設計全体を作ったのはClaude Code（<b>Opus 4.8</b>）。ビルド → 計測 → 修正という
+  自己検証ループを、ネットワーク越しに、誰もボードを見ていない状態で回しました。
+  しかも<b>ほぼすべての機能は1週間の旅行中にスマートフォンから開発</b>されています。</span></div></section>
+
+<!-- ============ SECTION 02 · TECH STACK ============ -->
+<section class="slide divider">
+  <div class="num">02</div>
+  <div class="name">技術スタック</div>
+  <div class="kick">なぜシンセをFPGAファブリックに載せるのか — そしてそれを可能にする3つの技術:
+  ボード、言語、ツールチェーン。</div>
+</section>
+
+<!-- ============ SYNTH 101 ============ -->
+<section class="slide">
+  <div class="h">減算合成シンセ入門</div>
+  <div class="hsub">倍音の豊かな波形から始めて、削っていく。このスライドの各ブロックはすべてXLS32内に回路として存在します。</div>
+  <div class="flow c4" style="margin-top:44px;">
+    <div class="fphase"><div class="pillhead">オシレーター</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <polyline points="8,64 48,20 48,64 88,20 88,64 128,20 128,64 168,20 168,64 208,20"
+          stroke="#1a73e8" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg></div>
+      <div class="fd"><b>倍音の多い生の波形</b>を作る — ノコギリ波、矩形波、三角波、ノイズ。
+      デチューンとユニゾンで音を太くします。</div></div>
+    <div class="fphase"><div class="pillhead">フィルター</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <path d="M 8 32 L 108 32 Q 136 32 143 17 Q 149 4 156 24 Q 166 60 188 70 L 208 74"
+          stroke="#188038" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="147" y1="8" x2="147" y2="78" stroke="#9aa0a6" stroke-width="1.5" stroke-dasharray="4 4"/>
+      </svg></div>
+      <div class="fd">ここが<b>「減算」</b>の部分。レゾナンス付きフィルターがスペクトルを削り、
+      カットオフを動かすと音色が変化します。</div></div>
+    <div class="fphase"><div class="pillhead">アンプ</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <polyline points="8,76 52,10 84,42 150,42 208,76"
+          stroke="#f9ab00" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <text x="22" y="36" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">A</text>
+        <text x="63" y="22" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">D</text>
+        <text x="112" y="34" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">S</text>
+        <text x="182" y="52" font-size="13" fill="#9aa0a6" font-family="Roboto, sans-serif">R</text>
+      </svg></div>
+      <div class="fd"><b>ADSRエンベロープ</b>（アタック・ディケイ・サステイン・リリース）が音量を形作る —
+      プラック、パッド、オルガンの違いはほぼこの曲線です。</div></div>
+    <div class="fphase"><div class="pillhead">エフェクト</div>
+      <div class="viz"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="18"  y="14" width="9" height="62" rx="4.5" fill="#d93025"/>
+        <rect x="58"  y="30" width="9" height="46" rx="4.5" fill="#d93025" opacity=".75"/>
+        <rect x="98"  y="42" width="9" height="34" rx="4.5" fill="#d93025" opacity=".55"/>
+        <rect x="138" y="52" width="9" height="24" rx="4.5" fill="#d93025" opacity=".38"/>
+        <rect x="178" y="60" width="9" height="16" rx="4.5" fill="#d93025" opacity=".24"/>
+      </svg></div>
+      <div class="fd"><b>コーラス・ディレイ・リバーブ</b>が広がりと空間を足す —
+      単なる音と楽器を分ける差です。</div></div>
+  </div>
+  <div class="body" style="margin-top:38px; max-width:1150px; font-size:18px;">
+    <p><b>動きを生むのはモジュレーション:</b> エンベロープとLFOがピッチ、カットオフ、音量を揺らします。
+    <span class="em">パッチ</span>とは各ブロックの設定値のこと — XLS32ではそのひとつひとつがMIDI CCです。</p>
+    <p style="margin-top:12px;" class="mut"><b>他の合成方式:</b> サンプリング · ウェーブテーブル · FM ·
+    加算合成 · 物理モデリング · アナログモデリング（バーチャルアナログ）。XLS32は根っこは減算合成で、
+    クロスオシレーターモジュレーションによるFM風味も持っています。</p>
+  </div></section>
+
+<!-- ============ SPEC TABLE ============ -->
+<section class="slide">
+  <div class="h">数字で見るシンセ</div>
+  <table class="gt compact">
+    <thead><tr><th style="width:260px;"></th><th>スペック</th><th style="width:400px;">備考</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="12" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".4"/>
+        <rect x="5" y="7" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".65"/>
+        <rect x="8" y="2" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2"/>
+      </svg>同時発音数</td><td>32音の時分割多重 — エンジン1サイクルにつき1ボイス</td><td>4パートマルチティンバー（MIDI ch 1–4）、動的に共有されるボイスプール</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <path d="M 2 10 Q 6.5 1 11 10 T 20 10 T 29 10" stroke="#34a853" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M 2 20 Q 6.5 11 11 20 T 20 20 T 29 20" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" opacity=".5"/>
+      </svg>オシレーター</td><td>1ボイスあたり2基 + サブオシレーター → 32ボイスで最大64基</td><td>5波形、PWM、クロスオシレーターのリング / FM / FM+（8種の比率）</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <path d="M 2 10 L 14 10 Q 18 10 19.5 6 Q 21 2.5 22.5 9 Q 24.5 18 28 22" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>フィルター</td><td>ボイスごとのレゾナンス付きステートバリアブル型 — LP / HP / BP / ノッチ</td><td>キートラッキング + フィルターエンベロープ + LFOによるカットオフ変調</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <polyline points="2,24 9,4 14,13 20,13 28,24" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>モジュレーション</td><td>ボイスごとにADSR×2、パートごとのLFO、ベンド、ポルタメント、ユニゾン</td><td>すべてMIDI CCで制御 — Web UIの正体はCCの送信</td></tr>
+      <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
+        <rect x="3" y="4" width="4" height="20" rx="2" fill="#4285f4"/>
+        <rect x="11" y="9" width="4" height="15" rx="2" fill="#4285f4" opacity=".6"/>
+        <rect x="19" y="14" width="4" height="10" rx="2" fill="#4285f4" opacity=".4"/>
+        <rect x="25.5" y="18" width="4" height="6" rx="2" fill="#4285f4" opacity=".25"/>
+      </svg>エフェクト</td><td>ステレオコーラス、ピンポンディレイ、8コムのFreeverbリバーブ</td><td>Verilogシェル側のブロックRAMディレイライン</td></tr>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="11" stroke="#f9ab00" stroke-width="2.2"/>
+        <path d="M 14 8 L 14 14 L 18.5 17" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>サンプルレート</td><td>32 kHz · 16ビットステレオPCMをUSB UARTで出力</td><td>Vivado / DSP48バックエンド時。オープンなバックエンドでは28 kHz</td></tr>
+      <tr><td><svg class="ric" width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="11" stroke="#34a853" stroke-width="2.2"/>
+        <path d="M 9 14.5 L 12.5 18 L 19.5 10.5" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>検証</td><td>USB経由の実機E2Eテスト130本超、すべて採点付き</td><td>FFT / スペクトログラムを0–100点で評価し、レポート動画を自動生成</td></tr>
+    </tbody>
+  </table></section>
+
+<!-- ============ HOW SYNTHS ARE BUILT ============ -->
+<section class="slide">
+  <div class="h">シンセの作り方</div>
+  <div class="hsub">オシレーターを実現する5つの方法 — 作りやすい順に並べています。</div>
+  <div class="ladder">
+    <div class="opt">
+      <div class="oico"><svg width="52" height="46" viewBox="0 0 52 46" fill="none">
+        <rect x="2" y="3" width="48" height="40" rx="5" stroke="#4285f4" stroke-width="2.5"/>
+        <line x1="2" y1="13" x2="50" y2="13" stroke="#4285f4" stroke-width="2.5"/>
+        <circle cx="8" cy="8" r="1.6" fill="#4285f4"/><circle cx="14" cy="8" r="1.6" fill="#4285f4"/>
+        <path d="M 8 30 Q 14 20 20 30 T 32 30 T 44 30" stroke="#4285f4" stroke-width="2.5" stroke-linecap="round"/>
+      </svg></div>
+      <div class="ot">Web Audio</div>
+      <div class="ou">ブラウザの実験・教育用途 — Chrome Music Lab、オンラインデモ</div>
+      <div class="op">+ インストール不要、どこでも動く、JS数行で書ける</div>
+      <div class="om">− タイミングはベストエフォート: 10–40 msのバッファ、高負荷時に音切れ</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="54" height="46" viewBox="0 0 54 46" fill="none">
+        <rect x="7" y="2" width="40" height="28" rx="3" stroke="#34a853" stroke-width="2.5"/>
+        <path d="M 2 38 L 52 38 L 47 32 L 7 32 Z" stroke="#34a853" stroke-width="2.5" stroke-linejoin="round"/>
+        <path d="M 14 20 L 19 12 L 24 20 L 29 12 L 34 20 L 39 12" stroke="#34a853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="ot">ソフトシンセ</div>
+      <div class="ou">音楽制作の主流 — Serum、Vital、DAW付属音源</div>
+      <div class="op">+ 機能が豊富、反復が速い、巨大なエコシステム</div>
+      <div class="om">− OSとCPUを共有。レイテンシ＝オーディオバッファ長</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="56" height="46" viewBox="0 0 56 46" fill="none">
+        <path d="M 2 14 L 10 14 L 13 8 L 19 20 L 25 8 L 31 20 L 34 14 L 42 14" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="42" cy="33" r="9" stroke="#f9ab00" stroke-width="2.5"/>
+        <line x1="42" y1="33" x2="47" y2="27" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="33" r="9" stroke="#f9ab00" stroke-width="2.5"/>
+        <line x1="14" y1="33" x2="14" y2="25.5" stroke="#f9ab00" stroke-width="2.5" stroke-linecap="round"/>
+      </svg></div>
+      <div class="ot">ディスクリートアナログ</div>
+      <div class="ou">MoogやEurorack — オペアンプ、VCO、本物の電圧</div>
+      <div class="op">+ アナログの音、手触り、直接操作できる面白さ</div>
+      <div class="om">− 電子回路を手組み。ドリフト、調律、1ボイスあたりのコストが高い</div>
+    </div>
+    <div class="opt hl">
+      <div class="badge">本プロジェクト</div>
+      <div class="oico"><svg width="48" height="46" viewBox="0 0 48 46" fill="none">
+        <rect x="6" y="5" width="36" height="36" rx="4" stroke="#1a73e8" stroke-width="2.5"/>
+        <line x1="18" y1="5" x2="18" y2="41" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="30" y1="5" x2="30" y2="41" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="6" y1="17" x2="42" y2="17" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="6" y1="29" x2="42" y2="29" stroke="#1a73e8" stroke-width="1.8"/>
+        <line x1="12" y1="1" x2="12" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="24" y1="1" x2="24" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="36" y1="1" x2="36" y2="5" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="12" y1="41" x2="12" y2="45" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="24" y1="41" x2="24" y2="45" stroke="#1a73e8" stroke-width="2"/>
+        <line x1="36" y1="41" x2="36" y2="45" stroke="#1a73e8" stroke-width="2"/>
+      </svg></div>
+      <div class="ot">FPGA</div>
+      <div class="ou">ハイブリッド型ハードシンセ — Novation Peak、UDO Super 6</div>
+      <div class="op">+ ハードウェアの決定性、ジッターなし、再構成可能</div>
+      <div class="om">− HDLとタイミングクロージャ: 最も過酷な開発ループ（本セッションの標的）</div>
+    </div>
+    <div class="opt">
+      <div class="oico"><svg width="52" height="46" viewBox="0 0 52 46" fill="none">
+        <rect x="10" y="9" width="32" height="28" rx="3" stroke="#5f6368" stroke-width="2.5"/>
+        <rect x="20" y="17" width="12" height="12" stroke="#5f6368" stroke-width="2"/>
+        <g stroke="#5f6368" stroke-width="2">
+          <line x1="16" y1="9" x2="16" y2="3"/><line x1="26" y1="9" x2="26" y2="3"/><line x1="36" y1="9" x2="36" y2="3"/>
+          <line x1="16" y1="37" x2="16" y2="43"/><line x1="26" y1="37" x2="26" y2="43"/><line x1="36" y1="37" x2="36" y2="43"/>
+          <line x1="10" y1="18" x2="4" y2="18"/><line x1="10" y1="28" x2="4" y2="28"/>
+          <line x1="42" y1="18" x2="48" y2="18"/><line x1="42" y1="28" x2="48" y2="28"/>
+        </g>
+      </svg></div>
+      <div class="ot">ASIC</div>
+      <div class="ou">量産された名機チップ — ヤマハDX7のFM音源、C64のSID</div>
+      <div class="op">+ 単価が最安、消費電力も最小、完全カスタム</div>
+      <div class="om">− 数億円規模のNRE、1回転に数か月、テープアウト後はやり直し不可</div>
+    </div>
+  </div>
+  <div class="lbar">
+    <div class="grad"></div>
+    <div class="ends"><span>作りやすい</span><span>作るのが難しい</span></div>
+  </div>
+  <div class="body" style="margin-top:22px; max-width:1150px; font-size:17.5px;">
+    <p class="mut">XLS32が選んだのは<b>FPGA</b> — ASICのコストを払わずにハードウェアの保証を得る道 —
+    そしてその弱点である「開発ループ」に正面から取り組みます。</p>
+  </div></section>
+
+<!-- ============ WHY FPGA ============ -->
+<section class="slide">
+  <div class="h">なぜWeb Audioではなく FPGA なのか</div>
+  <div class="cols c3">
+    <div>
+      <div class="cico"><svg width="40" height="44" viewBox="0 0 40 44" fill="none">
+        <circle cx="20" cy="26" r="15" stroke="#4285f4" stroke-width="2.2"/>
+        <path d="M 20 26 L 20 15" stroke="#4285f4" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="15" y1="3" x2="25" y2="3" stroke="#4285f4" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="20" y1="3" x2="20" y2="9" stroke="#4285f4" stroke-width="2.4"/>
+      </svg></div>
+      <div class="lbl">決定的で極小のレイテンシ</div>
+      <p>固定長パイプラインが1クロックにつき1サンプルを計算。データパスの遅延は常に数サイクルで一定 —
+      <b>1ミリ秒未満、ジッターなし</b>です。</p>
+      <p class="small">Web Audioは10–40 msのOSバッファの上で128サンプル単位にレンダリングし、
+      UIやガベージコレクタとCPUを共有します。</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="44" height="34" viewBox="0 0 44 34" fill="none">
+        <path d="M 5 30 A 17 17 0 0 1 39 30" stroke="#34a853" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="22" y1="30" x2="31" y2="17" stroke="#34a853" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="22" cy="30" r="2.6" fill="#34a853"/>
+      </svg></div>
+      <div class="lbl">ハードリアルタイムのデータパス</div>
+      <p>32ボイスが1本のパイプラインを時分割で通り、すべてが1サンプル周期内に完了。
+      1サンプルあたりの処理は<b>必ず終わる固定サイクル予算</b>で、パッチの内容に左右されません。</p>
+      <p class="small">CPUのタイミングはベストエフォートで、同時発音数と負荷が増えるほど悪化します。</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="42" height="40" viewBox="0 0 42 40" fill="none">
+        <line x1="2" y1="7" x2="40" y2="7" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="29" cy="7" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+        <line x1="2" y1="20" x2="40" y2="20" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="12" cy="20" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+        <line x1="2" y1="33" x2="40" y2="33" stroke="#f9ab00" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="34" cy="33" r="4.5" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2.2"/>
+      </svg></div>
+      <div class="lbl">ビット単位でカスタマイズできる</div>
+      <p>任意ビット幅の固定小数点、専用設計のオシレーター／フィルター構成、サンプル単位で正確な
+      モジュレーション経路。同じ設計がそのままDACやハードウェアMIDIを
+      <b>OSやドライバを経由せずに</b>駆動します。</p>
+      <p class="small">ブラウザのタブではなく、本物の楽器です。</p>
+    </div>
+  </div></section>
+
+<!-- ============ FPGA 101 ============ -->
+<section class="slide">
+  <div class="h">FPGA入門</div>
+  <div class="hsub">Field-Programmable Gate Array — 任意のデジタル回路に配線できる論理のグリッド。書き換えれば何度でも配線し直せます。</div>
+  <div style="display:grid; grid-template-columns: 680px 1fr; gap:52px; margin-top:26px; align-items:start;">
+    <div class="imgcard" style="padding:14px 18px;">
+      <svg viewBox="0 0 640 306" style="width:100%;">
+        <defs>
+          <pattern id="gatepat" width="27" height="24" patternUnits="userSpaceOnUse">
+            <g stroke="#7baaf7" stroke-width="1.3" fill="none">
+              <path d="M 8 6 L 12 6 A 6 6 0 0 1 12 18 L 8 18 Z"/>
+              <line x1="4" y1="9" x2="8" y2="9"/><line x1="4" y1="15" x2="8" y2="15"/>
+              <line x1="18.2" y1="12" x2="22" y2="12"/>
+            </g>
+          </pattern>
+          <g id="mram" stroke="#e37400" stroke-width="1.3" fill="none">
+            <rect x="1" y="0" width="14" height="17" rx="2"/>
+            <line x1="4.5" y1="4.5" x2="11.5" y2="4.5"/>
+            <line x1="4.5" y1="8.5" x2="11.5" y2="8.5"/>
+            <line x1="4.5" y1="12.5" x2="11.5" y2="12.5"/>
+          </g>
+          <g id="mcalc">
+            <rect x="1" y="0" width="14" height="18" rx="2" stroke="#188038" stroke-width="1.3" fill="none"/>
+            <rect x="3.6" y="2.6" width="8.8" height="3.6" rx="0.8" stroke="#188038" stroke-width="1.1" fill="none"/>
+            <g fill="#188038">
+              <circle cx="5" cy="10.5" r="1"/><circle cx="8" cy="10.5" r="1"/><circle cx="11" cy="10.5" r="1"/>
+              <circle cx="5" cy="14.5" r="1"/><circle cx="8" cy="14.5" r="1"/><circle cx="11" cy="14.5" r="1"/>
+            </g>
+          </g>
+        </defs>
+        <!-- package + I/O ring -->
+        <rect x="70" y="8" width="562" height="244" rx="10" fill="#fff" stroke="#5f6368" stroke-width="2"/>
+        <rect x="96" y="34" width="510" height="192" rx="4" fill="none" stroke="#bdc1c6" stroke-width="1.4" stroke-dasharray="5 4"/>
+        <text x="351" y="26" text-anchor="middle" font-size="12.5" fill="#80868b" font-family="Roboto, Noto Sans JP, sans-serif">I/Oリング — UART · JTAG · LED · Pmodピン</text>
+        <!-- LUT fabric: a sea of logic gates -->
+        <rect x="100" y="38" width="502" height="184" fill="url(#gatepat)"/>
+        <!-- BRAM stripes: mini RAM chips -->
+        <g>
+          <rect x="199" y="38" width="28" height="184" fill="#fef3d6" stroke="#f9ab00" stroke-width="1.6"/>
+          <rect x="459" y="38" width="28" height="184" fill="#fef3d6" stroke="#f9ab00" stroke-width="1.6"/>
+          <use href="#mram" x="205" y="43"/><use href="#mram" x="205" y="69"/><use href="#mram" x="205" y="95"/>
+          <use href="#mram" x="205" y="121"/><use href="#mram" x="205" y="147"/><use href="#mram" x="205" y="173"/>
+          <use href="#mram" x="205" y="199"/>
+          <use href="#mram" x="465" y="43"/><use href="#mram" x="465" y="69"/><use href="#mram" x="465" y="95"/>
+          <use href="#mram" x="465" y="121"/><use href="#mram" x="465" y="147"/><use href="#mram" x="465" y="173"/>
+          <use href="#mram" x="465" y="199"/>
+        </g>
+        <!-- DSP stripes: mini calculators -->
+        <g>
+          <rect x="299" y="38" width="28" height="184" fill="#e9f6ec" stroke="#34a853" stroke-width="1.6"/>
+          <rect x="379" y="38" width="28" height="184" fill="#e9f6ec" stroke="#34a853" stroke-width="1.6"/>
+          <use href="#mcalc" x="305" y="44"/><use href="#mcalc" x="305" y="74"/><use href="#mcalc" x="305" y="104"/>
+          <use href="#mcalc" x="305" y="134"/><use href="#mcalc" x="305" y="164"/><use href="#mcalc" x="305" y="194"/>
+          <use href="#mcalc" x="385" y="44"/><use href="#mcalc" x="385" y="74"/><use href="#mcalc" x="385" y="104"/>
+          <use href="#mcalc" x="385" y="134"/><use href="#mcalc" x="385" y="164"/><use href="#mcalc" x="385" y="194"/>
+        </g>
+        <!-- bitstream in -->
+        <text x="2" y="116" font-family="Roboto Mono, monospace" font-size="13" fill="#d93025">1011</text>
+        <path d="M 4 130 L 62 130 M 62 130 l -6 -4.5 M 62 130 l -6 4.5" stroke="#d93025" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="64" y="119" width="12" height="22" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+        <g stroke="#d93025" stroke-width="1.6" stroke-dasharray="5 4" opacity=".75" fill="none">
+          <path d="M 80 130 L 160 78"/>
+          <path d="M 80 130 L 196 138"/>
+          <path d="M 80 130 L 296 190"/>
+        </g>
+        <!-- legend: same pictograms as the notes at right -->
+        <!-- legend spacing widened: the Japanese labels are wider than the English ones -->
+        <g font-size="12.5" fill="#5f6368" font-family="Roboto, Noto Sans JP, sans-serif">
+          <g stroke="#4285f4" stroke-width="1.5" fill="none">
+            <path d="M 104 272 L 108 272 A 6.5 6.5 0 0 1 108 285 L 104 285 Z"/>
+            <line x1="100" y1="275" x2="104" y2="275"/><line x1="100" y1="282" x2="104" y2="282"/>
+            <line x1="114.8" y1="278.5" x2="119" y2="278.5"/>
+          </g>
+          <text x="126" y="284">LUTファブリック</text>
+          <use href="#mram" x="238" y="270"/>
+          <text x="260" y="284">ブロックRAM</text>
+          <use href="#mcalc" x="372" y="270"/>
+          <text x="394" y="284">DSPスライス</text>
+          <text x="486" y="284" fill="#d93025" font-family="Roboto Mono, monospace" font-size="13">1011→</text>
+          <text x="534" y="284">ビットストリーム</text>
+        </g>
+      </svg>
+    </div>
+    <div>
+      <div class="lbl" style="font-size:20px;"><svg class="lico" width="30" height="26" viewBox="0 0 30 26" fill="none">
+        <path d="M 8 4 L 14 4 A 9 9 0 0 1 14 22 L 8 22 Z" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="2" y1="9" x2="8" y2="9" stroke="#4285f4" stroke-width="2"/>
+        <line x1="2" y1="17" x2="8" y2="17" stroke="#4285f4" stroke-width="2"/>
+        <line x1="23" y1="13" x2="29" y2="13" stroke="#4285f4" stroke-width="2"/>
+      </svg>LUTファブリック</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">数千個の
+      <b>ルックアップテーブルとフリップフロップ</b>。プログラマブルな配線がそれらを任意の論理に結びます。</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="2" width="18" height="22" rx="3" stroke="#34a853" stroke-width="2"/>
+        <rect x="8" y="5.5" width="10" height="4.5" rx="1" stroke="#34a853" stroke-width="1.6"/>
+        <g fill="#34a853">
+          <circle cx="9" cy="14.5" r="1.4"/><circle cx="13" cy="14.5" r="1.4"/><circle cx="17" cy="14.5" r="1.4"/>
+          <circle cx="9" cy="19.5" r="1.4"/><circle cx="13" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/>
+        </g>
+      </svg>DSPスライス</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">縦のストライプ状に並ぶ
+      <b>積和演算</b>専用ブロック — ファブリックを使わない高速な演算器です。</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="28" height="26" viewBox="0 0 28 26" fill="none">
+        <rect x="5" y="2" width="18" height="22" rx="3" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="9.5" y1="8" x2="18.5" y2="8" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9.5" y1="13" x2="18.5" y2="13" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9.5" y1="18" x2="18.5" y2="18" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+        <line x1="2" y1="7" x2="5" y2="7" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="2" y1="13" x2="5" y2="13" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="2" y1="19" x2="5" y2="19" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="7" x2="26" y2="7" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="13" x2="26" y2="13" stroke="#f9ab00" stroke-width="2"/>
+        <line x1="23" y1="19" x2="26" y2="19" stroke="#f9ab00" stroke-width="2"/>
+      </svg>ブロックRAM</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">同じくストライプ状に並ぶ
+      <b>オンチップ専用メモリ</b> — バッファやテーブル用。読み出しはクロック同期です。</p>
+      <div class="lbl" style="font-size:20px; margin-top:18px;"><svg class="lico" width="42" height="26" viewBox="0 0 42 26" fill="none">
+        <text x="0" y="18" font-family="Roboto Mono, monospace" font-size="14" fill="#d93025">1011</text>
+        <path d="M 33 13 L 41 13 M 41 13 l -4 -3.5 M 41 13 l -4 3.5" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>ビットストリーム</div>
+      <p style="font-size:15.5px; color:var(--ink-2); line-height:1.5; margin-top:6px;">いわば「プログラム」。
+      電源投入時に読み込まれる<b>回路の記述</b>で、設計そのものが<i>チップになります</i>。</p>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns: 1fr 360px; gap:48px; margin-top:16px; align-items:center;">
+    <div class="body" style="margin-top:0; max-width:none;">
+      <p class="mut">XLS32が使うArtix-7 <code>xc7a35t</code>: LUT 20,800個 · DSPスライス90個 ·
+      36 Kb × 50個のブロックRAM · 100 MHzのクロック1本 —
+      このシンセは1クロックごとに1オーディオサンプルを計算する、文字どおりの回路です。</p>
+    </div>
+    <div style="display:grid; grid-template-columns: 170px 1fr; gap:14px; align-items:center;">
+      <div class="imgcard" style="height:110px; padding:0; overflow:hidden;">
+        <img src="assets/artix7.jpg" alt="基板上のXilinx Artix-7 XC7A35T" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="imgcap" style="margin-top:0; font-size:12px; text-align:left;">実際に使っているチップ:
+      基板上のArtix-7 <b>XC7A35T</b> — 写真: Pedant01, Wikimedia Commons, CC BY-SA 3.0</div>
+    </div>
+  </div></section>
+
+<!-- ============ FPGA REAL-WORLD USES ============ -->
+<section class="slide">
+  <div class="h">FPGAは実世界のどこで動いているか</div>
+  <div class="hsub">締め切りを決めるのが物理法則で、レイテンシをマイクロ秒・ナノ秒で測るような場所すべてです。</div>
+  <div class="cols c4" style="margin-top:40px; gap:32px;">
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/levorg.jpg" alt="スバル・レヴォーグ（2代目）" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">自動車</div>
+      <p style="font-size:15px; line-height:1.5;">スバル・レヴォーグの運転支援システム<b>アイサイト</b>。
+      Zynq UltraScale+上のステレオカメラ画像処理 — <b>1台に1個のFPGA-SoC</b>が数百万台に搭載。</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.businesswire.com/news/home/20200819005691/en/Subaru-Selects-Xilinx-to-Power-New-Generation-EyeSight-System"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">スバルがXilinxを採用 —
+      プレスリリース ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">写真: Tokumeigakarinoaoshima, Wikimedia Commons, CC BY-SA 4.0</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/digico.jpg" alt="DiGiCo SD5 デジタルミキシングコンソール" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">音響・映像</div>
+      <p style="font-size:15px; line-height:1.5;">DiGiCoのSDシリーズ卓はStealth <b>「Super FPGA」</b>
+      エンジンでミックス — 1台あたり最大<b>256系統</b>を1–2 msのレイテンシで処理。</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://digico.biz/stealth-core-2/"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">DiGiCo Stealth Core 2:
+      FPGA処理について ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">写真: The Blackbird Academy, Wikimedia Commons, CC BY-SA 2.0</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:0; overflow:hidden;">
+        <img src="assets/f35.jpg" alt="飛行中のF-35 Lightning II各型" style="width:100%; height:100%; object-fit:cover; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">航空宇宙・防衛</div>
+      <p style="font-size:15px; line-height:1.5;">F-35のアビオニクス。ロッキード・マーティンはXilinx FPGAを
+      機体全体で<b>数万個規模</b>で調達 — レーダーとセンサーの決定的な処理に使われています。</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.militaryaerospace.com/commercial-aerospace/article/14227038/tens-of-thousands-of-xilinx-fpgas-to-be-supplied-by-lockheed-martin-for-f-35-joint-strike-fighter-avionics"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">数万個のFPGA —
+      Military Aerospace ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">写真: U.S. Air Force / SSgt. K. Slivinske, パブリックドメイン</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:165px; padding:10px; overflow:hidden;">
+        <img src="assets/ul3524.png" alt="AMD Alveo UL3524 アクセラレータカード" style="width:100%; height:100%; object-fit:contain; border-radius:0;">
+      </div>
+      <div class="lbl" style="font-size:20px; margin-top:16px;">高頻度取引（HFT）</div>
+      <p style="font-size:15px; line-height:1.5;">マーケットメイカーや自己勘定トレーダーは
+      <b>ティック・トゥ・トレードの経路をFPGA論理で</b>実装 — 相場データを解析し発注するまで、
+      <b>ワイヤーからワイヤーまで1マイクロ秒未満</b>。</p>
+      <p style="font-size:12.5px; margin-top:8px;"><a href="https://www.amd.com/en/newsroom/press-releases/2023-9-27-amd-unveils-purpose-built-fpga-based-accelerator-.html"
+      target="_blank" rel="noopener" style="color:#1a73e8; text-decoration:none;">AMDの取引専用
+      FPGA — プレスリリース ↗</a></p>
+      <p style="font-size:11.5px; color:#9aa0a6; margin-top:6px;">画像 © Advanced Micro Devices, Inc., amd.com</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:34px; max-width:1150px; font-size:18px;">
+    <p class="mut">業界はさまざまでも理由はひとつ: <b>締め切りを決めるのが物理法則なら、論理はハードウェアに入る。</b>
+    XLS32はその同じ武器を音楽に借りてきました。</p>
+  </div></section>
+
+<!-- ============ VERILOG + DEV FLOW ============ -->
+<section class="slide">
+  <div class="h">Verilogと標準的な開発フロー</div>
+  <div class="hsub">ハードウェア記述言語。レジスタ単位、配線単位、クロック単位で回路を記述していきます。</div>
+  <div class="flow" style="margin-top:38px;">
+    <div class="fphase"><div class="pillhead">RTLを書く</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="8" y="34" font-family="Roboto Mono, monospace" font-size="13.5" fill="#1a73e8">always @(posedge clk)</text>
+        <text x="8" y="58" font-family="Roboto Mono, monospace" font-size="13.5" fill="#3c4043">&#160;&#160;q &lt;= d &amp; en;</text>
+      </svg></div>
+      <div class="fd">レジスタ、配線、<code>always</code>ブロック — さらにパイプライン段数、ハンドシェイク、
+      ビット幅まで<b>すべて手作業で管理</b>します。</div></div>
+    <div class="fphase"><div class="pillhead">シミュレーション</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="4" y="28" font-size="11" fill="#9aa0a6" font-family="Roboto, sans-serif">clk</text>
+        <text x="4" y="64" font-size="11" fill="#9aa0a6" font-family="Roboto, sans-serif">q</text>
+        <path d="M 26 32 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16"
+          stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M 26 52 H 70 L 82 70 H 130 L 142 52 H 206 M 26 70 H 70 L 82 52 H 130 L 142 70 H 206"
+          stroke="#5f6368" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="fd"><b>テストベンチ</b>で設計を動かす（iverilog、Verilator）。サイクル精度ですが、
+      書いたテストベンチ以上のことは分かりません。</div></div>
+    <div class="fphase"><div class="pillhead">論理合成</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M 48 10 L 62 10 A 11 11 0 0 1 62 32 L 48 32 Z"/>
+          <line x1="36" y1="16" x2="48" y2="16"/><line x1="36" y1="26" x2="48" y2="26"/>
+          <path d="M 48 52 L 62 52 A 11 11 0 0 1 62 74 L 48 74 Z"/>
+          <line x1="36" y1="58" x2="48" y2="58"/><line x1="36" y1="68" x2="48" y2="68"/>
+          <path d="M 128 28 C 134 36 134 48 128 56 C 146 56 158 52 168 42 C 158 32 146 28 128 28 Z"/>
+          <path d="M 73 21 h 16 v 15 h 40"/>
+          <path d="M 73 63 h 16 v -15 h 40"/>
+          <line x1="168" y1="42" x2="188" y2="42"/>
+        </g>
+      </svg></div>
+      <div class="fd">yosysやVivadoがRTLを<b>LUT・DSP・BRAM</b>に対応づける —
+      実チップのプリミティブによるネットリストになります。</div></div>
+    <div class="fphase"><div class="pillhead">配置配線</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="14" y="6" width="192" height="72" rx="5" stroke="#d93025" stroke-width="2"/>
+        <g fill="#fce8e6" stroke="#d93025" stroke-width="1.6">
+          <rect x="28" y="16" width="36" height="22" rx="2"/>
+          <rect x="84" y="46" width="32" height="20" rx="2"/>
+          <rect x="138" y="14" width="38" height="24" rx="2"/>
+          <rect x="168" y="50" width="26" height="16" rx="2"/>
+        </g>
+        <g stroke="#d93025" stroke-width="1.6" fill="none" stroke-linejoin="round">
+          <polyline points="46,38 46,56 84,56"/>
+          <polyline points="116,56 126,56 126,26 138,26"/>
+          <polyline points="176,38 181,38 181,50"/>
+        </g>
+      </svg></div>
+      <div class="fd">ネットリストをダイ上に収め、<b>タイミングを検証</b> —
+      ここが遅い工程で、1回に数分から数時間かかります。</div></div>
+    <div class="fphase"><div class="pillhead">書き込み・実機確認</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g font-family="Roboto Mono, monospace" font-size="17" fill="#4285f4">
+          <text x="8" y="48" opacity=".3">1</text>
+          <text x="24" y="48" opacity=".5">0</text>
+          <text x="40" y="48" opacity=".7">1</text>
+          <text x="56" y="48" opacity=".9">1</text>
+        </g>
+        <path d="M 70 42 L 116 42 M 116 42 l -7 -5 M 116 42 l -7 5" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="128" y="14" width="70" height="56" rx="5" stroke="#4285f4" stroke-width="2.2"/>
+        <g stroke="#4285f4" stroke-width="1.4" opacity=".6">
+          <line x1="151" y1="14" x2="151" y2="70"/><line x1="175" y1="14" x2="175" y2="70"/>
+          <line x1="128" y1="33" x2="198" y2="33"/><line x1="128" y1="51" x2="198" y2="51"/>
+        </g>
+      </svg></div>
+      <div class="fd"><b>JTAG</b>経由でビットストリームを書き込み、実機で検証します。</div></div>
+  </div>
+  <div class="body" style="margin-top:42px; max-width:1120px;">
+    <p>タイミングが通らなければRTLの編集に逆戻り。<b>このループこそが反復コスト</b>であり、
+    XLS32の方法論全体 — HLS + クラウドビルド + 機械採点による検証 — はそれを縮めるために組み立てられています。</p>
+  </div></section>
+
+<!-- ============ XLS / DSLX 101 ============ -->
+<section class="slide">
+  <div class="h">Google XLS入門: ハードウェアをソフトウェアとして書く</div>
+  <div class="split" style="grid-template-columns: 520px 1fr; margin-top: 24px;">
+    <div class="body">
+      <img src="assets/xls_logo.svg" alt="Google XLS のロゴ" style="height:74px; display:block; margin: 4px 0 26px -8px;">
+      <ul class="dots">
+        <li><b>高位合成（HLS）</b>: <i>振る舞い</i>をソフトウェア的に記述したものをハードウェア回路にコンパイルする技術。
+        RTLはコンパイラが書いてくれます
+        <a href="https://en.wikipedia.org/wiki/High-level_synthesis" target="_blank" rel="noopener"
+        style="color:#1a73e8; text-decoration:none;">（Wikipedia ↗）</a></li>
+        <li>XLSはGoogleの<b>オープンソースHLSツールキット</b>。書くのは<b>DSLX</b> —
+        純粋関数と小さな状態付き<b>proc</b>からなるRustライクな言語です</li>
+        <li>スケジューリング、<b>パイプラインレジスタの挿入</b>、ビット幅の削減はすべて自動</li>
+        <li>ユニットテストはインタプリタ上で<b>ミリ秒</b>で完了 — テストベンチもシミュレータもビルドも不要</li>
+      </ul>
+      <p class="mut">大半の反復ではFPGAツールに一切触れません。エージェントのループが速いのはこのためです。</p>
+    </div>
+    <div style="padding-top:6px;">
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="44" height="48" viewBox="0 0 44 48" fill="none" style="justify-self:center;">
+          <path d="M 22 4 a 13 13 0 0 1 8 23 c -2 2 -3 4 -3 7 h -10 c 0 -3 -1 -5 -3 -7 a 13 13 0 0 1 8 -23 Z" stroke="#4285f4" stroke-width="2.2" stroke-linejoin="round"/>
+          <line x1="17" y1="39" x2="27" y2="39" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+          <line x1="18.5" y1="44" x2="25.5" y2="44" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">作りたいもの</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">シンセの1ボイス: オシレーター → フィルター → エンベロープ、を数式として</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0;">▼</div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="42" height="46" viewBox="0 0 42 46" fill="none" style="justify-self:center;">
+          <rect x="4" y="2" width="34" height="42" rx="4" stroke="#34a853" stroke-width="2.2"/>
+          <text x="21" y="30" text-anchor="middle" font-size="22" font-style="italic" font-family="Georgia, serif" fill="#34a853">ƒ</text>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">DSLX — 振る舞いを記述する</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">純粋関数とproc。ユニットテストはミリ秒</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0; position:relative;">▼<span
+        style="position:absolute; left:86px; top:9px; font-size:11px; white-space:nowrap;">コード生成</span></div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="46" height="44" viewBox="0 0 46 44" fill="none" style="justify-self:center;">
+          <rect x="8" y="4" width="30" height="36" rx="3" stroke="#f9ab00" stroke-width="2.2"/>
+          <path d="M 8 28 l 7 5 l -7 5" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+          <text x="15" y="18" font-size="12" fill="#f9ab00" font-family="Roboto, sans-serif">D</text>
+          <text x="26" y="18" font-size="12" fill="#f9ab00" font-family="Roboto, sans-serif">Q</text>
+          <line x1="2" y1="12" x2="8" y2="12" stroke="#f9ab00" stroke-width="2"/>
+          <line x1="38" y1="12" x2="44" y2="12" stroke="#f9ab00" stroke-width="2"/>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">Verilog — コンパイラがRTLを出力</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">スケジューリング、パイプライン化、ビット幅削減まで自動で</div></div>
+      </div>
+      <div style="width:76px; margin-left:20px; text-align:center; color:#9aa0a6; font-size:15px; padding:5px 0; position:relative;">▼<span
+        style="position:absolute; left:86px; top:9px; font-size:11px; white-space:nowrap;">合成 + 配置配線</span></div>
+      <div style="display:grid; grid-template-columns:76px 1fr; gap:20px; align-items:center; background:#fff; border:1px solid var(--hairline); border-radius:14px; padding:12px 20px;">
+        <svg width="52" height="44" viewBox="0 0 52 44" fill="none" style="justify-self:center;">
+          <g stroke="#d93025" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M 10 6 L 17 6 A 8 8 0 0 1 17 22 L 10 22 Z"/>
+            <line x1="4" y1="10" x2="10" y2="10"/><line x1="4" y1="18" x2="10" y2="18"/>
+            <path d="M 10 26 L 17 26 A 8 8 0 0 1 17 42 L 10 42 Z"/>
+            <line x1="4" y1="30" x2="10" y2="30"/><line x1="4" y1="38" x2="10" y2="38"/>
+            <path d="M 25 14 h 6 v 10 h 8 M 25 34 h 6 v -10 h 8"/>
+            <path d="M 36 18 C 40 22 40 26 36 30 C 44 30 48 27 50 24 C 48 21 44 18 36 18 Z"/>
+          </g>
+        </svg>
+        <div><b style="color:var(--ink-2); font-size:17px;">チップ上のゲートへ</b>
+        <div style="font-size:14.5px; color:var(--ink-3); margin-top:3px;">合成と配置配線がLUT・DSP・BRAMに割り付ける</div></div>
+      </div>
+    </div>
+  </div></section>
+
+<!-- ============ DSLX VS VERILOG COMPARISON ============ -->
+<section class="slide">
+  <div class="h">synth.x から engine.v へ</div>
+  <div class="hsub">同じオシレーターの論理を、コンパイラ通過の前後で比較（実際のコードから抜粋・簡略化）。</div>
+  <div style="display:grid; grid-template-columns: 1fr 52px 1fr; align-items:start; margin-top:22px;">
+    <div>
+      <div style="font-size:13.5px; color:#5f6368; margin:0 0 6px 4px;"><b>synth.x</b> — 人が書くコード（DSLX）</div>
+      <div class="codecard" style="padding:18px 22px;"><pre style="font-size:13px;"><span class="cm">// オシレーター1サンプル分: 位相を波形に変換する</span>
+<span class="cm">// ビット幅は型そのもの: u3/u32は符号なし、s16は符号付き</span>
+<span class="kw">fn</span> <span class="fn">voice_wave</span>(wave: <span class="ty">u3</span>, phase: <span class="ty">u32</span>,
+              noise: <span class="ty">s16</span>) -&gt; <span class="ty">s16</span> {
+    <span class="kw">let</span> t = phase[24:32];  <span class="cm">// 周期内の位置 0..255</span>
+    <span class="kw">match</span> wave {
+        <span class="ty">u3</span>:0 =&gt; SINE[t],                        <span class="cm">// サイン波</span>
+        <span class="ty">u3</span>:1 =&gt; (t <span class="kw">as</span> <span class="ty">s16</span>) * <span class="ty">s16</span>:16 - <span class="ty">s16</span>:2048, <span class="cm">// ノコギリ波</span>
+        <span class="ty">u3</span>:4 =&gt; noise,                          <span class="cm">// ノイズ</span>
+        _    =&gt; SINE[t],
+    }
+}</pre></div>
+      <p style="font-size:14.5px; color:var(--green); margin-top:14px; line-height:1.5;">+ <b>いつもどおり
+      純粋関数を書くだけ</b> — 上から下へ読め、組み合わせられ、ソフトウェアと同じようにユニットテストできます。</p>
+      <p style="font-size:14.5px; color:var(--green); margin-top:6px; line-height:1.5;">+ <b>状態管理と
+      スケジューリングはツールの仕事</b> — どの値がどのサイクルにどのレジスタへ入るか（ここでは48段）は
+      コンパイラが引き受けます。</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− サイクル単位の厳密な制御が
+      必要な場所（BRAMポートやI/O）は、依然としてVerilogシェルに降りる必要があります。</p>
+    </div>
+    <div style="text-align:center; color:#9aa0a6; font-size:28px; margin-top:180px;">→</div>
+    <div>
+      <div style="font-size:13.5px; color:#5f6368; margin:0 0 6px 4px;"><b>engine.v</b> — コンパイラが出力するコード</div>
+      <div class="codecard" style="padding:18px 22px;"><pre style="font-size:13px;"><span class="cm">// パイプラインレジスタ p0/p1/p2 — 自動で挿入される</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
+  p0_t   &lt;= phase[31:24];
+
+  p1_sin &lt;= SINE[p0_t];        <span class="cm">// 256要素のROM</span>
+  p1_saw &lt;= {p0_t, 4'h0}
+            - 16'd2048;        <span class="cm">// シフトとオフセット</span>
+
+  p2_out &lt;= (wave == 3'd0) ? p1_sin
+          : (wave == 3'd1) ? p1_saw
+          : p1_noise;          <span class="cm">// 波形選択マルチプレクサ</span>
+<span class="kw">end</span></pre></div>
+      <p style="font-size:14.5px; color:var(--green); margin-top:14px; line-height:1.5;">+ すべてのレジスタ、
+      ポート、クロックサイクルを<b>完全に制御</b>できる — 本当に必要なときに。</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− <b>すべてが並列に
+      起きる</b>: どの<code>always</code>ブロックも毎クロック一斉に発火し、
+      上から下へ読める箇所はどこにもありません。</p>
+      <p style="font-size:14.5px; color:var(--red); margin-top:6px; line-height:1.5;">− <b>状態管理と
+      スケジューリングがすべて手作業</b>: どの値がどのサイクルにどのレジスタにあるかは<i>自分の</i>責任 —
+      ソフトウェアエンジニアが必ずぶつかる壁です。</p>
+    </div>
+  </div></section>
+
+<!-- ============ 11 · BUILD PIPELINE ============ -->
+<section class="slide">
+  <div class="h">DSLXからビットストリームまで — ビルドパイプライン</div>
+  <div class="flow" style="margin-top:44px;">
+    <div class="fphase"><div class="pillhead">DSLX</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <text x="8" y="30" font-family="Roboto Mono, monospace" font-size="13" fill="#1a73e8">fn voice_wave(wave: u3,</text>
+        <text x="8" y="50" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">&#160;&#160;phase: u32) -&gt; s16 {</text>
+        <text x="8" y="70" font-family="Roboto Mono, monospace" font-size="13" fill="#9aa0a6">&#160;&#160;&#160;&#160;… }</text>
+      </svg></div>
+      <div class="fd"><b>synth.x</b> — エンジン全体が378行のproc 1つ。
+      ユニットテストはインタプリタでミリ秒。</div></div>
+    <div class="fphase"><div class="pillhead">XLSコード生成</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g stroke="#34a853" stroke-width="2">
+          <rect x="14" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="92" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="170" y="24" width="12" height="36" rx="2" fill="#e9f6ec"/>
+          <rect x="42" y="30" width="34" height="24" rx="6" fill="none"/>
+          <rect x="120" y="30" width="34" height="24" rx="6" fill="none"/>
+          <line x1="26" y1="42" x2="42" y2="42"/><line x1="76" y1="42" x2="92" y2="42"/>
+          <line x1="104" y1="42" x2="120" y2="42"/><line x1="154" y1="42" x2="170" y2="42"/>
+          <line x1="2" y1="42" x2="14" y2="42"/><line x1="182" y1="42" x2="196" y2="42"/>
+        </g>
+        <g font-size="13" font-style="italic" font-family="Georgia, serif" fill="#188038" text-anchor="middle">
+          <text x="59" y="47">ƒ</text><text x="137" y="47">ƒ</text>
+        </g>
+        <text x="110" y="16" text-anchor="middle" font-size="10.5" fill="#9aa0a6" font-family="Roboto, Noto Sans JP, sans-serif">パイプラインレジスタ間の論理</text>
+      </svg></div>
+      <div class="fd"><b>ir_converter → opt → codegen</b>を<code>--generator=pipeline</code>付きで実行。
+      48段の<b>engine.v</b>が出力されます。</div></div>
+    <div class="fphase"><div class="pillhead">後処理</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="4" y="18" width="212" height="22" rx="3" fill="#fce8e6"/>
+        <text x="10" y="33" font-family="Roboto Mono, monospace" font-size="12.5" fill="#c5221f">- end else begin</text>
+        <rect x="4" y="46" width="212" height="22" rx="3" fill="#e6f4ea"/>
+        <text x="10" y="61" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038">+ end else if (ce) begin</text>
+      </svg></div>
+      <div class="fd"><b>fix_verilog.py</b>がグローバルクロックイネーブルを挿入し、
+      オープンなフローが受け付けないgenerateループを展開します。</div></div>
+    <div class="fphase"><div class="pillhead">合成 + 配置配線</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <rect x="14" y="6" width="192" height="72" rx="5" stroke="#d93025" stroke-width="2"/>
+        <g fill="#fce8e6" stroke="#d93025" stroke-width="1.6">
+          <rect x="28" y="16" width="36" height="22" rx="2"/>
+          <rect x="84" y="46" width="32" height="20" rx="2"/>
+          <rect x="138" y="14" width="38" height="24" rx="2"/>
+          <rect x="168" y="50" width="26" height="16" rx="2"/>
+        </g>
+        <g stroke="#d93025" stroke-width="1.6" fill="none" stroke-linejoin="round">
+          <polyline points="46,38 46,56 84,56"/>
+          <polyline points="116,56 126,56 126,26 138,26"/>
+          <polyline points="176,38 181,38 181,50"/>
+        </g>
+      </svg></div>
+      <div class="fd"><b>yosys → VPR</b>（F4PGA）、<b>nextpnr</b>（openXC7）、<b>Vivado</b>のいずれか —
+      <code>BACKEND=</code>で選択します。</div></div>
+    <div class="fphase"><div class="pillhead">書き込み</div>
+      <div class="viz" style="height:88px;"><svg viewBox="0 0 220 84" fill="none">
+        <g font-family="Roboto Mono, monospace" font-size="17" fill="#4285f4">
+          <text x="8" y="48" opacity=".3">1</text>
+          <text x="24" y="48" opacity=".5">0</text>
+          <text x="40" y="48" opacity=".7">1</text>
+          <text x="56" y="48" opacity=".9">1</text>
+        </g>
+        <path d="M 70 42 L 116 42 M 116 42 l -7 -5 M 116 42 l -7 5" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="128" y="14" width="70" height="56" rx="5" stroke="#4285f4" stroke-width="2.2"/>
+        <g stroke="#4285f4" stroke-width="1.4" opacity=".6">
+          <line x1="151" y1="14" x2="151" y2="70"/><line x1="175" y1="14" x2="175" y2="70"/>
+          <line x1="128" y1="33" x2="198" y2="33"/><line x1="128" y1="51" x2="198" y2="51"/>
+        </g>
+      </svg></div>
+      <div class="fd">JTAG経由の<b>openFPGALoader</b> — 反復時はSRAMへ、単体起動用はSPIフラッシュへ。</div></div>
+  </div>
+  <div class="body" style="margin-top:40px; max-width:1100px;">
+    <p class="mut">端から端までコマンド1つ: <code>STAGES=48 WCT=48 scripts/remote_build.sh</code> —
+    ソースをGCE VMに送ってビルドし、<code>top.bit</code>と<b>タイミングレポート</b>を持ち帰ります。
+    計測していないビルドを信用してはいけません。</p>
+  </div></section>
+
+<!-- ============ 12 · SECTION 03 ============ -->
+<section class="slide divider">
+  <div class="num">03</div>
+  <div class="name">AIエージェントによる<br>ループエンジニアリング</div>
+  <div class="kick">このボードの立ち上げはすべてリモート・ヘッドレスで行いました —
+  LEDを見る人も、スピーカーを聴く人も、ボタンを押す人もいません。</div>
+</section>
+
+<!-- ============ 13 · QUOTE ============ -->
+<section class="slide quote">
+  <div class="qtxt">「編集 → ビルド → 実行 → 観測」の自己検証サイクルを密に設計し、
+  エージェントにはその<i>中で</i>反復させる。</div>
+  <div class="who">ループエンジニアリング</div>
+  <div class="role">一手ずつ人がプロンプトを与えるのではなく</div></section>
+
+<!-- ============ 14 · THE LOOP ============ -->
+<section class="slide">
+  <div class="h">ループ</div>
+  <div class="hsub">客観的な合否判定を与えれば、あとはループが無人で回ります。</div>
+  <div class="steps">
+    <div class="step b"><div class="dot"></div><div class="t">編集</div>
+      <div class="d">エージェントが<code>synth.x</code>（DSLX）を変更 — 新機能、修正、タイミング調整。</div></div>
+    <div class="step y"><div class="dot"></div><div class="t">ビルド</div>
+      <div class="d">ネイティブx86のGCE VMでビットストリーム生成、約6分。タイミングレポートも一緒に返ります。</div></div>
+    <div class="step g"><div class="dot"></div><div class="t">書き込み・駆動</div>
+      <div class="d">JTAG経由の<code>openFPGALoader</code>。同じUSBケーブルでMIDIを送り、音声を録ります。</div></div>
+    <div class="step r"><div class="dot"></div><div class="t">検証</div>
+      <div class="d">FFT / スペクトログラムを0–100点で採点。合格ならマイルストーン達成、劣化なら編集へ戻ります。</div></div>
+  </div></section>
+
+<!-- ============ 15 · AUTONOMOUS VERIFICATION ============ -->
+<section class="slide">
+  <div class="h">要となる材料: 自律的な検証</div>
+  <div class="split" style="grid-template-columns: 600px 1fr;">
+    <div class="body">
+      <p>すべての機能が<b>人間の感覚を介さずに機械が採点できる</b>信号を出します:</p>
+      <ul class="dots">
+        <li>音声はUSB経由でサンプル列としてそのまま取り出せる</li>
+        <li>音程は<b>FFT</b>で検証 — 和音とはN個の同時ピークのこと</li>
+        <li>音色と安定性は<b>スペクトログラム</b>で検証 — 濁り、クリッピング、途切れが一目瞭然</li>
+        <li><b>採点付きE2Eテスト130本超</b>: 基本機能・組み合わせ・ストレス。各0–100点で、劣化すれば不合格</li>
+      </ul>
+      <p class="mut">教訓: FFTのピーク1点だけを見るチェックは、音声が壊れていても通ってしまったことがあります。
+      きれいな1スライスではなく、録音全体をスペクトログラムとして描くこと。</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:400px;"><img src="assets/m6b_filter_sweep.png" alt="フィルタースイープのスペクトログラム"></div>
+      <div class="imgcap">スペクトログラムとして検証したカットオフスイープ — これを読むのは人ではなく機械</div>
+    </div>
+  </div></section>
+
+<!-- ============ 16 · CYCLE TIME ============ -->
+<section class="slide">
+  <div class="h">ループの質はサイクルタイムで決まる</div>
+  <div class="hsub">FPGAの配置配線が律速 — だからビルドをクラウドへ移しました。</div>
+  <div class="bars">
+    <div class="bar"><div class="bl">Apple Silicon Mac<small>x86エミュレーション上のF4PGA（Docker）</small></div>
+      <div class="track"><div class="fill f-red" style="width:100%"></div></div><div class="pv">約10分</div></div>
+    <div class="bar"><div class="bl">ネイティブx86のGCE VM<small>scripts/remote_build.sh — ソースを送り、ビットストリームとタイミングを回収</small></div>
+      <div class="track"><div class="fill f-blue" style="width:60%"></div></div><div class="pv">約6分</div></div>
+    <div class="bar"><div class="bl">DSLXユニットテスト<small>内側のループ — 大半の反復はビルド不要</small></div>
+      <div class="track"><div class="fill f-green" style="width:2.5%"></div></div><div class="pv">ミリ秒</div></div>
+  </div>
+  <div class="body" style="max-width:1100px;">
+    <p class="mut">エージェントは判定を早く受け取り、1時間あたりの反復回数が増えます。しかもノートPCは空いたまま。
+    まずソフトウェアモデルで試作し、ビルドは確認のためだけに使いましょう。</p>
+  </div></section>
+
+<!-- ============ 17 · MILESTONES ============ -->
+<section class="slide">
+  <div class="h">検証可能な単位で積み上げる — M1からM19まで</div>
+  <div class="mtl">
+    <div class="bar-months">
+      <span>M1</span><span>M3</span><span>M6a</span><span>M6b</span><span>M13–14</span><span>WEB UI</span><span>M19</span>
+    </div>
+    <div class="ev up" style="left:1%;"><div class="pad"><b>最初の音</b>DDSサイン波1本 + ADSR。UART越しに遠隔で検証。</div></div>
+    <div class="ev dn" style="left:15.5%;"><div class="pad"><b>本物のMIDI入力</b>UART RX、パーサ、ボイスアサイン。音程はFFTで確認。</div></div>
+    <div class="ev up" style="left:30%;"><div class="pad"><b>パイプライン化</b>32ボイスを時分割するprocへ全面書き直し。1サイクル1ボイス。</div></div>
+    <div class="ev dn" style="left:44.5%;"><div class="pad"><b>ボイス毎フィルター</b>全ボイスに独立のレゾナントSVFとキートラック。</div></div>
+    <div class="ev up" style="left:59%;"><div class="pad"><b>BRAMエフェクト</b>コーラス、ピンポンディレイ、Freeverbリバーブをブロック RAM に。</div></div>
+    <div class="ev dn" style="left:73.5%;"><div class="pad"><b>ブラウザパネル</b>Serum風UI。プリセットは逆合成（CMA-ES）で生成。</div></div>
+    <div class="ev up" style="left:87%;"><div class="pad"><b>オシレーター間FM</b>リング/FMで非調和なベル音。ラッチ解除の修正でSVFを堅牢化。</div></div>
+  </div></section>
+
+<!-- ============ 18 · MILESTONE CLIPS ============ -->
+<section class="slide">
+  <div class="h">各マイルストーンは、実際どう鳴っていたか</div>
+  <div class="hsub">すべてBasys 3の実機から録った音です。画面はいま聴こえている音の
+    スペクトログラム。クリックで再生します。</div>
+  <div class="vgrid">
+
+    <div class="vcard">
+      <div class="vlbl">M1 · 最初の音<span class="dur">0:06</span></div>
+      <video src="assets/videos/m1-first-sound.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">8ビット/4 kHzのDDSサイン波1本と線形ADSR。音は貧弱ですが、
+        編集→ビルド→書き込み→測定のループが閉じたことの証明でした。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M6b · ボイス毎フィルター<span class="dur">0:10</span></div>
+      <video src="assets/videos/m6b-filter.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">パイプライン化の書き直し後、全ボイスが独立したレゾナントSVFを持ちます。
+        カットオフが開き、レゾナンスが鳴き始めるのが聴こえます。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M9 · ノイズ + サブオシ<span class="dur">0:13</span></div>
+      <video src="assets/videos/m9-noise-subosc.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">アナログの定番3点を一度に: LFSRノイズ、マルチモードフィルター、
+        1オクターブ下のサブオシレーター。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M13 · コーラス + ディレイ<span class="dur">0:13</span></div>
+      <video src="assets/videos/m13-chorus-delay.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">初めてブロックRAMを使用。16K×16のディレイラインが補間コーラスタップと
+        ピンポンエコーを駆動し、モノラルが一気に広がります。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M14 · リバーブ<span class="dur">0:11</span></div>
+      <video src="assets/videos/m14-reverb.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">BRAM上のSchroeder/Freeverb系の残響。帰還コムとオールパスで、
+        小部屋から大聖堂まで。この乗算のせいでクロックは÷4になりました。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M15 · ユニゾン<span class="dur">0:13</span></div>
+      <video src="assets/videos/m15-unison.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">1音に2/3/4ボイスを重ね、デチューンと位相のばらつきを与えます。
+        分厚いスーパーソウの代償は、最大同時発音数が32÷Nになること。</div>
+    </div>
+
+  </div></section>
+
+<!-- ============ 19 · CAPSTONE CLIPS ============ -->
+<section class="slide">
+  <div class="h">…そして機械が採点した後の音</div>
+  <div class="hsub">同じ録音環境を、完成した楽器に向けたものです。</div>
+  <div class="vgrid c2">
+
+    <div class="vcard">
+      <div class="vlbl">e2eテストレポート<span class="dur">4:41</span></div>
+      <video src="assets/videos/e2e-test-report.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">エージェント自身の回帰テストを字幕付きスペクトログラムに。USB経由で52項目
+        （基本・統合・厳格なストレス）を毎回書き込み直して録り直し、FFTの基準値と照合して
+        PASS / WARN / FAIL を判定。最後に総合スコア。</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">Web UI · バッハ「前奏曲」<span class="dur">0:43</span></div>
+      <video src="assets/videos/webui-bach-demo.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">ブラウザのパネルからライブで駆動する4パートのマルチティンバー演奏。
+        バッハの前奏曲ハ長調を、32ボイスをパート間で分け合いながらArtix-7 1枚で鳴らしています。</div>
+    </div>
+
+  </div>
+  <div class="vnote">19のマイルストーンのうち、耳だけで合格にしたものは一つもありません。どのクリップの裏にも、
+  エージェントが超えるべき数値がありました。</div>
+</section>
+
+<!-- ============ 20 · SECTION 04 ============ -->
+<section class="slide divider">
+  <div class="num">04</div>
+  <div class="name">アーキテクチャ詳解</div>
+  <div class="kick">クロックは1本、サンプルレートも1つ。すべては純粋関数か小さなprocのどちらかで、
+  シンセはティックごとにオーディオサンプルを1つ吐き出します。</div>
+</section>
+
+<!-- ============ 19 · ENGINE ============ -->
+<section class="slide">
+  <div class="h">エンジン: 1サイクルに1ボイス、32サイクルに1サンプル</div>
+  <div class="split" style="grid-template-columns: 540px 1fr;">
+    <div class="body">
+      <ul class="dots">
+        <li>32ボイスは<b>回転するリング</b>に載っていて、処理中のボイスは常にスロット0
+        （インデックスが定数なので<b>32:1のマルチプレクサが不要</b>）</li>
+        <li>データパスは1本を共有: オシレーター → サブオシ → ボイス毎レゾナントSVF → VCA。
+        ADSRが2基とパート毎のLFO付き</li>
+        <li>XLSが<b>48段のパイプライン</b>にコンパイル。多数のボイスが同時に流れ、
+        エンジンサイクルごとにおよそ1つが完了</li>
+        <li>32ボイス全部が、3,125クロックのサンプル予算のうち約96クロックで終わります</li>
+      </ul>
+      <p class="mut">乗算はすべて意図的にビット幅を絞ってあり、DSP48スライス1つに収まります。
+      オープンなフローでも小さなソフト乗算器のままで済みます。</p>
+    </div>
+    <div>
+      <div class="imgcard" style="height:420px; background:#fff;"><img src="assets/dsp_datapath.svg" alt="ボイス毎のデータパス"></div>
+      <div class="imgcap">ボイス毎のデータパス — 有効サイクルごとにスロット0のボイスに対して1回実行</div>
+    </div>
+  </div></section>
+
+<!-- ============ 20 · TIMING ============ -->
+<section class="slide">
+  <div class="h">1本のクロック、3つのリズム</div>
+  <table class="gt">
+    <thead><tr><th style="width:280px;">リズム</th><th style="width:180px;">周期</th><th>何が起きるか</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+      </svg>マスタークロック</td><td>10 ns</td><td>すべての土台 — 100 MHzの発振器1つのみ。MMCM/PLLなし</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
+      </svg>ce（エンジン, ÷3）</td><td>30 ns</td><td>ボイス1つ分の処理。全パイプラインレジスタを1本のクロックイネーブルで制御</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 19 h6 v-12 h4 v12 h24 v-12 h4" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      </svg>ce8（エフェクト, ÷6）</td><td>60 ns</td><td>28状態のエフェクトFSMを1ステップ進める。1ステップにつきBRAMを1回読み書き</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
+        <path d="M 2 12 Q 12 -2 21 12 T 40 12" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>サンプル周期</td><td>31.25 µs</td><td>32 kHzステレオのサンプル1つ分 — マスタークロック3,125発</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="max-width:1120px; margin-top:36px;">
+    <p>演算に使うのは1サンプルあたり<span class="em">3,125クロック中わずか約264クロック</span>。
+    パイプラインは周期の約90%を残して終わります。本当の上限はDSPではなく
+    <b>UARTのフレーム（約2,000クロック）</b>なので、エンジンにはまだ十分な伸びしろがあります。</p>
+  </div></section>
+
+<!-- ============ 21 · DIVISION OF LABOR ============ -->
+<section class="slide">
+  <div class="h">役割分担: DSLX と Verilogシェル</div>
+  <div class="rows" style="grid-template-columns: 340px 1fr;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="13" cy="13" r="11.5" stroke="#4285f4" stroke-width="2"/>
+      <text x="13" y="18" text-anchor="middle" font-size="15" font-style="italic" font-family="Georgia, serif" fill="#4285f4">ƒ</text>
+    </svg>純粋なDSP演算 → DSLX</div>
+    <ul class="dots">
+      <li>オシレーター、SVF、ADSR、LFO、ユニゾン、ミキサー — コンパイラのパイプライン化とビット幅の絞り込みが効くところ</li>
+      <li>ミリ秒でユニットテストでき、ハンドシェイクの管理も不要</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="4" y="2" width="18" height="22" rx="3" stroke="#188038" stroke-width="2"/>
+      <line x1="8.5" y1="8" x2="17.5" y2="8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8.5" y1="13" x2="17.5" y2="13" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="8.5" y1="18" x2="17.5" y2="18" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+    </svg>タイミング付きメモリと制御 → Verilog</div>
+    <ul class="dots">
+      <li>ブロックRAMには<b>同期読み出し</b>が必要。XLSが出すのは非同期読み出しで、BRAMには推論されません</li>
+      <li>エフェクトは<b>パイプライン演算ではなくメモリポートのスケジューリング</b> — 28状態のFSMが乗算器1つをL→Rの順に共有</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="2" y="3" width="4" height="20" rx="2" fill="#f9ab00"/>
+      <rect x="9.5" y="8" width="4" height="15" rx="2" fill="#f9ab00" opacity=".65"/>
+      <rect x="17" y="13" width="4" height="10" rx="2" fill="#f9ab00" opacity=".4"/>
+    </svg>エフェクトチェーン</div>
+    <ul class="dots">
+      <li>エンジンはモノラル。ステレオ感はシェルが作ります — 逆相コーラス、ピンポンエコー、+23サンプルずらした8コムのFreeverb</li>
+      <li>16K×16の循環バッファ4本 = ブロックRAM 32個。これがチップ上の律速リソースです</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 22 · RESOURCES ============ -->
+<section class="slide">
+  <div class="h">チップ上でどれだけ使っているか</div>
+  <div class="hsub">リポジトリに入っているVivadoビルド（Artix-7 xc7a35t）のreport_utilizationより。</div>
+  <div class="split" style="grid-template-columns: 640px 1fr; margin-top: 8px;">
+    <div class="bars" style="margin-top:44px;">
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">ブロックRAM<small>律速リソース</small></div>
+        <div class="track"><div class="fill f-blue" style="width:65%"></div></div><div class="pv">65%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">スライスLUT</div>
+        <div class="track"><div class="fill f-blue" style="width:50%"></div></div><div class="pv">50%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">レジスタ</div>
+        <div class="track"><div class="fill f-blue" style="width:42%"></div></div><div class="pv">42%</div></div>
+      <div class="bar" style="grid-template-columns: 190px 1fr 90px; margin: 26px 0;">
+        <div class="bl">DSP48スライス<small>90個中26個 — 乗算はすべてファブリック外へ</small></div>
+        <div class="track"><div class="fill f-blue" style="width:29%"></div></div><div class="pv">29%</div></div>
+    </div>
+    <div>
+      <div class="imgcard" style="height:400px; background:#fff;"><img src="assets/floorplan.svg" alt="リソースのフロアプラン"></div>
+      <div class="imgcap">エンジンとシェルはCLBファブリック、乗算はDSP48、ディレイラインはBRAM</div>
+    </div>
+  </div></section>
+
+<!-- ============ 23 · BACKENDS ============ -->
+<section class="slide">
+  <div class="h">差し替え可能な3つの配置配線バックエンド</div>
+  <table class="gt">
+    <thead><tr><th style="width:190px;">バックエンド</th><th style="width:120px;">DSP48</th><th style="width:120px;">BRAM</th><th style="width:190px;">クロック / レート</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#5f6368" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 10 0 v 3" stroke="#5f6368" stroke-width="2"/>
+      </svg>Vivado</td><td class="ok">✓ 26</td><td class="ok">✓ 32</td><td>÷3 · 32 kHz</td>
+        <td>配布しているビットストリーム。クリティカルパス約18.5 ns、余裕約10 ns。クローズドソース。</td></tr>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#188038" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 9.6 -1.8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      </svg>openXC7</td><td class="no">✗</td><td class="ok">✓</td><td>÷4 · 28 kHz</td>
+        <td>完全オープンで、実際のFmaxレポートも出ます。ただしnextpnrはDSPのCARRYCASCINピンを（まだ）配線できません。</td></tr>
+      <tr><td><svg class="ric" width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="4" y="11" width="18" height="12" rx="3" stroke="#188038" stroke-width="2"/>
+        <path d="M 8 11 V 8 a 5 5 0 0 1 9.6 -1.8" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      </svg>F4PGA / VPR</td><td class="no">✗</td><td class="no">✗</td><td>÷4 · 28 kHz</td>
+        <td>完全オープン。乗算はソフト実装でスライス使用率が約90%。このプロジェクトの出発点であり、設計を形作った制約。</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="max-width:1120px; margin-top:36px;">
+    <p><b>ボトルネックはXLSではなく、配置配線バックエンドの方でした。</b>まったく同じRTLが
+    Vivadoでは26個のDSP48と32個のBRAMに推論され、クリティカルパスが半減（約40 → 約18.5 ns）して
+    本来の32 kHzが戻ります。</p>
+  </div></section>
+
+<!-- ============ 24 · SECTION 05 ============ -->
+<section class="slide divider">
+  <div class="num">05</div>
+  <div class="name">つまずきと学び</div>
+  <div class="kick">互いのことを知らない3つのツールを積み重ねているので、継ぎ目は必ず漏れます。
+  実際に痛い目を見たところと、そこから学んだことを。</div>
+</section>
+
+<!-- ============ 25 · F4PGA LIMITS ============ -->
+<section class="slide">
+  <div class="h">オープンなフローの制約が、設計全体を決めた</div>
+  <div class="rows" style="grid-template-columns: 360px 1fr; row-gap: 34px;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="3" y="3" width="20" height="20" rx="4" stroke="#9aa0a6" stroke-width="2"/>
+      <path d="M 9.5 9.5 L 16.5 16.5 M 16.5 9.5 L 9.5 16.5" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>DSP48が推論されない</div>
+    <ul class="dots">
+      <li>乗算はすべてLUT+キャリーのソフト乗算器に → <b>乗算器は極力小さく</b>。オペランドの型を細くして、XLSの幅絞り込みパスに縮めてもらう</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect x="5" y="2" width="16" height="22" rx="3" stroke="#9aa0a6" stroke-width="2"/>
+      <line x1="9" y1="8" x2="17" y2="8" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="13" x2="17" y2="13" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="18" x2="17" y2="18" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>非同期読み出しはBRAMにならない</div>
+    <ul class="dots">
+      <li>XLSのROMは巨大なマルチプレクサのまま。シェルに手書きした<b>同期読み出しRAM</b>だけがブロックRAMに載ります</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="13" cy="13" r="10.5" stroke="#9aa0a6" stroke-width="2"/>
+      <path d="M 13 7 L 13 13 L 17.5 16" stroke="#9aa0a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="2" y1="24" x2="24" y2="2" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>MMCMもクロック分周も使えない</div>
+    <ul class="dots">
+      <li>遅いクロックが作れない → すべてを100 MHzで動かし、<b>グローバルなクロックイネーブル</b>で歩を進める（マルチサイクルの技）</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="28" height="26" viewBox="0 0 28 26" fill="none">
+      <path d="M 2 13 Q 14 1 26 13 Q 14 25 2 13 Z" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="14" cy="13" r="4" stroke="#f9ab00" stroke-width="2"/>
+    </svg>タイミングは自分で読み解く</div>
+    <ul class="dots">
+      <li>ツールはマルチサイクルを認識できず、そのパスを失敗と報告します → <b>生のレポートを毎ビルド保存して測る</b>。配置にはばらつきがあるので余裕も残す</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 26 · FIXED POINT ============ -->
+<section class="slide">
+  <div class="h">固定小数点との格闘 — 浮動小数点シミュレーションでは出ないバグ</div>
+  <div class="cols c3">
+    <div>
+      <div class="cico"><svg width="48" height="38" viewBox="0 0 48 38" fill="none">
+        <line x1="2" y1="6" x2="46" y2="6" stroke="#bdc1c6" stroke-width="1.6" stroke-dasharray="4 4"/>
+        <line x1="2" y1="32" x2="46" y2="32" stroke="#bdc1c6" stroke-width="1.6" stroke-dasharray="4 4"/>
+        <path d="M 2 26 Q 6 10 10 6 L 20 6 Q 25 32 29 32 L 39 32 Q 43 16 46 10" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      </svg></div>
+      <div class="lbl">ラッチしてしまうフィルター</div>
+      <p>高レゾナンスではSVFの内部状態がクランプの上下端に張り付き、無音に。明るいポリフォニックFMでは
+      フルスケールのリミットサイクルに固まり、<b>再生時間の96%が振り切れ</b>ていました。</p>
+      <p class="small">対策: リーキー積分器（毎サンプル約1%）で極を単位円の内側へ寄せ、自励振動が減衰するように。
+      浮動小数点シミュレーションでは一度も現れず、実機だけが見せてくれました。</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="46" height="38" viewBox="0 0 46 38" fill="none">
+        <path d="M 2 34 Q 20 32 30 20 Q 37 11 40 4" stroke="#f9ab00" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <path d="M 40 4 l -7 1 M 40 4 l -1 7" stroke="#f9ab00" stroke-width="2.4" stroke-linecap="round"/>
+      </svg></div>
+      <div class="lbl">暴走したリバーブ</div>
+      <p>ダンピングを小さなシフト量で実装したせいで可聴帯域が潰れ、<i>さらに</i>16ビットの状態が
+      ラップアラウンド。符号が反転して帰還が暴走しました。</p>
+      <p class="small">対策: ダンピングを (old+new)/2 に。原理的にオーバーフローせず、帯域も保たれます。
+      加えてリセット時にBRAMをクリア。電源投入時のゴミが帰還ループの種になるためです。</p>
+    </div>
+    <div>
+      <div class="cico"><svg width="48" height="38" viewBox="0 0 48 38" fill="none">
+        <path d="M 2 19 Q 7 4 12 19 T 22 19 T 32 19" stroke="#34a853" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <circle cx="40" cy="14" r="7" stroke="#34a853" stroke-width="2.2"/>
+        <path d="M 37 14 l 2.2 2.2 L 43.5 11.5" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg></div>
+      <div class="lbl">ラップさせず、飽和させる</div>
+      <p>ラップアラウンドは巨大な不連続、つまり広帯域のクリックノイズです。ミキサーでクランプし、
+      デモでは厚い和音のベロシティを控えめに保ちます。</p>
+      <p class="small">検証は録音全体のスペクトログラムで。FFTを1スライスだけ見て合格にしたら、
+      実際の音は壊れていた、ということがありました。</p>
+    </div>
+  </div></section>
+
+<!-- ============ 27 · AGENT LEARNINGS ============ -->
+<section class="slide">
+  <div class="h">エージェントのループを実際に機能させたもの</div>
+  <div class="rows" style="grid-template-columns: 360px 1fr; row-gap: 36px;">
+    <div class="lbl"><svg class="lico" width="28" height="24" viewBox="0 0 28 24" fill="none">
+      <path d="M 3 21 A 12 12 0 0 1 25 21" stroke="#4285f4" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="21" x2="20" y2="12" stroke="#4285f4" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="14" cy="21" r="2.2" fill="#4285f4"/>
+    </svg>客観的な合否判定</div>
+    <ul class="dots">
+      <li>すべての機能を機械が0〜100点で採点。「だいたい良さそう」は無し。エージェントはその数値を読んで直します</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 9 2 h 8 M 11 2 v 7 L 4.5 20.5 A 2.6 2.6 0 0 0 6.9 24 h 12.2 a 2.6 2.6 0 0 0 2.4 -3.5 L 15 9 V 2"
+        stroke="#188038" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="8" y1="17" x2="18" y2="17" stroke="#188038" stroke-width="2"/>
+    </svg>ビルドの前に試作する</div>
+    <ul class="dots">
+      <li>NumPy/numbaで書いたエンジンのモデルがRTLを写し取っています。FMの強さ、リバーブのダンピング、プリセット探索はすべてシミュレーションで先に確かめ、<b>その後で</b>6分のビルドを使いました</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <line x1="2" y1="7" x2="24" y2="7" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="17" cy="7" r="3.4" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2"/>
+      <line x1="2" y1="19" x2="24" y2="19" stroke="#f9ab00" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="9" cy="19" r="3.4" fill="#f6f7f9" stroke="#f9ab00" stroke-width="2"/>
+    </svg>シミュレーションを実機に較正する</div>
+    <ul class="dots">
+      <li>同じパッチをシミュレーションと実機で比較するプローブを用意。実機で検証するまで、合わせ込んだプリセットは「シミュレーション上で最適」なだけ。録音は非決定的なので、N回のうちベストを採り、書き込み直す</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <circle cx="11" cy="11" r="8" stroke="#d93025" stroke-width="2"/>
+      <line x1="17" y1="17" x2="24" y2="24" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>フォーマットを変えたら、読む側を全部見直す</div>
+    <ul class="dots">
+      <li>ボードをステレオ化したのにホスト側はモノラルのまま読んでいて、全音が1オクターブ低く。相対音程でのチェックだったため見逃していました</li>
+    </ul>
+  </div></section>
+
+<!-- ============ SECTION 06 ============ -->
+<section class="slide divider">
+  <div class="num">06</div>
+  <div class="name">まとめ &amp; Q&amp;A</div>
+  <div class="kick">持ち帰ってほしいこと、資料の場所、そして皆さんからの質問。</div>
+</section>
+
+<!-- ============ TAKEAWAYS ============ -->
+<section class="slide">
+  <div class="agenda">
+    <div class="h-big">まとめ</div>
+    <ol>
+      <li><span class="num">01</span><span class="txt" style="font-size:21px;">HLSを使うと、DSPハードウェアがソフトウェアのように書ける。制御が要るところだけ薄いシェルで</span></li>
+      <li><span class="num">02</span><span class="txt" style="font-size:21px;">機械が採点できる信号をすべての機能が出すなら、エージェントは本物のハードウェアを作れる</span></li>
+      <li><span class="num">03</span><span class="txt" style="font-size:21px;">効いてくるのはサイクルタイム。速いビルド + ソフトウェアモデル = 1時間あたりの反復回数</span></li>
+      <li><span class="num">04</span><span class="txt" style="font-size:21px;">信じずに測る。タイミングレポート、スペクトログラム、シミュレーションと実機の較正</span></li>
+      <li><span class="num">05</span><span class="txt" style="font-size:21px;">摩擦が生まれるのはツールの継ぎ目。記録に残せば、それ自体が再利用できる資産になる</span></li>
+    </ol>
+  </div></section>
+
+<!-- ============ 31 · RESOURCES ============ -->
+<section class="slide">
+  <div class="h">参考リンク</div>
+  <div class="rows" style="margin-top:56px; grid-template-columns: 320px 1fr;">
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 2 8 a 2 2 0 0 1 2 -2 h 6 l 3 3 h 9 a 2 2 0 0 1 2 2 v 9 a 2 2 0 0 1 -2 2 H 4 a 2 2 0 0 1 -2 -2 Z"
+        stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+    </svg>プロジェクト</div>
+    <ul class="dots">
+      <li>github.com/kazunori279/xls32-fpga-synth — Apache-2.0。ビルド済みビットストリーム同梱</li>
+      <li>デモ動画: youtu.be/2ROr9M_ZlVY</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 5 2 h 11 l 5 5 v 17 H 5 Z" stroke="#188038" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M 16 2 v 5 h 5" stroke="#188038" stroke-width="2" stroke-linejoin="round"/>
+      <line x1="9" y1="13" x2="17" y2="13" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+      <line x1="9" y1="18" x2="17" y2="18" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
+    </svg>リポジトリ内のドキュメント</div>
+    <ul class="dots">
+      <li><code>ARCHITECTURE.md</code> — ブロック毎の詳解: コード、データフロー、タイミングチャート</li>
+      <li><code>DEVELOPMENT.md</code> — マイルストーンの履歴とツールチェーンの苦戦ログ</li>
+    </ul>
+    <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M 13 2 L 24 8 L 13 14 L 2 8 Z" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M 2 13 l 11 6 l 11 -6" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" fill="none"/>
+      <path d="M 2 18 l 11 6 l 11 -6" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" fill="none"/>
+    </svg>使用したスタック</div>
+    <ul class="dots">
+      <li>Google XLS — google.github.io/xls</li>
+      <li>F4PGA — f4pga.org · openXC7 · openFPGALoader</li>
+      <li>Basys 3 — digilent.com</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 32 · THANK YOU ============ -->
+<section class="slide thanks">
+  <div class="inner">
+    <h1>ありがとうございました</h1>
+    <p>ご質問をどうぞ</p>
+    <div class="links">
+      <b>github.com/kazunori279/xls32-fpga-synth</b>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div id="hud">1 / 32</div>
+<div id="help"><kbd>←</kbd> <kbd>→</kbd> ページ送り &nbsp; <kbd>f</kbd> 全画面</div>
+
+<script>
+(() => {
+  const slides = [...document.querySelectorAll('.slide')];
+  const hud = document.getElementById('hud');
+  const frame = document.getElementById('frame');
+  let cur = Math.min(Math.max((parseInt(location.hash.slice(1), 10) || 1) - 1, 0), slides.length - 1);
+
+  function show(i) {
+    cur = Math.min(Math.max(i, 0), slides.length - 1);
+    // Leaving a slide must silence it — a milestone clip playing over the next slide is worse
+    // than no clip at all.
+    slides.forEach((s, j) => {
+      if (j !== cur) s.querySelectorAll('video').forEach(v => { if (!v.paused) v.pause(); });
+    });
+    slides.forEach((s, j) => s.classList.toggle('active', j === cur));
+    hud.textContent = (cur + 1) + ' / ' + slides.length;
+    history.replaceState(null, '', '#' + (cur + 1));
+    slides.forEach((s, j) => {
+      const n = s.querySelector('.pageno');
+      if (n) n.textContent = j + 1;
+    });
+  }
+
+  function fit() {
+    const vw = (window.visualViewport && visualViewport.width) || innerWidth;
+    const vh = (window.visualViewport && visualViewport.height) || innerHeight;
+    const s = Math.min(vw / 1280, vh / 720) * 0.96;
+    frame.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+
+  addEventListener('keydown', e => {
+    // A focused video keeps its own keys (space = play/pause, arrows = seek).
+    if (e.target instanceof HTMLVideoElement && e.key !== 'Escape') return;
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  });
+  addEventListener('click', e => {
+    // Links and the video cards own their clicks — don't page the deck out from under them.
+    if (e.target.closest('a, video, .vcard')) return;
+    show(e.clientX > innerWidth / 2 ? cur + 1 : cur - 1);
+  });
+  addEventListener('resize', fit);
+  addEventListener('orientationchange', fit);
+  if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+
+  let tx = null, ty = null;
+  addEventListener('touchstart', e => {
+    if (e.target.closest('video, .vcard')) { tx = ty = null; return; }  // let the scrubber be dragged
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, { passive: true });
+  addEventListener('touchend', e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) show(dx < 0 ? cur + 1 : cur - 1);
+    tx = ty = null;
+  }, { passive: true });
+
+  addEventListener('hashchange', () => {
+    const n = (parseInt(location.hash.slice(1), 10) || 1) - 1;
+    if (n !== cur) show(n);
+  });
+
+  // Only one milestone clip at a time — starting one stops whatever else was playing.
+  const clips = [...document.querySelectorAll('.vcard video')];
+  clips.forEach(v => v.addEventListener('play', () => {
+    clips.forEach(o => { if (o !== v && !o.paused) o.pause(); });
+  }));
+
+  // YouTube embed: real iframe over http(s); from file:// YouTube blocks embeds
+  // (error 153, missing referer), so fall back to a click-through thumbnail.
+  const ytbox = document.getElementById('ytbox');
+  if (ytbox) {
+    const id = '2ROr9M_ZlVY';
+    if (location.protocol === 'file:') {
+      ytbox.innerHTML =
+        '<a href="https://youtu.be/' + id + '" target="_blank" rel="noopener" ' +
+        'style="display:block;width:100%;height:100%;position:relative;">' +
+        '<img src="https://img.youtube.com/vi/' + id + '/maxresdefault.jpg" ' +
+        'onerror="this.onerror=null;this.src=\'https://img.youtube.com/vi/' + id + '/hqdefault.jpg\'" ' +
+        'style="width:100%;height:100%;object-fit:cover;display:block;">' +
+        '<svg viewBox="0 0 68 48" style="position:absolute;left:50%;top:50%;width:78px;' +
+        'transform:translate(-50%,-50%);filter:drop-shadow(0 2px 8px rgba(0,0,0,.4));">' +
+        '<path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/>' +
+        '<path d="M45 24 27 14v20z" fill="#fff"/></svg></a>';
+    } else {
+      ytbox.innerHTML =
+        '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '" title="XLS32 デモ動画" ' +
+        'style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; ' +
+        'encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+    }
+  }
+
+  fit(); show(cur);
+})();
+</script>
+</body>
+</html>
