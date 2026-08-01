@@ -11,10 +11,12 @@
 #       CRF=<n>     x264 quality (default 30 — lower is better and bigger).
 #       FPSMAX=<n>  cap the output frame rate (default 20).
 #       ABR=<rate>  AAC bitrate (default 192k).
-# GitHub's blob view only plays an MP4 under ~5 MB (bigger ones get "we can't show files
-# that are this big"), and the raw URL is served as application/octet-stream, so it
-# downloads rather than plays. The two README clips are made with
+# GitHub never plays a repo-committed MP4 inline: <video> is stripped from Markdown, the
+# blob view shows no player at any file size, and the raw URL is served as
+# application/octet-stream, so it downloads. The README links to YouTube instead; the
+# copies kept in docs/assets/ are made small with
 #   CRF=33 FPSMAX=12 ABR=128k scripts/make_mp4.sh in docs/assets/out.mp4
+# and the YouTube uploads with CRF=20 FPSMAX=30 ABR=320k.
 set -euo pipefail
 IN="${1:?usage: make_mp4.sh in.wav [out.mp4]}"
 OUT="${2:-${IN%.*}.mp4}"
