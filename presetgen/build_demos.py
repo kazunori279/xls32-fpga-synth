@@ -14,7 +14,7 @@ from a broad INSTRUMENT LIBRARY.
 
 Format (demos.json):
   { "songs": [ {
-      "name","genre","bpm","bars","fx": <raw CC83>,
+      "name","genre","bpm","bars",
       "parts": [patch0..patch3],   # each: { control-id: raw-CC-value }
       "notes": [[t_beats, dur_beats, ch, midi, vel], ...] } ] }
 """
@@ -24,10 +24,9 @@ try:
 except ImportError:
     import demo_scores as SC
 
-def w(v): return (v & 7) << 4      # CC70 wave / CC83 fx / CC87 xratio  (3-bit @ bit4)
+def w(v): return (v & 7) << 4      # CC70 wave / CC87 xratio  (3-bit field @ bit4)
 def s(v): return (v & 3) << 5      # 2-bit selects
 SINE, SAW, SQUARE, TRI, NOISE = w(0), w(1), w(2), w(3), w(4)
-DRY, CHORUS, ECHO, BOTH = w(0), w(1), w(2), w(3)
 LP, HP, BP, NOTCH = s(0), s(1), s(2), s(3)
 RING, FM, FMP = s(1), s(2), s(3)   # cross-osc modes
 
@@ -107,16 +106,16 @@ def pulse(out, ch, midi, t, count, step, dur=None, vel=100):
     for i in range(count): out.append([round(t+i*step,4), round(dur or step*0.5,4), ch, midi, vel])
 
 songs = []
-def song(name, genre, bpm, bars, fx, parts, notes):
-    songs.append({"name": name, "genre": genre, "bpm": bpm, "bars": bars, "fx": fx, "parts": parts, "notes": notes})
-def mk(name, bpm, bars, fx, parts, notes):   # pure: RETURN a Classical song dict (reused by make_random)
-    return {"name": name, "genre": "Classical", "bpm": bpm, "bars": bars, "fx": fx, "parts": parts, "notes": notes}
+def song(name, genre, bpm, bars, parts, notes):
+    songs.append({"name": name, "genre": genre, "bpm": bpm, "bars": bars, "parts": parts, "notes": notes})
+def mk(name, bpm, bars, parts, notes):   # pure: RETURN a Classical song dict (reused by make_random)
+    return {"name": name, "genre": "Classical", "bpm": bpm, "bars": bars, "parts": parts, "notes": notes}
 def fx_amounts(sg, **kw):                    # override the genre's default effect amounts
     sg.update(kw); return sg
-def prog_song(name, genre, bpm, fx, parts, prog, build):
+def prog_song(name, genre, bpm, parts, prog, build):
     out = []
     for bari, (root, qual) in enumerate(prog): build(out, bari, root, qual, bari * 4.0)
-    song(name, genre, bpm, len(prog), fx, parts, out)
+    song(name, genre, bpm, len(prog), parts, out)
 def bass_root(out, ch, r, octv, t, mode, vel=104):
     if mode == "8th":   pulse(out, ch, n(r,octv), t, 8, 0.5, dur=0.42, vel=vel)
     elif mode == "4":   pulse(out, ch, n(r,octv), t, 4, 1.0, dur=0.7, vel=vel)
@@ -157,7 +156,7 @@ def bach_prelude():
     hold(out, 1, chord("C", "maj", 4), t, 4.0, 54)
     hold(out, 2, [n("C",2)], t, 4.0, 82)
     hold(out, 3, [n("C",5)], t, 4.0, 58)
-    return mk("Bach · Prelude in C", 76, 35, CHORUS, [HARPSI(), STRINGS(), UPRIGHT(), BELL()], out)
+    return mk("Bach · Prelude in C", 76, 35, [HARPSI(), STRINGS(), UPRIGHT(), BELL()], out)
 
 def goldberg_aria():
     """Aria from the Goldberg Variations, first half (16 bars of 3/4). `bars` counts 4-beat
@@ -169,7 +168,7 @@ def goldberg_aria():
         hold(out, 2, [note_name(SC.GOLDBERG_BASS[bi])], t, 1.9, 80)  # the bass the 30 variations share
         out.append([round(t+2,4), 0.9, 2, note_name(SC.GOLDBERG_BASS[bi]) + 12, 58])
         out.append([round(t+1,4), 1.0, 3, n(root, 5), 34])           # sarabande stress on beat 2
-    sg = mk("Bach · Goldberg Aria", 58, 12, CHORUS, [HARPSI(), WARMPAD(), UPRIGHT(), GLOCK()], out)
+    sg = mk("Bach · Goldberg Aria", 58, 12, [HARPSI(), WARMPAD(), UPRIGHT(), GLOCK()], out)
     return fx_amounts(sg, reverb=96, room=s(2), chorusd=34)      # small room, a little shimmer
 
 def the_swan():
@@ -185,7 +184,7 @@ def the_swan():
         if bar not in seen:
             seen.add(bar)
             if midi <= n("G", 3): out.append([round(bar * 6.0, 4), 6.0, 3, midi, 36])
-    sg = mk("Saint-Saëns · Le Cygne", 70, 39, BOTH, [FLUTE(), HARP(), UPRIGHT(), WARMPAD()], out)
+    sg = mk("Saint-Saëns · Le Cygne", 70, 39, [FLUTE(), HARP(), UPRIGHT(), WARMPAD()], out)
     return fx_amounts(sg, reverb=118, room=s(3), chorusd=58, echod=44, dtime=80)   # big wet hall
 
 def vivaldi_winter():
@@ -195,7 +194,7 @@ def vivaldi_winter():
     out += SC.unpack(SC.WINTER_PIZ, 1, 62, transpose=-12)
     out += SC.unpack(SC.WINTER_BASS, 2, 72)
     out += SC.unpack(SC.WINTER_PIZ2, 3, 54, transpose=-12)
-    sg = mk("Vivaldi · Winter (Largo)", 44, 18, CHORUS, [SAWLEAD(), PLUCK(), UPRIGHT(), HARP()], out)
+    sg = mk("Vivaldi · Winter (Largo)", 44, 18, [SAWLEAD(), PLUCK(), UPRIGHT(), HARP()], out)
     return fx_amounts(sg, reverb=104, room=s(2), chorusd=48)     # ensemble spread on the strings
 
 def ode_to_joy():
@@ -209,7 +208,7 @@ def ode_to_joy():
         t = bari * 4.0
         hold(out, 1, chord(r,q,4), t, 4.0, 52); hold(out, 2, [n(r,3)], t, 4.0, 82)
         arp(out, 3, chord(r,q,5), t, 8, 0.5, dur=0.4, vel=46)
-    return mk("Beethoven · Ode to Joy", 92, 8, CHORUS, [BRASS(), CHOIR(), SUB(), GLOCK()], out)
+    return mk("Beethoven · Ode to Joy", 92, 8, [BRASS(), CHOIR(), SUB(), GLOCK()], out)
 
 def canon_in_d():
     prog = [("D","maj"),("A","maj"),("B","min"),("F#","min"),("G","maj"),("D","maj"),("G","maj"),("A","maj")]
@@ -219,7 +218,7 @@ def canon_in_d():
         hold(out, 1, chord(r,q,4), t, 4.0, 52); hold(out, 2, [n(r,3)], t, 4.0, 78)
         arp(out, 0, chord(r,q,5), t, 8, 0.5, dur=0.45, vel=80)
         if bari >= 4: arp(out, 3, chord(r,q,6), t, 16, 0.25, dur=0.2, vel=44)
-    return mk("Pachelbel · Canon in D", 68, 8, CHORUS, [HARP(), STRINGS(), UPRIGHT(), BELL()], out)
+    return mk("Pachelbel · Canon in D", 68, 8, [HARP(), STRINGS(), UPRIGHT(), BELL()], out)
 
 def fur_elise():
     m = "E5 D#5 E5 D#5 E5 B4 D5 C5 A4 . C4 E4 A4 B4 . E4 G#4 B4 C5 . E4 E5 D#5 E5 D#5 E5 B4 D5 C5 A4 . ."
@@ -230,7 +229,7 @@ def fur_elise():
     for start, dur, r, q in [(0.0, 7.5, "A", "min"), (7.5, 2.0, "E", "maj"), (9.5, 6.5, "A", "min")]:
         hold(out, 2, [n(r, 3)], start, dur, 72)                                   # left-hand bass
         arp(out, 1, chord(r, q, 3), start, int(round(dur * 2)), 0.5, dur=0.45, vel=42)  # broken-chord accomp
-    return mk("Beethoven · Für Elise", 80, 4, CHORUS, [EP(), HARP(), UPRIGHT(), GLOCK()], out)
+    return mk("Beethoven · Für Elise", 80, 4, [EP(), HARP(), UPRIGHT(), GLOCK()], out)
 
 def baroque_air():
     # chord-derived (melody = chord tones) so it is always consonant — replaces a mis-metered tune
@@ -241,7 +240,7 @@ def baroque_air():
         hold(out, 2, [n(r,3)], t, 4.0, 72); hold(out, 1, chord(r,q,4), t, 4.0, 44)
         arp(out, 0, chord(r,q,5), t, 8, 0.5, dur=0.45, vel=80, updown=True)      # flowing melodic line
         arp(out, 3, chord(r,q,6), t, 4, 1.0, dur=0.8, vel=40)                    # gentle upper voice
-    return mk("Baroque Air", 72, 8, CHORUS, [FLUTE(), STRINGS(), UPRIGHT(), HARP()], out)
+    return mk("Baroque Air", 72, 8, [FLUTE(), STRINGS(), UPRIGHT(), HARP()], out)
 
 def moonlight():
     prog = [("C#","min"),("C#","min"),("A","maj"),("F#","min"),("G#","maj"),("C#","min"),("G#","maj"),("C#","min")]
@@ -250,7 +249,7 @@ def moonlight():
         t = bari * 4.0; tones = chord(r,q,4); trip = [tones[0], tones[1%len(tones)], tones[2%len(tones)]]
         for k in range(12): out.append([round(t+k*(4.0/12),4), 0.3, 0, trip[k%3], 56])
         hold(out, 2, [n(r,3)], t, 4.0, 70); hold(out, 1, [chord(r,q,5)[0]], t, 4.0, 44)
-    return mk("Beethoven · Moonlight", 54, 8, BOTH, [EP(), ABELL(), ADRONE(), WARMPAD()], out)
+    return mk("Beethoven · Moonlight", 54, 8, [EP(), ABELL(), ADRONE(), WARMPAD()], out)
 
 def gymnopedie():
     prog = [("G","maj7"),("D","maj7"),("G","maj7"),("D","maj7")]
@@ -261,7 +260,7 @@ def gymnopedie():
         hold(out, 2, [n(r,3)], t, 1.0, 66); hold(out, 1, chord(r,q,4), t+2.0, 1.6, 46)
         out.append([round(t+1.0,4), 2.6, 0, mel[(bari*2)%len(mel)], 62])
         out.append([round(t+3.0,4), 0.9, 0, mel[(bari*2+1)%len(mel)], 56])
-    return mk("Satie · Gymnopédie", 66, 4, BOTH, [FLUTE(), WARMPAD(), UPRIGHT(), GLOCK()], out)
+    return mk("Satie · Gymnopédie", 66, 4, [FLUTE(), WARMPAD(), UPRIGHT(), GLOCK()], out)
 
 def aria_am():
     # chord-derived aria (melody from chord tones) — always consonant
@@ -274,10 +273,10 @@ def aria_am():
         out.append([round(t,4), 1.8, 0, tones[-1], 78])                          # two-note chord-tone melody
         out.append([round(t+2,4), 1.8, 0, tones[max(0,len(tones)-2)], 72])
         arp(out, 3, chord(r,q,6), t, 4, 1.0, dur=0.8, vel=38)
-    return mk("Aria in A minor", 84, 8, CHORUS, [EP(), HARP(), UPRIGHT(), GLOCK()], out)
+    return mk("Aria in A minor", 84, 8, [EP(), HARP(), UPRIGHT(), GLOCK()], out)
 
 # --- more public-domain themes (melody on ch0 + harmony ALIGNED to the melody -> consonant) ---
-def pd_mel(name, bpm, bars, fx, parts, mel, changes):
+def pd_mel(name, bpm, bars, parts, mel, changes):
     out = []; t = 0.0
     for m, d in mel:
         if m is not None: out.append([round(t,4), round(d*0.92,4), 0, m, 84])
@@ -286,7 +285,7 @@ def pd_mel(name, bpm, bars, fx, parts, mel, changes):
         hold(out, 2, [n(r,3)], start, dur, 70)
         arp(out, 1, chord(r,q,3), start, max(1,int(round(dur*2))), 0.5, dur=0.45, vel=40)
         arp(out, 3, chord(r,q,5), start, max(1,int(round(dur))), 1.0, dur=0.8, vel=34)
-    return mk(name, bpm, bars, fx, parts, out)
+    return mk(name, bpm, bars, parts, out)
 
 def twinkle():
     N = lambda s: n(s, 4)
@@ -296,14 +295,14 @@ def twinkle():
            (N("G"),1),(N("G"),1),(N("F"),1),(N("F"),1), (N("E"),1),(N("E"),1),(N("D"),2)]
     ch = [(0,4,"C","maj"),(4,4,"C","maj"),(8,4,"F","maj"),(12,4,"C","maj"),
           (16,4,"G","maj"),(20,4,"C","maj"),(24,4,"G","maj"),(28,4,"C","maj")]
-    return pd_mel("Mozart · Twinkle", 108, 8, CHORUS, [HARPSI(), STRINGS(), UPRIGHT(), GLOCK()], mel, ch)
+    return pd_mel("Mozart · Twinkle", 108, 8, [HARPSI(), STRINGS(), UPRIGHT(), GLOCK()], mel, ch)
 
 def beethoven5():
     G,Eb,F,D = n("G",4), n("Eb",4), n("F",4), n("D",4)
     mel = [(G,0.5),(G,0.5),(G,0.5),(None,0.5),(Eb,2.0),
            (F,0.5),(F,0.5),(F,0.5),(None,0.5),(D,2.0)]
     ch = [(0,4,"C","min"),(4,4,"G","maj")]     # Cm (Eb,G) then V (F,D) -> consonant
-    return pd_mel("Beethoven · Symphony No.5", 108, 2, BOTH, [BRASS(), STRINGS(), UPRIGHT(), GLOCK()], mel, ch)
+    return pd_mel("Beethoven · Symphony No.5", 108, 2, [BRASS(), STRINGS(), UPRIGHT(), GLOCK()], mel, ch)
 
 def eine_kleine():
     # G/D arpeggio texture (the piece is broken chords) -> derived, always consonant
@@ -314,7 +313,7 @@ def eine_kleine():
         hold(out, 2, [n(r,3)], t, 4.0, 72); hold(out, 1, chord(r,q,4), t, 4.0, 44)
         arp(out, 0, chord(r,q,5), t, 8, 0.5, dur=0.42, vel=82, updown=True)
         arp(out, 3, chord(r,q,6), t, 4, 1.0, dur=0.8, vel=38)
-    return mk("Mozart · Eine kleine Nachtmusik", 132, 8, CHORUS, [SAWLEAD(), STRINGS(), UPRIGHT(), HARP()], out)
+    return mk("Mozart · Eine kleine Nachtmusik", 132, 8, [SAWLEAD(), STRINGS(), UPRIGHT(), HARP()], out)
 
 # the public-domain rotation the classical "replace" pulls from (all verified consonant)
 CLASSICAL_PD = [bach_prelude, goldberg_aria, the_swan, vivaldi_winter, ode_to_joy, canon_in_d,
@@ -334,7 +333,7 @@ def acid_drive():
         if bari % 2 == 1:
             hold(out, 2, chord(r,"min",4), t, 0.5, 110); hold(out, 2, chord(r,"min",4), t+2, 0.5, 110)
         arp(out, 3, chord(r,"min",5), t, 16, 0.25, dur=0.12, vel=70)
-    prog_song("Acid Drive", "Techno", 130, ECHO, [SUB(), ACID(), STAB(), HAT()], prog, build)
+    prog_song("Acid Drive", "Techno", 130, [SUB(), ACID(), STAB(), HAT()], prog, build)
 
 def warehouse():
     prog = [("F","min"),("F","min"),("Db","maj"),("Eb","maj")]
@@ -343,9 +342,9 @@ def warehouse():
         for b in range(4): hold(out, 1, chord(r,q,4), t+b+0.5, 0.35, 100)
         for i, iv in enumerate([0,3,7,10,7,3,0,3]): out.append([round(t+i*0.5,4), 0.4, 2, n(r,4)+iv, 96])
         arp(out, 3, chord(r,q,5), t, 16, 0.25, dur=0.14, vel=64, updown=True)
-    prog_song("Warehouse", "Techno", 126, ECHO, [SUB(), STAB(), RINGLEAD(), CLANG()], prog, build)
+    prog_song("Warehouse", "Techno", 126, [SUB(), STAB(), RINGLEAD(), CLANG()], prog, build)
 
-def _techno(name, bpm, prog, key_oct, bassmode, leadseq, arp_oct, parts, fx=ECHO, stab_every=2):
+def _techno(name, bpm, prog, key_oct, bassmode, leadseq, arp_oct, parts, stab_every=2):
     def build(out, bari, r, q, t):
         bass_root(out, 0, r, key_oct, t, bassmode, vel=116)
         if bari % stab_every == (stab_every-1):
@@ -354,7 +353,7 @@ def _techno(name, bpm, prog, key_oct, bassmode, leadseq, arp_oct, parts, fx=ECHO
         for i, iv in enumerate(leadseq):
             out.append([round(t+i*(4.0/len(leadseq)),4), (4.0/len(leadseq))*0.8, 1, base+iv, 96 if i%2==0 else 78])
         arp(out, 3, chord(r,q,arp_oct), t, 16, 0.25, dur=0.13, vel=62, updown=(bari%2==0))
-    prog_song(name, "Techno", bpm, fx, parts, prog, build)
+    prog_song(name, "Techno", bpm, parts, prog, build)
 
 def techno_extra():
     _techno("Detroit", 128, [("A","min7"),("A","min7"),("D","min7"),("E","min7")], 2, "8th",
@@ -362,13 +361,13 @@ def techno_extra():
     _techno("Hardwire", 134, [("E","min"),("E","min"),("G","min"),("D","min")], 2, "16",
             [0,0,12,0,10,0,7,0,3,0,12,0,7,3,0,7], 5, [SUB(), ACID(), HOOVER(), HAT()], stab_every=1)
     _techno("Dub Chamber", 120, [("C","min9"),("C","min9"),("Ab","maj7"),("G","min7")], 2, "4",
-            [0,3,7,3], 5, [SUB(), EP(), STRINGS(), BELL()], fx=BOTH, stab_every=1)
+            [0,3,7,3], 5, [SUB(), EP(), STRINGS(), BELL()], stab_every=1)
     _techno("Rave Signal", 132, [("A","min"),("F","maj"),("G","maj"),("A","min")], 3, "off",
             [0,12,7,12,3,12,7,12], 5, [SUB(), HOOVER(), STAB(), CLANG()])
     _techno("Minimal Pulse", 124, [("D","min"),("D","min"),("D","min"),("A","min")], 2, "8th",
             [0,0,10,0,7,0,0,0], 5, [SUB(), ACID(), ORGAN(), GLOCK()], stab_every=4)
     _techno("Uplift", 128, [("A","min"),("C","maj"),("G","maj"),("F","maj")], 3, "8th",
-            [0,4,7,12,7,4,7,12], 5, [SUB(), PLUCK(), STAB(), BELL()], fx=BOTH)
+            [0,4,7,12,7,4,7,12], 5, [SUB(), PLUCK(), STAB(), BELL()])
 
 
 # ==================== POP (8) ====================
@@ -380,7 +379,7 @@ def synthwave():
         tt = t
         for nm, ov, d in mels[bari]: out.append([round(tt,4), d*0.95, 2, n(nm,ov), 92]); tt += d
         arp(out, 3, chord(r,q,5), t, 8, 0.5, dur=0.4, vel=58, updown=True)
-    prog_song("Neon Drive", "Pop", 118, CHORUS, [REESE(), STRINGS(), SAWLEAD(), BELL()], prog, build)
+    prog_song("Neon Drive", "Pop", 118, [REESE(), STRINGS(), SAWLEAD(), BELL()], prog, build)
 
 def future_pop():
     prog = [("C","maj7"),("A","min7"),("F","maj7"),("G","dom7")]
@@ -391,28 +390,28 @@ def future_pop():
         lead = [("G",5,1.5),("E",5,0.5),("F",5,1),("G",5,1)]; tt = t
         for nm, ov, d in lead: out.append([round(tt,4), d*0.9, 2, n(nm,ov), 90]); tt += d
         arp(out, 3, chord(r,q,5), t, 16, 0.25, dur=0.16, vel=54)
-    prog_song("Future Pop", "Pop", 100, BOTH, [FMBASS(), PLUCK(), SAWLEAD(), GLOCK()], prog, build)
+    prog_song("Future Pop", "Pop", 100, [FMBASS(), PLUCK(), SAWLEAD(), GLOCK()], prog, build)
 
-def _pop(name, bpm, prog, fx, bassmode, lead, parts, arp_oct=5, chord_oct=4, arpv=54):
+def _pop(name, bpm, prog, bassmode, lead, parts, arp_oct=5, chord_oct=4, arpv=54):
     def build(out, bari, r, q, t):
         bass_root(out, 0, r, 3, t, bassmode, vel=100); hold(out, 1, chord(r,q,chord_oct), t, 4.0, 64)
         tt = t
         for iv, d in lead[bari % len(lead)]: out.append([round(tt,4), d*0.9, 2, n(r,5)+iv, 92]); tt += d
         arp(out, 3, chord(r,q,arp_oct), t, 8, 0.5, dur=0.4, vel=arpv, updown=True)
-    prog_song(name, "Pop", bpm, fx, parts, prog, build)
+    prog_song(name, "Pop", bpm, parts, prog, build)
 
 def pop_extra():
-    _pop("Sunset Pop", 112, [("F","maj7"),("A","min7"),("Bb","maj7"),("C","dom7")], CHORUS, "8th",
+    _pop("Sunset Pop", 112, [("F","maj7"),("A","min7"),("Bb","maj7"),("C","dom7")], "8th",
          [[(0,2),(4,2)],[(-1,2),(2,2)],[(2,2),(5,2)],[(4,1),(2,1),(0,2)]], [PBASS(), EP(), FLUTE(), HARP()])
-    _pop("Dance Floor", 122, [("C","maj"),("G","maj"),("A","min"),("F","maj")], BOTH, "4",
+    _pop("Dance Floor", 122, [("C","maj"),("G","maj"),("A","min"),("F","maj")], "4",
          [[(7,1),(4,1),(0,2)],[(2,2),(-1,2)],[(0,1),(3,1),(7,2)],[(5,2),(2,2)]], [SUB(), STAB(), SQLEAD(), BELL()])
-    _pop("Heartlight (Ballad)", 76, [("C","maj"),("G","maj"),("A","min7"),("F","maj7")], BOTH, "hold",
+    _pop("Heartlight (Ballad)", 76, [("C","maj"),("G","maj"),("A","min7"),("F","maj7")], "hold",
          [[(4,4)],[(2,4)],[(0,2),(3,2)],[(0,4)]], [UPRIGHT(), WARMPAD(), EP(), GLOCK()], arpv=44)
-    _pop("City Pop", 104, [("D","maj7"),("C#","min7"),("B","min7"),("E","dom7")], CHORUS, "walk",
+    _pop("City Pop", 104, [("D","maj7"),("C#","min7"),("B","min7"),("E","dom7")], "walk",
          [[(0,1),(2,1),(4,2)],[(-1,2),(2,2)],[(-3,2),(0,2)],[(4,1),(2,1),(-1,2)]], [FMBASS(), EP(), FLUTE(), HARP()])
-    _pop("Bright Side (K-pop)", 120, [("Eb","maj"),("Bb","maj"),("C","min"),("Ab","maj")], BOTH, "8th",
+    _pop("Bright Side (K-pop)", 120, [("Eb","maj"),("Bb","maj"),("C","min"),("Ab","maj")], "8th",
          [[(7,1),(9,1),(12,2)],[(7,2),(4,2)],[(0,1),(3,1),(7,2)],[(4,2),(0,2)]], [SUB(), STAB(), SAWLEAD(), GLOCK()], arpv=58)
-    _pop("Midnight (Funk)", 108, [("E","min7"),("A","dom7"),("D","maj7"),("C#","min7")], CHORUS, "off",
+    _pop("Midnight (Funk)", 108, [("E","min7"),("A","dom7"),("D","maj7"),("C#","min7")], "off",
          [[(0,1),(3,1),(0,1),(7,1)],[(4,1),(0,1),(4,2)],[(2,1),(5,1),(2,2)],[(0,2),(3,2)]], [PBASS(), ORGAN(), SQLEAD(), GLOCK()])
 
 
@@ -422,7 +421,7 @@ def _ambient(name, bpm, prog, parts, bell_oct=5, spark_oct=6, drone_oct=2):
         hold(out, 0, chord(r,q,3), t, 4.0, 58); hold(out, 2, [n(r,drone_oct)], t, 4.0, 72)
         for i, iv in enumerate(CH[q]): out.append([round(t+i*1.0,4), 2.5, 1, n(r,bell_oct)+iv, 50])
         arp(out, 3, chord(r,q,spark_oct), t, 8, 0.5, dur=0.6, vel=38, updown=True)
-    prog_song(name, "Ambient", bpm, BOTH, parts, prog, build)
+    prog_song(name, "Ambient", bpm, parts, prog, build)
 
 def ambient_all():
     _ambient("Aurora", 72, [("D","maj9"),("A","add9"),("B","min9"),("G","maj7")], [APAD(), ABELL(), ADRONE(), ASPARK()])
@@ -441,7 +440,7 @@ def ambient_all():
             out.append([round(t,4), 2.0, 1, motif[(bari*2)%len(motif)], 56])
             out.append([round(t+2,4), 2.0, 1, motif[(bari*2+1)%len(motif)], 52])
             arp(out, 3, chord(r,q,6), t, 8, 0.5, dur=0.6, vel=36, updown=True)
-        song("Grieg · Morning Mood", "Ambient", 68, 4, BOTH, [APADW(), FLUTE(), ADRONE(), HARP()], out)
+        song("Grieg · Morning Mood", "Ambient", 68, 4, [APADW(), FLUTE(), ADRONE(), HARP()], out)
     dawn()
 
 
@@ -471,11 +470,11 @@ def _render(prog, build):
 # ---- midigen (theory-aware) composer for non-classical: real melody + voice-led extended harmony ----
 MG_KEYS = {"major": ["C","G","D","F","A","Bb","Eb"], "minor": ["A","E","D","C","F","G","B"]}
 MG_CFG = {
- "Pop":     {"mode":"major", "fx":CHORUS, "bpm":[100,108,112,118,122],
+ "Pop":     {"mode":"major", "bpm":[100,108,112,118,122],
    "progs":[["ii7","V7","Imaj7","vi7"],["Imaj7","vi7","IV","V7"],["vi7","IV","Imaj7","V7"],["Imaj7","IV","ii7","V7"]]},
- "Techno":  {"mode":"minor", "fx":ECHO, "bpm":[124,126,128,130,132],
+ "Techno":  {"mode":"minor", "bpm":[124,126,128,130,132],
    "progs":[["i","VI","VII","i"],["i7","iv7","VII","V7"],["i","VII","VI","VII"],["i","iv7","V7","i"]]},
- "Ambient": {"mode":"major", "fx":BOTH, "bpm":[60,66,70,74],
+ "Ambient": {"mode":"major", "bpm":[60,66,70,74],
    "progs":[["Imaj7","IV","vi7","ii7"],["Imaj7","V7","vi7","IV"],["ii7","V7","Imaj7","IV"],["vi7","IV","Imaj7","V7"]]},
 }
 MG_PATCH = {
@@ -533,7 +532,7 @@ def _mg_song(genre, seed):
     parts = [rng.choice(MG_PATCH[genre]["bass"])(), rng.choice(MG_PATCH[genre]["chords"])(),
              rng.choice(MG_PATCH[genre]["lead"])(), rng.choice(MG_PATCH[genre]["arp"])()]
     return {"name": rng.choice(_ADJ) + " " + rng.choice(_NOUN), "genre": genre, "bpm": rng.choice(cfg["bpm"]),
-            "bars": bars, "fx": cfg["fx"], "parts": parts, "notes": out}
+            "bars": bars, "parts": parts, "notes": out}
 
 def make_random(genre, seed=0):
     """Classical -> public-domain rotation; others -> midigen theory composer."""
@@ -545,9 +544,9 @@ def make_random(genre, seed=0):
 
 
 # --- per-genre effect amounts (raw CC values) so each demo shows off the effects -------------
-# The fx MODE (CC83) is already per-song; these are the AMOUNTS: reverb wet (93), room size (91),
-# chorus depth (94), delay depth (95), delay time (82). Attached to every song by genre so the
-# demo player restores the full effect state, not just the mode.
+# reverb wet (93), room size (91), chorus depth (94), delay depth (95), delay time (82).
+# Attached to every song by genre so the demo player restores the full effect state.
+# (There is no mode byte: the old CC83 dry/chorus/delay/both select is gone — see synthspec.py.)
 FX_BY_GENRE = {
     "Classical": {"reverb": 88,  "room": s(1), "chorusd": 0,  "echod": 0,   "dtime": 63},  # hall tail
     "Pop":       {"reverb": 52,  "room": s(0), "chorusd": 85, "echod": 0,   "dtime": 63},  # chorus + a little room
@@ -563,7 +562,7 @@ def add_effects(sg):
 
 # what the web UI's 💾 TONES button owns: the sound, not the score. Re-running the generator
 # keeps these as they are in demos.json and refreshes everything else.
-TONE_KEYS = ("parts", "fx", "reverb", "room", "chorusd", "echod", "dtime")
+TONE_KEYS = ("parts", "reverb", "room", "chorusd", "echod", "dtime")
 def keep_tones(songs, path):
     """Carry hand-tuned tones over from the existing demos.json, matched by song name."""
     if not os.path.exists(path): return songs
@@ -584,6 +583,9 @@ if __name__ == "__main__":
     for _sg in songs: add_effects(_sg)                       # attach per-genre effect amounts
     out_path = os.path.join(os.path.dirname(__file__), "..", "webui", "static", "demos.json")
     keep_tones(songs, out_path)
+    for _sg in songs:                                        # round(t,4) yields floats; the UI's
+        for _nt in _sg["notes"]:                             # own save writes 6, not 6.0 — match it
+            _nt[0], _nt[1] = (int(x) if float(x).is_integer() else x for x in _nt[:2])
     with open(out_path, "w") as f:
         json.dump({"songs": songs}, f, indent=1)
     by = {}
