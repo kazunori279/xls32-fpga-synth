@@ -26,6 +26,23 @@ milestone: **[English](https://htmlpreview.github.io/?https://gist.githubusercon
 · **[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)**.
 Sources live in [`docs/slides/`](docs/slides/) — self-contained HTML, no build step.*
 
+### Hear it
+
+Two of the built-in 4-part demo songs, played by the board and recorded off its own audio output
+over USB — no room mic, no software instruments, every note is the FPGA's logic. The picture is a
+scrolling spectrogram of that same signal.
+
+**Bach · Prelude in C** — 4 parts, 1:51 ([download](docs/assets/bach-prelude.mp4))
+
+<video src="https://github.com/kazunori279/xls32-fpga-synth/raw/main/docs/assets/bach-prelude.mp4" controls width="100%"></video>
+
+**Saint-Saëns · Le Cygne** — 4 parts, 2:18 ([download](docs/assets/le-cygne.mp4))
+
+<video src="https://github.com/kazunori279/xls32-fpga-synth/raw/main/docs/assets/le-cygne.mp4" controls width="100%"></video>
+
+*(Both live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo player with
+`/api/capture` and rendered with [`scripts/make_mp4.sh`](scripts/make_mp4.sh).)*
+
 ## At a glance
 
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
@@ -505,6 +522,9 @@ afplay capture.wav                         # play on the Mac (or open the .wav)
 ```bash
 scripts/spectro.sh capture.wav            # capture.wav -> spectrogram PNG
 scripts/make_mp4.sh demo.wav              # demo.wav -> MP4 with a scrolling spectrogram
+SPAN=10 CRF=24 scripts/make_mp4.sh x.wav  # SPAN = seconds the window shows at once, i.e. the
+                                          # scroll speed (default: the clip, capped at 30 s);
+                                          # CRF = video quality/size (lower = bigger)
 ```
 
 ### Run the e2e test suite

@@ -26,8 +26,10 @@ media/
 test/out/
 *.wav
 *.mp4
-# ...except the milestone clips embedded in the slide deck (kept so it stays self-contained).
+# ...except the milestone clips embedded in the slide deck (kept so it stays self-contained)
+# and the two demo songs embedded in the README.
 !docs/slides/assets/videos/*.mp4
+!docs/assets/*.mp4
 
 # --- local secrets / certs / large corpora (never commit) ---
 webui/certs/
