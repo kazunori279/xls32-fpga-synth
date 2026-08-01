@@ -9,6 +9,12 @@
 #                   plays against a mostly-black frame. Deriving the hop from SPAN keeps
 #                   the picture full whatever the clip length.
 #       CRF=<n>     x264 quality (default 30 — lower is better and bigger).
+#       FPSMAX=<n>  cap the output frame rate (default 20).
+#       ABR=<rate>  AAC bitrate (default 192k).
+# GitHub's blob view only plays an MP4 under ~5 MB (bigger ones get "we can't show files
+# that are this big"), and the raw URL is served as application/octet-stream, so it
+# downloads rather than plays. The two README clips are made with
+#   CRF=33 FPSMAX=12 ABR=128k scripts/make_mp4.sh in docs/assets/out.mp4
 set -euo pipefail
 IN="${1:?usage: make_mp4.sh in.wav [out.mp4]}"
 OUT="${2:-${IN%.*}.mp4}"
@@ -20,7 +26,8 @@ SPAN="${SPAN:-$(awk -v d="$DUR" 'BEGIN{s=(d<30)?d:30; print (s<1)?1:s}')}"
 # hop = samples per pixel column; overlap is what showspectrum actually takes.
 HOP=$(awk -v r=$RATE -v s="$SPAN" -v w=$W 'BEGIN{h=int(r*s/w); print (h<8)?8:h}')
 OVERLAP=$(awk -v h="$HOP" -v n=$WIN 'BEGIN{printf "%.4f", 1-h/n}')
-FPS=$(awk -v r=$RATE -v h="$HOP" 'BEGIN{f=r/h; printf "%d", (f>20)?20:((f<1)?1:f)}')
+FPSMAX="${FPSMAX:-20}"
+FPS=$(awk -v r=$RATE -v h="$HOP" -v m="$FPSMAX" 'BEGIN{f=r/h; printf "%d", (f>m)?m:((f<1)?1:f)}')
 CRF="${CRF:-30}"                           # the spectrogram is decoration next to the audio:
                                            # a high CRF keeps a 2-minute song a few MB, not 16
 
@@ -31,5 +38,5 @@ ffmpeg -y -i "$IN" -filter_complex \
 [s]aresample=${RATE},showspectrum=s=${W}x${H}:mode=combined:slide=scroll:color=intensity:scale=cbrt:fscale=log:legend=1:overlap=${OVERLAP},fps=${FPS}[v];\
 [m]aresample=44100[a]" \
 -map "[v]" -map "[a]" -c:v libx264 -preset slow -crf "$CRF" -pix_fmt yuv420p \
--c:a aac -b:a 192k -shortest "$OUT"
+-c:a aac -b:a "${ABR:-192k}" -shortest "$OUT"
 echo "wrote $OUT (${SPAN}s window, ${FPS} fps, crf ${CRF})"
