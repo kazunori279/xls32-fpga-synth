@@ -32,13 +32,13 @@ Two of the built-in 4-part demo songs, played by the board and recorded off its 
 over USB — no room mic, no software instruments, every note is the FPGA's logic. The picture is a
 scrolling spectrogram of that same signal.
 
-**Bach · Prelude in C** — 4 parts, 1:51 ([download](docs/assets/bach-prelude.mp4))
+[![Bach · Prelude in C, played by the FPGA — click to play](docs/assets/bach-prelude-poster.jpg)](docs/assets/bach-prelude.mp4)
 
-<video src="https://github.com/kazunori279/xls32-fpga-synth/raw/main/docs/assets/bach-prelude.mp4" controls width="100%"></video>
+*▶️ **[Bach · Prelude in C](docs/assets/bach-prelude.mp4)** — 4 parts, 1:51 (click to play on GitHub).*
 
-**Saint-Saëns · Le Cygne** — 4 parts, 2:18 ([download](docs/assets/le-cygne.mp4))
+[![Saint-Saëns · Le Cygne, played by the FPGA — click to play](docs/assets/le-cygne-poster.jpg)](docs/assets/le-cygne.mp4)
 
-<video src="https://github.com/kazunori279/xls32-fpga-synth/raw/main/docs/assets/le-cygne.mp4" controls width="100%"></video>
+*▶️ **[Saint-Saëns · Le Cygne](docs/assets/le-cygne.mp4)** — 4 parts, 2:18 (click to play on GitHub).*
 
 *(Both live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo player with
 `/api/capture` and rendered with [`scripts/make_mp4.sh`](scripts/make_mp4.sh).)*
