@@ -105,17 +105,20 @@ body{
 .partbar{display:flex;align-items:center;gap:12px;padding:10px 14px;flex:1 1 auto;
   background:linear-gradient(#2b2721,#1c1915);border-radius:6px}   /* to the right of the patch panel */
 .parts{display:flex;gap:6px}
-/* each part = one chip. click = edit + play, double-click = disable. led shows play state. */
+/* each part = one chip. click = play it alone (+ edit it), shift-click = layer it. led = demo mute.
+   full amber = the primary part (knobs edit it); half amber = also in the layer, keys play it too. */
 .partchip{display:inline-flex;align-items:center;gap:7px;height:36px;box-sizing:border-box;
   padding:0 13px 0 9px;border-radius:5px;border:1px solid #000;cursor:pointer;font:inherit;
   background:linear-gradient(#4a453c,#2a2620)}
 .partchip.editing{background:linear-gradient(#e8b24a,#c98a1f)}
+.partchip.layered{background:linear-gradient(#8d6b2b,#5c4415)}
 .partled{width:12px;height:12px;border-radius:50%;border:1px solid #000;cursor:pointer;position:relative;
   background:radial-gradient(circle at 40% 35%,#3a352d,#141210);box-shadow:inset 0 0 2px #000}
 .partled::after{content:'';position:absolute;inset:-9px -7px}   /* mute hit area, not the 12px dot (touch) */
 .partled.on{background:radial-gradient(circle at 40% 35%,#7fe6a0,#1c9b52);box-shadow:0 0 6px rgba(70,220,130,.8),inset 0 0 2px #063}
 .partname{font-size:10px;letter-spacing:1px;font-weight:700;color:#c9bda3;white-space:nowrap}
 .partchip.editing .partname{color:#241109}
+.partchip.layered .partname{color:#f2e0b8}
 .bsearch{flex:1;min-width:0;padding:7px 10px;border-radius:4px;border:1px solid #000;
   font-family:inherit;font-size:12px;background:#f5efe1;color:#241f18}
 .bclose{width:30px;height:30px;border-radius:4px;cursor:pointer;font-size:14px;font-weight:700;

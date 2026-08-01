@@ -342,6 +342,34 @@ songs (sequenced on the server for steady timing). The server holds the serial p
 stop it before running the `host/` tools above. See the
 [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) section for the architecture.
 
+**Playing it — the computer keyboard.** Your laptop's keys are a piano, one octave plus a fourth:
+
+```
+black keys      W   E       T   Y   U       O   P
+                C#  D#      F#  G#  A#      C#  D#
+
+white keys    A   S   D   F   G   H   J   K   L
+              C   D   E   F   G   A   B   C   D
+```
+
+`Z` / `X` shift down / up an octave (the label at the bottom right shows which). The keys are read
+by *physical position*, so they still play with a kana IME switched on or on a non-QWERTY layout.
+
+**Playing it — the 4 PARTS.** The synth is multitimbral: 4 independent parts on MIDI channels 0–3,
+each with its own patch. The PART chips at the top right carry two separate controls:
+
+- **Click a part's name** — that part *alone* plays what you press, and the knobs edit it. This is
+  the normal case: what you hear is exactly the tone you're editing.
+- **⇧-click** (or ⌘/Ctrl-click) **another part's name** — adds it to the selection, so a key press
+  now **stacks the note across every selected part**. That's how you build a layer (piano + strings,
+  saw + sub). Selected parts show amber; the last one clicked is the *primary* — full amber, and the
+  one the knobs edit. ⇧-click a layered part again to drop it; a plain click collapses back to one.
+- **Click a part's LED** — mutes that part **in a demo song**. It has no effect on your own playing;
+  it's there so you can strip a song down to, say, just the bass line while you re-voice it.
+
+Loading a demo song fills all 4 parts with the song's patches and lights every LED (the song plays
+all 4); your keys start on Part 1, so you can play along on top.
+
 > **Demoing on one Mac** (board + browser on the same machine): `http://localhost:8765` is a
 > secure context, so audio works with **no certificate**. Just `uv run python webui/server.py`
 > and open the URL. To open the UI from **other devices** on the network, serve HTTPS (Web Audio

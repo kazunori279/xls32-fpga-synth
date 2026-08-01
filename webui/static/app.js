@@ -2,7 +2,7 @@
 // (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
 // an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
 
-const VERSION = 'v72-partmute';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v74-layer';  // bump on each front-end change; shown in the header + cache-busts the worklet
 const SR = 32000;
 let spec = null, ws = null, ctx = null, node = null, analyser = null;
 let powered = false, framesRecv = 0, resampleRatio = 1, audioEl = null;
@@ -10,8 +10,9 @@ let localPlay = false;            // LOCAL play: server plays audio + reads MIDI
 let masterVol = 64, mvolKnob = null, masterGainNode = null;   // header MASTER OUTPUT volume (final-mix gain)
 const ctlEl = {};                 // id -> {set(v), get()}
 const NPARTS = 4;                 // MULTITIMBRAL: 4 parts on MIDI channels 0-3
-let activeCh = 0;                 // the part the KNOBS edit (edit focus, single)
-let playSet = new Set([0]);       // the parts that PLAY incoming notes (layer set, any number)
+let activeCh = 0;                 // the PRIMARY selected part: the one the knobs edit
+let selSet = new Set([0]);        // every selected part = what live notes play (⇧-click a chip to layer)
+let playSet = new Set([0]);       // parts whose LED is lit = the parts a DEMO sounds (the mute set)
 let partValues = [];              // per-part control state; values -> partValues[activeCh]
 let values = {};                  // id -> current raw value (alias of partValues[activeCh])
 let partPreset = [];              // per-part {cat, name, index} of the last-loaded preset (for the name bar)
@@ -28,26 +29,27 @@ window.__stats = { ctx: 'off', frames: 0, rms: 0, notes: 0, connected: false };
 function sendMidi(bytes) {
   if (ws && ws.readyState === 1) ws.send(new Uint8Array(bytes));
 }
-function playChans() { return playSet.size ? [...playSet] : []; }   // parts that play the note (layer)
+function noteChans() { return selSet.size ? [...selSet] : [activeCh]; }   // LIVE notes -> the selected part(s)
 function noteOn(n, vel = 100) {
   if (n < 0 || n > 127) return;
-  const chans = playChans(); if (!chans.length) return;
-  for (const ch of chans) sendMidi([0x90 | ch, n, vel]);            // stack the note across the layer
+  const chans = noteChans(); if (!chans.length) return;
+  for (const ch of chans) sendMidi([0x90 | ch, n, vel]);            // stack it across the layer
   activeNotes.set(n, chans); highlightKey(n, true);
   window.__stats.notes = activeNotes.size;
 }
 function noteOff(n) {
-  const chans = activeNotes.get(n) || playChans();                 // off to the SAME parts it started on
+  const chans = activeNotes.get(n) || noteChans();                 // off to the SAME parts it started on
+  //                                                                  (the selection may have moved since)
   for (const ch of chans) sendMidi([0x80 | ch, n, 0]);
   activeNotes.delete(n); highlightKey(n, false);
   window.__stats.notes = activeNotes.size;
 }
 function sendCC(cc, val) { sendMidi([0xB0 | activeCh, cc & 0x7f, val & 0x7f]); }   // knob edits -> focused part
 function sendCCch(cc, val, ch) { sendMidi([0xB0 | ch, cc & 0x7f, val & 0x7f]); }   // to a specific part
-function sendPerfCC(cc, val) { for (const ch of playChans()) sendMidi([0xB0 | ch, cc & 0x7f, val & 0x7f]); }  // mod wheel etc -> layer
+function sendPerfCC(cc, val) { for (const ch of noteChans()) sendMidi([0xB0 | ch, cc & 0x7f, val & 0x7f]); }  // mod wheel etc
 function sendBend(norm) {
   const b = Math.max(0, Math.min(16383, 8192 + Math.round(norm * 8191)));
-  for (const ch of playChans()) sendMidi([0xE0 | ch, b & 0x7f, (b >> 7) & 0x7f]);   // bend the whole layer
+  for (const ch of noteChans()) sendMidi([0xE0 | ch, b & 0x7f, (b >> 7) & 0x7f]);   // bend follows the notes
 }
 
 // ---------- control state ----------
@@ -159,38 +161,58 @@ function equalizeSegs() {
   });
 }
 // ---------- parts (multitimbral) ----------
-// Two independent things: PLAY (which parts sound the incoming note — the layer, any number) and
-// EDIT FOCUS (which single part the knobs edit). Clicking a chip's name focuses it (and lights its
-// PLAY so edits are audible); clicking its LED toggles play/layer membership.
+// Two independent things: the SELECTION (which parts the keys play — clicking a chip's name) and
+// the DEMO MUTE set (which parts a playing song sounds — clicking a chip's LED).
+//
+// Layering is explicit: a plain click selects that part ALONE, so the keyboard always auditions
+// exactly the tone the knobs are editing. ⇧-click (or ⌘/Ctrl-click) adds a part to the selection
+// and the keys then stack the note across every selected part; ⇧-click a layered part again drops
+// it. The last part clicked is the PRIMARY one — full amber, and the one the knobs edit; the rest
+// of the layer sits at half amber. Selecting a part also lights its LED, so a part you pull into
+// the layer mid-song is audible.
 function refreshPartUI() {
   document.querySelectorAll('#parts .partchip').forEach((chip, ch) => {
     chip.classList.toggle('editing', ch === activeCh);
+    chip.classList.toggle('layered', selSet.has(ch) && ch !== activeCh);
     chip.querySelector('.partled').classList.toggle('on', playSet.has(ch));
   });
 }
-function postLocalChans() {
+function postLocalChans() {   // LOCAL play: the host-side MIDI keyboard targets the selected part too
   if (!localPlay) return;
   fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ on: true, chans: [...playSet] }) }).catch(() => {});
+    body: JSON.stringify({ on: true, chans: noteChans() }) }).catch(() => {});
 }
 function mutedChans() { const m = []; for (let ch = 0; ch < NPARTS; ch++) if (!playSet.has(ch)) m.push(ch); return m; }
 function postDemoMute() {   // DEMO notes are sequenced server-side, so the LED set has to go to the server too
   fetch('/api/demo_mute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mute: mutedChans() }) }).catch(() => {});
 }
-function setPlay(ch, on) {
+function setPlay(ch, on) {   // the LED = this part's demo mute
   if (on) playSet.add(ch);
   else {
     playSet.delete(ch);
     for (const [n, chans] of activeNotes) if (chans.includes(ch)) sendMidi([0x80 | ch, n, 0]);  // release held on this part
   }
-  refreshPartUI(); postLocalChans(); postDemoMute();
+  refreshPartUI(); postDemoMute();
 }
-function setPart(ch) {                            // edit focus (+ ensure it's audible)
+function sameSet(a, b) { return a.size === b.size && [...a].every((v) => b.has(v)); }
+function setPart(ch, layer = false) {   // click = this part alone · ⇧-click = add it to / drop it from the layer
+  let next;
+  if (!layer) next = new Set([ch]);
+  else { next = new Set(selSet); if (next.has(ch) && next.size > 1) next.delete(ch); else next.add(ch); }
+  if (!sameSet(next, selSet))                     // the layer moved: release first, or notes strand on the
+    for (const n of Array.from(activeNotes.keys())) noteOff(n);   // parts that just left it
+  selSet = next;
+  focusPart(next.has(ch) ? ch : [...next][0]);    // knobs follow the clicked part (or what's left of the layer)
+}
+function focusPart(ch) {                          // the PRIMARY part: the one the knobs edit
   activeCh = ch;
   values = partValues[ch];                        // repoint; panel + knob sends now target this part
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);   // refresh knobs (no send)
-  if (!playSet.has(ch)) playSet.add(ch), postLocalChans(), postDemoMute();  // focusing a part lights its PLAY
+  let unmuted = false;                            // a part you selected is never left demo-muted
+  for (const c of selSet) if (!playSet.has(c)) { playSet.add(c); unmuted = true; }
+  if (unmuted) postDemoMute();
+  postLocalChans();                                        // host MIDI-in follows the selection
   refreshPartUI();
   const pp = partPreset[ch];                       // restore this part's patch name + browse position
   if (pp) { setBar(pp.cat, pp.name); curIndex = pp.index; }
@@ -203,12 +225,12 @@ function buildParts() {
   box.innerHTML = '';
   for (let ch = 0; ch < NPARTS; ch++) {
     const chip = document.createElement('button'); chip.className = 'partchip';
-    chip.title = 'click the name = edit this part · click the LED = mute/unmute it (demo + keyboard)';
+    chip.title = 'click the name = play this part alone (and edit it) · ⇧-click = layer it with the others · click the LED = mute it in a demo';
     const led = document.createElement('span'); led.className = 'partled';
-    led.title = 'green = this part sounds · click to mute/unmute';
+    led.title = 'green = a demo sounds this part · click to mute/unmute';
     const name = document.createElement('span'); name.className = 'partname'; name.textContent = 'Part ' + (ch + 1);
     chip.append(led, name);
-    chip.addEventListener('click', () => setPart(ch));         // edit focus + play
+    chip.addEventListener('click', (e) => setPart(ch, e.shiftKey || e.metaKey || e.ctrlKey));   // ⇧ = layer
     led.addEventListener('click', (e) => {                     // LED is the MUTE, and only the mute
       e.stopPropagation(); setPlay(ch, !playSet.has(ch));      // (don't let it bubble up and re-focus/re-enable)
     });
@@ -374,20 +396,34 @@ function highlightKey(note, on) {
 }
 
 // ---------- computer keyboard ----------
-const KMAP = { a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12, o: 13, l: 14, p: 15 };
-const held = new Map();           // key char -> the exact MIDI note sent (so a later octave shift
+// The laptop keys are a one-octave-plus piano: the home row A S D F G H J is C D E F G A B, the
+// row above it W E · T Y U the black keys in between, K O L P carrying on past the top C.
+// Keyed off `e.code` (the PHYSICAL key), not `e.key`, so it still plays with a kana IME switched
+// on or on a non-QWERTY layout — `e.key` is 'Process'/'ち' there and would never match.
+const KMAP = {
+  KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6,
+  KeyG: 7, KeyY: 8, KeyH: 9, KeyU: 10, KeyJ: 11,
+  KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15,
+};
+const OCT_DOWN = 'KeyZ', OCT_UP = 'KeyX';
+const held = new Map();           // e.code -> the exact MIDI note sent (so a later octave shift
 //                                   can't make keyup release the wrong note and strand the original)
+function typingInField(el) {      // the preset search box owns the letters while it has focus
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+}
 document.addEventListener('keydown', (e) => {
-  if (e.repeat || e.metaKey || e.ctrlKey) return;
-  const key = e.key.toLowerCase();
-  if (key === 'z') { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
-  if (key === 'x') { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }
-  if (key in KMAP && !held.has(key)) { const note = 12 * (baseOct + 1) + KMAP[key]; held.set(key, note); noteOn(note); e.preventDefault(); }
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (typingInField(e.target)) return;
+  const code = e.code;
+  if (code === OCT_DOWN) { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
+  if (code === OCT_UP) { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }
+  if (code in KMAP && !held.has(code)) { const note = 12 * (baseOct + 1) + KMAP[code]; held.set(code, note); noteOn(note); e.preventDefault(); }
 });
 document.addEventListener('keyup', (e) => {
-  const key = e.key.toLowerCase();
-  if (held.has(key)) { noteOff(held.get(key)); held.delete(key); }
+  const code = e.code;
+  if (held.has(code)) { noteOff(held.get(code)); held.delete(code); }
 });
+window.addEventListener('blur', () => { for (const n of held.values()) noteOff(n); held.clear(); });  // keyup lands elsewhere
 function octLabel() { document.getElementById('octlabel').textContent = 'oct ' + baseOct; }
 
 // ---------- panic / stuck-note & stuck-drag safety net ----------
@@ -432,8 +468,8 @@ async function initWebMidi() {
   try {
     const access = await navigator.requestMIDIAccess();
     access.inputs.forEach((inp) => inp.onmidimessage = (e) => {
-      const d = Array.from(e.data);                  // fan voice messages out to the whole play/layer set
-      if (d[0] >= 0x80 && d[0] < 0xf0) { const st = d[0] & 0xf0; for (const ch of playChans()) sendMidi([st | ch, ...d.slice(1)]); }
+      const d = Array.from(e.data);                  // re-address voice messages to the selected part
+      if (d[0] >= 0x80 && d[0] < 0xf0) { const st = d[0] & 0xf0; for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
       else sendMidi(d);
       const [st, d1] = e.data;                       // reflect notes on the on-screen keys
       if ((st & 0xf0) === 0x90 && e.data[2] > 0) highlightKey(d1, true);
@@ -586,7 +622,7 @@ async function playDemo(idx) {
   // load the song's 4 part patches + effects into the multitimbral editor so each PART can be tweaked live
   song.parts.forEach((p, ch) => { if (ch < NPARTS) partValues[ch] = { ...spec.defaults, ...p, ...fxState }; });
   playSet = new Set([0, 1, 2, 3]);   // a song sounds all 4 parts: light every LED, then click one to mute that part
-  activeCh = 0; values = partValues[0];
+  activeCh = 0; selSet = new Set([0]); values = partValues[0];   // the song plays all 4; your keys play part 1
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);           // reflect part 1 on the panel
   refreshPartUI();
   // build the setup MIDI from the CURRENT (customized) state: shared effects + each part's patch
@@ -669,7 +705,7 @@ async function setPlayMode(on) {
   const dbg = document.getElementById('dbg');
   try {
     const r = await fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ on, chans: [...playSet] }) }).then((x) => x.json());
+      body: JSON.stringify({ on, chans: noteChans() }) }).then((x) => x.json());
     localPlay = !!r.on;
     renderPlayMode();
     if (on && !localPlay) {                        // requested LOCAL but the server couldn't switch
@@ -683,7 +719,7 @@ async function setAudioOut(v) {
   const device = (v === '') ? null : parseInt(v, 10);   // '' = system default
   try {
     await fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ on: localPlay, chans: [...playSet], device }) });
+      body: JSON.stringify({ on: localPlay, chans: noteChans(), device }) });
   } catch (e) {}
 }
 async function initPlayMode() {
