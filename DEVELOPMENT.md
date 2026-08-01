@@ -311,10 +311,10 @@ engine** so every voice can later get its own filter (M6b) at full sample rate.
   mix accumulator + the MIDI parser. One voice is processed per engine cycle; a
   sample is emitted every 32 cycles. MIDI in / audio out are ready/valid **channels**
   the Verilog shell drives (`_midi_in`, `_audio_out`).
-- **Rotate-ring voice storage.** The old dynamic `voices[vidx]` read is a 32:1
-  ~3200-bit mux (~21 ns). Instead the ring is **rotated** so the current voice is
-  always at slot 0 → constant-index read/write, no dynamic mux. `apply_on`/
-  `apply_off` keep their constant-index (unrolled) scans.
+- **Rotate-ring voice storage.** The old dynamic `voices[vidx]` read is a 32:1 mux
+  over 189-bit voices — 6,048 input bits (~21 ns). Instead the ring is **rotated**
+  so the current voice is always at slot 0 → constant-index read/write, no
+  dynamic mux. `apply_on`/`apply_off` keep their constant-index (unrolled) scans.
 - **Hi-fi restored:** 16-bit / **32 kHz** again, pristine 256-point sine.
 
 Verified on the board: `play.py` reads **4/4 chord tones** over UART and the

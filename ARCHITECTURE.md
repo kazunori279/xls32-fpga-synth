@@ -288,9 +288,9 @@ and [C1 clocking](#c1-clocking).
 ## A2 Voice ring & allocation
 
 **What it does.** 32 voices live in a ring that is **rotated by one each cycle**, so the voice
-being processed is always at index 0. That turns a dynamic `voices[vidx]` access (a 32:1
-~3200-bit mux — the original ~21 ns timing wall) into a constant-index read/write. Note-on
-claims free voices; note-off releases by matching note **and** part.
+being processed is always at index 0. That turns a dynamic `voices[vidx]` access (a 32:1 mux
+over 189-bit voices — 6,048 input bits, the original ~21 ns timing wall) into a constant-index
+read/write. Note-on claims free voices; note-off releases by matching note **and** part.
 
 **How it's built.** The ring rotate ([`rtl/synth.x:291`](rtl/synth.x)):
 
