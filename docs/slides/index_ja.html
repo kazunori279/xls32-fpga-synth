@@ -1317,63 +1317,143 @@
   シンセはティックごとにオーディオサンプルを1つ吐き出します。</div>
 </section>
 
-<!-- ============ 19 · ENGINE ============ -->
+<!-- ============ 19 · VOICE PARAMS ============ -->
 <section class="slide">
-  <div class="h">1ボイスの設計 — 借りるパラメータ、抱えて回る状態</div>
-  <div class="hsub">共有パッチ4つ、回転する状態スロット32個、データパス1本。複製ではなく、ハードウェアを時間で使い回す設計。</div>
+  <div class="h">ボイスあたり28パラメータ — その実体はパートにある</div>
+  <div class="hsub">パッチはパート単位。28フィールドを4セット（MIDIチャンネルごとに1つ）持ち、ボイスは2ビットのポインタだけを持つ。</div>
   <div style="margin-top:16px;">
-    <svg viewBox="0 0 1152 498" width="100%" style="display:block;">
-  <defs><marker id="e0A" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="e0B" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="e0G" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker><marker id="e0N" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker></defs>
-
-  <!-- params: they live in parts[4] and are only ever read -->
-  <text x="576" y="12" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368" text-anchor="middle">parts[4] — 4つのパッチ（波形・カットオフ・レゾナンス・ADSR×2・LFO・ユニゾン）。実体は32個ではなく4個。</text>
-  <rect x="353" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="405" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 0</text><path d="M405 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="467" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="519" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 1</text><path d="M519 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="581" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="633" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 2</text><path d="M633 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="695" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="747" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 3</text><path d="M747 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
-  <path d="M486 72 L666 72 L606 96 L546 96 z" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-  <text x="576" y="89" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000" text-anchor="middle">4:1</text>
-  <path d="M700 84 L646 84" stroke="#f9ab00" stroke-width="1.4" stroke-dasharray="4 3" fill="none"
-        marker-end="url(#e0A)"/>
-  <text x="708" y="88" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000">cur.part</text>
-  <text x="470" y="88" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#b06000" text-anchor="end">パラメータは毎サイクル読み直す（ボイスには保持しない）</text>
-  <path d="M576 96 L576 112" stroke="#f9ab00" stroke-width="2.2" fill="none" marker-end="url(#e0A)"/>
-
-  <!-- the one shared datapath: every voice walks this same chain, one voice per cycle -->
-  <rect x="0" y="116" width="1030" height="232" rx="16" fill="#e8f0fe" stroke="#1a73e8"
-        stroke-width="2" stroke-dasharray="7 5"/>
-  <text x="16" y="144" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1a73e8">このチェーンの物理的な実体は1本 — 1サンプルあたり32回再利用</text>
-  <rect x="16" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="93" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">DDS OSC</text><text x="93" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">位相アキュムレータ</text><rect x="184" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="261" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">波形</text><text x="261" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">鋸 / 矩形 / 三角 / 正弦</text><path d="M171 196 L181 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="352" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="429" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">クロス変調</text><text x="429" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">FM・リング</text><path d="M339 196 L349 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="520" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="597" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">サブOSC</text><text x="597" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">−1 オクターブ</text><path d="M507 196 L517 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="688" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="765" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">SVF</text><text x="765" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">レゾナントフィルタ</text><path d="M675 196 L685 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="856" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="933" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">VCA</text><text x="933" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">音量</text><path d="M843 196 L853 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
-  <rect x="4" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="17" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ユニゾン</text><text x="17" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ボイススロット毎のデチューン</text><path d="M99 266 L93 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="204" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="217" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">LFO</text><text x="217" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ピッチ・PWM・カットオフ</text><path d="M299 266 L261 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="624" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="637" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text><text x="637" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">フィルタエンベロープ</text><path d="M719 266 L765 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="824" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="837" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text><text x="837" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">音量エンベロープ</text><path d="M919 266 L933 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
-  <text x="16" y="338" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#b06000">モジュレータ — こちらも実体は各1つ。選ばれたパートの値で動く</text>
-  <text x="1014" y="338" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368"
-        text-anchor="end">乗算はすべて意図的にビット幅を絞ってあり、それぞれがDSP48スライス1つに収まる</text>
-  <path d="M1014 196 L1043 196" stroke="#5f6368"
-        stroke-width="1.6" marker-end="url(#e0N)"/>
-  <rect x="1047" y="160" width="105" height="72" rx="9" fill="#d2e3fc"/>
-  <text x="1099" y="191" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#3c4043"
-        text-anchor="middle">ミキサ</text>
-  <text x="1099" y="212" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368"
-        text-anchor="middle">4パート → ステレオ</text>
-
-  <!-- state: read from slot 0, written back to slot 31 -->
-  <path d="M13 416 L13 354" stroke="#1a73e8" stroke-width="2.2"
-        fill="none" marker-end="url(#e0B)"/>
-  <path d="M1005 350 L1005 412" stroke="#188038" stroke-width="2.2"
-        fill="none" marker-end="url(#e0G)"/>
-  <text x="29" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#1a73e8">189 b 読み出し</text>
-  <text x="989" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#188038"
-        text-anchor="end">189 b 書き戻し</text>
-  <text x="200" y="376" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#3c4043">167 b は毎サイクル書き換え — phase・ph2・cinc・env/fenv＋stage・flo・fbnd</text>
-  <text x="200" y="398" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#5f6368">22 b はノートオン時にラッチして以降不変 — note・vel・uni・part</text>
-  <rect x="0" y="418" width="26" height="46" rx="5" fill="#1a73e8"/><rect x="32" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="64" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="96" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="128" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="160" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="192" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="224" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="256" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="288" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="320" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="352" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="384" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="416" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="448" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="480" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="512" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="544" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="576" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="608" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="640" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="672" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="704" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="736" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="768" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="800" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="832" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="864" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="896" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="928" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="960" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="992" y="418" width="26" height="46" rx="5" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
-  <text x="13" y="447" font-family="Roboto Mono, monospace" font-size="12.5" fill="#fff" text-anchor="middle">0</text>
-  <text x="1005" y="447" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038" text-anchor="middle">31</text>
-  <text x="0" y="486" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368">voices[32] — 状態。毎サイクル1つ左へ回転する（配線だけ、ロジックなし）</text>
-  <text x="1152" y="486" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368"
-        text-anchor="end">1ボイス／サイクル · 32サイクルで1サンプル</text>
-</svg>
+    <svg viewBox="0 0 1152 460" width="100%" style="display:block;">
+  <defs><marker id="pA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker></defs>
+  <text x="0" y="20" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">parts[4] — MIDIチャンネルごとに1つ</text>
+  <rect x="0" y="30" width="230" height="72" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
+  <text x="16" y="60" font-family="Roboto Mono, monospace" font-size="14.5" fill="#b06000">parts[0]</text>
+  <text x="16" y="82" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">MIDI ch 1 · 340 b</text>
+  <rect x="0" y="118" width="230" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="16" y="148" font-family="Roboto Mono, monospace" font-size="14.5" fill="#5f6368">parts[1]</text>
+  <text x="16" y="170" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">MIDI ch 2 · 340 b</text>
+  <rect x="0" y="206" width="230" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="16" y="236" font-family="Roboto Mono, monospace" font-size="14.5" fill="#5f6368">parts[2]</text>
+  <text x="16" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">MIDI ch 3 · 340 b</text>
+  <rect x="0" y="294" width="230" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="16" y="324" font-family="Roboto Mono, monospace" font-size="14.5" fill="#5f6368">parts[3]</text>
+  <text x="16" y="346" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">MIDI ch 4 · 340 b</text>
+  <text x="0" y="400" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#1a73e8" font-weight="700">ボイスが持つ唯一の手がかり:</text>
+  <text x="0" y="426" font-family="Roboto Mono, monospace" font-size="15.5" fill="#1a73e8">part: u2</text>
+  <text x="0" y="447" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">2ビット。ノートオン時にラッチ</text>
+  <path d="M230 66 L248 66" stroke="#f9ab00" stroke-width="1.6" fill="none" stroke-dasharray="5 4"/>
+  <path d="M248 30 L248 448" stroke="#f9ab00" stroke-width="1.6" fill="none" stroke-dasharray="5 4"/>
+  <path d="M248 95 L257 95" stroke="#f9ab00" stroke-width="1.6" fill="none" marker-end="url(#pA)"/>
+  <path d="M248 239 L257 239" stroke="#f9ab00" stroke-width="1.6" fill="none" marker-end="url(#pA)"/>
+  <path d="M248 383 L257 383" stroke="#f9ab00" stroke-width="1.6" fill="none" marker-end="url(#pA)"/>
+  <text x="260" y="20" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">1つの Part = 28フィールド・340ビット。すべてパッチデータ。</text>
+  <rect x="260" y="30" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="276" cy="54" r="4.5" fill="#f9ab00"/><text x="288" y="59" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">オシレータ</text><text x="536" y="58" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC70·75·73·78·80</text><text x="288" y="87" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">wave · pw · subsel · detsel</text><text x="288" y="106" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">unison</text><text x="288" y="128" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">波形・パルス幅・サブOSC、</text><text x="288" y="145" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">デチューン量とユニゾン数</text>
+  <rect x="560" y="30" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="576" cy="54" r="4.5" fill="#f9ab00"/><text x="588" y="59" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">フィルタ</text><text x="836" y="58" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC74·71·72·79</text><text x="588" y="87" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">cutoff · reso · fmode · fdepth</text><text x="588" y="118" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">SVFのカットオフとレゾナンス、</text><text x="588" y="135" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">LP/HP/BP/ノッチとエンベロープ量</text>
+  <rect x="860" y="30" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="876" cy="54" r="4.5" fill="#f9ab00"/><text x="888" y="59" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">クロス変調</text><text x="1136" y="58" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC85·86·87</text><text x="888" y="87" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">xmode · xdepth · xratio</text><text x="888" y="118" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">オフ / FM / リング変調、</text><text x="888" y="135" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">変調量と第2OSCの周波数比</text>
+  <rect x="260" y="174" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="276" cy="198" r="4.5" fill="#f9ab00"/><text x="288" y="203" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">音量ADSR</text><text x="536" y="202" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC20-23</text><text x="288" y="231" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">a_att · a_dec · a_sus · a_rel</text><text x="288" y="262" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">音量エンベロープ。各段8段階なので</text><text x="288" y="279" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">乗算器を使わずに済む</text>
+  <rect x="560" y="174" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="576" cy="198" r="4.5" fill="#f9ab00"/><text x="588" y="203" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">フィルタADSR</text><text x="836" y="202" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC24-27</text><text x="588" y="231" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">f_att · f_dec · f_sus · f_rel</text><text x="588" y="262" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">カットオフに繋がる2本目のADSR。</text><text x="588" y="279" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">プラック感はこれで決まる</text>
+  <rect x="860" y="174" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="876" cy="198" r="4.5" fill="#f9ab00"/><text x="888" y="203" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">LFO</text><text x="1136" y="202" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC76·77·1·92</text><text x="888" y="231" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">lfo_rate · lfo_depth · lfo_ph</text><text x="888" y="250" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">vibsel · trdep</text><text x="888" y="272" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">パートごとに1基。ピッチ・PWM・</text><text x="888" y="289" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">カットオフ・トレモロを揺らす</text>
+  <rect x="260" y="318" width="288" height="130" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><circle cx="276" cy="342" r="4.5" fill="#f9ab00"/><text x="288" y="347" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#b06000" font-weight="700">演奏系</text><text x="536" y="346" font-family="Roboto Mono, monospace" font-size="10.5" fill="#9aa0a6" text-anchor="end">CC7 · bend · CC5</text><text x="288" y="375" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043">vol · bend · portsel</text><text x="288" y="406" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">パート音量・ピッチベンド・</text><text x="288" y="423" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ポルタメントのグライド速度</text>
+  <rect x="560" y="318" width="588" height="130" rx="10" fill="#e8f0fe"/>
+  <text x="580" y="352" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#1a73e8" font-weight="700">ボイスはこれを一切保持しない。</text>
+  <text x="580" y="380" font-family="Roboto, Arial, sans-serif" font-size="13.2" fill="#3c4043">持つのは part: u2 — ノートオン時にラッチされる2ビットの</text>
+  <text x="580" y="400" font-family="Roboto, Arial, sans-serif" font-size="13.2" fill="#3c4043">ポインタだけ。エンジンは毎サイクル、選ばれたパートの</text>
+  <text x="580" y="420" font-family="Roboto, Arial, sans-serif" font-size="13.2" fill="#3c4043">パッチを読み直す。だから演奏中のCC変更は、そのパートで</text>
+  <text x="580" y="440" font-family="Roboto, Arial, sans-serif" font-size="13.2" fill="#3c4043">鳴っている全ボイスに次のサンプルから反映される。</text>
+  </svg>
   </div>
 </section>
 
-<!-- ============ 19a · VOICE RING ============ -->
+<!-- ============ 19a · ENGINE INPUTS ============ -->
+<section class="slide">
+  <div class="h">1本のデータパス — パラメータを選び、状態を通す</div>
+  <div class="hsub">毎サイクル、エンジンは1つのパートのパッチを選び、1ボイスの189ビットを受け取り、チェーンを通して状態を書き戻す。</div>
+  <div style="margin-top:16px;">
+    <svg viewBox="0 0 1152 496" width="100%" style="display:block;">
+  <defs><marker id="e0A" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="e0B" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="e0G" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker><marker id="e0N" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker></defs>
+  <text x="576" y="12" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368" text-anchor="middle">parts[4] — 前スライドのパッチ。4つのうち1つが、ボイスごと・サイクルごとに選ばれる。</text>
+  <rect x="353" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="405" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 0</text>
+  <path d="M405 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <rect x="467" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="519" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 1</text>
+  <path d="M519 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <rect x="581" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="633" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 2</text>
+  <path d="M633 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <rect x="695" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="747" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 3</text>
+  <path d="M747 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <path d="M486 72 L666 72 L606 96 L546 96 z" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+  <text x="576" y="89" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000" text-anchor="middle">4:1</text>
+  <path d="M700 84 L646 84" stroke="#f9ab00" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#e0A)"/>
+  <text x="708" y="88" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000">cur.part</text>
+  <text x="470" y="88" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#b06000" text-anchor="end">パラメータは毎サイクル読み直す（ボイスには保持しない）</text>
+  <path d="M576 96 L576 112" stroke="#f9ab00" stroke-width="2.2" fill="none" marker-end="url(#e0A)"/>
+  <rect x="0" y="116" width="1030" height="232" rx="16" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="16" y="144" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#1a73e8" font-weight="700">このチェーンの物理的な実体は1本 — すべてのボイスが同じ回路を通る</text>
+  <rect x="16" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="93" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">DDS OSC</text>
+  <text x="93" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">位相アキュムレータ</text>
+  <rect x="184" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="261" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">波形</text>
+  <text x="261" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">鋸 / 矩形 / 三角 / 正弦</text>
+  <path d="M171 196 L181 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="352" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="429" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">クロス変調</text>
+  <text x="429" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">FM・リング</text>
+  <path d="M339 196 L349 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="520" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="597" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">サブOSC</text>
+  <text x="597" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">−1 オクターブ</text>
+  <path d="M507 196 L517 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="688" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="765" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">SVF</text>
+  <text x="765" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">レゾナントフィルタ</text>
+  <path d="M675 196 L685 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="856" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+  <text x="933" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#3c4043" font-weight="700" text-anchor="middle">VCA</text>
+  <text x="933" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">音量</text>
+  <path d="M843 196 L853 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="4" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="17" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#b06000" font-weight="700">ユニゾン</text>
+  <text x="17" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ボイスごとのデチューン量</text>
+  <path d="M99 266 L93 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
+  <rect x="204" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="217" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#b06000" font-weight="700">LFO</text>
+  <text x="217" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ピッチ・PWM・カットオフ</text>
+  <path d="M299 266 L261 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
+  <rect x="624" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="637" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#b06000" font-weight="700">ADSR</text>
+  <text x="637" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">フィルタエンベロープ</text>
+  <path d="M719 266 L765 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
+  <rect x="824" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="837" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#b06000" font-weight="700">ADSR</text>
+  <text x="837" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">音量エンベロープ</text>
+  <path d="M919 266 L933 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
+  <text x="16" y="338" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#b06000" font-weight="700">モジュレータ — こちらも実体は各1つ。選ばれたパートの値で動く</text>
+  <text x="1014" y="338" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" text-anchor="end">乗算はすべて意図的にビット幅を絞ってあり、それぞれがDSP48スライス1つに収まる</text>
+  <path d="M1014 196 L1043 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="1047" y="160" width="105" height="72" rx="9" fill="#d2e3fc"/>
+  <text x="1099" y="191" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#3c4043" font-weight="700" text-anchor="middle">ミキサ</text>
+  <text x="1099" y="212" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="middle">4パート → ステレオ</text>
+  <path d="M13 396 L13 354" stroke="#1a73e8" stroke-width="2.2" fill="none" marker-end="url(#e0B)"/>
+  <path d="M1005 350 L1005 392" stroke="#188038" stroke-width="2.2" fill="none" marker-end="url(#e0G)"/>
+  <text x="29" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#1a73e8" font-weight="700">189 b 読み出し</text>
+  <text x="989" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#188038" font-weight="700" text-anchor="end">189 b 書き戻し</text>
+  <text x="505" y="376" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#3c4043" text-anchor="middle">1ボイス分の状態 — サイクルの先頭で読み、最後に書き戻す</text>
+  <rect x="0" y="400" width="888" height="56" rx="8" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1.6"/>
+  <text x="18" y="424" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#1a73e8" font-weight="700">167 b — 毎サイクル書き換え</text>
+  <text x="18" y="444" font-family="Roboto Mono, monospace" font-size="12" fill="#3c4043">phase · ph2 · cinc · env / fenv + stage · flo · fbnd</text>
+  <rect x="896" y="400" width="114" height="56" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
+  <text x="953" y="423" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#3c4043" font-weight="700" text-anchor="middle">22 b</text>
+  <text x="953" y="441" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="middle">そのまま通過</text>
+  <text x="0" y="484" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#5f6368">22 b はノートオン時にラッチして以降不変: note · vel · uni · part</text>
+  <text x="1152" y="484" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#1a73e8" font-weight="700" text-anchor="end">この189ビットがサイクル間どこに置かれるかは → 次のスライド</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 19b · VOICE RING ============ -->
 <section class="slide">
   <div class="h">なぜリングなのか — 32:1マルチプレクサの壁</div>
   <div class="hsub">配列の動的インデックスはタダではありません。チップ上で最も幅の広いマルチプレクサになってしまいます。</div>
