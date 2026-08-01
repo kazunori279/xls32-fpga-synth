@@ -104,6 +104,23 @@
   .imgcard img { max-width: 100%; max-height: 100%; border-radius: 8px; }
   .imgcap { text-align: center; font-size: 14px; color: #80868b; margin-top: 12px; }
 
+  /* milestone clips — each card is a real capture off the board (spectrogram + audio) */
+  .vgrid { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr);
+           column-gap: 24px; row-gap: 12px; }
+  .vgrid.c2 { grid-template-columns: repeat(2, 1fr); column-gap: 44px; margin-top: 34px; }
+  .vcard { background: #fff; border: 1px solid var(--hairline); border-radius: 14px;
+           padding: 9px 9px 10px; }
+  .vcard .vlbl { display: flex; justify-content: space-between; align-items: baseline;
+                 padding: 0 4px 6px; font-family: var(--mono); font-size: 15px;
+                 font-weight: 700; color: var(--blue-bright); }
+  .vcard .vlbl .dur { font-family: var(--font); font-weight: 400; font-size: 13px; color: #80868b; }
+  .vcard video { display: block; width: 100%; aspect-ratio: 2.62 / 1; object-fit: contain;
+                 background: #000; border-radius: 7px; }
+  .vgrid.c2 .vcard video { aspect-ratio: 16 / 9; }
+  .vcard .vcap { padding: 8px 4px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .vgrid.c2 .vcard .vcap { padding-top: 12px; font-size: 16.5px; line-height: 1.5; }
+  .vnote { margin-top: 26px; font-size: 17px; color: var(--ink-3); max-width: 1060px; }
+
   /* big ideas — label rows */
   .rows { margin-top: 52px; display: grid; grid-template-columns: 300px 1fr; row-gap: 40px; column-gap: 40px; max-width: 1120px; }
   .rows .lbl { color: var(--blue-bright); font-size: 24px; font-weight: 500; }
@@ -1131,7 +1148,84 @@
     <div class="ev up" style="left:87%;"><div class="pad"><b>Cross-osc FM</b>Ring / FM — inharmonic bells; the de-latch fix hardens the SVF.</div></div>
   </div></section>
 
-<!-- ============ 18 · SECTION 04 ============ -->
+<!-- ============ 18 · MILESTONE CLIPS ============ -->
+<section class="slide">
+  <div class="h">What each milestone actually sounded like</div>
+  <div class="hsub">Every clip is a capture off the Basys 3 — the picture is the spectrogram
+    of the audio you are hearing. Click a clip to play it.</div>
+  <div class="vgrid">
+
+    <div class="vcard">
+      <div class="vlbl">M1 · first sound<span class="dur">0:06</span></div>
+      <video src="assets/videos/m1-first-sound.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">One DDS sine plus a linear ADSR at 8-bit / 4 kHz. Thin — but it proved
+        the edit → build → flash → measure loop was closed.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M6b · per-voice filter<span class="dur">0:10</span></div>
+      <video src="assets/videos/m6b-filter.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">After the pipelined rewrite every voice gets its own resonant SVF —
+        hear the cutoff sweep open and the resonance start to sing.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M9 · noise + sub-osc<span class="dur">0:13</span></div>
+      <video src="assets/videos/m9-noise-subosc.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">Three cheap analog staples at once: LFSR noise, a multimode filter,
+        and a sub-oscillator an octave down.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M13 · chorus + delay<span class="dur">0:13</span></div>
+      <video src="assets/videos/m13-chorus-delay.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">First use of block RAM — a 16K×16 delay line drives interpolated
+        chorus taps and a ping-pong echo. Mono becomes wide.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M14 · reverb<span class="dur">0:11</span></div>
+      <video src="assets/videos/m14-reverb.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">A Schroeder / Freeverb tail in BRAM — feedback combs plus all-passes,
+        room through cathedral. Its multiplies forced the ÷4 clock.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">M15 · unison<span class="dur">0:13</span></div>
+      <video src="assets/videos/m15-unison.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">Voice-stacking — 2 / 3 / 4 detuned, phase-decorrelated voices per note.
+        A thick super-saw, paid for with max polyphony of 32 ÷ N.</div>
+    </div>
+
+  </div></section>
+
+<!-- ============ 19 · CAPSTONE CLIPS ============ -->
+<section class="slide">
+  <div class="h">…and what it sounds like once the machine grades it</div>
+  <div class="hsub">The same capture rig, pointed at the finished instrument.</div>
+  <div class="vgrid c2">
+
+    <div class="vcard">
+      <div class="vlbl">e2e test report<span class="dur">4:41</span></div>
+      <video src="assets/videos/e2e-test-report.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">The agent's own regression run as a captioned spectrogram: 52 tests
+        over USB — basic, integration, and strict stress — each re-flashed, re-recorded, and
+        scored PASS / WARN / FAIL against an FFT reference, with one overall grade on top.</div>
+    </div>
+
+    <div class="vcard">
+      <div class="vlbl">web UI · Bach Prelude<span class="dur">0:43</span></div>
+      <video src="assets/videos/webui-bach-demo.mp4" controls preload="metadata" playsinline></video>
+      <div class="vcap">Four-part multitimbral playback driven live from the browser panel —
+        Bach's Prelude in C, 32 voices shared across the parts, one Artix-7 doing all of it.</div>
+    </div>
+
+  </div>
+  <div class="vnote">Nineteen milestones, and not one of them was signed off by ear alone —
+  behind every clip in this section there is a number the agent had to beat.</div>
+</section>
+
+<!-- ============ 20 · SECTION 04 ============ -->
 <section class="slide divider">
   <div class="num">04</div>
   <div class="name">Architecture deep-dive</div>
@@ -1479,6 +1573,11 @@
 
   function show(i) {
     cur = Math.min(Math.max(i, 0), slides.length - 1);
+    // Leaving a slide must silence it — a milestone clip playing over the next slide is worse
+    // than no clip at all.
+    slides.forEach((s, j) => {
+      if (j !== cur) s.querySelectorAll('video').forEach(v => { if (!v.paused) v.pause(); });
+    });
     slides.forEach((s, j) => s.classList.toggle('active', j === cur));
     hud.textContent = (cur + 1) + ' / ' + slides.length;
     history.replaceState(null, '', '#' + (cur + 1));
@@ -1496,6 +1595,8 @@
   }
 
   addEventListener('keydown', e => {
+    // A focused video keeps its own keys (space = play/pause, arrows = seek).
+    if (e.target instanceof HTMLVideoElement && e.key !== 'Escape') return;
     if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
     else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
     else if (e.key === 'Home') show(0);
@@ -1503,7 +1604,8 @@
     else if (e.key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   });
   addEventListener('click', e => {
-    if (e.target.closest('a')) return;
+    // Links and the video cards own their clicks — don't page the deck out from under them.
+    if (e.target.closest('a, video, .vcard')) return;
     show(e.clientX > innerWidth / 2 ? cur + 1 : cur - 1);
   });
   addEventListener('resize', fit);
@@ -1511,7 +1613,10 @@
   if (window.visualViewport) visualViewport.addEventListener('resize', fit);
 
   let tx = null, ty = null;
-  addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchstart', e => {
+    if (e.target.closest('video, .vcard')) { tx = ty = null; return; }  // let the scrubber be dragged
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, { passive: true });
   addEventListener('touchend', e => {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
@@ -1523,6 +1628,12 @@
     const n = (parseInt(location.hash.slice(1), 10) || 1) - 1;
     if (n !== cur) show(n);
   });
+
+  // Only one milestone clip at a time — starting one stops whatever else was playing.
+  const clips = [...document.querySelectorAll('.vcard video')];
+  clips.forEach(v => v.addEventListener('play', () => {
+    clips.forEach(o => { if (o !== v && !o.paused) o.pause(); });
+  }));
 
   // YouTube embed: real iframe over http(s); from file:// YouTube blocks embeds
   // (error 153, missing referer), so fall back to a click-through thumbnail.
