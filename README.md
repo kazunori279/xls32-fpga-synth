@@ -257,7 +257,7 @@ The project is grouped into topical subdirectories:
 > ```
 >
 > Publish **after** pushing to `main`. A gist has no directories, so the decks' relative
-> `src="assets/…"` cannot resolve there; `publish_gist.py` rewrites those 22 paths to
+> `src="assets/…"` cannot resolve there; `publish_gist.py` rewrites those 21 paths to
 > `raw.githubusercontent.com/…/main/docs/slides/assets/…` in the published copy (the files in
 > the repo keep the relative paths). Those URLs read from `main`, so an asset that is only local
 > renders as a hole in the published deck — the script fails early if a referenced asset is
