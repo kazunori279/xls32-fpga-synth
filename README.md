@@ -21,6 +21,11 @@ multitimbral selector, preset browser, and demo player.*
 
 *▶️ **[Demo video](https://youtu.be/2ROr9M_ZlVY)** — the web UI driving the Basys 3 board live, with the synth's own audio (click to watch on YouTube).*
 
+*🎞️ **Slide deck** — a 50-minute session on how this was built, with playable audio clips from each
+milestone: **[English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html)**
+· **[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)**.
+Sources live in [`docs/slides/`](docs/slides/) — self-contained HTML, no build step.*
+
 ## At a glance
 
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
@@ -40,6 +45,9 @@ multitimbral selector, preset browser, and demo player.*
 A per-block implementation deep-dive (code, dataflow, and timing diagrams for every block) lives
 in **[ARCHITECTURE.md](ARCHITECTURE.md)**; the milestone-by-milestone build history (M1 → M19 +
 Web UI) and the toolchain friction logs & learnings live in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
+The 50-minute talk that covers all of the above lives in **[`docs/slides/`](docs/slides/)**
+([English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html) ·
+[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)).
 
 ---
 
