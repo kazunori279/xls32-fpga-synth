@@ -8,12 +8,28 @@ SR = 32000                    # 100 MHz / 3125 — real-time rate with the ÷3 D
 BAUD = 2000000               # 100 MHz / 50 (2 Mbaud: lets the board stream 32 kHz in real time)
 
 def find_port():
+    """The board's UART. With more than one board plugged in, set XLS32_PORT to a full
+    /dev path or to any substring of one (e.g. the board's FTDI serial) to pick — otherwise
+    which board you get is just whichever serial number happens to sort last."""
+    want = os.environ.get("XLS32_PORT", "")
+    if want.startswith("/dev/"):
+        return want
     for _ in range(10):
         p = sorted(glob.glob("/dev/cu.usbserial-*"))
+        if want:
+            p = [d for d in p if want in d]
         if p:
             return p[-1]                      # channel B (…1) = UART; …0 = JTAG
         time.sleep(0.5)
-    sys.exit("no /dev/cu.usbserial-* port found (board connected/flashed?)")
+    seen = sorted(glob.glob("/dev/cu.*"))
+    sys.exit(f"no {'matching ' if want else ''}/dev/cu.usbserial-* port found "
+             f"(board connected, powered on, and flashed?)"
+             + (f"\n  XLS32_PORT={want!r} matched none of: " if want else "\n  serial ports present: ")
+             + (", ".join(seen) or "(none)"))
+
+def list_ports():
+    """Every board UART currently enumerated — both channels of every FTDI on the bus."""
+    return sorted(glob.glob("/dev/cu.usbserial-*"))
 
 def open_port(rw=False, baud=BAUD):
     dev = find_port()

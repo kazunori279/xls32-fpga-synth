@@ -25,14 +25,10 @@ def read_stdin():
     return vals
 
 def read_serial(dev, secs):
-    import os, time, glob, termios
+    import os, termios
     if not dev:
-        for _ in range(10):
-            p = sorted(glob.glob("/dev/cu.usbserial-*"))
-            if p: dev = p[-1]; break
-            time.sleep(0.5)
-    if not dev:
-        sys.exit("no /dev/cu.usbserial-* port found")
+        from uartaudio import find_port          # honours XLS32_PORT when 2 boards are plugged in
+        dev = find_port()
     fd = os.open(dev, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
     a = termios.tcgetattr(fd)
     a[2] = termios.CS8 | termios.CLOCAL | termios.CREAD; a[0]=0; a[1]=0; a[3]=0
