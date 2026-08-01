@@ -112,6 +112,7 @@ class Bridge:
         self._capbuf = None                       # debug: capture resampled output to a WAV
         self._demo_stop = None                    # server-side demo sequencer (tight timing, no browser jitter)
         self._demo_thread = None
+        self._demo_mute = set()                   # parts with their UI LED off: drop their note-ons mid-song
         self._under = self._over = self._maxfill = 0
 
     def open(self):
@@ -330,8 +331,18 @@ class Bridge:
         return None
 
     # ---- server-side DEMO sequencer: browser-independent timing (no setInterval/WS jitter) ----
-    def start_demo(self, setup, events, loop_ms):
+    def set_demo_mute(self, mute):
+        """Parts whose LED the UI turned off. The browser gates its own keyboard notes with the
+        same set; this is the half the browser can't do, since the song plays from _demo_run."""
+        new = {int(c) & 0x0f for c in mute}
+        for ch in new - self._demo_mute:           # newly muted: kill whatever it is holding right now
+            for note in range(128):                # (the engine has no CC123 all-notes-off)
+                self.write_midi(bytes([0x80 | ch, note, 0]))
+        self._demo_mute = new
+
+    def start_demo(self, setup, events, loop_ms, mute=()):
         self.stop_demo()
+        self._demo_mute = {int(c) & 0x0f for c in mute}
         ev = threading.Event()
         self._demo_stop = ev
         self._demo_thread = threading.Thread(target=self._demo_run, args=(setup, events, loop_ms, ev), daemon=True)
@@ -362,7 +373,10 @@ class Bridge:
                     return
                 if stop.is_set():
                     return
-                self.write_midi(bytes(m))
+                b = bytes(m)
+                if (b[0] & 0xF0) == 0x90 and (b[0] & 0x0F) in self._demo_mute:
+                    continue                       # muted part: swallow the note-on (offs still go, so nothing hangs)
+                self.write_midi(b)
             rem = base + loop_s - time.monotonic()  # hold the bar length, then loop
             if rem > 0 and stop.wait(rem):
                 return
@@ -401,7 +415,8 @@ async def revalidate_assets(request, call_next):
     # change always reaches the browser — the old fixed ?v query in index.html could pin stale JS.
     resp = await call_next(request)
     p = request.url.path
-    if p == "/" or p.endswith((".html", ".js", ".css")):
+    # .json covers demos.json / presets_*.json, which the UI itself writes back to.
+    if p == "/" or p.endswith((".html", ".js", ".css", ".json")):
         resp.headers["Cache-Control"] = "no-cache"
     return resp
 
@@ -451,7 +466,16 @@ async def api_demo_play(req: Request):
     # server-side demo playback: the browser sends the (customized) setup CCs + timed note events;
     # the server sequences them with a monotonic clock -> steady timing regardless of the browser.
     d = await req.json()
-    bridge.start_demo(d.get("setup", []), d.get("events", []), float(d.get("loop_ms", 4000)))
+    bridge.start_demo(d.get("setup", []), d.get("events", []), float(d.get("loop_ms", 4000)),
+                      d.get("mute", []))
+    return {"ok": True}
+
+
+@app.post("/api/demo_mute")
+async def api_demo_mute(req: Request):
+    # live per-part mute for the running song: the UI's part LEDs, applied to the sequencer.
+    d = await req.json()
+    bridge.set_demo_mute(d.get("mute", []))
     return {"ok": True}
 
 

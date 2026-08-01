@@ -2,7 +2,7 @@
 // (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
 // an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
 
-const VERSION = 'v70-label';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v72-partmute';  // bump on each front-end change; shown in the header + cache-busts the worklet
 const SR = 32000;
 let spec = null, ws = null, ctx = null, node = null, analyser = null;
 let powered = false, framesRecv = 0, resampleRatio = 1, audioEl = null;
@@ -173,19 +173,24 @@ function postLocalChans() {
   fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ on: true, chans: [...playSet] }) }).catch(() => {});
 }
+function mutedChans() { const m = []; for (let ch = 0; ch < NPARTS; ch++) if (!playSet.has(ch)) m.push(ch); return m; }
+function postDemoMute() {   // DEMO notes are sequenced server-side, so the LED set has to go to the server too
+  fetch('/api/demo_mute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mute: mutedChans() }) }).catch(() => {});
+}
 function setPlay(ch, on) {
   if (on) playSet.add(ch);
   else {
     playSet.delete(ch);
     for (const [n, chans] of activeNotes) if (chans.includes(ch)) sendMidi([0x80 | ch, n, 0]);  // release held on this part
   }
-  refreshPartUI(); postLocalChans();
+  refreshPartUI(); postLocalChans(); postDemoMute();
 }
 function setPart(ch) {                            // edit focus (+ ensure it's audible)
   activeCh = ch;
   values = partValues[ch];                        // repoint; panel + knob sends now target this part
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);   // refresh knobs (no send)
-  if (!playSet.has(ch)) playSet.add(ch), postLocalChans();  // focusing a part lights its PLAY
+  if (!playSet.has(ch)) playSet.add(ch), postLocalChans(), postDemoMute();  // focusing a part lights its PLAY
   refreshPartUI();
   const pp = partPreset[ch];                       // restore this part's patch name + browse position
   if (pp) { setBar(pp.cat, pp.name); curIndex = pp.index; }
@@ -198,12 +203,15 @@ function buildParts() {
   box.innerHTML = '';
   for (let ch = 0; ch < NPARTS; ch++) {
     const chip = document.createElement('button'); chip.className = 'partchip';
-    chip.title = 'click = edit + play this part · double-click = disable';
+    chip.title = 'click the name = edit this part · click the LED = mute/unmute it (demo + keyboard)';
     const led = document.createElement('span'); led.className = 'partled';
+    led.title = 'green = this part sounds · click to mute/unmute';
     const name = document.createElement('span'); name.className = 'partname'; name.textContent = 'Part ' + (ch + 1);
     chip.append(led, name);
     chip.addEventListener('click', () => setPart(ch));         // edit focus + play
-    chip.addEventListener('dblclick', () => setPlay(ch, false));  // disable (mute + drop from layer)
+    led.addEventListener('click', (e) => {                     // LED is the MUTE, and only the mute
+      e.stopPropagation(); setPlay(ch, !playSet.has(ch));      // (don't let it bubble up and re-focus/re-enable)
+    });
     box.append(chip);
   }
   refreshPartUI();
@@ -577,6 +585,7 @@ async function playDemo(idx) {
   EFFECT_IDS.forEach((id) => { fxState[id] = (song[id] != null) ? song[id] : spec.defaults[id]; });
   // load the song's 4 part patches + effects into the multitimbral editor so each PART can be tweaked live
   song.parts.forEach((p, ch) => { if (ch < NPARTS) partValues[ch] = { ...spec.defaults, ...p, ...fxState }; });
+  playSet = new Set([0, 1, 2, 3]);   // a song sounds all 4 parts: light every LED, then click one to mute that part
   activeCh = 0; values = partValues[0];
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);           // reflect part 1 on the panel
   refreshPartUI();
@@ -595,7 +604,7 @@ async function playDemo(idx) {
   });
   events.sort((a, b) => a[0] - b[0]);
   fetch('/api/demo_play', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ setup, events, loop_ms: loopMs }) }).catch(() => {});
+    body: JSON.stringify({ setup, events, loop_ms: loopMs, mute: mutedChans() }) }).catch(() => {});
   document.querySelectorAll('#demolist .bitem').forEach((el, k) => el.classList.toggle('on', k === idx));
   setBar(song.genre, song.name);
   const b = document.getElementById('demo'); if (b) b.textContent = '■ DEMO';

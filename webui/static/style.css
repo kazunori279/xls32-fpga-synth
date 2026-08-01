@@ -110,8 +110,9 @@ body{
   padding:0 13px 0 9px;border-radius:5px;border:1px solid #000;cursor:pointer;font:inherit;
   background:linear-gradient(#4a453c,#2a2620)}
 .partchip.editing{background:linear-gradient(#e8b24a,#c98a1f)}
-.partled{width:12px;height:12px;border-radius:50%;border:1px solid #000;
+.partled{width:12px;height:12px;border-radius:50%;border:1px solid #000;cursor:pointer;position:relative;
   background:radial-gradient(circle at 40% 35%,#3a352d,#141210);box-shadow:inset 0 0 2px #000}
+.partled::after{content:'';position:absolute;inset:-9px -7px}   /* mute hit area, not the 12px dot (touch) */
 .partled.on{background:radial-gradient(circle at 40% 35%,#7fe6a0,#1c9b52);box-shadow:0 0 6px rgba(70,220,130,.8),inset 0 0 2px #063}
 .partname{font-size:10px;letter-spacing:1px;font-weight:700;color:#c9bda3;white-space:nowrap}
 .partchip.editing .partname{color:#241109}
