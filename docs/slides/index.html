@@ -1316,52 +1316,63 @@
 <!-- ============ 19 · ENGINE ============ -->
 <section class="slide">
   <div class="h">One voice: borrowed params, carried state</div>
-  <div class="hsub">Four shared patches, thirty-two rotating state slots, one datapath — and where every number a voice needs comes from.</div>
-  <div style="position:relative; margin-top:18px;">
-    <svg viewBox="0 0 1152 494" width="100%" style="display:block;">
-  <defs><marker id="e0A" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="e0B" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="e0G" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
+  <div class="hsub">Four shared patches, thirty-two rotating state slots, one datapath — iteration over shared hardware, not replication.</div>
+  <div style="margin-top:16px;">
+    <svg viewBox="0 0 1152 498" width="100%" style="display:block;">
+  <defs><marker id="e0A" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="e0B" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="e0G" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker><marker id="e0N" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker></defs>
 
   <!-- params: they live in parts[4] and are only ever read -->
-  <text x="576" y="18" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368" text-anchor="middle">parts[4] — the four patches: wave, cutoff, reso, ADSR ×2, LFO, unison. Four copies exist, not thirty-two.</text>
-  <rect x="353" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="405" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 0</text><path d="M405 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="467" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="519" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 1</text><path d="M519 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="581" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="633" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 2</text><path d="M633 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="695" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="747" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 3</text><path d="M747 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
-  <path d="M486 86 L666 86 L606 112 L546 112 z" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-  <text x="576" y="105" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000" text-anchor="middle">4:1</text>
-  <path d="M700 99 L646 99" stroke="#f9ab00" stroke-width="1.4" stroke-dasharray="4 3"
-        fill="none" marker-end="url(#e0A)"/>
-  <text x="708" y="103" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000">cur.part</text>
-  <path d="M576 112 L576 138" stroke="#f9ab00" stroke-width="2.2" fill="none" marker-end="url(#e0A)"/>
-  <text x="598" y="132" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#b06000">params are re-read every cycle — the voice never stores them</text>
+  <text x="576" y="12" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368" text-anchor="middle">parts[4] — the four patches: wave, cutoff, reso, ADSR ×2, LFO, unison. Four copies exist, not thirty-two.</text>
+  <rect x="353" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="405" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 0</text><path d="M405 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="467" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="519" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 1</text><path d="M519 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="581" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="633" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 2</text><path d="M633 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="695" y="24" width="104" height="32" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="747" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 3</text><path d="M747 56 L576 72" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <path d="M486 72 L666 72 L606 96 L546 96 z" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+  <text x="576" y="89" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000" text-anchor="middle">4:1</text>
+  <path d="M700 84 L646 84" stroke="#f9ab00" stroke-width="1.4" stroke-dasharray="4 3" fill="none"
+        marker-end="url(#e0A)"/>
+  <text x="708" y="88" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000">cur.part</text>
+  <text x="470" y="88" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#b06000" text-anchor="end">params are re-read every cycle — the voice never stores them</text>
+  <path d="M576 96 L576 112" stroke="#f9ab00" stroke-width="2.2" fill="none" marker-end="url(#e0A)"/>
 
-  <!-- the one shared datapath (the existing figure sits inside this card) -->
-  <rect x="64" y="142" width="1024" height="206" rx="12" fill="#fff" stroke="#dadce0"/>
-  <text x="84" y="164" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#5f6368">the per-voice chain — ONE physical copy, shared by all 32 voices</text>
+  <!-- the one shared datapath: every voice walks this same chain, one voice per cycle -->
+  <rect x="0" y="116" width="1030" height="232" rx="16" fill="#e8f0fe" stroke="#1a73e8"
+        stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="16" y="144" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1a73e8">ONE physical copy of this chain — reused 32× per sample</text>
+  <rect x="16" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="93" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">DDS osc</text><text x="93" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">phase accumulator</text><rect x="184" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="261" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">waveform</text><text x="261" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">saw / sq / tri / sine</text><path d="M171 196 L181 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="352" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="429" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">cross-mod</text><text x="429" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">FM · ring</text><path d="M339 196 L349 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="520" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="597" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">sub-osc</text><text x="597" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">−1 octave</text><path d="M507 196 L517 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="688" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="765" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">SVF</text><text x="765" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">resonant filter</text><path d="M675 196 L685 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/><rect x="856" y="160" width="155" height="72" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/><text x="933" y="191" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">VCA</text><text x="933" y="212" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">amplitude</text><path d="M843 196 L853 196" stroke="#5f6368" stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="4" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="17" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">unison</text><text x="17" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">detune per voice slot</text><path d="M99 266 L93 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="204" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="217" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">LFO</text><text x="217" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">pitch · PWM · cutoff · trem</text><path d="M299 266 L261 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="624" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="637" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text><text x="637" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">filter envelope</text><path d="M719 266 L765 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/><rect x="824" y="266" width="190" height="54" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="837" y="289" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text><text x="837" y="308" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">amplitude envelope</text><path d="M919 266 L933 237" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#e0A)"/>
+  <text x="16" y="338" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#b06000">modulators — also one copy each, driven by the selected part</text>
+  <text x="1014" y="338" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368"
+        text-anchor="end">every multiply is deliberately narrow — one DSP48 slice each</text>
+  <path d="M1014 196 L1043 196" stroke="#5f6368"
+        stroke-width="1.6" marker-end="url(#e0N)"/>
+  <rect x="1047" y="160" width="105" height="72" rx="9" fill="#d2e3fc"/>
+  <text x="1099" y="191" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#3c4043"
+        text-anchor="middle">mixer</text>
+  <text x="1099" y="212" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368"
+        text-anchor="middle">4 parts → stereo</text>
 
   <!-- state: read from slot 0, written back to slot 31 -->
-  <path d="M77 414 L77 354" stroke="#1a73e8" stroke-width="2.2"
+  <path d="M13 416 L13 354" stroke="#1a73e8" stroke-width="2.2"
         fill="none" marker-end="url(#e0B)"/>
-  <path d="M1069 350 L1069 410" stroke="#188038" stroke-width="2.2"
+  <path d="M1005 350 L1005 412" stroke="#188038" stroke-width="2.2"
         fill="none" marker-end="url(#e0G)"/>
-  <text x="93" y="382" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#1a73e8">189 b in</text>
-  <text x="1053" y="382" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#188038"
+  <text x="29" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#1a73e8">189 b in</text>
+  <text x="989" y="372" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#188038"
         text-anchor="end">189 b back</text>
-  <text x="262" y="372" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#3c4043">167 b rewritten every cycle — phase · ph2 · cinc · env/fenv + stage · flo · fbnd</text>
-  <text x="262" y="394" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#5f6368">22 b latched at note-on, then read-only — note · vel · uni · part</text>
-  <rect x="64" y="416" width="26" height="48" rx="5" fill="#1a73e8"/><rect x="96" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="128" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="160" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="192" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="224" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="256" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="288" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="320" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="352" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="384" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="416" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="448" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="480" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="512" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="544" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="576" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="608" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="640" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="672" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="704" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="736" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="768" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="800" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="832" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="864" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="896" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="928" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="960" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="992" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="1024" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="1056" y="416" width="26" height="48" rx="5" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
-  <text x="77" y="446" font-family="Roboto Mono, monospace" font-size="12.5" fill="#fff" text-anchor="middle">0</text>
-  <text x="1069" y="446" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038" text-anchor="middle">31</text>
-  <text x="64" y="482" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368">voices[32] — the state. Rotates one slot left every cycle: wires, no logic.</text>
-  <text x="1088" y="482" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368"
+  <text x="200" y="376" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#3c4043">167 b rewritten every cycle — phase · ph2 · cinc · env/fenv + stage · flo · fbnd</text>
+  <text x="200" y="398" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#5f6368">22 b latched at note-on, then read-only — note · vel · uni · part</text>
+  <rect x="0" y="418" width="26" height="46" rx="5" fill="#1a73e8"/><rect x="32" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="64" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="96" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="128" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="160" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="192" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="224" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="256" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="288" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="320" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="352" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="384" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="416" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="448" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="480" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="512" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="544" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="576" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="608" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="640" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="672" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="704" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="736" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="768" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="800" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="832" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="864" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="896" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="928" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="960" y="418" width="26" height="46" rx="5" fill="#e8f0fe"/><rect x="992" y="418" width="26" height="46" rx="5" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="13" y="447" font-family="Roboto Mono, monospace" font-size="12.5" fill="#fff" text-anchor="middle">0</text>
+  <text x="1005" y="447" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038" text-anchor="middle">31</text>
+  <text x="0" y="486" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368">voices[32] — the state. Rotates one slot left every cycle: wires, no logic.</text>
+  <text x="1152" y="486" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368"
         text-anchor="end">1 voice / cycle · 32 cycles = 1 sample</text>
 </svg>
-    <img src="assets/dsp_datapath.svg" alt="The per-voice signal chain" style="position:absolute;
-         left:71px; top:172px; width:1010px; height:163.8px;">
   </div>
 </section>
 
 <!-- ============ 19a · VOICE RING ============ -->
 <section class="slide">
   <div class="h">Why a ring? The 32:1 mux was the timing wall</div>
-  <div class="hsub">Bullet 1 — a dynamic array index is not free in hardware. It is a mux, and this one was the widest thing on the chip.</div>
+  <div class="hsub">A dynamic array index is not free in hardware. It is a mux, and this one was the widest thing on the chip.</div>
   <div style="margin-top:26px;">
     <svg viewBox="0 0 1152 452" style="width:100%;height:452px;">
     <defs><marker id="rA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="rR" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#d93025"/></marker><marker id="rB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="rG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
@@ -1543,85 +1554,10 @@
   </div>
 </section>
 
-<!-- ============ 19b · SHARED DATAPATH ============ -->
-<section class="slide">
-  <div class="h">One datapath, thirty-two users</div>
-  <div class="hsub">Bullet 2 — every voice runs the same chain, so the chain exists once. Area is one voice; throughput is thirty-two.</div>
-  <div style="margin-top:26px;">
-    <svg viewBox="0 0 1152 412" style="width:100%;height:412px;">
-    <defs><marker id="dA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="dB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="dY" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker></defs>
-    <rect x="0" y="66" width="80" height="20" rx="4" fill="#d2e3fc"/>
-    <text x="40" y="80" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v0</text>
-    <rect x="0" y="92" width="80" height="20" rx="4" fill="#d2e3fc"/>
-    <text x="40" y="106" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v1</text>
-    <rect x="0" y="118" width="80" height="20" rx="4" fill="#d2e3fc"/>
-    <text x="40" y="132" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v2</text>
-    <rect x="0" y="172" width="80" height="20" rx="4" fill="#d2e3fc"/>
-    <text x="40" y="186" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v30</text>
-    <rect x="0" y="198" width="80" height="20" rx="4" fill="#d2e3fc"/>
-    <text x="40" y="212" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v31</text>
-    <text x="40" y="152" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#5f6368" text-anchor="middle">⋮</text>
-    <text x="40" y="52" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1a73e8" text-anchor="middle">32 voices</text>
-    <path d="M80 76 L124 130 M80 102 L124 133 M80 182 L124 137 M80 208 L124 140" stroke="#dadce0" stroke-width="1.3"/>
-    <path d="M124 135 L170 135" stroke="#1a73e8" stroke-width="2" marker-end="url(#dB)"/>
-    <text x="42" y="238" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">1 per cycle</text>
-    <rect x="164" y="52" width="857" height="248" rx="16" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2" stroke-dasharray="7 5"/>
-    <text x="176" y="82" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1a73e8">ONE physical copy of this chain — reused 32× per sample</text>
-    <rect x="176" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="240" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">DDS osc</text>
-    <text x="240" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">phase accumulator</text>
-    <rect x="317" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="381" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">waveform</text>
-    <text x="381" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">saw / sq / tri / sine</text>
-    <path d="M304 135 L314 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <rect x="458" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="522" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">cross-mod</text>
-    <text x="522" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">FM · ring</text>
-    <path d="M445 135 L455 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <rect x="599" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="663" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">sub-osc</text>
-    <text x="663" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">−1 octave</text>
-    <path d="M586 135 L596 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <rect x="740" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="804" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">SVF</text>
-    <text x="804" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">resonant filter</text>
-    <path d="M727 135 L737 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <rect x="881" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
-    <text x="945" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">VCA</text>
-    <text x="945" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">amplitude</text>
-    <path d="M868 135 L878 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <text x="176" y="206" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#b06000">modulators — also one copy each</text>
-    <rect x="176" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
-    <text x="189" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text>
-    <text x="189" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">amplitude envelope</text>
-    <path d="M346 218 L346 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
-    <rect x="388" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
-    <text x="401" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text>
-    <text x="401" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">filter envelope</text>
-    <path d="M558 218 L558 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
-    <rect x="600" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
-    <text x="613" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">LFO</text>
-    <text x="613" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">per part · vibrato / tremolo</text>
-    <path d="M770 218 L770 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
-    <rect x="812" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
-    <text x="825" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">unison</text>
-    <text x="825" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">detune per voice slot</text>
-    <path d="M982 218 L982 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
-    <path d="M1009 135 L1039 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
-    <rect x="1047" y="100" width="105" height="70" rx="9" fill="#d2e3fc"/>
-    <text x="1099" y="130" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#3c4043" text-anchor="middle">mixer</text>
-    <text x="1099" y="151" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="middle">4 parts → stereo</text>
-    <rect x="0" y="340" width="1152" height="64" rx="10" fill="#e6f4ea"/>
-    <text x="20" y="366" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">Every multiply is deliberately narrow, so each maps to a single DSP48 slice.</text>
-    <text x="20" y="389" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">Thirty-two copies would cost thirty-two times the silicon. This is iteration over shared hardware, not replication.</text>
-    </svg>
-  </div>
-</section>
-
 <!-- ============ 19c · PIPELINE ============ -->
 <section class="slide">
   <div class="h">Time-multiplexing ≠ pipelining</div>
-  <div class="hsub">Bullet 3 — the datapath is shared in time, and XLS also cuts it into 48 stages. Those are two different things.</div>
+  <div class="hsub">The datapath is shared in time, and XLS also cuts it into 48 stages. Those are two different things.</div>
   <div style="margin-top:26px;">
     <svg viewBox="0 0 1152 446" style="width:100%;height:446px;">
     <defs><marker id="pG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
