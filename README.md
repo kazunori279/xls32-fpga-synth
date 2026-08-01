@@ -229,6 +229,23 @@ The project is grouped into topical subdirectories:
   (`docs/slides/`); **`media/`** — captured .wav/.mp4/screenshots (gitignored);
   **`build/`** — bitstream build output; **`webui/certs/`** — local TLS cert (both gitignored).
 
+> **Publishing the slides.** The deck links at the top of this file point at a **[public
+> gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab)**, which is a
+> separate copy — `git push` does not update it. After editing `docs/slides/`, re-publish both
+> decks:
+>
+> ```bash
+> uv run docs/slides/publish_gist.py --dry-run   # what would change
+> uv run docs/slides/publish_gist.py             # PATCH the gist
+> ```
+>
+> Publish **after** pushing to `main`. A gist has no directories, so the decks' relative
+> `src="assets/…"` cannot resolve there; `publish_gist.py` rewrites those 22 paths to
+> `raw.githubusercontent.com/…/main/docs/slides/assets/…` in the published copy (the files in
+> the repo keep the relative paths). Those URLs read from `main`, so an asset that is only local
+> renders as a hole in the published deck — the script fails early if a referenced asset is
+> missing from `docs/slides/assets/`, but it cannot tell whether you have pushed it yet.
+
 ---
 
 # 2. Quickstart guide
