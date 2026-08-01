@@ -1319,26 +1319,48 @@
 
 <!-- ============ 19 · ENGINE ============ -->
 <section class="slide">
-  <div class="h">エンジン: 1サイクルに1ボイス、32サイクルに1サンプル</div>
-  <div class="split" style="grid-template-columns: 540px 1fr;">
-    <div class="body">
-      <ul class="dots">
-        <li>32ボイスは<b>回転するリング</b>に載っていて、処理中のボイスは常にスロット0
-        （インデックスが定数なので<b>32:1のマルチプレクサが不要</b>）</li>
-        <li>データパスは1本を共有: オシレーター → サブオシ → ボイス毎レゾナントSVF → VCA。
-        ADSRが2基とパート毎のLFO付き</li>
-        <li>XLSが<b>48段のパイプライン</b>にコンパイル。多数のボイスが同時に流れ、
-        エンジンサイクルごとにおよそ1つが完了</li>
-        <li>32ボイス全部が、3,125クロックのサンプル予算のうち約96クロックで終わります</li>
-      </ul>
-      <p class="mut">乗算はすべて意図的にビット幅を絞ってあり、DSP48スライス1つに収まります。
-      オープンなフローでも小さなソフト乗算器のままで済みます。</p>
-    </div>
-    <div>
-      <div class="imgcard" style="height:420px; background:#fff;"><img src="assets/dsp_datapath.svg" alt="ボイス毎のデータパス"></div>
-      <div class="imgcap">ボイス毎のデータパス — 有効サイクルごとにスロット0のボイスに対して1回実行</div>
-    </div>
-  </div></section>
+  <div class="h">1ボイスの設計 — 借りるパラメータ、抱えて回る状態</div>
+  <div class="hsub">共有パッチ4つ、回転する状態スロット32個、データパス1本。1ボイスに必要な値がどこから来るか。</div>
+  <div style="position:relative; margin-top:18px;">
+    <svg viewBox="0 0 1152 494" width="100%" style="display:block;">
+  <defs><marker id="e0A" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="e0B" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="e0G" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
+
+  <!-- params: they live in parts[4] and are only ever read -->
+  <text x="576" y="18" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368" text-anchor="middle">parts[4] — 4つのパッチ（波形・カットオフ・レゾナンス・ADSR×2・LFO・ユニゾン）。実体は32個ではなく4個。</text>
+  <rect x="353" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="405" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 0</text><path d="M405 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="467" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="519" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 1</text><path d="M519 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="581" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="633" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 2</text><path d="M633 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/><rect x="695" y="30" width="104" height="36" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/><text x="747" y="54" font-family="Roboto Mono, monospace" font-size="13.5" fill="#b06000" text-anchor="middle">part 3</text><path d="M747 66 L576 86" stroke="#f9ab00" stroke-width="1.4" fill="none" opacity=".75"/>
+  <path d="M486 86 L666 86 L606 112 L546 112 z" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+  <text x="576" y="105" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000" text-anchor="middle">4:1</text>
+  <path d="M700 99 L646 99" stroke="#f9ab00" stroke-width="1.4" stroke-dasharray="4 3"
+        fill="none" marker-end="url(#e0A)"/>
+  <text x="708" y="103" font-family="Roboto Mono, monospace" font-size="13" fill="#b06000">cur.part</text>
+  <path d="M576 112 L576 138" stroke="#f9ab00" stroke-width="2.2" fill="none" marker-end="url(#e0A)"/>
+  <text x="598" y="132" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#b06000">パラメータは毎サイクル読み直す（ボイスには保持しない）</text>
+
+  <!-- the one shared datapath (the existing figure sits inside this card) -->
+  <rect x="64" y="142" width="1024" height="206" rx="12" fill="#fff" stroke="#dadce0"/>
+  <text x="84" y="164" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#5f6368">1ボイス分の信号経路 — 物理的な実体は1本だけ。32ボイスで共有する</text>
+
+  <!-- state: read from slot 0, written back to slot 31 -->
+  <path d="M77 414 L77 354" stroke="#1a73e8" stroke-width="2.2"
+        fill="none" marker-end="url(#e0B)"/>
+  <path d="M1069 350 L1069 410" stroke="#188038" stroke-width="2.2"
+        fill="none" marker-end="url(#e0G)"/>
+  <text x="93" y="382" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#1a73e8">189 b 読み出し</text>
+  <text x="1053" y="382" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#188038"
+        text-anchor="end">189 b 書き戻し</text>
+  <text x="262" y="372" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#3c4043">167 b は毎サイクル書き換え — phase・ph2・cinc・env/fenv＋stage・flo・fbnd</text>
+  <text x="262" y="394" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#5f6368">22 b はノートオン時にラッチして以降不変 — note・vel・uni・part</text>
+  <rect x="64" y="416" width="26" height="48" rx="5" fill="#1a73e8"/><rect x="96" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="128" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="160" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="192" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="224" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="256" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="288" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="320" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="352" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="384" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="416" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="448" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="480" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="512" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="544" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="576" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="608" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="640" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="672" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="704" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="736" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="768" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="800" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="832" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="864" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="896" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="928" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="960" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="992" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="1024" y="416" width="26" height="48" rx="5" fill="#e8f0fe"/><rect x="1056" y="416" width="26" height="48" rx="5" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="77" y="446" font-family="Roboto Mono, monospace" font-size="12.5" fill="#fff" text-anchor="middle">0</text>
+  <text x="1069" y="446" font-family="Roboto Mono, monospace" font-size="12.5" fill="#188038" text-anchor="middle">31</text>
+  <text x="64" y="482" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368">voices[32] — 状態。毎サイクル1つ左へ回転する（配線だけ、ロジックなし）</text>
+  <text x="1088" y="482" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#5f6368"
+        text-anchor="end">1ボイス／サイクル · 32サイクルで1サンプル</text>
+</svg>
+    <img src="assets/dsp_datapath.svg" alt="ボイス毎の信号経路" style="position:absolute;
+         left:71px; top:172px; width:1010px; height:163.8px;">
+  </div>
+</section>
 
 <!-- ============ 19a · VOICE RING ============ -->
 <section class="slide">
