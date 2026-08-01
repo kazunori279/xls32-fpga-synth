@@ -348,8 +348,8 @@ stop it before running the `host/` tools above. See the
 black keys      W   E       T   Y   U       O   P
                 C#  D#      F#  G#  A#      C#  D#
 
-white keys    A   S   D   F   G   H   J   K   L
-              C   D   E   F   G   A   B   C   D
+white keys    A   S   D   F   G   H   J   K   L   ;   '
+              C   D   E   F   G   A   B   C   D   E   F
 ```
 
 `Z` / `X` shift down / up an octave (the label at the bottom right shows which). The keys are read

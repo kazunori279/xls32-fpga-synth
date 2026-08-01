@@ -2,7 +2,7 @@
 // (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
 // an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
 
-const VERSION = 'v74-layer';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v75-keys';  // bump on each front-end change; shown in the header + cache-busts the worklet
 const SR = 32000;
 let spec = null, ws = null, ctx = null, node = null, analyser = null;
 let powered = false, framesRecv = 0, resampleRatio = 1, audioEl = null;
@@ -396,14 +396,15 @@ function highlightKey(note, on) {
 }
 
 // ---------- computer keyboard ----------
-// The laptop keys are a one-octave-plus piano: the home row A S D F G H J is C D E F G A B, the
-// row above it W E · T Y U the black keys in between, K O L P carrying on past the top C.
-// Keyed off `e.code` (the PHYSICAL key), not `e.key`, so it still plays with a kana IME switched
-// on or on a non-QWERTY layout — `e.key` is 'Process'/'ち' there and would never match.
+// The laptop keys are a piano an octave and a fourth wide: the home row A S D F G H J K L ; ' is
+// the white keys C D E F G A B C D E F, the row above it W E · T Y U · O P the black ones in
+// between. Keyed off `e.code` (the PHYSICAL key), not `e.key`, so it still plays with a kana IME
+// switched on or on a non-QWERTY layout — `e.key` is 'Process'/'ち' there and would never match.
+// (Semicolon/Quote are positional too: on a JIS board they're the same two keys right of L.)
 const KMAP = {
   KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6,
   KeyG: 7, KeyY: 8, KeyH: 9, KeyU: 10, KeyJ: 11,
-  KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15,
+  KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15, Semicolon: 16, Quote: 17,
 };
 const OCT_DOWN = 'KeyZ', OCT_UP = 'KeyX';
 const held = new Map();           // e.code -> the exact MIDI note sent (so a later octave shift
