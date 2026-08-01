@@ -1340,6 +1340,325 @@
     </div>
   </div></section>
 
+<!-- ============ 19a · VOICE RING ============ -->
+<section class="slide">
+  <div class="h">なぜリングなのか — 32:1マルチプレクサの壁</div>
+  <div class="hsub">1点目 — 配列の動的インデックスはタダではありません。チップ上で最も幅の広いマルチプレクサになってしまいます。</div>
+  <div style="margin-top:26px;">
+    <svg viewBox="0 0 1152 452" style="width:100%;height:452px;">
+    <defs><marker id="rA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="rR" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#d93025"/></marker><marker id="rB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="rG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
+    <text x="0" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#d93025">✗ 配列をインデックスする</text>
+    <text x="0" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#d93025">voices[vidx]</text>
+    <rect x="2" y="68" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="86" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 0</text>
+    <path d="M96 81 L150 81" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="102" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="120" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 1</text>
+    <path d="M96 115 L150 115" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="136" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="154" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 2</text>
+    <path d="M96 149 L150 149" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="232" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="250" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 30</text>
+    <path d="M96 245 L150 245" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="266" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="284" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 31</text>
+    <path d="M96 279 L150 279" stroke="#dadce0" stroke-width="1.3"/>
+    <text x="49" y="200" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#5f6368" text-anchor="middle">⋮</text>
+    <path d="M150 62 L196 96 L196 266 L150 300 Z" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+    <text x="173" y="175" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="700" fill="#d93025" text-anchor="middle">32:1</text>
+    <text x="173" y="193" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#d93025" text-anchor="middle">mux</text>
+    <path d="M173 334 L173 302" stroke="#d93025" stroke-width="1.6" marker-end="url(#rR)"/>
+    <text x="173" y="350" font-family="Roboto Mono, monospace" font-size="12.5" fill="#d93025" text-anchor="middle">vidx</text>
+    <path d="M196 181 L248 181" stroke="#5f6368" stroke-width="1.6" marker-end="url(#rA)"/>
+    <text x="254" y="177" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">データパスへ</text>
+    <rect x="0" y="386" width="340" height="60" rx="9" fill="#fce8e6"/>
+    <text x="16" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#d93025">幅 約3,200ビットのマルチプレクサ</text>
+    <text x="16" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">約21ns — 30nsの予算を超過。タイミング違反。</text>
+    <path d="M362 20 L362 366" stroke="#dadce0" stroke-width="1.4" stroke-dasharray="4 5"/>
+    <text x="392" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#188038">✓ 配列を回転させる</text>
+    <text x="392" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#188038">voices[0]</text>
+    <text x="460" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1a73e8">slot 0</text>
+    <text x="1146" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" text-anchor="end">slot 31</text>
+    <text x="446" y="93" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">サイクル N</text>
+    <rect x="460.0" y="70" width="19" height="36" rx="4" fill="#1a73e8"/>
+    <text x="470" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v0</text>
+    <rect x="481.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="491" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v1</text>
+    <rect x="503.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="512" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
+    <rect x="524.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="534" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
+    <rect x="546.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="556" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
+    <rect x="567.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="577" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
+    <rect x="589.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="598" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
+    <rect x="610.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="620" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
+    <rect x="632.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="642" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
+    <rect x="653.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="663" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
+    <rect x="675.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="684" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
+    <rect x="696.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="706" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
+    <rect x="718.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="728" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
+    <rect x="739.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="749" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
+    <rect x="761.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="770" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
+    <rect x="782.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="792" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
+    <rect x="804.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="814" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
+    <rect x="825.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="835" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
+    <rect x="847.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="856" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
+    <rect x="868.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="878" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
+    <rect x="890.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="900" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
+    <rect x="911.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="921" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
+    <rect x="933.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="942" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
+    <rect x="954.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="964" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
+    <rect x="976.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="986" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
+    <rect x="997.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1007" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
+    <rect x="1019.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1028" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
+    <rect x="1040.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1050" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
+    <rect x="1062.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1072" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
+    <rect x="1083.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1093" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
+    <rect x="1105.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1114" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
+    <rect x="1126.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1136" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
+    <text x="446" y="323" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">サイクル N+1</text>
+    <rect x="460.0" y="300" width="19" height="36" rx="4" fill="#1a73e8"/>
+    <text x="470" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v1</text>
+    <rect x="481.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="491" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
+    <rect x="503.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="512" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
+    <rect x="524.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="534" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
+    <rect x="546.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="556" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
+    <rect x="567.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="577" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
+    <rect x="589.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="598" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
+    <rect x="610.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="620" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
+    <rect x="632.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="642" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
+    <rect x="653.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="663" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
+    <rect x="675.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="684" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
+    <rect x="696.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="706" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
+    <rect x="718.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="728" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
+    <rect x="739.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="749" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
+    <rect x="761.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="770" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
+    <rect x="782.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="792" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
+    <rect x="804.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="814" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
+    <rect x="825.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="835" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
+    <rect x="847.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="856" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
+    <rect x="868.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="878" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
+    <rect x="890.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="900" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
+    <rect x="911.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="921" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
+    <rect x="933.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="942" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
+    <rect x="954.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="964" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
+    <rect x="976.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="986" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
+    <rect x="997.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1007" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
+    <rect x="1019.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1028" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
+    <rect x="1040.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1050" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
+    <rect x="1062.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1072" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
+    <rect x="1083.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1093" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
+    <rect x="1105.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1114" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
+    <rect x="1126.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1136" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v0′</text>
+    <path d="M470 106 L470 174" stroke="#1a73e8" stroke-width="2" marker-end="url(#rB)"/>
+    <rect x="460" y="176" width="212" height="54" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+    <text x="566" y="200" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043" text-anchor="middle">process_voice()</text>
+    <text x="566" y="219" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">共有データパスは1本だけ</text>
+    <path d="M672 203 L1136 203 L1136 296" stroke="#188038" fill="none" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#rG)"/>
+    <text x="684" y="196" font-family="Roboto Mono, monospace" font-size="12" fill="#188038">rotate_in(v0′)</text>
+    <path d="M1146 142 L980 142" stroke="#5f6368" stroke-width="1.5" marker-end="url(#rA)"/>
+    <text x="972" y="147" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368" text-anchor="end">全スロットが1つ左へシフト</text>
+    <rect x="392" y="386" width="760" height="60" rx="9" fill="#e6f4ea"/>
+    <text x="410" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038">インデックスがリテラルの 0 になり、読み書きがただの配線になります。</text>
+    <text x="410" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">インデックスがすべてループ定数なので、XLSは固定シフトに展開します。マルチプレクサは1つも生成されません。</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ 19b · SHARED DATAPATH ============ -->
+<section class="slide">
+  <div class="h">データパスは1本、利用者は32ボイス</div>
+  <div class="hsub">2点目 — 全ボイスが同じチェーンを通るので、チェーンの実体は1つで済みます。面積は1ボイス分、スループットは32ボイス分。</div>
+  <div style="margin-top:26px;">
+    <svg viewBox="0 0 1152 412" style="width:100%;height:412px;">
+    <defs><marker id="dA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="dB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="dY" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#f9ab00"/></marker></defs>
+    <rect x="0" y="66" width="80" height="20" rx="4" fill="#d2e3fc"/>
+    <text x="40" y="80" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v0</text>
+    <rect x="0" y="92" width="80" height="20" rx="4" fill="#d2e3fc"/>
+    <text x="40" y="106" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v1</text>
+    <rect x="0" y="118" width="80" height="20" rx="4" fill="#d2e3fc"/>
+    <text x="40" y="132" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v2</text>
+    <rect x="0" y="172" width="80" height="20" rx="4" fill="#d2e3fc"/>
+    <text x="40" y="186" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v30</text>
+    <rect x="0" y="198" width="80" height="20" rx="4" fill="#d2e3fc"/>
+    <text x="40" y="212" font-family="Roboto Mono, monospace" font-size="9.5" fill="#3c4043" text-anchor="middle">v31</text>
+    <text x="40" y="152" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#5f6368" text-anchor="middle">⋮</text>
+    <text x="40" y="52" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1a73e8" text-anchor="middle">32 ボイス</text>
+    <path d="M80 76 L124 130 M80 102 L124 133 M80 182 L124 137 M80 208 L124 140" stroke="#dadce0" stroke-width="1.3"/>
+    <path d="M124 135 L170 135" stroke="#1a73e8" stroke-width="2" marker-end="url(#dB)"/>
+    <text x="42" y="238" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">1サイクル1つ</text>
+    <rect x="164" y="52" width="857" height="248" rx="16" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="176" y="82" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1a73e8">このチェーンの物理的な実体は1本 — 1サンプルあたり32回再利用</text>
+    <rect x="176" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="240" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">DDS OSC</text>
+    <text x="240" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">位相アキュムレータ</text>
+    <rect x="317" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="381" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">波形</text>
+    <text x="381" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">鋸 / 矩形 / 三角 / 正弦</text>
+    <path d="M304 135 L314 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <rect x="458" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="522" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">クロス変調</text>
+    <text x="522" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">FM・リング</text>
+    <path d="M445 135 L455 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <rect x="599" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="663" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">サブOSC</text>
+    <text x="663" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">−1 オクターブ</text>
+    <path d="M586 135 L596 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <rect x="740" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="804" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">SVF</text>
+    <text x="804" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">レゾナントフィルタ</text>
+    <path d="M727 135 L737 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <rect x="881" y="100" width="128" height="70" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+    <text x="945" y="130" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">VCA</text>
+    <text x="945" y="151" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">音量</text>
+    <path d="M868 135 L878 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <text x="176" y="206" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#b06000">モジュレータ — こちらも実体は各1つ</text>
+    <rect x="176" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="189" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text>
+    <text x="189" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">音量エンベロープ</text>
+    <path d="M346 218 L346 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
+    <rect x="388" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="401" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ADSR</text>
+    <text x="401" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">フィルタエンベロープ</text>
+    <path d="M558 218 L558 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
+    <rect x="600" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="613" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">LFO</text>
+    <text x="613" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">パート毎・ビブラート/トレモロ</text>
+    <path d="M770 218 L770 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
+    <rect x="812" y="218" width="194" height="52" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="825" y="240" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#b06000">ユニゾン</text>
+    <text x="825" y="259" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">ボイススロット毎のデチューン</text>
+    <path d="M982 218 L982 178" stroke="#f9ab00" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#dY)"/>
+    <path d="M1009 135 L1039 135" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dA)"/>
+    <rect x="1047" y="100" width="105" height="70" rx="9" fill="#d2e3fc"/>
+    <text x="1099" y="130" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#3c4043" text-anchor="middle">ミキサ</text>
+    <text x="1099" y="151" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="middle">4パート → ステレオ</text>
+    <rect x="0" y="340" width="1152" height="64" rx="10" fill="#e6f4ea"/>
+    <text x="20" y="366" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">乗算はすべて意図的にビット幅を絞ってあり、それぞれがDSP48スライス1つに収まります。</text>
+    <text x="20" y="389" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">32本並べればシリコンも32倍。これは複製ではなく、共有ハードウェアの反復利用です。</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ 19c · PIPELINE ============ -->
+<section class="slide">
+  <div class="h">時分割多重 ≠ パイプライン</div>
+  <div class="hsub">3点目 — データパスは時間方向に共有され、さらにXLSがそれを48段に切り分けます。この2つは別の話です。</div>
+  <div style="margin-top:26px;">
+    <svg viewBox="0 0 1152 446" style="width:100%;height:446px;">
+    <defs><marker id="pG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
+    <text x="150" y="16" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">エンジンサイクル（1サイクル = 1 ce = マスタ3クロック = 30ns）</text>
+    <path d="M150 44 L150 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="150" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">0</text>
+    <path d="M298 44 L298 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="298" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">8</text>
+    <path d="M446 44 L446 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="446" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">16</text>
+    <path d="M594 44 L594 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="594" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">24</text>
+    <path d="M742 44 L742 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="742" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">32</text>
+    <path d="M890 44 L890 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="890" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">40</text>
+    <path d="M1038 44 L1038 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="1038" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">48</text>
+    <text x="136" y="79" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 0</text>
+    <rect x="150" y="58" width="888" height="32" rx="6" fill="#d2e3fc" opacity="1.00"/>
+    <rect x="150" y="58" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <text x="594" y="79" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#174ea6" text-anchor="middle">48段のパイプライン、各段にレジスタ1つ</text>
+    <circle cx="1038" cy="74" r="5" fill="#188038"/>
+    <text x="136" y="123" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 1</text>
+    <rect x="168" y="102" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.90"/>
+    <rect x="168" y="102" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="1056" cy="118" r="5" fill="#188038"/>
+    <text x="136" y="167" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 2</text>
+    <rect x="187" y="146" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.80"/>
+    <rect x="187" y="146" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="1075" cy="162" r="5" fill="#188038"/>
+    <text x="136" y="211" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 3</text>
+    <rect x="206" y="190" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.70"/>
+    <rect x="206" y="190" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="1094" cy="206" r="5" fill="#188038"/>
+    <text x="136" y="255" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 4</text>
+    <rect x="224" y="234" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.60"/>
+    <rect x="224" y="234" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="1112" cy="250" r="5" fill="#188038"/>
+    <text x="136" y="299" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 5</text>
+    <rect x="242" y="278" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.50"/>
+    <rect x="242" y="278" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="1130" cy="294" r="5" fill="#188038"/>
+    <text x="136" y="336" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">⋮</text>
+    <text x="150" y="336" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">…以下、ボイス31まで同様</text>
+    <path d="M1038 74 L1130 294" stroke="#188038" stroke-width="1.8" stroke-dasharray="4 4"/>
+    <text x="1152" y="336" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038" text-anchor="end">毎サイクル 1ボイス投入・1ボイス完了</text>
+    <text x="1152" y="357" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368" text-anchor="end">● = そのボイスのサンプルが完成</text>
+    <rect x="0" y="378" width="1152" height="64" rx="10" fill="#e6f4ea"/>
+    <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">レイテンシは48サイクル、スループットは1サイクルに1ボイス。スキャン時間を決めるのは後者だけです。</text>
+    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">つまり32ボイスは 48 × 32 ではなく32エンジンサイクル。これが前スライドの約96マスタクロック（32 × 3）の正体です。</text>
+    </svg>
+  </div>
+</section>
+
 <!-- ============ 20 · TIMING ============ -->
 <section class="slide">
   <div class="h">1本のクロック、3つのリズム</div>
