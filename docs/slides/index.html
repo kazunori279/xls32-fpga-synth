@@ -2341,130 +2341,87 @@
   </div>
 </section>
 
-<!-- ============ 19d · END-TO-END TIMING ============ -->
+<!-- ============ 19d · LIFE OF A SAMPLE ============ -->
 <section class="slide">
-  <div class="h">One MIDI byte in, one 32 kHz sample out</div>
-  <div class="hsub">Every cadence on the board is a division of the same 100 MHz clock — on one log scale, plus what the sample tick actually looks like.</div>
+  <div class="h">The life of one sample: 31.25 µs, 3,125 clocks</div>
+  <div class="hsub">32 kHz means a new stereo sample every 3,125 master clocks. Here is where they actually go.</div>
   <div style="margin-top:12px;">
     <svg viewBox="0 0 1152 500" style="width:100%;height:500px;">
-    <rect x="0" y="0" width="140" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(11,14) scale(0.72)" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="6" width="20.4" height="12" rx="1.6"/><path d="M7 6 V18 M12 6 V18 M17 6 V18"/></g>
-    <text x="37" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">MIDI in</text>
-    <text x="37" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">host UART or DIN</text>
-    <rect x="164" y="0" width="150" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(175,14) scale(0.72)" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 12 H12.4"/><path d="M8.8 8 L12.8 12 L8.8 16"/><rect x="15.6" y="3.6" width="6.6" height="16.8" rx="1.6"/></g>
-    <text x="201" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">UART RX</text>
-    <text x="201" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">handover on ce</text>
-    <rect x="338" y="0" width="200" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(349,14) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 1.8 v3.2 M15 1.8 v3.2 M9 19 v3.2 M15 19 v3.2 M1.8 9 h3.2 M1.8 15 h3.2 M19 9 h3.2 M19 15 h3.2"/></g>
-    <text x="375" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">engine</text>
-    <text x="375" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">32 voices · 1 per ce</text>
-    <rect x="562" y="0" width="200" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(573,14) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10 q2.6 -6 5.2 0 t5.2 0 t5.2 0 t4.4 0"/><path d="M2 17.5 q2.6 -4 5.2 0 t5.2 0 t5.2 0 t4.4 0"/></g>
-    <text x="599" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">effects FSM</text>
-    <text x="599" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">28 steps · 1 per ce8</text>
-    <rect x="786" y="0" width="162" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(797,14) scale(0.72)" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="3.6" width="6.6" height="16.8" rx="1.6"/><path d="M11.6 12 H22.4"/><path d="M18.8 8 L22.8 12 L18.8 16"/></g>
-    <text x="823" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">UART TX</text>
-    <text x="823" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">4 bytes · ~20 µs</text>
-    <rect x="972" y="0" width="180" height="52" rx="8" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(983,14) scale(0.72)" fill="none" stroke="#188038" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 9 H6.6 L11.6 4.6 V19.4 L6.6 15 H2.6 Z"/><path d="M15.2 9.4 a4 4 0 0 1 0 5.2"/><path d="M18.4 6.6 a8.4 8.4 0 0 1 0 10.8"/></g>
-    <text x="1009" y="23" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">audio out</text>
-    <text x="1009" y="39" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368">player / I2S DAC</text>
-    <path d="M140 26 H158" stroke="#9aa0a6" stroke-width="1.5"/>
-    <path d="M164 26 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M314 26 H332" stroke="#9aa0a6" stroke-width="1.5"/>
-    <path d="M338 26 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M538 26 H556" stroke="#9aa0a6" stroke-width="1.5"/>
-    <path d="M562 26 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M762 26 H780" stroke="#9aa0a6" stroke-width="1.5"/>
-    <path d="M786 26 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M948 26 H966" stroke="#9aa0a6" stroke-width="1.5"/>
-    <path d="M972 26 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <text x="576" y="70" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#1a73e8" text-anchor="middle">the whole thing is paced by the 32 kHz sample tick — one every 3,125 clocks</text>
-    <rect x="24" y="80" width="1104" height="142" rx="10" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(44,90) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="7.5" width="20.4" height="9" rx="1.5"/><path d="M6 7.5 v4 M10 7.5 v2.6 M14 7.5 v4 M18 7.5 v2.6"/></g>
-    <text x="72" y="106" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">Timescales</text>
-    <text x="154" y="106" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— all of them derived from the single 100 MHz clock · log scale</text>
-    <path d="M70 196 H1090" stroke="#dadce0" stroke-width="1.4"/>
-    <path d="M90.0 196 v5" stroke="#bdc1c6" stroke-width="1.2"/>
-    <text x="90.0" y="214" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">10 ns</text>
-    <path d="M359.4 196 v5" stroke="#bdc1c6" stroke-width="1.2"/>
-    <text x="359.44444444444446" y="214" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">100 ns</text>
-    <path d="M628.9 196 v5" stroke="#bdc1c6" stroke-width="1.2"/>
-    <text x="628.8888888888889" y="214" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">1 µs</text>
-    <path d="M898.3 196 v5" stroke="#bdc1c6" stroke-width="1.2"/>
-    <text x="898.3333333333333" y="214" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">10 µs</text>
-    <path d="M90.0 180 V196" stroke="#5f6368" stroke-width="1.2" stroke-dasharray='3 3'/>
-    <circle cx="90.0" cy="196" r="2.6" fill="#5f6368"/>
-    <text x="90.0" y="160" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" font-weight="600" text-anchor="middle">master clock</text>
-    <text x="90.0" y="174" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">10 ns · 1 clk</text>
-    <path d="M218.6 150 V196" stroke="#188038" stroke-width="1.8" />
-    <circle cx="218.6" cy="196" r="3.4" fill="#188038"/>
-    <text x="218.5576714105757" y="130" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#188038" font-weight="700" text-anchor="middle">ce — engine</text>
-    <text x="218.5576714105757" y="144" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#188038" text-anchor="middle">30 ns · 3 clk</text>
-    <path d="M299.7 180 V196" stroke="#b06000" stroke-width="1.2" stroke-dasharray='3 3'/>
-    <circle cx="299.7" cy="196" r="2.6" fill="#b06000"/>
-    <text x="299.66853135337067" y="160" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#b06000" font-weight="600" text-anchor="middle">ce8 — effects</text>
-    <text x="299.66853135337067" y="174" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">60 ns · 6 clk</text>
-    <path d="M628.9 150 V196" stroke="#1a73e8" stroke-width="1.2" stroke-dasharray='3 3'/>
-    <circle cx="628.9" cy="196" r="2.6" fill="#1a73e8"/>
-    <text x="628.8888888888889" y="130" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#1a73e8" font-weight="600" text-anchor="middle">32-voice scan</text>
-    <text x="628.8888888888889" y="144" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">~1 µs · ~96 clk (32 voices × 3 clk)</text>
-    <path d="M691.0 180 V196" stroke="#1a73e8" stroke-width="1.2" stroke-dasharray='3 3'/>
-    <circle cx="691.0" cy="196" r="2.6" fill="#1a73e8"/>
-    <text x="690.9820704824793" y="160" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#1a73e8" font-weight="600" text-anchor="middle">effects pass</text>
-    <text x="690.9820704824793" y="174" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">1.7 µs · 168 clk</text>
-    <path d="M817.2 150 V196" stroke="#5f6368" stroke-width="1.2" stroke-dasharray='3 3'/>
-    <circle cx="817.2" cy="196" r="2.6" fill="#5f6368"/>
-    <text x="817.2224733905384" y="130" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" font-weight="600" text-anchor="middle">MIDI byte in</text>
-    <text x="817.2224733905384" y="144" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">~5 µs · ~500 clk</text>
-    <path d="M979.4 180 V196" stroke="#d93025" stroke-width="1.8" />
-    <circle cx="979.4" cy="196" r="3.4" fill="#d93025"/>
-    <text x="979.4441932761282" y="160" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#d93025" font-weight="700" text-anchor="middle">audio frame out</text>
-    <text x="979.4441932761282" y="174" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#d93025" text-anchor="middle">~20 µs · ~2000 clk</text>
-    <path d="M1031.7 150 V196" stroke="#202124" stroke-width="1.8" />
-    <circle cx="1031.7" cy="196" r="3.4" fill="#202124"/>
-    <text x="1031.6679225082476" y="130" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="middle">sample period</text>
-    <text x="1031.6679225082476" y="144" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#202124" text-anchor="middle">31.25 µs · 3125 clk</text>
-    <rect x="24" y="232" width="1104" height="212" rx="10" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(44,242) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 18 V7 H6.4 V18 H11.2 V7 H16 V18 H20.8 V7 H22.4"/></g>
-    <text x="72" y="258" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">Timing</text>
-    <text x="124" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— a clock-cycle view around the sample tick; the long runs are snipped at ‖ (96-clk scan, ~2,000-clk TX, ~861-clk idle)</text>
-    <rect x="46" y="268.0" width="1060" height="17.0" fill="#f8f9fa"/>
-    <rect x="46" y="302.0" width="1060" height="17.0" fill="#f8f9fa"/>
-    <rect x="46" y="336.0" width="1060" height="17.0" fill="#f8f9fa"/>
-    <rect x="46" y="370.0" width="1060" height="17.0" fill="#f8f9fa"/>
-    <rect x="46" y="404.0" width="1060" height="17.0" fill="#f8f9fa"/>
-    <rect x="722.0" y="268.0" width="48.0" height="170.0" fill="#eceff1" fill-opacity=".85"/>
-    <path d="M742.0 268.0 L732.0 438.0" stroke="#b0b6bb" stroke-width="1.4"/>
-    <path d="M758.0 268.0 L748.0 438.0" stroke="#b0b6bb" stroke-width="1.4"/>
-    <rect x="842.0" y="268.0" width="48.0" height="170.0" fill="#eceff1" fill-opacity=".85"/>
-    <path d="M862.0 268.0 L852.0 438.0" stroke="#b0b6bb" stroke-width="1.4"/>
-    <path d="M878.0 268.0 L868.0 438.0" stroke="#b0b6bb" stroke-width="1.4"/>
-    <text x="210" y="280.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">clk (100 MHz)</text>
-    <path d="M218.0 281.0V272.0H254.0V281.0H290.0V272.0H326.0V281.0H362.0V272.0H398.0V281.0H434.0V272.0H470.0V281.0H506.0V272.0H542.0V281.0H578.0V272.0H614.0V281.0H650.0V272.0H686.0V281.0H722.0H770.0V272.0H806.0V281.0H842.0H890.0V272.0H926.0V281.0H962.0V272.0H998.0V281.0H1034.0V272.0H1070.0V281.0H1106.0" fill="none" stroke="#4285f4" stroke-width="1.4"/>
-    <text x="210" y="297.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#202124" font-weight="700" text-anchor="end">ce (÷3, engine)</text>
-    <path d="M218.0 289.0H290.0V298.0H362.0H434.0V289.0H506.0V298.0H578.0H650.0V289.0H722.0H770.0V298.0H842.0H890.0V289.0H962.0V298.0H1034.0H1106.0" fill="none" stroke="#188038" stroke-width="2.0"/>
-    <text x="210" y="314.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">ce8 (÷6, effects)</text>
-    <path d="M218.0 306.0H290.0V315.0H362.0H434.0H506.0H578.0H650.0V306.0H722.0H770.0V315.0H842.0H890.0V306.0H962.0V315.0H1034.0H1106.0" fill="none" stroke="#f9ab00" stroke-width="1.8"/>
-    <text x="210" y="348.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">sample ready (avld)</text>
-    <path d="M218.0 340.0H290.0H362.0H434.0H506.0V349.0H578.0H650.0H722.0H770.0V340.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
-    <text x="210" y="365.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">32-voice scan (on ce)</text>
-    <path d="M218.0 366.0H290.0H362.0H434.0H506.0V357.0H578.0H650.0H722.0H770.0V366.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#12b5cb" stroke-width="1.6"/>
-    <text x="210" y="382.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#202124" font-weight="700" text-anchor="end">stick — 32 kHz pulse</text>
-    <path d="M218.0 374.0H290.0V383.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0V374.0H962.0V383.0H1034.0H1106.0" fill="none" stroke="#d93025" stroke-width="2.0"/>
-    <text x="210" y="399.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">audio pull (ardy, on ce)</text>
-    <path d="M218.0 400.0H290.0H362.0H434.0V391.0H506.0V400.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
-    <text x="210" y="416.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">effects FSM (dst, on ce8)</text>
-    <path d="M218.0 417.0H290.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#c8cbcf" stroke-width="1.3"/>
-    <rect x="434.0" y="408.0" width="288.0" height="9.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/><text x="578.0" y="415.9" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#1a73e8" font-weight="700" text-anchor="middle">dst 1→28</text>
-    <text x="210" y="433.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">UART TX out</text>
-    <path d="M218.0 434.0H290.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#c8cbcf" stroke-width="1.3"/>
-    <rect x="770.0" y="425.0" width="72.0" height="9.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/><text x="806.0" y="432.9" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#d93025" font-weight="700" text-anchor="middle">TX</text>
+    <rect x="24" y="0" width="1104" height="190" rx="10" fill="#ffffff" stroke="#dadce0"/>
+    <g transform="translate(44,10) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.4" r="8.8"/><path d="M12 8.6 V13.4 H15.6"/><path d="M9 1.9 H15"/><path d="M12 1.9 V4.6"/></g>
+    <text x="72" y="26" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">The period</text>
+    <text x="156" y="26" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— one 32 kHz sample: 3,125 clocks of the 100 MHz master, drawn to scale</text>
+    <rect x="46" y="44" width="1060" height="25" rx="4" fill="#fafbfc"/>
+    <g transform="translate(52,47) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 1.8 v3.2 M15 1.8 v3.2 M9 19 v3.2 M15 19 v3.2 M1.8 9 h3.2 M1.8 15 h3.2 M19 9 h3.2 M19 15 h3.2"/></g>
+    <text x="210" y="56" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">engine</text>
+    <text x="210" y="68" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">32 voices · 1 per ce</text>
+    <text x="1098" y="60" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">— already the next sample: the scan restarts the moment this one is pulled</text>
+    <rect x="46" y="76" width="1060" height="25" rx="4" fill="#fafbfc"/>
+    <g transform="translate(52,79) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10 q2.6 -6 5.2 0 t5.2 0 t5.2 0 t4.4 0"/><path d="M2 17.5 q2.6 -4 5.2 0 t5.2 0 t5.2 0 t4.4 0"/></g>
+    <text x="210" y="88" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">effects FSM</text>
+    <text x="210" y="100" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">28 steps · 1 per ce8</text>
+    <text x="1098" y="92" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">— echo/chorus, then the reverb combs and all-passes, L then R</text>
+    <rect x="46" y="108" width="1060" height="25" rx="4" fill="#fafbfc"/>
+    <g transform="translate(52,111) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="3.6" width="6.6" height="16.8" rx="1.6"/><path d="M11.6 12 H22.4"/><path d="M18.8 8 L22.8 12 L18.8 16"/></g>
+    <text x="210" y="120" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">UART TX</text>
+    <text x="210" y="132" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">4 bytes @ 2 Mbaud</text>
+    <rect x="218.0" y="48" width="27.3" height="17" rx="3" fill="#d7f1f6" stroke="#12b5cb" stroke-width="1.4"/>
+    <text x="254.27936" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#0b7b8a" font-weight="700">96 clk (32 voices × 3)</text>
+    <rect x="218.0" y="80" width="47.7" height="17" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+    <text x="274.73888" y="92" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#174ea6" font-weight="700">168 clk (28 steps × 6)</text>
+    <rect x="265.7" y="112" width="568.3" height="17" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+    <text x="549.89888" y="124" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#a50e0e" font-weight="700" text-anchor="middle">~2,000 clk — 4 bytes × 10 bits × 50 clk per bit</text>
+    <rect x="834.1" y="112" width="271.9" height="17" rx="3" fill="#f1f3f4" stroke="#c8cbcf" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text x="970.02944" y="124" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b" text-anchor="middle">~960 clk idle</text>
+    <path d="M218.0 146 H1106.0" stroke="#dadce0" stroke-width="1.4"/>
+    <path d="M218.0 146 v5" stroke="#bdc1c6" stroke-width="1.2"/>
+    <text x="218.0" y="163" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">0</text>
+    <path d="M502.2 146 v5" stroke="#bdc1c6" stroke-width="1.2"/>
+    <text x="502.16" y="163" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">1,000</text>
+    <path d="M786.3 146 v5" stroke="#bdc1c6" stroke-width="1.2"/>
+    <text x="786.32" y="163" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="middle">2,000</text>
+    <path d="M218.0 140 V152" stroke="#202124" stroke-width="1.8"/>
+    <path d="M1106.0 140 V152" stroke="#202124" stroke-width="1.8"/>
+    <text x="1106.0" y="163" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">3,125 clk · 31.25 µs</text>
+    <text x="218.0" y="182" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b">MIDI in sits outside this picture — bytes are taken whenever they arrive, on the next ce, ~500 clocks each</text>
+    <rect x="24" y="202" width="1104" height="242" rx="10" fill="#ffffff" stroke="#dadce0"/>
+    <g transform="translate(44,212) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 18 V7 H6.4 V18 H11.2 V7 H16 V18 H20.8 V7 H22.4"/></g>
+    <text x="72" y="228" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">Clock by clock</text>
+    <text x="172" y="228" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— the same period around the tick; the long runs above are snipped at ‖</text>
+    <rect x="46" y="254.0" width="1060" height="17.0" fill="#f8f9fa"/>
+    <rect x="46" y="288.0" width="1060" height="17.0" fill="#f8f9fa"/>
+    <rect x="46" y="322.0" width="1060" height="17.0" fill="#f8f9fa"/>
+    <rect x="46" y="356.0" width="1060" height="17.0" fill="#f8f9fa"/>
+    <rect x="46" y="390.0" width="1060" height="17.0" fill="#f8f9fa"/>
+    <rect x="722.0" y="254.0" width="48.0" height="170.0" fill="#eceff1" fill-opacity=".85"/>
+    <path d="M742.0 254.0 L732.0 424.0" stroke="#b0b6bb" stroke-width="1.4"/>
+    <path d="M758.0 254.0 L748.0 424.0" stroke="#b0b6bb" stroke-width="1.4"/>
+    <rect x="842.0" y="254.0" width="48.0" height="170.0" fill="#eceff1" fill-opacity=".85"/>
+    <path d="M862.0 254.0 L852.0 424.0" stroke="#b0b6bb" stroke-width="1.4"/>
+    <path d="M878.0 254.0 L868.0 424.0" stroke="#b0b6bb" stroke-width="1.4"/>
+    <text x="210" y="266.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">clk (100 MHz)</text>
+    <path d="M218.0 267.0V258.0H254.0V267.0H290.0V258.0H326.0V267.0H362.0V258.0H398.0V267.0H434.0V258.0H470.0V267.0H506.0V258.0H542.0V267.0H578.0V258.0H614.0V267.0H650.0V258.0H686.0V267.0H722.0H770.0V258.0H806.0V267.0H842.0H890.0V258.0H926.0V267.0H962.0V258.0H998.0V267.0H1034.0V258.0H1070.0V267.0H1106.0" fill="none" stroke="#4285f4" stroke-width="1.4"/>
+    <text x="210" y="283.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#202124" font-weight="700" text-anchor="end">ce (÷3, engine)</text>
+    <path d="M218.0 275.0H290.0V284.0H362.0H434.0V275.0H506.0V284.0H578.0H650.0V275.0H722.0H770.0V284.0H842.0H890.0V275.0H962.0V284.0H1034.0H1106.0" fill="none" stroke="#188038" stroke-width="2.0"/>
+    <text x="210" y="300.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">ce8 (÷6, effects)</text>
+    <path d="M218.0 292.0H290.0V301.0H362.0H434.0H506.0H578.0H650.0V292.0H722.0H770.0V301.0H842.0H890.0V292.0H962.0V301.0H1034.0H1106.0" fill="none" stroke="#f9ab00" stroke-width="1.8"/>
+    <text x="210" y="334.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">sample ready (avld)</text>
+    <path d="M218.0 326.0H290.0H362.0H434.0H506.0V335.0H578.0H650.0H722.0H770.0V326.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+    <text x="210" y="351.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">32-voice scan (on ce)</text>
+    <path d="M218.0 352.0H290.0H362.0H434.0H506.0V343.0H578.0H650.0H722.0H770.0V352.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#12b5cb" stroke-width="1.6"/>
+    <text x="210" y="368.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#202124" font-weight="700" text-anchor="end">stick — 32 kHz pulse</text>
+    <path d="M218.0 360.0H290.0V369.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0V360.0H962.0V369.0H1034.0H1106.0" fill="none" stroke="#d93025" stroke-width="2.0"/>
+    <text x="210" y="385.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">audio pull (ardy, on ce)</text>
+    <path d="M218.0 386.0H290.0H362.0H434.0V377.0H506.0V386.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+    <text x="210" y="402.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">effects FSM (dst, on ce8)</text>
+    <path d="M218.0 403.0H290.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#c8cbcf" stroke-width="1.3"/>
+    <rect x="434.0" y="394.0" width="288.0" height="9.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/><text x="578.0" y="401.9" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#1a73e8" font-weight="700" text-anchor="middle">dst 1→28</text>
+    <text x="210" y="419.1" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#5f6368" text-anchor="end">UART TX out</text>
+    <path d="M218.0 420.0H290.0H362.0H434.0H506.0H578.0H650.0H722.0H770.0H842.0H890.0H962.0H1034.0H1106.0" fill="none" stroke="#c8cbcf" stroke-width="1.3"/>
+    <rect x="770.0" y="411.0" width="72.0" height="9.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/><text x="806.0" y="418.9" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#d93025" font-weight="700" text-anchor="middle">TX</text>
     <rect x="0" y="452" width="1152" height="48" rx="10" fill="#e8f0fe"/>
     <text x="20" y="473" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#174ea6" font-weight="700">Nothing waits: the engine has the sample ready before the tick asks for it.</text>
-    <text x="20" y="492" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">After the pull the next sample's scan starts straight away, in parallel with the effects FSM and the TX — of the 3,125 clocks only the ~2,000-clock frame out comes close to filling the period.</text>
+    <text x="20" y="492" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">Effects take 168 clocks with the next sample's 96-clock scan already running underneath; of the 3,125 clocks only the ~2,000-clock UART frame comes close to filling the period.</text>
     </svg>
   </div>
 </section>
