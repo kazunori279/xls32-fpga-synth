@@ -57,18 +57,14 @@ player with `/api/capture` and rendered with [`scripts/make_mp4.sh`](scripts/mak
 A per-block implementation deep-dive (code, dataflow, and timing diagrams for every block) lives
 in **[ARCHITECTURE.md](ARCHITECTURE.md)**; the milestone-by-milestone build history (M1 → M19 +
 Web UI) and the toolchain friction logs & learnings live in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
-The 50-minute talk that covers all of the above lives in **[`docs/slides/`](docs/slides/)**
+The 50-minute talk that covers all of the above — with playable audio clips from each milestone —
+lives in **[`docs/slides/`](docs/slides/)**
 ([English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html) ·
 [日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)).
 
 ---
 
 # 1. Overview
-
-*🎞️ **Slide deck** — a 50-minute session on how this was built, with playable audio clips from each
-milestone: **[English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html)**
-· **[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)**.
-Sources live in [`docs/slides/`](docs/slides/) — self-contained HTML, no build step.*
 
 ## What it is
 
@@ -243,7 +239,8 @@ The project is grouped into topical subdirectories:
 - **`firmware/`** — a committed prebuilt bitstream (`top.bit`) so a board can be flashed **without
   building** (see [Set up a board without building](#set-up-a-board-without-building)).
 - **`docs/`** — diagrams & spectrogram PNGs (in `docs/assets/`) and the session slides
-  (`docs/slides/`); **`media/`** — captured .wav/.mp4/screenshots (gitignored);
+  (`docs/slides/`, self-contained HTML, no build step); **`media/`** — captured
+  .wav/.mp4/screenshots (gitignored);
   **`build/`** — bitstream build output; **`webui/certs/`** — local TLS cert (both gitignored).
 
 > **Publishing the slides.** The deck links at the top of this file point at a **[public
