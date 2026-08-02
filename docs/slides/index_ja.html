@@ -124,6 +124,18 @@
              display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .imgcard img { max-width: 100%; max-height: 100%; border-radius: 8px; }
   .imgcap { text-align: center; font-size: 14px; color: #80868b; margin-top: 12px; }
+  /* a click-through link to a track on YouTube: thumbnail, title, running time */
+  .ytrow { display: grid; grid-template-columns: 80px 1fr auto; align-items: center; gap: 14px;
+    background: #fff; border: 1px solid var(--hairline); border-radius: 12px;
+    padding: 7px 14px 7px 7px; text-decoration: none; margin-top: 8px; }
+  .ytrow:hover { border-color: var(--blue-bright); }
+  .ytrow .ythumb { position: relative; display: block; width: 80px; height: 45px; }
+  .ytrow .ythumb img { width: 80px; height: 45px; max-width: none; max-height: none;
+    object-fit: cover; border-radius: 6px; display: block; }
+  .ytrow .ythumb svg { position: absolute; left: 50%; top: 50%; width: 26px;
+    transform: translate(-50%, -50%); filter: drop-shadow(0 1px 4px rgba(0,0,0,.45)); }
+  .ytrow .ytt { color: var(--blue-bright); font-weight: 500; font-size: 16.5px; }
+  .ytrow .ytm { color: #9aa0a6; font-size: 12.5px; white-space: nowrap; }
 
   /* milestone clips — each card is a real capture off the board (spectrogram + audio) */
   .vgrid { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr);
@@ -427,9 +439,16 @@
       </div>
     </div>
     <div>
-      <div class="imgcard" id="ytbox" style="height:340px; padding:0; overflow:hidden; position:relative;"></div>
+      <div class="imgcard" id="ytbox" style="height:266px; padding:0; overflow:hidden; position:relative;"></div>
       <div class="imgcap">デモ動画 — Web UIでボードを鳴らす様子、音はシンセ本体の出力<br>
       <span style="color:#9aa0a6">youtu.be/2ROr9M_ZlVY</span></div>
+      <div class="imgcap" style="margin-top:16px; font-size:13px;">ボードが通しで演奏した2曲 — いずれも4パート、音はシンセ本体の出力:</div>
+      <a class="ytrow" href="https://youtu.be/wpsqDLXTggE" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/wpsqDLXTggE/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">バッハ · プレリュード ハ長調</span><span class="ytm">4パート · 1:51</span></a>
+      <a class="ytrow" href="https://youtu.be/tL7N2eV9pn8" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/tL7N2eV9pn8/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">サン＝サーンス · 白鳥</span><span class="ytm">4パート · 2:18</span></a>
     </div>
   </div></section>
 
