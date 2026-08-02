@@ -1711,185 +1711,193 @@
 <!-- ============ 19c0 · THE 48 STAGES ============ -->
 <section class="slide">
   <div class="h">Inside the 48 stages</div>
-  <div class="hsub">Nobody drew these boundaries — XLS cut the dataflow graph into 48 slices. One box per stage, drawn to the size of the logic inside it; the bar between two boxes is the register wall that hands the sample on.</div>
+  <div class="hsub">Nobody drew these boundaries — XLS cut the dataflow graph into 48 slices. One box per stage, drawn to the size of the logic inside it; the bar between two boxes is the register wall that hands the data on.</div>
   <div style="margin-top:18px;">
     <svg viewBox="0 0 1152 500" style="width:100%;height:500px;">
-    <text x="56" y="16" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">box area = combinational logic in that stage · bar between boxes = the registers handed forward</text>
-    <rect x="56.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#12b5cb" opacity=".85"/>
-    <rect x="60.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="65.0" y="119.9" width="6.1" height="6.1" rx="1.5" fill="#12b5cb" opacity=".85"/>
-    <rect x="72.1" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="77.1" y="118.2" width="7.8" height="7.8" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="85.8" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="90.8" y="122.4" width="3.6" height="3.6" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="95.4" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="100.4" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="106.7" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="111.7" y="121.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="117.6" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="122.6" y="120.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="128.7" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="133.7" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="140.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="145.0" y="121.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="150.8" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="155.8" y="120.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="161.9" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="166.9" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="173.2" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="178.2" y="121.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="184.1" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="189.1" y="120.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="195.2" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="200.2" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="206.5" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="211.5" y="121.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="217.3" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="222.3" y="120.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="228.4" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="233.4" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="239.7" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="244.7" y="121.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="250.6" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="255.6" y="120.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="261.7" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="266.7" y="120.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <rect x="273.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="278.0" y="119.9" width="6.1" height="6.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
-    <circle cx="281.0" cy="112.9" r="2" fill="#d93025"/>
-    <rect x="285.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="290.0" y="83.0" width="43.0" height="43.0" rx="1.5" fill="#4285f4" opacity=".85"/>
-    <rect x="334.0" y="122.3" width="4.0" height="3.7" fill="#3c4043"/>
-    <rect x="339.0" y="54.2" width="71.8" height="71.8" rx="1.5" fill="#4285f4" opacity=".85"/>
-    <circle cx="374.9" cy="47.2" r="2" fill="#d93025"/>
-    <rect x="411.8" y="88.1" width="4.0" height="37.9" fill="#3c4043"/>
-    <rect x="416.8" y="70.4" width="55.6" height="55.6" rx="1.5" fill="#a142f4" opacity=".85"/>
-    <circle cx="444.6" cy="63.4" r="2" fill="#d93025"/>
-    <rect x="473.4" y="97.0" width="4.0" height="29.0" fill="#3c4043"/>
-    <rect x="478.4" y="53.2" width="72.8" height="72.8" rx="1.5" fill="#a142f4" opacity=".85"/>
-    <rect x="552.2" y="116.6" width="4.0" height="9.4" fill="#3c4043"/>
-    <rect x="557.2" y="97.1" width="28.9" height="28.9" rx="1.5" fill="#a142f4" opacity=".85"/>
-    <circle cx="571.7" cy="90.1" r="2" fill="#d93025"/>
-    <rect x="587.1" y="110.5" width="4.0" height="15.5" fill="#3c4043"/>
-    <rect x="592.1" y="114.2" width="11.8" height="11.8" rx="1.5" fill="#a142f4" opacity=".85"/>
-    <circle cx="590.6" cy="107.2" r="2" fill="#d93025"/>
-    <circle cx="595.6" cy="107.2" r="2" fill="#d93025"/>
-    <circle cx="600.6" cy="107.2" r="2" fill="#d93025"/>
-    <circle cx="605.6" cy="107.2" r="2" fill="#d93025"/>
-    <rect x="605.0" y="118.0" width="4.0" height="8.0" fill="#3c4043"/>
-    <rect x="610.0" y="93.4" width="32.6" height="32.6" rx="1.5" fill="#a142f4" opacity=".85"/>
-    <circle cx="626.3" cy="86.4" r="2" fill="#d93025"/>
-    <rect x="643.5" y="115.5" width="4.0" height="10.5" fill="#3c4043"/>
-    <rect x="648.5" y="50.9" width="75.1" height="75.1" rx="1.5" fill="#34a853" opacity=".85"/>
-    <circle cx="683.6" cy="43.9" r="2" fill="#d93025"/>
-    <circle cx="688.6" cy="43.9" r="2" fill="#d93025"/>
-    <rect x="724.6" y="88.7" width="4.0" height="37.3" fill="#3c4043"/>
-    <rect x="729.6" y="56.5" width="69.5" height="69.5" rx="1.5" fill="#34a853" opacity=".85"/>
-    <rect x="800.1" y="120.8" width="4.0" height="5.2" fill="#3c4043"/>
-    <rect x="805.1" y="116.9" width="9.1" height="9.1" rx="1.5" fill="#34a853" opacity=".85"/>
-    <circle cx="809.6" cy="109.9" r="2" fill="#d93025"/>
-    <rect x="815.1" y="119.9" width="4.0" height="6.1" fill="#3c4043"/>
-    <rect x="820.1" y="112.3" width="13.7" height="13.7" rx="1.5" fill="#34a853" opacity=".85"/>
-    <rect x="834.8" y="121.5" width="4.0" height="4.5" fill="#3c4043"/>
-    <rect x="839.8" y="59.1" width="66.9" height="66.9" rx="1.5" fill="#34a853" opacity=".85"/>
-    <rect x="907.8" y="122.4" width="4.0" height="3.6" fill="#3c4043"/>
-    <rect x="912.8" y="71.8" width="54.2" height="54.2" rx="1.5" fill="#34a853" opacity=".85"/>
-    <circle cx="937.4" cy="64.8" r="2" fill="#d93025"/>
-    <circle cx="942.4" cy="64.8" r="2" fill="#d93025"/>
-    <rect x="968.0" y="86.0" width="4.0" height="40.0" fill="#3c4043"/>
-    <rect x="973.0" y="106.3" width="19.7" height="19.7" rx="1.5" fill="#e8710a" opacity=".85"/>
-    <circle cx="980.4" cy="99.3" r="2" fill="#d93025"/>
-    <circle cx="985.4" cy="99.3" r="2" fill="#d93025"/>
-    <rect x="993.7" y="123.7" width="4.0" height="2.3" fill="#3c4043"/>
-    <rect x="998.7" y="112.4" width="13.6" height="13.6" rx="1.5" fill="#e8710a" opacity=".85"/>
-    <circle cx="1003.0" cy="105.4" r="2" fill="#d93025"/>
-    <circle cx="1008.0" cy="105.4" r="2" fill="#d93025"/>
-    <rect x="1013.3" y="124.1" width="4.0" height="1.9" fill="#3c4043"/>
-    <rect x="1018.3" y="114.2" width="11.8" height="11.8" rx="1.5" fill="#e8710a" opacity=".85"/>
-    <rect x="1031.2" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1036.2" y="118.4" width="7.6" height="7.6" rx="1.5" fill="#e8710a" opacity=".85"/>
-    <circle cx="1040.0" cy="111.4" r="2" fill="#d93025"/>
-    <rect x="1044.8" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1049.8" y="115.6" width="10.4" height="10.4" rx="1.5" fill="#e8710a" opacity=".85"/>
-    <rect x="1061.2" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1066.2" y="113.8" width="12.2" height="12.2" rx="1.5" fill="#d93025" opacity=".85"/>
-    <rect x="1079.4" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1084.4" y="118.8" width="7.2" height="7.2" rx="1.5" fill="#d93025" opacity=".85"/>
-    <circle cx="1088.0" cy="111.8" r="2" fill="#d93025"/>
-    <rect x="1092.6" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1097.6" y="114.7" width="11.3" height="11.3" rx="1.5" fill="#d93025" opacity=".85"/>
-    <rect x="1109.8" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1114.8" y="121.8" width="4.2" height="4.2" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <rect x="1120.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1125.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <rect x="1129.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1134.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <rect x="1138.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1143.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <rect x="1147.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1152.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <rect x="1156.0" y="124.5" width="4.0" height="1.5" fill="#3c4043"/>
-    <rect x="1161.0" y="123.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
-    <path d="M50 126.0 L1146 126.0" stroke="#9aa0a6" stroke-width="1.2"/>
-    <text x="57.5" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">0</text>
-    <text x="103.06719812246051" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">4</text>
-    <text x="147.39941445902656" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">8</text>
-    <text x="191.62778486727976" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">12</text>
-    <text x="236.06827200307447" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">16</text>
-    <text x="280.9925700089152" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">20</text>
-    <text x="514.8035966071352" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">24</text>
-    <text x="686.0805058996817" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">28</text>
-    <text x="873.2983232265732" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">32</text>
-    <text x="1024.2477672500645" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">36</text>
-    <text x="1087.9720873948233" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">40</text>
-    <text x="1135.5" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">44</text>
-    <text x="1162.5" y="138.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">47</text>
-    <rect x="56.0" y="146" width="15.1" height="5" rx="2.5" fill="#12b5cb"/>
-    <rect x="77.1" y="146" width="207.0" height="5" rx="2.5" fill="#f9ab00"/>
-    <rect x="290.0" y="146" width="120.8" height="5" rx="2.5" fill="#4285f4"/>
-    <rect x="416.8" y="146" width="225.7" height="5" rx="2.5" fill="#a142f4"/>
-    <rect x="648.5" y="146" width="318.5" height="5" rx="2.5" fill="#34a853"/>
-    <rect x="973.0" y="146" width="87.2" height="5" rx="2.5" fill="#e8710a"/>
-    <rect x="1066.2" y="146" width="42.7" height="5" rx="2.5" fill="#d93025"/>
-    <rect x="1114.8" y="146" width="49.2" height="5" rx="2.5" fill="#9aa0a6"/>
-    <path d="M1148 148.5 l-9 -5 l0 10 z" fill="#9aa0a6"/>
-    <text x="56" y="172" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">one sample’s data walks left → right, one stage per clock — 48 different samples are in flight at once</text>
-    <text x="56" y="192" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">● = a hardware multiply, mapped onto one of the design’s 26 DSP48 blocks — it costs no LUTs, so it is not in the box area</text>
-    <rect x="56" y="204" width="12" height="12" rx="2.5" fill="#12b5cb"/>
-    <text x="76" y="214" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">0–1</text>
-    <text x="122" y="214" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">MIDI in</text>
-    <text x="322" y="214" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">A UART byte, then a running-status MIDI parse: note-on, note-off, control change.</text>
-    <rect x="56" y="228" width="12" height="12" rx="2.5" fill="#f9ab00"/>
-    <text x="76" y="238" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">2–20</text>
-    <text x="122" y="238" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Free-voice scan</text>
-    <text x="322" y="238" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">A serial fold over the 32 slots looking for free ones: the count chains slot to slot, so only ~2 fit per stage.</text>
-    <rect x="56" y="252" width="12" height="12" rx="2.5" fill="#4285f4"/>
-    <text x="76" y="262" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">21–22</text>
-    <text x="122" y="262" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Voice &amp; part fetch</text>
-    <text x="322" y="262" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">One-hot write masks, then the slot-0 voice and its part’s parameters — 93 array reads land in stage 22 alone.</text>
-    <rect x="56" y="276" width="12" height="12" rx="2.5" fill="#a142f4"/>
-    <text x="76" y="286" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">23–27</text>
-    <text x="122" y="286" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Envelopes &amp; modulation</text>
-    <text x="322" y="286" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Two ADSRs, portamento glide, the LFO, tremolo gain, the note→increment table, unison detune seeds.</text>
-    <rect x="56" y="300" width="12" height="12" rx="2.5" fill="#34a853"/>
-    <text x="76" y="310" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">28–33</text>
-    <text x="122" y="310" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Oscillators</text>
-    <text x="322" y="310" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Phase advance, detuned 2nd osc, sub-osc, noise LFSR, PWM compare, ring/FM multiply, and the writeback into the 32-voice ring.</text>
-    <rect x="56" y="324" width="12" height="12" rx="2.5" fill="#e8710a"/>
-    <text x="76" y="334" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">34–38</text>
-    <text x="122" y="334" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Filter</text>
-    <text x="322" y="334" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">The state-variable filter: three clamped integrator steps (low → high → band) plus the de-latch leak.</text>
-    <rect x="56" y="348" width="12" height="12" rx="2.5" fill="#d93025"/>
-    <text x="76" y="358" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">39–41</text>
-    <text x="122" y="358" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Mix &amp; output</text>
-    <text x="322" y="358" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Per-part gain and volume, accumulate into the mix, clamp to 16 bits, advance each part’s LFO on slot 31.</text>
-    <rect x="56" y="372" width="12" height="12" rx="2.5" fill="#9aa0a6"/>
-    <text x="76" y="382" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">42–47</text>
-    <text x="122" y="382" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Nothing</text>
-    <text x="322" y="382" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Six stages carrying only the valid bit: latency the scheduler added to reach the 48 we asked for.</text>
-    <rect x="0" y="426" width="1152" height="64" rx="10" fill="#e6f4ea"/>
-    <text x="20" y="453" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#188038" font-weight="700">This is nobody’s block diagram. It is lumpy, it interleaves note handling with DSP, and it ends in six empty stages.</text>
-    <text x="20" y="477" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">We only ever gave a number — --pipeline_stages=48. Where the cuts fall is the scheduler’s answer to the 30 ns budget, not a partition we drew.</text>
+    <text x="56" y="14" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">box area = combinational logic in that stage · bar between boxes = the registers handed forward</text>
+    <rect x="56.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#12b5cb" opacity=".85"/>
+    <rect x="60.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="65.0" y="111.9" width="6.1" height="6.1" rx="1.5" fill="#12b5cb" opacity=".85"/>
+    <rect x="72.1" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="77.1" y="110.2" width="7.8" height="7.8" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="85.8" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="90.8" y="114.4" width="3.6" height="3.6" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="95.4" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="100.4" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="106.7" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="111.7" y="113.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="117.6" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="122.6" y="112.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="128.7" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="133.7" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="140.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="145.0" y="113.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="150.8" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="155.8" y="112.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="161.9" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="166.9" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="173.2" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="178.2" y="113.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="184.1" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="189.1" y="112.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="195.2" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="200.2" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="206.5" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="211.5" y="113.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="217.3" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="222.3" y="112.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="228.4" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="233.4" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="239.7" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="244.7" y="113.1" width="4.9" height="4.9" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="250.6" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="255.6" y="112.9" width="5.1" height="5.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="261.7" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="266.7" y="112.7" width="5.3" height="5.3" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <rect x="273.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="278.0" y="111.9" width="6.1" height="6.1" rx="1.5" fill="#f9ab00" opacity=".85"/>
+    <circle cx="281.0" cy="104.9" r="2" fill="#d93025"/>
+    <rect x="285.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="290.0" y="75.0" width="43.0" height="43.0" rx="1.5" fill="#4285f4" opacity=".85"/>
+    <rect x="334.0" y="114.3" width="4.0" height="3.7" fill="#3c4043"/>
+    <rect x="339.0" y="46.2" width="71.8" height="71.8" rx="1.5" fill="#4285f4" opacity=".85"/>
+    <circle cx="374.9" cy="39.2" r="2" fill="#d93025"/>
+    <rect x="411.8" y="80.1" width="4.0" height="37.9" fill="#3c4043"/>
+    <rect x="416.8" y="62.4" width="55.6" height="55.6" rx="1.5" fill="#a142f4" opacity=".85"/>
+    <circle cx="444.6" cy="55.4" r="2" fill="#d93025"/>
+    <rect x="473.4" y="89.0" width="4.0" height="29.0" fill="#3c4043"/>
+    <rect x="478.4" y="45.2" width="72.8" height="72.8" rx="1.5" fill="#a142f4" opacity=".85"/>
+    <rect x="552.2" y="108.6" width="4.0" height="9.4" fill="#3c4043"/>
+    <rect x="557.2" y="89.1" width="28.9" height="28.9" rx="1.5" fill="#a142f4" opacity=".85"/>
+    <circle cx="571.7" cy="82.1" r="2" fill="#d93025"/>
+    <rect x="587.1" y="102.5" width="4.0" height="15.5" fill="#3c4043"/>
+    <rect x="592.1" y="106.2" width="11.8" height="11.8" rx="1.5" fill="#a142f4" opacity=".85"/>
+    <circle cx="590.6" cy="99.2" r="2" fill="#d93025"/>
+    <circle cx="595.6" cy="99.2" r="2" fill="#d93025"/>
+    <circle cx="600.6" cy="99.2" r="2" fill="#d93025"/>
+    <circle cx="605.6" cy="99.2" r="2" fill="#d93025"/>
+    <rect x="605.0" y="110.0" width="4.0" height="8.0" fill="#3c4043"/>
+    <rect x="610.0" y="85.4" width="32.6" height="32.6" rx="1.5" fill="#a142f4" opacity=".85"/>
+    <circle cx="626.3" cy="78.4" r="2" fill="#d93025"/>
+    <rect x="643.5" y="107.5" width="4.0" height="10.5" fill="#3c4043"/>
+    <rect x="648.5" y="42.9" width="75.1" height="75.1" rx="1.5" fill="#34a853" opacity=".85"/>
+    <circle cx="683.6" cy="35.9" r="2" fill="#d93025"/>
+    <circle cx="688.6" cy="35.9" r="2" fill="#d93025"/>
+    <rect x="724.6" y="80.7" width="4.0" height="37.3" fill="#3c4043"/>
+    <rect x="729.6" y="48.5" width="69.5" height="69.5" rx="1.5" fill="#34a853" opacity=".85"/>
+    <rect x="800.1" y="112.8" width="4.0" height="5.2" fill="#3c4043"/>
+    <rect x="805.1" y="108.9" width="9.1" height="9.1" rx="1.5" fill="#34a853" opacity=".85"/>
+    <circle cx="809.6" cy="101.9" r="2" fill="#d93025"/>
+    <rect x="815.1" y="111.9" width="4.0" height="6.1" fill="#3c4043"/>
+    <rect x="820.1" y="104.3" width="13.7" height="13.7" rx="1.5" fill="#34a853" opacity=".85"/>
+    <rect x="834.8" y="113.5" width="4.0" height="4.5" fill="#3c4043"/>
+    <rect x="839.8" y="51.1" width="66.9" height="66.9" rx="1.5" fill="#34a853" opacity=".85"/>
+    <rect x="907.8" y="114.4" width="4.0" height="3.6" fill="#3c4043"/>
+    <rect x="912.8" y="63.8" width="54.2" height="54.2" rx="1.5" fill="#34a853" opacity=".85"/>
+    <circle cx="937.4" cy="56.8" r="2" fill="#d93025"/>
+    <circle cx="942.4" cy="56.8" r="2" fill="#d93025"/>
+    <rect x="968.0" y="78.0" width="4.0" height="40.0" fill="#3c4043"/>
+    <rect x="973.0" y="98.3" width="19.7" height="19.7" rx="1.5" fill="#e8710a" opacity=".85"/>
+    <circle cx="980.4" cy="91.3" r="2" fill="#d93025"/>
+    <circle cx="985.4" cy="91.3" r="2" fill="#d93025"/>
+    <rect x="993.7" y="115.7" width="4.0" height="2.3" fill="#3c4043"/>
+    <rect x="998.7" y="104.4" width="13.6" height="13.6" rx="1.5" fill="#e8710a" opacity=".85"/>
+    <circle cx="1003.0" cy="97.4" r="2" fill="#d93025"/>
+    <circle cx="1008.0" cy="97.4" r="2" fill="#d93025"/>
+    <rect x="1013.3" y="116.1" width="4.0" height="1.9" fill="#3c4043"/>
+    <rect x="1018.3" y="106.2" width="11.8" height="11.8" rx="1.5" fill="#e8710a" opacity=".85"/>
+    <rect x="1031.2" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1036.2" y="110.4" width="7.6" height="7.6" rx="1.5" fill="#e8710a" opacity=".85"/>
+    <circle cx="1040.0" cy="103.4" r="2" fill="#d93025"/>
+    <rect x="1044.8" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1049.8" y="107.6" width="10.4" height="10.4" rx="1.5" fill="#e8710a" opacity=".85"/>
+    <rect x="1061.2" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1066.2" y="105.8" width="12.2" height="12.2" rx="1.5" fill="#d93025" opacity=".85"/>
+    <rect x="1079.4" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1084.4" y="110.8" width="7.2" height="7.2" rx="1.5" fill="#d93025" opacity=".85"/>
+    <circle cx="1088.0" cy="103.8" r="2" fill="#d93025"/>
+    <rect x="1092.6" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1097.6" y="106.7" width="11.3" height="11.3" rx="1.5" fill="#d93025" opacity=".85"/>
+    <rect x="1109.8" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1114.8" y="113.8" width="4.2" height="4.2" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <rect x="1120.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1125.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <rect x="1129.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1134.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <rect x="1138.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1143.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <rect x="1147.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1152.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <rect x="1156.0" y="116.5" width="4.0" height="1.5" fill="#3c4043"/>
+    <rect x="1161.0" y="115.0" width="3.0" height="3.0" rx="1.5" fill="#9aa0a6" opacity=".85"/>
+    <path d="M50 118.0 L1146 118.0" stroke="#9aa0a6" stroke-width="1.2"/>
+    <text x="57.5" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">0</text>
+    <text x="103.06719812246051" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">4</text>
+    <text x="147.39941445902656" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">8</text>
+    <text x="191.62778486727976" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">12</text>
+    <text x="236.06827200307447" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">16</text>
+    <text x="280.9925700089152" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">20</text>
+    <text x="514.8035966071352" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">24</text>
+    <text x="686.0805058996817" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">28</text>
+    <text x="873.2983232265732" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">32</text>
+    <text x="1024.2477672500645" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">36</text>
+    <text x="1087.9720873948233" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">40</text>
+    <text x="1135.5" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">44</text>
+    <text x="1162.5" y="130.0" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#9aa0a6" text-anchor="middle">47</text>
+    <g transform="translate(54.5,136)" fill="none" stroke="#12b5cb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.4"/><circle cx="4.8" cy="9" r="1.15" fill="#12b5cb"/><circle cx="6.0" cy="6.0" r="1.15" fill="#12b5cb"/><circle cx="9" cy="4.8" r="1.15" fill="#12b5cb"/><circle cx="12.0" cy="6.0" r="1.15" fill="#12b5cb"/><circle cx="13.2" cy="9" r="1.15" fill="#12b5cb"/></g>
+    <rect x="56.0" y="158" width="15.1" height="5" rx="2.5" fill="#12b5cb"/>
+    <g transform="translate(171.5,136)" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.4" cy="7.4" r="5.2"/><path d="M11.2 11.2 L16.4 16.4"/></g>
+    <rect x="77.1" y="158" width="207.0" height="5" rx="2.5" fill="#f9ab00"/>
+    <g transform="translate(341.4,136)" fill="none" stroke="#4285f4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.2" y="3.2" width="9.6" height="11.6" rx="1.5"/><path d="M1.2 7.1 h9.6 M1.2 11 h9.6"/><path d="M12.4 9 h4.4 M14.9 6.9 l2.1 2.1 l-2.1 2.1"/></g>
+    <rect x="290.0" y="158" width="120.8" height="5" rx="2.5" fill="#4285f4"/>
+    <g transform="translate(520.7,136)" fill="none" stroke="#a142f4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 16 L4.8 3 L8.2 10 L12 10 L16.8 16"/></g>
+    <rect x="416.8" y="158" width="225.7" height="5" rx="2.5" fill="#a142f4"/>
+    <g transform="translate(798.8,136)" fill="none" stroke="#34a853" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 9 Q3 2 5 9 T9 9 T13 9 T17 9"/></g>
+    <rect x="648.5" y="158" width="318.5" height="5" rx="2.5" fill="#34a853"/>
+    <g transform="translate(1007.6,136)" fill="none" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 7.4 H7.4 Q9.8 7.4 10.7 4.4 Q11.7 7.6 12.6 10.6 L16.6 16"/></g>
+    <rect x="973.0" y="158" width="87.2" height="5" rx="2.5" fill="#e8710a"/>
+    <g transform="translate(1078.5,136)" fill="none" stroke="#d93025" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7 H5 L9 3.4 V14.6 L5 11 H2 Z"/><path d="M11.8 6.6 Q14.2 9 11.8 11.4"/><path d="M14.3 4.2 Q17.6 9 14.3 13.8"/></g>
+    <rect x="1066.2" y="158" width="42.7" height="5" rx="2.5" fill="#d93025"/>
+    <g transform="translate(1130.4,136)" fill="none" stroke="#9aa0a6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7"/><path d="M9 4.6 V9.2 L12.3 11.2"/></g>
+    <rect x="1114.8" y="158" width="49.2" height="5" rx="2.5" fill="#9aa0a6"/>
+    <path d="M1148 160.5 l-9 -5 l0 10 z" fill="#9aa0a6"/>
+    <text x="56" y="182" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">data moves one stage per clock-enable — 30 ns, one in every three 100 MHz cycles — so all 48 stages take 1.44 µs end to end</text>
+    <text x="56" y="201" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">a new voice enters every 24 ce (measured), so two are inside the 48 stages at any moment · ● = a hardware multiply, mapped onto one of the 26 DSP48 blocks and so costing no LUTs</text>
+    <g transform="translate(56,216) scale(0.78)" fill="none" stroke="#12b5cb" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.4"/><circle cx="4.8" cy="9" r="1.15" fill="#12b5cb"/><circle cx="6.0" cy="6.0" r="1.15" fill="#12b5cb"/><circle cx="9" cy="4.8" r="1.15" fill="#12b5cb"/><circle cx="12.0" cy="6.0" r="1.15" fill="#12b5cb"/><circle cx="13.2" cy="9" r="1.15" fill="#12b5cb"/></g>
+    <text x="78" y="228" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">0–1</text>
+    <text x="124" y="228" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">MIDI in</text>
+    <text x="322" y="228" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">A UART byte, then a running-status MIDI parse: note-on, note-off, control change.</text>
+    <g transform="translate(56,240) scale(0.78)" fill="none" stroke="#f9ab00" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.4" cy="7.4" r="5.2"/><path d="M11.2 11.2 L16.4 16.4"/></g>
+    <text x="78" y="252" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">2–20</text>
+    <text x="124" y="252" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Free-voice scan</text>
+    <text x="322" y="252" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">A serial fold over the 32 slots looking for free ones: the count chains slot to slot, so only ~2 fit per stage.</text>
+    <g transform="translate(56,264) scale(0.78)" fill="none" stroke="#4285f4" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.2" y="3.2" width="9.6" height="11.6" rx="1.5"/><path d="M1.2 7.1 h9.6 M1.2 11 h9.6"/><path d="M12.4 9 h4.4 M14.9 6.9 l2.1 2.1 l-2.1 2.1"/></g>
+    <text x="78" y="276" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">21–22</text>
+    <text x="124" y="276" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Voice &amp; part fetch</text>
+    <text x="322" y="276" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">One-hot write masks, then the slot-0 voice and its part’s parameters — 93 array reads land in stage 22 alone.</text>
+    <g transform="translate(56,288) scale(0.78)" fill="none" stroke="#a142f4" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 16 L4.8 3 L8.2 10 L12 10 L16.8 16"/></g>
+    <text x="78" y="300" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">23–27</text>
+    <text x="124" y="300" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Envelopes &amp; modulation</text>
+    <text x="322" y="300" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Two ADSRs, portamento glide, the LFO, tremolo gain, the note→increment table, unison detune seeds.</text>
+    <g transform="translate(56,312) scale(0.78)" fill="none" stroke="#34a853" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 9 Q3 2 5 9 T9 9 T13 9 T17 9"/></g>
+    <text x="78" y="324" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">28–33</text>
+    <text x="124" y="324" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Oscillators</text>
+    <text x="322" y="324" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Phase advance, detuned 2nd osc, sub-osc, noise LFSR, PWM compare, ring/FM multiply, and the writeback into the 32-voice ring.</text>
+    <g transform="translate(56,336) scale(0.78)" fill="none" stroke="#e8710a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 7.4 H7.4 Q9.8 7.4 10.7 4.4 Q11.7 7.6 12.6 10.6 L16.6 16"/></g>
+    <text x="78" y="348" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">34–38</text>
+    <text x="124" y="348" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Filter</text>
+    <text x="322" y="348" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">The state-variable filter: three clamped integrator steps (low → high → band) plus the de-latch leak.</text>
+    <g transform="translate(56,360) scale(0.78)" fill="none" stroke="#d93025" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7 H5 L9 3.4 V14.6 L5 11 H2 Z"/><path d="M11.8 6.6 Q14.2 9 11.8 11.4"/><path d="M14.3 4.2 Q17.6 9 14.3 13.8"/></g>
+    <text x="78" y="372" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">39–41</text>
+    <text x="124" y="372" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Mix &amp; output</text>
+    <text x="322" y="372" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Per-part gain and volume, accumulate into the mix, clamp to 16 bits, advance each part’s LFO on slot 31.</text>
+    <g transform="translate(56,384) scale(0.78)" fill="none" stroke="#9aa0a6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7"/><path d="M9 4.6 V9.2 L12.3 11.2"/></g>
+    <text x="78" y="396" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#80868b">42–47</text>
+    <text x="124" y="396" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Nothing</text>
+    <text x="322" y="396" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">Six stages carrying only the valid bit: latency the scheduler added to reach the 48 we asked for.</text>
+    <rect x="0" y="430" width="1152" height="62" rx="10" fill="#e6f4ea"/>
+    <text x="20" y="456" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#188038" font-weight="700">This is nobody’s block diagram. It is lumpy, it interleaves note handling with DSP, and it ends in six empty stages.</text>
+    <text x="20" y="479" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">We only ever gave a number — --pipeline_stages=48. Where the cuts fall is the scheduler’s answer to the 30 ns budget, not a partition we drew.</text>
     </svg>
   </div>
 </section>
