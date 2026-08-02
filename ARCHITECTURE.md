@@ -117,7 +117,10 @@ ready/valid handshake. After the pull, the engine **immediately scans the next s
 (96 clk on `ce`) *in parallel* with the effects FSM (on `ce8`) and the UART TX — that's why the scan
 needs no snip of its own: it overlaps the runs already snipped, and `avld` goes high again the moment
 it finishes. The long runs (the 96-clock scan, the effects tail, the ~2000-clock UART TX, the
-~861-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles:
+~960-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles. The idle
+tail is `3125 − 168 − 2000 ≈ 957` — only the effects pass and the UART frame are in series (TX starts
+when `dst` reaches 28, [`rtl/top.v`](rtl/top.v)); the 96-clock scan overlaps them and belongs to the
+*next* sample, so it doesn't come out of this period:
 
 ![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/assets/wd_e2e.svg)
 
