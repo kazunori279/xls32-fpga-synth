@@ -227,7 +227,10 @@ Today everything assumes one board. The seam to introduce is a **board package**
 scripts + flash recipe) and a **host transport interface**. Everything that is DSP or musical stays
 shared.
 
-### Target layout
+### The layout, as built
+
+Everything unmarked exists today; `(Mnn)` marks a directory that lands with the milestone that
+first needs it, so the tree below is also the plan.
 
 ```
 core/                          # board-independent
@@ -240,35 +243,33 @@ core/                          # board-independent
 boards/
   __init__.py                  # registry: get_board("basys3" | "tiliqua")
   basys3/
-    board.py                   # descriptor: transport="uart", sr=32000, flash cmd, CC caveats
+    board.py                   # descriptor: transport="uart", sr=32000, load cmd
     rtl/     top.v  basys3.xdc  basys3_nextpnr.xdc  build_vivado.tcl
     scripts/ build.sh  vmbuild.sh  vmbuild_vivado.sh  vmbuild_nextpnr.sh  remote_build.sh  verify.sh
     firmware/ top.bit
   tiliqua/
-    board.py                   # descriptor: transport="usbaudio", sr=…, flash cmd
-    gateware/
+    board.py                   # descriptor: transport="usbaudio", sr=48000, unsupported="…M21"
+    gateware/                  # (M21)
       top.py                   # Amaranth top — audio-only variant
       xls_engine.py            # Instance() wrapper around core/engine.v + CE/CDC
-      effects.py               # PSRAM-backed chorus / echo / reverb
-      midi_bridge.py           # TRS + USB-MIDI → engine's u8 midi_in channel
+      effects.py               # (M26) PSRAM-backed chorus / echo / reverb
+      midi_bridge.py           # (M24) TRS + USB-MIDI → engine's u8 midi_in channel
       video/                   # (M28+) framebuffer, scope, menu overlay
     fw/                        # (M29) Rust firmware for the SoC menu
-    scripts/ build.sh  flash.sh
-    firmware/                  # released .tar.gz bitstream archives
-    deps/tiliqua               # git submodule (apfaudio/tiliqua)
+    scripts/ build.sh          # (M21)   flash.sh (M31)
+    firmware/                  # (M31) released .tar.gz bitstream archives
+    deps/tiliqua               # (M21) git submodule (apfaudio/tiliqua)
 
 host/
   transport/
-    base.py                    # Transport ABC: open() / send_midi(bytes) / read_frames(n) / close()
-    uart.py                    # ← the serial half of today's uartaudio.py
-    usbaudio.py                # sounddevice capture + USB-MIDI out
-  synth.py                     # ← the set_* / CC helper half of uartaudio.py (board-agnostic)
+    base.py                    # Transport ABC + open_transport(board) factory
+    uart.py                    # ← the serial half of the old uartaudio.py, verbatim
+    usbaudio.py                # (M25) sounddevice capture + USB-MIDI out
+  synth.py                     # ← the set_* / CC helper half, plus SR from the descriptor
   play.py  record_wav.py  analyze.py  analyze_fft.py  filter_demo.py  fx_diag.py
   demos/
 
-webui/                         # unchanged; server.py gains --board
-test/                          # unchanged; harness.py gains --board
-presetgen/                     # unchanged; engine.py takes SR from the board descriptor
+webui/  test/  presetgen/      # unchanged; they import host/synth.py and get SR from the board
 scripts/                       # board-agnostic media tools stay: spectro.sh make_mp4.sh demo_video.sh
 docs/
 ```
@@ -278,15 +279,29 @@ docs/
 1. **`core/` never mentions a board.** No pin names, no clock rates, no transport. The only
    board-visible interface is the proc's three channels (`midi_in`, `audio_out`, `viz_out`).
 2. **One board seam on the host side.** Everything in `host/`, `webui/`, `test/`, `presetgen/`
-   talks to a `Transport` and reads `SR` from a board descriptor. Today 29 files touch
-   `uartaudio`; after the split they touch `host/synth.py` and never `serial` directly.
-3. **Board selection** is `--board` / `$XLS32_BOARD`, defaulting to `basys3` so nothing existing
-   breaks.
+   talks to a `Transport` and reads `SR` from a board descriptor. 29 files used to touch
+   `uartaudio`; now they touch `host/synth.py` and never `serial` directly.
+3. **Board selection is `$XLS32_BOARD`, defaulting to `basys3`** so nothing existing breaks.
+   *Deliberately no `--board` flag yet:* `host/synth.py` binds `SR` at **import** time, so a flag
+   parsed halfway down a `main()` would be read after every module that depends on it has already
+   captured the old value — it would look like it worked and silently grade at the wrong rate. The
+   flag can land at M25, when a second board actually produces samples to be wrong about.
 4. **Use `git mv`** so history follows the files.
 5. **Exit criterion for M20: the Basys 3 e2e suite scores the same as before the move.** The
    restructure is not allowed to change behaviour.
 
-Docs to update in the same milestone: `README.md` (repo layout, all command paths),
+Two things the first draft of this section got wrong, corrected here:
+
+- **`presetgen/engine.py` must *not* take `SR` from the board.** Its `SR = 28000` is a property of
+  the offline *model*, not of any board: the `BASE_INC` phase increments are tuned against it, and
+  the calibration bank was fitted at that rate. Repointing it at the board's 32 kHz would silently
+  invalidate every stored preset. It stays a module constant.
+- **`core/codegen.sh` did not exist.** The XLS invocation was copy-pasted into four build scripts
+  and had already drifted — `build.sh` hardcoded `--pipeline_stages=48` where the VM scripts passed
+  `$STAGES`. M20 extracted it, so the Tiliqua build calls the same twelve lines the Basys 3 build
+  does rather than a fifth copy.
+
+Docs updated in the same milestone: `README.md` (repo layout, all command paths),
 `ARCHITECTURE.md` (file references), `DEVELOPMENT.md`, `test/README.md`.
 
 ---
@@ -298,11 +313,18 @@ existing loop.
 
 ### Phase A — foundations
 
-**M20 · Restructure for two boards**
+**M20 · Restructure for two boards** — *code done; awaiting the hardware regression*
 Move to the layout in §3. Split `host/uartaudio.py` into `host/transport/uart.py` +
-`host/synth.py`. Add `boards/*/board.py` descriptors and `--board` plumbing through `host/`,
+`host/synth.py`. Add `boards/*/board.py` descriptors and `$XLS32_BOARD` plumbing through `host/`,
 `webui/`, `test/`, `presetgen/`.
 *Exit:* `uv run python test/run_tests.py` on Basys 3 scores within noise of the pre-move report.
+
+Done so far, with no board attached: 26 importers rewritten, `core/codegen.sh` extracted, docs
+repathed. Verified statically — all 35 MIDI builders plus `pitch_bend`, `note_to_hz`, `glitches`,
+`samples_from_bytes`, `to_signed` and `normalize` snapshotted to JSON before the split produce
+**byte-identical** output after it; every entry point still resolves its imports; every doc link
+and script path points at a file that exists. That covers the pure functions and the wiring, but
+not the wire — the exit criterion above still needs the Basys 3 plugged in.
 
 **M21 · ECP5 feasibility spike** *(decision gate)*
 Build `core/engine.v` standalone for `LFE5U-25F` with yosys + nextpnr-ecp5 — no Tiliqua

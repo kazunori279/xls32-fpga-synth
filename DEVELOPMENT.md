@@ -78,6 +78,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **15 ✅** | ⭐ **unison** (voice-stacking, detune + phase-decorrelation) | **thick super-saw; beating 2%→37% as voices stack** |
 | **Web UI ✅** | Browser **synth panel** (live MIDI in + audio out + ADSR over CC) | **RMS rises on note; slow-attack pad vs fast bass audible** |
 | 16+ | 24 dB filter / self-osc / drive (cascade a 2nd SVF pole + saturation), **ring/FM ✅ (M19)**, osc sync, exp. envelopes, LFO shapes, aftertouch / mod matrix | — |
+| 20 ◐ | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | pure functions byte-identical across the split; **Basys 3 e2e regression pending** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -221,7 +222,7 @@ uv run host/demos/demo.py demo.wav && scripts/make_mp4.sh demo.wav   # record + 
 - **Bandwidth sets the ceiling:** 115200 baud = ~11.5 kB/s, so 8-bit maxes ~11 kHz.
   16-bit @ 32 kHz needs 64 kB/s → bumped the UART to **1 Mbaud** (both ends).
 - **macOS custom baud:** `termios` only names up to B230400; for 1 Mbaud use the
-  `IOSSIOSPEED` ioctl (`0x80045402`) after `tcsetattr` (see `uartaudio.py`).
+  `IOSSIOSPEED` ioctl (`0x80045402`) after `tcsetattr` (see `host/transport/uart.py`).
 - **16-bit framing without a sync word:** stream lo/hi bytes and **auto-detect the
   byte alignment on the host** — real audio is smooth, a 1-byte-shifted stream is
   noise, so pick the offset with the smaller sample-to-sample delta.
@@ -328,7 +329,7 @@ clock via a global **clock-enable** (`ce`, injected by `fix_verilog.py`), giving
 every register path a 20 ns budget. See the frictions section for the full story.
 
 ```bash
-scripts/build.sh      # or: STAGES=48 WCT=48 scripts/remote_build.sh  (native x86 host, faster)
+boards/basys3/scripts/build.sh      # or: STAGES=48 WCT=48 boards/basys3/scripts/remote_build.sh  (native x86 host, faster)
 openFPGALoader -b basys3 build/top.bit
 uv run host/play.py                 # 4/4 chord over UART
 uv run host/record_wav.py 3 m6a.wav && scripts/spectro.sh m6a.wav   # clean spectrogram
@@ -576,7 +577,7 @@ flowchart LR
   BR -->|"WS: PCM frames down"| AW
 ```
 
-- **Bridge** (`webui/server.py`, [FastAPI](https://fastapi.tiangolo.com/)): owns the serial port (reuses `uartaudio.open_port`),
+- **Bridge** (`webui/server.py`, [FastAPI](https://fastapi.tiangolo.com/)): owns the serial port (reuses `transport.uart.open_port`),
   one reader thread drains the FTDI RX buffer, **byte-aligns** the 16-bit stream, and forwards
   the *raw* aligned bytes to every browser over one WebSocket (a per-sample Python decode
   couldn't keep up with the stream and dropped data — the browser decodes instead); MIDI bytes
@@ -853,12 +854,12 @@ add the two interfaces that make it a **standalone** instrument — a hardware M
 straight in, and analog audio out to real speakers — with **no host and no OS/driver round-trip**.
 This is the low-latency chain: keyboard → FPGA → DAC → amp, every stage hard-real-time.
 
-- **M7 — DIN MIDI input** (`rtl/top.v`). A second **UART RX at 31250 baud** on **Pmod JA1**, fed by
+- **M7 — DIN MIDI input** (`boards/basys3/rtl/top.v`). A second **UART RX at 31250 baud** on **Pmod JA1**, fed by
   a standard **opto-isolated MIDI-DIN breakout**. Its decoded bytes are **arbitrated into the same
   `midi_in` stream** the FT2232 (web UI, 2 Mbaud) already drives — so the hardware keyboard and the
   browser coexist, both routing to the 4 parts by channel. The parser, voice allocation, and CC map
   are all unchanged; MIDI simply has a second physical source.
-- **M8 — I2S DAC output** (`rtl/top.v`). A **Philips-I2S master** (BCLK / LRCLK / SDATA on **Pmod
+- **M8 — I2S DAC output** (`boards/basys3/rtl/top.v`). A **Philips-I2S master** (BCLK / LRCLK / SDATA on **Pmod
   JB1–3**) clocks the engine's 16-bit stereo samples to a **UDA1334A** DAC, whose analog line-out
   feeds the speakers (**KEF LSX II** via 3.5 mm, in this build). BCLK = 3.125 MHz, 64 BCLK/frame →
   Fs ≈ 48.8 kHz, a zero-order hold of the 28 kHz engine samples; offset-binary → two's-complement
@@ -872,7 +873,7 @@ shift registers on the 100 MHz clock). The full build confirms it: **`Final crit
 39.85 ns`** — under the ÷4 40 ns budget, and actually *better* than the pre-M7/M8 4-part figure
 (40.02 ns), so the added I/O placed for free. `basys3.xdc` gains the four Pmod pins (JA1; JB1–3).
 
-**Verification.** A functional iverilog testbench (`rtl/tb_io.v`, with a stub engine) drives a DIN
+**Verification.** A functional iverilog testbench (`core/sim/tb_io.v`, with a stub engine) drives a DIN
 note-on and checks that (a) the bytes decode and forward to the engine (`last = 0x64`, the
 velocity) and (b) BCLK/LRCLK toggle — both pass. The full F4PGA build synthesizes, routes, and
 closes timing (above). **Not yet hardware-tested** — the MIDI-DIN breakout + UDA1334A are on order;
@@ -883,6 +884,44 @@ once they arrive the plan is: flash, wire (breakout at 3.3 V → JA1; DAC → JB
 > serial-out → **JA1**, powered from JA pin 6 (VCC) + pin 5 (GND); keyboard DIN-OUT → breakout
 > DIN-IN. *FPGA→speakers:* UDA1334A BCLK←JB1, WSEL←JB2, DIN←JB3, VIN←JB pin 6 (3.3 V), GND←JB pin 5;
 > DAC 3.5 mm line-out → speaker aux-in. Flash with `openFPGALoader -b basys3 build/top.bit`.
+
+## Milestone 20 — one synth, two boards (code done; Basys 3 regression pending)
+
+The first milestone that adds no sound. A second target — the [Tiliqua](docs/TILIQUA_PORT.md), an
+ECP5 Eurorack module — meant the tree had to stop assuming there was only ever one board, and the
+cheapest time to draw that line was before any ECP5 gateware existed to drag across it.
+
+**The seam.** Two questions, asked of every file: *is this the synth, or is this the board?*
+`core/` holds the answer to the first — `synth.x` and its testbenches name no pin, no clock rate
+and no transport, and the only thing a board can see is the proc's three channels. `boards/<name>/`
+holds the second: pinout, build scripts, and a `board.py` descriptor the host side reads for the
+sample rate and which transport to use. `host/uartaudio.py` straddled both, so it split in two —
+`host/synth.py` (MIDI/CC builders, sample maths, `SR`) and `host/transport/uart.py` (the FTDI
+ioctl, the recorder thread, the byte-alignment guess), behind a small `Transport` ABC.
+
+**`$XLS32_BOARD`, and deliberately not `--board`.** `host/synth.py` binds `SR` at *import* time,
+and 26 modules import it at their own import time. A `--board` flag parsed inside `main()` would be
+read long after every dependent module had captured the old rate — it would run, print no error,
+and grade at the wrong sample rate. An environment variable is read before python starts, so it
+cannot be late. The flag can come back when a second board actually produces samples.
+
+**Extracting `core/codegen.sh` found a live bug.** The XLS invocation was copy-pasted into four
+build scripts, and the copies had drifted: `build.sh` hardcoded `--pipeline_stages=48` where the VM
+scripts honoured `$STAGES`. Sweeping `STAGES` therefore did nothing on a local build. One script
+now, called by every board.
+
+**Verifying a refactor with no board attached.** The exit criterion is a hardware e2e score, but
+the Basys 3 wasn't plugged in — so the check was pushed as far as it would go statically. All 35
+MIDI builders, plus `pitch_bend` across a sweep, `note_to_hz`, `glitches`, `to_signed`, `normalize`
+and `samples_from_bytes` (stereo and mono), were snapshotted to JSON *before* the split and
+re-run after: byte-identical. Every entry point still resolves its imports; every doc link and
+script path resolves to a file that exists. That pins the pure functions and the wiring. It says
+nothing about the wire, which is exactly what the hardware run is for.
+
+**A correction worth recording:** `presetgen/engine.py`'s `SR = 28000` looks like a board rate and
+is not. It is a property of the offline model — the `BASE_INC` phase increments are tuned to it and
+the calibration bank was fitted at it. Repointing it at the board's 32 kHz would have invalidated
+every stored preset while looking like a tidy-up.
 
 ---
 
@@ -1027,7 +1066,7 @@ Learnings:
 ## Backends for DSP48/BRAM: openXC7 (nextpnr) vs Vivado — the migration learnings
 
 Getting DSP48 required leaving F4PGA/VPR. Two backends were added alongside it (both select via
-`BACKEND=` in `scripts/remote_build.sh`); the hard-won lessons:
+`BACKEND=` in `boards/basys3/scripts/remote_build.sh`); the hard-won lessons:
 
 - **XLS is not the blocker; the P&R backend is.** XLS emits ordinary `*`/`$mul`, and mainline yosys
   infers DSP (`synth_xilinx`). F4PGA's `symbiflow_synth` just never runs the DSP passes *and* its
@@ -1061,23 +1100,23 @@ Getting DSP48 required leaving F4PGA/VPR. Two backends were added alongside it (
   **latched the SVF under stress** (~0.5 ns margin lost to voltage/temp/routing); ÷3 (30 ns) is
   rock-solid and still sustains 32 kHz. Reliability > the last MHz — same lesson as the placement note.
 - **Host read must match the board:** the board went **stereo** (4 bytes/frame) with the iOS fix, but
-  `host/uartaudio.py` still de-serialized mono — so every tone read an *octave low* (2× samples). The
+  the host helper (now `host/transport/uart.py`) still de-serialized mono — so every tone read an *octave low* (2× samples). The
   test suite kept scoring "pitch" via a relative check so it went unnoticed. `samples_from_bytes` now
   de-interleaves. Lesson: when the RTL output format changes, audit *every* host consumer.
 
 ## Unlocking DSP48 & MMCM/PLL (backend upgrade path)
 
 > **✅ DSP48 + BRAM DONE (Vivado backend).** This was implemented. Two open-source backends were
-> added first (`scripts/vmbuild_nextpnr.sh`, openXC7 `yosys synth_xilinx` + nextpnr-xilinx): it
+> added first (`boards/basys3/scripts/vmbuild_nextpnr.sh`, openXC7 `yosys synth_xilinx` + nextpnr-xilinx): it
 > **routes, infers BRAM, and Fmax-reports cleanly (~32 MHz)**, and yosys *does* infer DSP48 — but
 > this nextpnr build can't route the DSP `CARRYCASCIN` constant pin (a real 7-series maturity gap),
-> so DSP is blocked there. The **Vivado ML Standard** backend (`scripts/vmbuild_vivado.sh`,
-> `rtl/build_vivado.tcl`) closes it: **26 DSP48E1 + 32 RAMB36E1 inferred**, and the engine critical
+> so DSP is blocked there. The **Vivado ML Standard** backend (`boards/basys3/scripts/vmbuild_vivado.sh`,
+> `boards/basys3/rtl/build_vivado.tcl`) closes it: **26 DSP48E1 + 32 RAMB36E1 inferred**, and the engine critical
 > path drops **~40 ns → ~18.5 ns**. That headroom let the clock-enable move **÷4 → ÷3** and restore
 > a **true 32 kHz** real-time stream with correct pitch (hardware-verified; ÷2 was tried but latched
 > the SVF under stress). Net effect beyond speed: the old "4-parts-at-40.02 ns / placement-roulette"
 > fragility is **gone** — the path now sits at 19.5 ns with ~10 ns of margin. The narrowing needed
-> to keep each multiply inside one DSP48 (single-DSP, no cascade) is in `rtl/synth.x`; the F4PGA and
+> to keep each multiply inside one DSP48 (single-DSP, no cascade) is in `core/synth.x`; the F4PGA and
 > nextpnr fallbacks still work at ÷4/28 kHz (soft multipliers). The MMCM/PLL half remains future work.
 >
 > *The original analysis that motivated this migration follows.*

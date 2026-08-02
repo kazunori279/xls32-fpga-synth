@@ -35,17 +35,21 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 
 ## Conventions
 
-**Two source files hold the whole design:**
+**Two source files hold the whole design**, and they sit on opposite sides of the
+board seam — the engine is portable, the shell is Basys 3:
 
 | File | What's in it |
 |------|--------------|
-| [`rtl/synth.x`](rtl/synth.x) | The entire synth engine in **DSLX** (Google XLS, Rust-like): all oscillators, the filter, envelopes, LFO, unison, voice allocation, multitimbral parts, and the mixer. One `proc engine` (378 lines). Compiled to `engine.v`. |
-| [`rtl/top.v`](rtl/top.v) | The **Verilog shell**: 100 MHz clocking + clock-enables, UART RX/TX, the ready/valid handshake to the engine, the stereo block-RAM **effects** (chorus/echo/reverb), I2S DAC out, DIN MIDI in, and the LED comet (457 lines). |
+| [`core/synth.x`](core/synth.x) | The entire synth engine in **DSLX** (Google XLS, Rust-like): all oscillators, the filter, envelopes, LFO, unison, voice allocation, multitimbral parts, and the mixer. One `proc engine` (378 lines). Compiled to `engine.v`. Mentions no pin, clock rate or transport. |
+| [`boards/basys3/rtl/top.v`](boards/basys3/rtl/top.v) | The **Verilog shell**: 100 MHz clocking + clock-enables, UART RX/TX, the ready/valid handshake to the engine, the stereo block-RAM **effects** (chorus/echo/reverb), I2S DAC out, DIN MIDI in, and the LED comet (457 lines). Everything a different board would replace. |
 
-Supporting: [`rtl/fix_verilog.py`](rtl/fix_verilog.py) post-processes `engine.v`;
-[`rtl/basys3.xdc`](rtl/basys3.xdc) pins; [`rtl/build_vivado.tcl`](rtl/build_vivado.tcl) +
-[`scripts/`](scripts) build it. ([`rtl/gen_lut.py`](rtl/gen_lut.py) is a milestone-1 artifact —
-[see E4](#e4-luts--fix_verilogpy).)
+Below, `synth.x` and `top.v` are shorthand for those two paths.
+
+Supporting: [`codegen.sh`](core/codegen.sh) runs the XLS toolchain;
+[`fix_verilog.py`](core/fix_verilog.py) post-processes `engine.v`;
+[`basys3.xdc`](boards/basys3/rtl/basys3.xdc) pins; [`build_vivado.tcl`](boards/basys3/rtl/build_vivado.tcl) +
+[`boards/basys3/scripts/`](boards/basys3/scripts) build it. ([`gen_lut.py`](core/gen_lut.py) is a
+milestone-1 artifact — [see E4](#e4-luts--fix_verilogpy).)
 
 **Execution model.** The engine is a **time-multiplexed pipeline**: one `proc engine` whose
 `next()` runs **one voice per enabled cycle**, with the 32 voices held in a rotating ring so the
@@ -119,7 +123,7 @@ needs no snip of its own: it overlaps the runs already snipped, and `avld` goes 
 it finishes. The long runs (the 96-clock scan, the effects tail, the ~2000-clock UART TX, the
 ~960-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles. The idle
 tail is `3125 − 168 − 2000 ≈ 957` — only the effects pass and the UART frame are in series (TX starts
-when `dst` reaches 28, [`rtl/top.v`](rtl/top.v)); the 96-clock scan overlaps them and belongs to the
+when `dst` reaches 28, [`top.v`](boards/basys3/rtl/top.v)); the 96-clock scan overlaps them and belongs to the
 *next* sample, so it doesn't come out of this period:
 
 ![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/assets/wd_e2e.svg)
@@ -170,7 +174,8 @@ the 2000-clock frame, not the compute:
   **1000 clocks**, doubling the ceiling to ~100 kHz. 5/10 Mbaud (`BAUD` = 20/10) are the next integer
   points; the practical reliable max on a given **Mac + cable** is ~4–6 Mbaud (driver/signal-limited,
   below the chip's 12 Mbaud) and is best found empirically. Changing it touches the `BAUD` localparam
-  in [`rtl/top.v`](rtl/top.v) and the matching baud in [`host/uartaudio.py`](host/uartaudio.py).
+  in [`top.v`](boards/basys3/rtl/top.v) and the matching baud in
+  [`host/transport/uart.py`](host/transport/uart.py).
 - **Send fewer bytes** (mono, or packed 12-bit) — fewer bytes/frame directly shrinks the 2000.
 - **Bypass the UART for listening.** The [I2S DAC path (E1)](#e1-i2s-dac-out) clocks samples out at
   its own ~48.8 kHz and is *not* bound by the 2 Mbaud link — the UART's frame cost only exists because
@@ -187,7 +192,7 @@ the 2000-clock frame, not the compute:
 Each `next()` receives at most one MIDI byte, processes exactly one voice, and — on the 32nd
 voice — emits one audio sample.
 
-**How it's built** ([`rtl/synth.x:301`](rtl/synth.x)):
+**How it's built** ([`synth.x:301`](core/synth.x)):
 
 ```rust
 proc engine {
@@ -213,7 +218,7 @@ proc engine {
 }
 ```
 
-The `Eng` state ([`rtl/synth.x:59`](rtl/synth.x)):
+The `Eng` state ([`synth.x:59`](core/synth.x)):
 
 ```rust
 pub struct Eng { voices: Voice[32], vidx: u5, mixacc: s32,
@@ -295,7 +300,7 @@ being processed is always at index 0. That turns a dynamic `voices[vidx]` access
 over 189-bit voices — 6,048 input bits, the original ~21 ns timing wall) into a constant-index
 read/write. Note-on claims free voices; note-off releases by matching note **and** part.
 
-**How it's built.** The ring rotate ([`rtl/synth.x:291`](rtl/synth.x)):
+**How it's built.** The ring rotate ([`synth.x:291`](core/synth.x)):
 
 ```rust
 fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
@@ -307,7 +312,7 @@ fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
 ```
 
 Note-off releases *every* matching voice (so unison stacks and duplicate notes all stop)
-([`rtl/synth.x:143`](rtl/synth.x)):
+([`synth.x:143`](core/synth.x)):
 
 ```rust
 fn apply_off(voices: Voice[32], note: u8, part: u2) -> Voice[32] {
@@ -321,7 +326,7 @@ fn apply_off(voices: Voice[32], note: u8, part: u2) -> Voice[32] {
 ```
 
 The `Voice` struct — deliberately narrow, because total ring width is the F4PGA packing budget
-([`rtl/synth.x:40`](rtl/synth.x)):
+([`synth.x:40`](core/synth.x)):
 
 ```rust
 pub struct Voice { phase: u32, env: u16, env_st: Env, note: u8, vel: u8,
@@ -346,7 +351,7 @@ nibble select one of 4 `Part` patches; every voice carries a 2-bit `part` tag, a
 voice reads *its* part's patch through a 4:1 mux before processing.
 
 **How it's built.** The `Part` patch — everything sound-shaping, including a per-part LFO
-oscillator ([`rtl/synth.x:46`](rtl/synth.x)):
+oscillator ([`synth.x:46`](core/synth.x)):
 
 ```rust
 pub struct Part { wave: u3, cutoff: u16, reso: u16, fdepth: u16,   // wave(70) cutoff(74) reso(71) fdepth(79)
@@ -359,7 +364,7 @@ pub struct Part { wave: u3, cutoff: u16, reso: u16, fdepth: u16,   // wave(70) c
                   f_att: u16, f_dec: u16, f_sus: u16, f_rel: u16 }  // filter-env ADSR (CC24-27)
 ```
 
-Channel → part routing ([`rtl/synth.x:314`](rtl/synth.x)):
+Channel → part routing ([`synth.x:314`](core/synth.x)):
 
 ```rust
 let ch = ps[0:2];                  // MIDI channel (low 2 bits) -> part 0-3
@@ -394,7 +399,7 @@ parameters arrive from **three sources**, assembled inline in `next()` right bef
    are recomputed each cycle from `p`'s LFO phase and passed as scalar args (details in
    [B10](#b10-lfo), [B11](#b11-pitch-expression), [B3](#b3-pwm)).
 
-**How it's built** ([`rtl/synth.x:332`](rtl/synth.x)) — read voice, mux patch, derive mod, call:
+**How it's built** ([`synth.x:332`](core/synth.x)) — read voice, mux patch, derive mod, call:
 
 ```rust
 let cur = voices1[u32:0];                              // (1) per-voice state
@@ -426,7 +431,7 @@ keep the `Voice` ring narrow (ring width is the F4PGA packing budget — [A2](#a
 
 # Part B — Per-voice datapath
 
-Everything below runs inside `process_voice()` ([`rtl/synth.x:184`](rtl/synth.x)), once per
+Everything below runs inside `process_voice()` ([`synth.x:184`](core/synth.x)), once per
 enabled cycle for the slot-0 voice. The chain is: oscillators → sub → cross-mod → filter → VCA.
 
 ![Per-voice datapath overview: DDS oscillators → cross-mod → sub-osc → resonant SVF → VCA → serialized mix, with amp/filter ADSR and the part LFO as modulation inputs](docs/assets/dsp_datapath.svg)
@@ -438,7 +443,7 @@ oscillator: a 32-bit phase accumulator advances by a per-note increment each sam
 phase bits index a wavetable. Pitch is set by the increment, which comes from an **octave-folded**
 12-entry table rather than a 128-entry LUT.
 
-**How it's built** ([`rtl/synth.x:12`](rtl/synth.x)):
+**How it's built** ([`synth.x:12`](core/synth.x)):
 
 ```rust
 const BASE_INC: u32[12] = u32[12]:[1097338, 1162588, 1231719, 1304961, 1382558, 1464769,
@@ -449,7 +454,7 @@ fn note_inc(note: u8) -> u32 {
 }
 ```
 
-Phase advance, in `process_voice` ([`rtl/synth.x:208`](rtl/synth.x)):
+Phase advance, in `process_voice` ([`synth.x:208`](core/synth.x)):
 
 ```rust
 let phase_n = v.phase + inc;         // inc = note increment (+ pitch mod + unison detune)
@@ -482,7 +487,7 @@ op in XLS/VPR) with a 12:1 mux + shift. Rounding error vs the exact table is <30
 **What it does.** Five waveforms selected per part by CC70: sine (from the LUT), saw, pulse
 (PWM, [B3](#b3-pwm)), triangle, and white noise (from an LFSR).
 
-**How it's built** ([`rtl/synth.x:99`](rtl/synth.x)):
+**How it's built** ([`synth.x:99`](core/synth.x)):
 
 ```rust
 fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
@@ -499,7 +504,7 @@ fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
 ```
 
 The noise source is a 16-bit [Galois LFSR](https://en.wikipedia.org/wiki/Linear-feedback_shift_register)
-advanced once per sample in the proc ([`rtl/synth.x:329`](rtl/synth.x)):
+advanced once per sample in the proc ([`synth.x:329`](core/synth.x)):
 
 ```rust
 let lfsr1 = (st.lfsr >> u16:1) ^ (if (st.lfsr & u16:1) == u16:1 { u16:0xB400 } else { u16:0 });
@@ -511,7 +516,7 @@ the tap mask **`0xB400`** is XORed back in. That mask sets the taps for a *maxim
 polynomial, so the register visits **all 65535 nonzero states** before repeating (~2 s at
 32 kHz) — a broadband, effectively-white sequence from one shift + one conditional XOR (no
 multiply, no LUT). The state must never be zero (zero is a fixed point), so `Eng` seeds it to
-`u16:0xACE1` at init ([`rtl/synth.x:309`](rtl/synth.x)). The low 12 bits, centered by
+`u16:0xACE1` at init ([`synth.x:309`](core/synth.x)). The low 12 bits, centered by
 `- 2048`, become the `noise` sample.
 
 It's a **single shared/global generator** (it lives in `Eng`, not per-`Part`), and it does
@@ -530,7 +535,7 @@ byte is below a threshold. The threshold is CC75 plus an LFO wobble, so pulse-wi
 modulated for the classic PWM shimmer.
 
 **How it's built** — the duty threshold is computed per sample and passed into `voice_wave`
-([`rtl/synth.x:346`](rtl/synth.x)):
+([`synth.x:346`](core/synth.x)):
 
 ```rust
 let pwr = ((p.pw << u16:1) as s32) + (lfo_mod >> u32:4);
@@ -546,7 +551,7 @@ even harmonics vanish (odd-only, like a square); narrowing the pulse brings them
 the main, the two **beat** for analog thickness. Detune depth is CC78 (off / ~3 / ~7 / ~13 cents).
 
 **How it's built** — a second accumulator with a constant-cents offset added to the increment
-([`rtl/synth.x:216`](rtl/synth.x)):
+([`synth.x:216`](core/synth.x)):
 
 ```rust
 let doff = match detsel { u2:0 => u32:0, u2:1 => inc >> u32:9,
@@ -569,7 +574,7 @@ mutually-exclusive uses of it, so cross-mod adds no new per-voice ring state.
 Adds weight/bass.
 
 **How it's built** — a 1-bit toggle flipped each time the main phase wraps
-([`rtl/synth.x:211`](rtl/synth.x)):
+([`synth.x:211`](core/synth.x)):
 
 ```rust
 let wrapped = phase_n < v.phase;                           // u32 overflow = one osc period
@@ -591,7 +596,7 @@ inharmonic (bell/metallic) timbres it otherwise can't. CC85 picks Off / Ring / F
 depth, CC87 is one of 8 modulator:carrier ratios.
 
 **How it's built** — ratios by shift/add (no multiply), then the FM index is a real multiply
-([`rtl/synth.x:218`](rtl/synth.x)):
+([`synth.x:218`](core/synth.x)):
 
 ```rust
 let mstep = match xratio {                                 // mod:carrier  (all shift/add)
@@ -627,7 +632,7 @@ one filter *per voice*, filtering that voice's oscillator before the mix. All fo
 (low/high/band/notch) fall out together; CC72 selects the mode, CC71 the resonance, CC74 +
 key-tracking + the filter envelope + the LFO set the cutoff.
 
-**How it's built** — the filter kernel, coefficients in Q13 ([`rtl/synth.x:70`](rtl/synth.x)):
+**How it's built** — the filter kernel, coefficients in Q13 ([`synth.x:70`](core/synth.x)):
 
 ```rust
 fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32) {
@@ -643,7 +648,7 @@ fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32)
 }
 ```
 
-Cutoff assembly + multimode select + 4× input attenuation ([`rtl/synth.x:264`](rtl/synth.x)):
+Cutoff assembly + multimode select + 4× input attenuation ([`synth.x:264`](core/synth.x)):
 
 ```rust
 let ktrack = (v.note as s32) * s32:16;                    // key-tracking: brighter high notes
@@ -670,7 +675,7 @@ a single 25×18 DSP48.
 sharing one parametric state machine. Rates come from CC20–23 (amp) and CC24–27 (filter) via an
 8-entry time LUT.
 
-**How it's built** — the envelope step ([`rtl/synth.x:87`](rtl/synth.x)):
+**How it's built** — the envelope step ([`synth.x:87`](core/synth.x)):
 
 ```rust
 fn adsr(env: u16, st: Env, att: u16, dec: u16, sus: u16, rel: u16) -> (u16, Env) {
@@ -684,14 +689,14 @@ fn adsr(env: u16, st: Env, att: u16, dec: u16, sus: u16, rel: u16) -> (u16, Env)
 }
 ```
 
-Both envelopes are stepped for the current voice ([`rtl/synth.x:189`](rtl/synth.x)):
+Both envelopes are stepped for the current voice ([`synth.x:189`](core/synth.x)):
 
 ```rust
 let (env_n, est_n)   = adsr(v.env,  v.env_st,  a_att, a_dec, a_sus, a_rel);
 let (fenv_n, fest_n) = adsr(v.fenv, v.fenv_st, f_att, f_dec, f_sus, f_rel);  // per-voice filter env
 ```
 
-The `Env` state machine ([`rtl/synth.x:33`](rtl/synth.x): `enum Env : u3`):
+The `Env` state machine ([`synth.x:33`](core/synth.x): `enum Env : u3`):
 
 ```mermaid
 stateDiagram-v2
@@ -731,7 +736,7 @@ at 32 kHz — an 8:1 mux and no multiply, cheap for packing.
 oscillator by envelope × velocity × tremolo, collapsed into one small gain so the sample multiply
 stays narrow.
 
-**How it's built** ([`rtl/synth.x:257`](rtl/synth.x)):
+**How it's built** ([`synth.x:257`](core/synth.x)):
 
 ```rust
 let e7  = (env_n >> u16:9) as u8;                          // envelope -> 0..127
@@ -748,7 +753,7 @@ one ~16×8 sample multiply, keeps both products small — no full 32×32 soft-mu
 **What it does.** Each part has its own LFO oscillator (a phase accumulator into the sine LUT).
 Its output fans out to filter-cutoff modulation (auto-wah), vibrato, tremolo, and PWM.
 
-**How it's built** — read + fan-out ([`rtl/synth.x:334`](rtl/synth.x)):
+**How it's built** — read + fan-out ([`synth.x:334`](core/synth.x)):
 
 ```rust
 let lfo_raw = SINE[p.lfo_ph[24:32]];                      // this part's LFO phase
@@ -760,7 +765,7 @@ let tg = (s32:64 - (((s32:64 - lfoU) * (p.trdep as s32)) >> u32:7)) as u8;   // 
 ```
 
 Each part's LFO phase advances once per sample (on the ring's last slot)
-([`rtl/synth.x:363`](rtl/synth.x)):
+([`synth.x:363`](core/synth.x)):
 
 ```rust
 let parts2 = if last {
@@ -778,7 +783,7 @@ at independent speeds — advanced once per sample, not once per voice.
 **pitch bend** (0xE0, ±2 semitones), and **portamento** (CC5, glide between notes).
 
 **How it's built** — portamento glides `cinc` toward the target, then pitch mod is applied
-multiplicatively ([`rtl/synth.x:193`](rtl/synth.x)):
+multiplicatively ([`synth.x:193`](core/synth.x)):
 
 ```rust
 let tgt = note_inc(v.note) >> u32:6;                      // target increment / 64
@@ -791,7 +796,7 @@ let inc0 = (cinc_n as u32) << u32:6;
 let inc = (inc0 as s32 + (((inc0 >> u32:12) as s32) * (pmod as s16 as s32))) as u32;
 ```
 
-Bend decode and the vibrato+bend sum ([`rtl/synth.x:324`](rtl/synth.x)):
+Bend decode and the vibrato+bend sum ([`synth.x:324`](core/synth.x)):
 
 ```rust
 let bend_v = (((((evv as s32) << u32:7) | (evn as s32)) - s32:8192) >> u32:4) as s16;  // 14-bit, center 8192
@@ -810,7 +815,7 @@ detuned by a fixed symmetric slot and started at a decorrelated phase, for a thi
 polyphony becomes 32/N.
 
 **How it's built** — allocation assigns the slot + decorrelated seed
-([`rtl/synth.x:136`](rtl/synth.x)):
+([`synth.x:136`](core/synth.x)):
 
 ```rust
 let slot = ((cnt as s8) * s8:2 - ((un as s8) - s8:1)) as s4;   // {-1,+1} / {-2,0,+2} / {-3,-1,+1,+3}
@@ -818,7 +823,7 @@ let seed = ((lfsr as u32) << u32:16) ^ ((cnt as u32) << u32:29);   // decorrelat
 ```
 
 The slot detunes the increment; gain compensation ≈ 256/√N holds loudness
-([`rtl/synth.x:207`](rtl/synth.x), [`:354`](rtl/synth.x)):
+([`synth.x:207`](core/synth.x), [`:354`](core/synth.x)):
 
 ```rust
 let inc = (inc as s32 + ((inc >> u32:9) as s32) * (v.uni as s32)) as u32;   // ~3.4 cents/unit
@@ -836,8 +841,8 @@ thickness. Since `apply_off` releases every matching voice, note-off is free.
 **What it does.** The 32 per-voice outputs are summed one-per-cycle into an accumulator, then
 scaled and **saturated** (never wrapped) into the 16-bit output sample.
 
-**How it's built** — serialized accumulate ([`rtl/synth.x:358`](rtl/synth.x)) and the final scale
-([`rtl/synth.x:283`](rtl/synth.x)):
+**How it's built** — serialized accumulate ([`synth.x:358`](core/synth.x)) and the final scale
+([`synth.x:283`](core/synth.x)):
 
 ```rust
 let compv = (comp * (p.vol as s32)) >> u32:7;             // unison comp × per-part volume (CC7)
@@ -856,7 +861,7 @@ fn scale_mix(acc: s32) -> u16 {
 cycle-to-cycle**: each voice adds its `amp·compv` term, so after 32 cycles the accumulator holds
 the full 32-voice sum. On the ring's last slot (`vidx == 31`) that total is scaled out and the
 accumulator is cleared for the next sample — the emit/reset gate lives in the proc's `next()`
-([`rtl/synth.x:360`](rtl/synth.x), see the [A1 schedule](#a1-the-engine-proc)):
+([`synth.x:360`](core/synth.x), see the [A1 schedule](#a1-the-engine-proc)):
 
 ```rust
 let last = st.vidx == u5:31;
@@ -890,7 +895,7 @@ to signed ([C1/C4](#part-c--the-verilog-shell)).
 produces `ce` (÷3, engine) and `ce8` (÷6, effects); a separate counter makes the 32 kHz sample
 tick.
 
-**How it's built** ([`rtl/top.v:57`](rtl/top.v)):
+**How it's built** ([`top.v:57`](boards/basys3/rtl/top.v)):
 
 ```verilog
 reg [2:0] cec = 3'd0;
@@ -899,7 +904,7 @@ wire ce  = (cec == 3'd0) || (cec == 3'd3);   // 1 of every 3 cycles (engine + sa
 wire ce8 = (cec == 3'd0);                     // 1 of every 6 cycles (effects FSM, 60ns/step)
 ```
 
-Sample tick ([`rtl/top.v:155`](rtl/top.v)):
+Sample tick ([`top.v:155`](boards/basys3/rtl/top.v)):
 
 ```verilog
 localparam integer SAMPDIV = 3125;   // 100 MHz / 32 kHz
@@ -951,8 +956,8 @@ live code is ÷3/÷6.**
 **What it does.** Two receivers feed one MIDI stream — the FT2232 at 2 Mbaud (web bridge/host) and
 DIN MIDI at 31250 baud — and one transmitter streams the 16-bit stereo audio out at 2 Mbaud.
 
-**How it's built** — baud dividers ([`rtl/top.v:34`](rtl/top.v)) and the FT2232 RX framing
-([`rtl/top.v:89`](rtl/top.v)):
+**How it's built** — baud dividers ([`top.v:34`](boards/basys3/rtl/top.v)) and the FT2232 RX framing
+([`top.v:89`](boards/basys3/rtl/top.v)):
 
 ```verilog
 localparam integer BAUD  = 50;     // 100 MHz / 2 Mbaud
@@ -992,8 +997,8 @@ so 4 audio bytes/sample fit inside the 3125-clock budget for real-time 32 kHz.
 — completes each transfer **only on a `ce` cycle**, so bytes/samples aren't lost across the
 multicycle.
 
-**How it's built** — instantiation ([`rtl/top.v:66`](rtl/top.v)) and the two handshakes
-([`rtl/top.v:121`](rtl/top.v), [`:312`](rtl/top.v)):
+**How it's built** — instantiation ([`top.v:66`](boards/basys3/rtl/top.v)) and the two handshakes
+([`top.v:121`](boards/basys3/rtl/top.v), [`:312`](boards/basys3/rtl/top.v)):
 
 ```verilog
 xls_engine eng (.clk(clk100), .rst(rst), .ce(ce),
@@ -1022,7 +1027,7 @@ back-pressure and delivers exactly one sample per tick.
 (`Llo Lhi Rlo Rhi`), with a 1-bit channel marker in each low byte's LSB so the host can lock byte
 alignment *and* L/R order unambiguously.
 
-**How it's built** ([`rtl/top.v:405`](rtl/top.v)):
+**How it's built** ([`top.v:405`](boards/basys3/rtl/top.v)):
 
 ```verilog
 // 1-bit channel marker in the low byte's LSB (L=0, R=1)
@@ -1087,7 +1092,7 @@ record where that seam first showed up.
 first echo+chorus, then the reverb send (8 comb + 4 all-pass for L, then the same for R).
 
 **How it's built** — the state progression (representative steps,
-[`rtl/top.v:321`](rtl/top.v)):
+[`top.v:321`](boards/basys3/rtl/top.v)):
 
 ```verilog
 if (ce8) begin
@@ -1141,7 +1146,7 @@ the full 8-comb/4-all-pass stereo Freeverb; the live machine is 28 steps.)
 **What it does.** Four 16K×16 buffers: `dmemL`/`dmemR` for echo+chorus and `dmem2L`/`dmem2R` for
 the reverb tank. Synchronous read+write is the pattern yosys/Vivado actually map to RAMB36E1.
 
-**How it's built** ([`rtl/top.v:185`](rtl/top.v)):
+**How it's built** ([`top.v:185`](boards/basys3/rtl/top.v)):
 
 ```verilog
 reg [15:0] dmemL [0:16383];  reg [15:0] dmemR [0:16383];    // echo + chorus
@@ -1152,7 +1157,7 @@ always @(posedge clk100) begin
 end
 ```
 
-The reverb tank is carved into 8 comb regions + 4 all-pass ([`rtl/top.v:171`](rtl/top.v)):
+The reverb tank is carved into 8 comb regions + 4 all-pass ([`top.v:171`](boards/basys3/rtl/top.v)):
 
 ```verilog
 localparam [13:0] RB0=14'd0, RB1=14'd1300, ... RB7=14'd9100,
@@ -1161,7 +1166,7 @@ localparam [13:0] RB0=14'd0, RB1=14'd1300, ... RB7=14'd9100,
 
 **Gotcha.** Power-up BRAM is garbage that would seed a runaway feedback loop, so a `clearing`
 sweep zeroes all four buffers (all 16384 addresses) before normal operation
-([`rtl/top.v:302`](rtl/top.v)). XLS's *async*-read ROMs never map to BRAM — only a hand-written
+([`top.v:302`](boards/basys3/rtl/top.v)). XLS's *async*-read ROMs never map to BRAM — only a hand-written
 sync-read RAM like this does.
 
 **The one primitive underneath all three effects: a circular delay line.** Chorus, echo, and every
@@ -1204,7 +1209,7 @@ so the fractional part drives a linear interpolation between two adjacent reads 
 **What it does.** A short delay tap swept by a triangle LFO, L/R in anti-phase, linearly
 interpolated to a fractional sample so the sweep doesn't click.
 
-**How it's built** ([`rtl/top.v:203`](rtl/top.v)):
+**How it's built** ([`top.v:203`](boards/basys3/rtl/top.v)):
 
 ```verilog
 reg  [14:0] clfo = 15'd0;
@@ -1236,8 +1241,8 @@ floored at 128 samples so the read tap can never coincide with the write pointer
 
 **What it does.** A long delay tap with feedback that **ping-pongs L↔R**. Time is CC82, depth CC95.
 
-**How it's built** — the delay length ([`rtl/top.v:168`](rtl/top.v)) and the cross-fed write
-([`rtl/top.v:336`](rtl/top.v)):
+**How it's built** — the delay length ([`top.v:168`](boards/basys3/rtl/top.v)) and the cross-fed write
+([`top.v:336`](boards/basys3/rtl/top.v)):
 
 ```verilog
 wire [13:0] edly = {dtime, 7'd0} | 14'd128;     // dtime<<7, ~4..508 ms @ 32 kHz
@@ -1290,7 +1295,7 @@ feedback comb filters + 4 series all-pass diffusers **per channel**, with the Fr
 spread (R delays = L + 23). Room size (CC91) sets the comb feedback gain → decay time.
 
 **How it's built** — the comb feedback (a real Q15 multiply → DSP48) with damping
-([`rtl/top.v:251`](rtl/top.v)):
+([`top.v:251`](boards/basys3/rtl/top.v)):
 
 ```verilog
 // Damping = 0.5*old + 0.5*new (overflow-safe). fbm = g*y (Q15, DSP mult). cbn = in + fbm.
@@ -1299,7 +1304,7 @@ wire signed [15:0] fbm = ($signed({1'b0,rvg}) * nlp + 32'sd16384) >>> 15;   // g
 wire signed [15:0] cbn = sat18(rin_r + fbm);
 ```
 
-Room-size gain ([`rtl/top.v:221`](rtl/top.v)):
+Room-size gain ([`top.v:221`](boards/basys3/rtl/top.v)):
 
 ```verilog
 wire [14:0] rvg = (rsize==2'd0) ? 15'd22000 :   // 0.671  room      (~0.4 s)
@@ -1318,7 +1323,7 @@ runaway); input is a *fixed* small `/64` (not `1/(1−g)`, which makes big rooms
 feedback multiply maps to a **DSP48** on Vivado (works, hardware-verified); on the soft-multiplier
 F4PGA fabric it railed, so reverb is DSP-backend-only. The MSB truncation trap (taking `(a*b)>>>15`
 in a 16-bit context) is why the products use explicit 32-bit intermediates
-([`rtl/top.v:271`](rtl/top.v)).
+([`top.v:271`](boards/basys3/rtl/top.v)).
 
 ---
 
@@ -1329,7 +1334,7 @@ in a 16-bit context) is why the products use explicit 32-bit intermediates
 **What it does.** A free-running Philips-I2S master clocks the stereo samples to a UDA1334A DAC on
 Pmod JB → analog line-out. Built and timing-closed; hardware-pending.
 
-**How it's built** ([`rtl/top.v:433`](rtl/top.v)):
+**How it's built** ([`top.v:433`](boards/basys3/rtl/top.v)):
 
 ```verilog
 reg [10:0] i2s_c = 11'd0;
@@ -1368,8 +1373,8 @@ inverted to two's-complement at load; a 1-bit I2S delay means bit 0 of each slot
 **What it does.** A hardware MIDI keyboard plugged into an opto-isolated DIN breakout on Pmod JA1,
 decoded at 31250 baud and merged into the same MIDI stream the web bridge drives.
 
-**How it's built** — 2-FF synchronizer ([`rtl/top.v:29`](rtl/top.v)) + RX FSM
-([`rtl/top.v:111`](rtl/top.v)), merged after the web bridge ([`rtl/top.v:118`](rtl/top.v)):
+**How it's built** — 2-FF synchronizer ([`top.v:29`](boards/basys3/rtl/top.v)) + RX FSM
+([`top.v:111`](boards/basys3/rtl/top.v)), merged after the web bridge ([`top.v:118`](boards/basys3/rtl/top.v)):
 
 ```verilog
 reg [1:0] mrxs = 2'b11;
@@ -1393,7 +1398,7 @@ a cursor to the next LED, and each LED's brightness tracks the real ADSR envelop
 lit it.
 
 **How it's built** — driven by the engine's `viz_out` tuple `{env, is_new, last}`
-([`rtl/top.v:140`](rtl/top.v)):
+([`top.v:140`](boards/basys3/rtl/top.v)):
 
 ```verilog
 always @(posedge clk100) if (vvld && ce) begin
@@ -1409,7 +1414,7 @@ end
 ```
 
 **Gotcha.** `is_new` is a one-shot with *no new state*: a freshly allocated voice is uniquely
-`env==0 && env_st==ATTACK` on its first slot-0 visit ([`rtl/synth.x:370`](rtl/synth.x)), so the
+`env==0 && env_st==ATTACK` on its first slot-0 visit ([`synth.x:370`](core/synth.x)), so the
 LED display costs nothing in the voice ring. The `last` bit self-aligns the scan index each
 32-voice pass. Brightness is an 8-bit PWM compare against a free-running counter.
 
@@ -1418,16 +1423,16 @@ LED display costs nothing in the voice ring. The `last` bit self-aligns the scan
 **What it does.** The shipped lookup tables are hand-embedded in `synth.x`; a small Python pass
 patches the XLS-generated Verilog for the open toolchain.
 
-**The real LUTs** live in [`rtl/synth.x:1`](rtl/synth.x): `SINE: s16[256]` (±2047, signed) used
+**The real LUTs** live in [`synth.x:1`](core/synth.x): `SINE: s16[256]` (±2047, signed) used
 by both the oscillators and the LFO, and the octave-folded `BASE_INC: u32[12]` phase-increment
 table ([B1](#b1-oscillator--dds)), computed for **32 kHz**.
 
-> **Note:** [`rtl/gen_lut.py`](rtl/gen_lut.py) is a **milestone-1 artifact** — it prints a
+> **Note:** [`gen_lut.py`](core/gen_lut.py) is a **milestone-1 artifact** — it prints a
 > 256-entry *u8* sine centered at 128 and a single A4 increment at a 4 kHz sample rate. It does
 > **not** feed the current build; the shipped `s16` sine and 32 kHz `BASE_INC` are maintained
 > directly in `synth.x`.
 
-**`fix_verilog.py`** does two transforms on `engine.v` ([`rtl/fix_verilog.py:31`](rtl/fix_verilog.py)):
+**`fix_verilog.py`** does two transforms on `engine.v` ([`fix_verilog.py:31`](core/fix_verilog.py)):
 
 ```python
 src, count = pat.subn(unroll, src)   # 1. unroll `for (genvar...) assign a[i]=...` into explicit assigns
@@ -1437,7 +1442,7 @@ src, ng = re.subn(r'\bend else begin\b', 'end else if (ce) begin', src, count=1)
 ```
 
 **Build flags & backends.** XLS codegen is identical across backends
-([`scripts/vmbuild.sh`](scripts/vmbuild.sh)):
+([`vmbuild.sh`](boards/basys3/scripts/vmbuild.sh)):
 `--generator=pipeline --pipeline_stages=48 --worst_case_throughput=48 --delay_model=unit
 --use_system_verilog=false --reset=rst --reset_active_low=false --reset_asynchronous=false`.
 Only synthesis/P&R differs:
@@ -1472,7 +1477,7 @@ Block → resource, on the committed Vivado build (utilization from
 | Delay + reverb memories — `dmemL/R`, `dmem2L/R` (4 × 16K×16) | **BRAM ×32** (RAMB36) | 65 % of 50 — the *binding* resource |
 | Inferred sine / note-increment ROMs | **BRAM** | Vivado infers these; on F4PGA they stay LUT muxes ([E4](#e4-luts--fix_verilogpy)) |
 | Shell (`top.v`) — UART RX×2/TX, `ce`/`ce8`, 28-state effects FSM, LED PWM, I2S | **CLB** | small vs the engine |
-| clk (W5), UART, LEDs ×16, Pmod JA1 (DIN), Pmod JB1–3 (I2S) | **I/O banks** | pinned in [`rtl/basys3.xdc`](rtl/basys3.xdc) |
+| clk (W5), UART, LEDs ×16, Pmod JA1 (DIN), Pmod JB1–3 (I2S) | **I/O banks** | pinned in [`basys3.xdc`](boards/basys3/rtl/basys3.xdc) |
 
 **Gotcha.** This is a **schematic resource map, not the actual placement** — real place-and-route
 positions vary per build (and per backend: the open F4PGA flow has no DSP/BRAM inference, so there
@@ -1481,6 +1486,6 @@ positions vary per build (and per backend: the open F4PGA flow has no DSP/BRAM i
 
 ---
 
-*Generated from `rtl/synth.x` and `rtl/top.v`. Line citations point at the current sources — if
+*Generated from `core/synth.x` and `boards/basys3/rtl/top.v`. Line citations point at the current sources — if
 they drift, grep for the quoted line. For the story behind each block, see the matching milestone
 in [DEVELOPMENT.md](DEVELOPMENT.md).*

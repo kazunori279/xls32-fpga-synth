@@ -36,7 +36,7 @@ scrolling spectrogram of that same signal.
 *▶️ **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)** — 4 parts, 2:18 (click to listen on YouTube).*
 
 *(Both MP4s also live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo
-player with `/api/capture` and rendered with [`scripts/make_mp4.sh`](scripts/make_mp4.sh).)*
+player with `/api/capture` and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 
 ## At a glance
 
@@ -180,7 +180,7 @@ flash, measure, read the number, revise.
   place-and-route is the slow step. Building F4PGA under x86 *emulation* on an Apple-Silicon
   Mac takes ~8–10 min per iteration; offloading the build to a **native x86 [GCE](https://cloud.google.com/products/compute) VM** in the
   cloud cuts it to ~6 min and frees the laptop — so the agent gets its verdict sooner and
-  fits more iterations into an hour. (`scripts/remote_build.sh` pushes the sources up, builds
+  fits more iterations into an hour. (`boards/basys3/scripts/remote_build.sh` pushes the sources up, builds
   on the VM, and pulls the bitstream + timing report back.)
 
 ```mermaid
@@ -202,14 +202,25 @@ emits **one audio sample per sample-rate tick**.
 
 ## Repository layout
 
-The project is grouped into topical subdirectories:
-- **`rtl/`** — hardware sources: `synth.x` (DSLX), `top.v` (Verilog shell/wrapper),
-  `basys3.xdc`, `tb.v` ([iverilog](http://iverilog.icarus.com/)), `gen_lut.py` (LUT + phase-increment generator),
-  `fix_verilog.py` (post-codegen fixups); `engine.v` is generated here.
-- **`scripts/`** — build/flash: `build.sh` (local [Docker](https://www.docker.com/)), `remote_build.sh` + `vmbuild.sh`
-  (native x86 GCE build), `verify.sh` (flash + UART check), `spectro.sh` (.wav → PNG),
-  `make_mp4.sh` (.wav → spectrogram MP4).
-- **`host/`** — host tools: `uartaudio.py` (2 Mbaud + 16-bit host helper), `analyze.py`
+The tree is split down one line: what is the *synth*, and what is the *board*. The engine
+knows nothing about pins, clock rates or how audio gets to a host, so a second board is an
+addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT.md).
+
+- **`core/`** — board-independent hardware sources: `synth.x` (DSLX — the whole engine),
+  `codegen.sh` (DSLX → IR → optimised IR → pipelined Verilog; every board calls this one),
+  `fix_verilog.py` (post-codegen fixups), `gen_lut.py` (LUT + phase-increment generator),
+  and `sim/tb*.v` ([iverilog](http://iverilog.icarus.com/) testbenches). `engine.v` is generated into `build/`.
+- **`boards/`** — one package per target, plus a small registry (`get_board()`, selected with
+  `$XLS32_BOARD`, default `basys3`):
+  - **`boards/basys3/`** — `board.py` (descriptor: 32 kHz, UART transport), `rtl/` (`top.v`
+    Verilog shell, `basys3.xdc`, `build_vivado.tcl`), `scripts/` (`build.sh` local
+    [Docker](https://www.docker.com/); `remote_build.sh` + `vmbuild*.sh` native x86 GCE build; `verify.sh` flash +
+    UART check), `firmware/` (committed bitstream).
+  - **`boards/tiliqua/`** — declared, no gateware yet (M21+).
+- **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
+  `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
+- **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
+  (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3), `analyze.py`
   (envelope/pitch checks), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
@@ -289,12 +300,12 @@ uv sync                     # runtime deps only (all have prebuilt wheels — wo
 > Macs blocks the compiler; WEB mode and on-screen/computer/Web-MIDI keyboards still work).
 > `--extra presetgen` adds the preset-generation toolchain (`dawdreamer` etc.), only for dev work.
 
-> **A prebuilt bitstream ships in the repo** at [`firmware/top.bit`](firmware/top.bit.md), so you can
+> **A prebuilt bitstream ships in the repo** at [`top.bit`](boards/basys3/firmware/top.bit.md), so you can
 > flash a board **without building** (no Vivado / F4PGA — just `openFPGALoader`). See
 > [Set up a board without building](#set-up-a-board-without-building) below. (The build output
-> `build/top.bit` is gitignored; `firmware/top.bit` is a committed copy — regenerate it with
+> `build/top.bit` is gitignored; `boards/basys3/firmware/top.bit` is a committed copy — regenerate it with
 > [Build the bitstream](#build-the-bitstream) / [Build in the cloud](#build-in-the-cloud-native-x86-gce-vm-faster)
-> then `cp build/top.bit firmware/top.bit`.)
+> then `cp build/top.bit boards/basys3/firmware/top.bit`.)
 
 The build turns DSLX into a bitstream through three independent tools (XLS → F4PGA → loader):
 
@@ -316,16 +327,16 @@ flowchart LR
 
 ### Set up a board without building
 
-The fastest path — flash the **committed** [`firmware/top.bit`](firmware/top.bit.md) with
+The fastest path — flash the **committed** [`top.bit`](boards/basys3/firmware/top.bit.md) with
 `openFPGALoader`; no toolchain, no rebuild. Plug the Basys 3 in over USB, then:
 
 ```bash
 # A) Persistent — write the onboard SPI flash (survives power cycles, boots standalone):
-openFPGALoader -b basys3 -f firmware/top.bit
+openFPGALoader -b basys3 -f boards/basys3/firmware/top.bit
 #    then set the Basys 3 mode jumper JP1 to QSPI so it loads from flash on power-up.
 
 # B) Volatile — load SRAM directly (quicker, but lost on power-off / unplug):
-openFPGALoader -b basys3 firmware/top.bit
+openFPGALoader -b basys3 boards/basys3/firmware/top.bit
 ```
 
 Verify it's alive (should print the Artix-7 IDCODE):
@@ -433,7 +444,7 @@ shown from the **project root** (Python tools run under [`uv`](https://docs.astr
 
 ### Build the bitstream
 ```bash
-scripts/build.sh    # DSLX codegen (XLS) + F4PGA -> build/top.bit  (local Docker, ~8–10 min)
+boards/basys3/scripts/build.sh    # DSLX codegen (XLS) + F4PGA -> build/top.bit  (local Docker, ~8–10 min)
 ```
 Self-contained: pulls the XLS release + an [Ubuntu](https://ubuntu.com/) rootfs and clones `f4pga-examples` into
 `/tmp` on first run (Docker `--platform linux/amd64`, emulated on Apple Silicon).
@@ -443,25 +454,25 @@ Self-contained: pulls the XLS release + an [Ubuntu](https://ubuntu.com/) rootfs 
 > already passes this.)
 
 ### Build in the cloud (native x86 GCE VM, faster)
-`scripts/build.sh` runs F4PGA under amd64 **emulation** on Apple Silicon (~8–10 min). A
+`boards/basys3/scripts/build.sh` runs F4PGA under amd64 **emulation** on Apple Silicon (~8–10 min). A
 **native x86 GCE VM** builds in ~6 min and frees the Mac:
 ```bash
-STAGES=48 WCT=48 scripts/remote_build.sh    # push sources → build on the VM → pull top.bit + timing back
+STAGES=48 WCT=48 boards/basys3/scripts/remote_build.sh    # push sources → build on the VM → pull top.bit + timing back
 ```
-`remote_build.sh` scp's `rtl/{synth.x,top.v,basys3.xdc,fix_verilog.py}` + `scripts/vmbuild.sh`
+`remote_build.sh` scp's `core/{synth.x,codegen.sh,fix_verilog.py}` + `boards/basys3/rtl/{top.v,basys3.xdc}` + `boards/basys3/scripts/vmbuild.sh`
 to `~/build/` on the VM (flat), runs `vmbuild.sh` (native codegen + F4PGA in Docker), and pulls
 `build/top.bit` + `build/timing.txt`. Then flash locally as above.
 
 **Backend selection (`BACKEND=`).** Three P&R backends are supported — see the
 [migration learnings](DEVELOPMENT.md#backends-for-dsp48bram-openxc7-nextpnr-vs-vivado--the-migration-learnings):
 ```bash
-BACKEND=vivado   STAGES=48 WCT=48 scripts/remote_build.sh   # Vivado ML Standard: DSP48 + BRAM (recommended)
-BACKEND=nextpnr  STAGES=48 WCT=48 scripts/remote_build.sh   # openXC7 (yosys+nextpnr-xilinx): open, BRAM, no DSP
-BACKEND=f4pga    STAGES=48 WCT=48 scripts/remote_build.sh   # F4PGA/VPR (default; soft mult, no DSP/MMCM)
+BACKEND=vivado   STAGES=48 WCT=48 boards/basys3/scripts/remote_build.sh   # Vivado ML Standard: DSP48 + BRAM (recommended)
+BACKEND=nextpnr  STAGES=48 WCT=48 boards/basys3/scripts/remote_build.sh   # openXC7 (yosys+nextpnr-xilinx): open, BRAM, no DSP
+BACKEND=f4pga    STAGES=48 WCT=48 boards/basys3/scripts/remote_build.sh   # F4PGA/VPR (default; soft mult, no DSP/MMCM)
 ```
-- **`vivado`** (`scripts/vmbuild_vivado.sh` + `rtl/build_vivado.tcl`) infers **26 DSP48E1 + 32 RAMB36E1** (~50% LUTs),
+- **`vivado`** (`boards/basys3/scripts/vmbuild_vivado.sh` + `boards/basys3/rtl/build_vivado.tcl`) infers **26 DSP48E1 + 32 RAMB36E1** (~50% LUTs),
   critical path ~18.5 ns → the committed RTL runs **÷3 / 32 kHz**. Needs Vivado under `/opt/Xilinx`.
-- **`nextpnr`** (`scripts/vmbuild_nextpnr.sh`, `rtl/basys3_nextpnr.xdc`, `regymm/openxc7` image) is
+- **`nextpnr`** (`boards/basys3/scripts/vmbuild_nextpnr.sh`, `boards/basys3/rtl/basys3_nextpnr.xdc`, `regymm/openxc7` image) is
   fully open, infers BRAM, prints a real Fmax — but can't route the DSP `CARRYCASCIN` pin.
 - **`f4pga`**/`nextpnr` (soft multipliers, ~40 ns) require the **÷4 / 28 kHz** variant (revert the
   `top.v` clock-enable + `synth.x` `BASE_INC` to the 28 kHz values); the committed defaults target
@@ -496,7 +507,7 @@ this repo — create/start it before running `remote_build.sh`.
 ### Flash & verify
 ```bash
 openFPGALoader -b basys3 build/top.bit   # flash over JTAG (FT2232 channel A)
-scripts/verify.sh                         # flash + read UART, check sine period + ADSR envelope
+boards/basys3/scripts/verify.sh                         # flash + read UART, check sine period + ADSR envelope
 uv run host/play.py                       # send MIDI note-ons, FFT-verify the pitches (default Amaj7)
 uv run host/play.py 60 64 67              # C major
 uv run host/play.py --wave saw 69         # A4 sawtooth — FFT shows the harmonic stack
@@ -504,7 +515,7 @@ uv run host/play.py --wave saw 69         # A4 sawtooth — FFT shows the harmon
 
 ### Simulate (no board)
 ```bash
-iverilog -g2012 -o /tmp/s.vvp rtl/tb.v rtl/engine.v && vvp /tmp/s.vvp | grep '^S ' | uv run host/analyze.py
+iverilog -g2012 -o /tmp/s.vvp core/sim/tb.v build/engine.v && vvp /tmp/s.vvp | grep '^S ' | uv run host/analyze.py
 ```
 
 ### Record & listen
@@ -557,12 +568,12 @@ filter, VCA, envelopes, LFO, unison, effects, clocking, I/O) — see
 
 ## How it works
 
-The core is a **time-multiplexed pipelined voice engine** (an XLS `proc` in `rtl/synth.x`):
+The core is a **time-multiplexed pipelined voice engine** (an XLS `proc` in `core/synth.x`):
 32 voices live in a **rotating ring**, so the current voice is always at slot 0 (constant-index —
 no 32:1 mux). **One voice is processed per engine cycle; one 16-bit sample is emitted every 32.**
 Per voice the datapath is oscillator(s) → optional sub-osc → per-voice resonant [SVF](https://en.wikipedia.org/wiki/State_variable_filter) →
 [VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier) (envelope × velocity × [tremolo](https://en.wikipedia.org/wiki/Tremolo)), with 2× ADSR and a per-part LFO. MIDI in and audio
-out are ready/valid channels driven by a thin Verilog shell (`rtl/top.v`).
+out are ready/valid channels driven by a thin Verilog shell (`boards/basys3/rtl/top.v`).
 
 The engine is **mono; the shell creates the stereo image** with block-RAM effects downstream —
 per-channel [chorus](https://en.wikipedia.org/wiki/Chorus_%28audio_effect%29) (anti-phase taps), ping-pong echo/delay, and an 8-comb [Freeverb](https://en.wikipedia.org/wiki/Reverberation) reverb, each
@@ -628,7 +639,7 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 | 87 | cross-osc ratio (8: 1/1.5/2/3/4/5/7/½) | 0xE0 | pitch bend (±2 st) |
 
 `webui/synthspec.py` is the machine-readable source of truth for this map (served to the
-browser at `/api/spec`); `host/uartaudio.py` has the matching `set_*` helpers. The map grew
+browser at `/api/spec`); `host/synth.py` has the matching `set_*` helpers. The map grew
 milestone by milestone — the historical "CC map so far" snapshots live in the M10/M11/M13
 sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified).
 

@@ -44,4 +44,5 @@ plus ffmpeg). Outputs land in `test/out/` (gitignored):
 Each test scores 0–100 by its rubric → **PASS ≥ 85 · WARN 60–84 · FAIL < 60**; the overall is
 the weighted mean → letter grade. **Stress is strict**: glitches, clipping/railing, and
 stuck/latched output (tail not returning to digital silence) lower the score. Reuses
-`host/uartaudio.py` (serial, MIDI, capture) and `webui/synthspec.py` (CC map + factory presets).
+`host/synth.py` (MIDI, sample maths), `host/transport/uart.py` (serial capture) and
+`webui/synthspec.py` (CC map + factory presets).
