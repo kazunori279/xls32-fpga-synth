@@ -1696,7 +1696,7 @@
     <text x="330" y="241" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">One UART byte, then the running-status parse: note-on / note-off / CC turned into one event.</text>
     <rect x="56" y="255" width="12" height="12" rx="2.5" fill="#f9ab00"/>
     <text x="76" y="265" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#202124">2–20 · Voice allocation — 353</text>
-    <text x="330" y="265" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">The 32-slot search for free voices, unrolled by XLS into about two slots per stage — 16–18 flops each.</text>
+    <text x="330" y="265" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">A serial fold over the 32 slots looking for free ones: the running count chains slot to slot, so only ~2 fit per stage.</text>
     <rect x="56" y="279" width="12" height="12" rx="2.5" fill="#4285f4"/>
     <text x="76" y="289" font-family="Roboto, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#202124">21–22 · State read — 1,437</text>
     <text x="330" y="289" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">One-hot write masks for the slots taken, plus slot 0’s voice and its part’s parameters — 93 array reads in stage 22 alone.</text>
