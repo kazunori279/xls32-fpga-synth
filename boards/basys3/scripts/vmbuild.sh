@@ -7,14 +7,8 @@ set -e
 cd ~/build
 X=$HOME/xls/xls-v0.0.0-10214-gcf49d0e31-linux-x64
 STAGES=${STAGES:-48}; WCT=${WCT:-48}
-echo "== codegen (stages=$STAGES wct=$WCT) =="
-$X/ir_converter_main --top=engine synth.x > engine.ir
-$X/opt_main engine.ir > engine.opt.ir
-$X/codegen_main --generator=pipeline --pipeline_stages=$STAGES --worst_case_throughput=$WCT \
-  --delay_model=unit --use_system_verilog=false --reset=rst --reset_active_low=false \
-  --reset_asynchronous=false --top=engine --module_name=xls_engine \
-  --output_verilog_path=engine.v engine.opt.ir
-python3 fix_verilog.py engine.v
+# Shared with every other board — remote_build.sh ships core/codegen.sh here alongside synth.x.
+XLS_DIR=$X STAGES=$STAGES WCT=$WCT SRC=synth.x OUT=engine.v bash ./codegen.sh
 EX=$HOME/f4pga-examples; W=$EX/xc7/synth; mkdir -p $W
 sudo rm -rf $W/build                     # root-owned from prior docker run
 cp top.v engine.v basys3.xdc $W/

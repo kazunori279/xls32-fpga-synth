@@ -9,14 +9,8 @@ STAGES=${STAGES:-48}; WCT=${WCT:-48}
 VIV=$(ls -d /opt/Xilinx/Vivado/*/settings64.sh 2>/dev/null | sort | tail -1)
 if [ -z "$VIV" ]; then echo "ERROR: Vivado not found under /opt/Xilinx/Vivado"; exit 1; fi
 source "$VIV"
-echo "== codegen (stages=$STAGES wct=$WCT) =="
-$X/ir_converter_main --top=engine synth.x > engine.ir
-$X/opt_main engine.ir > engine.opt.ir
-$X/codegen_main --generator=pipeline --pipeline_stages=$STAGES --worst_case_throughput=$WCT \
-  --delay_model=unit --use_system_verilog=false --reset=rst --reset_active_low=false \
-  --reset_asynchronous=false --top=engine --module_name=xls_engine \
-  --output_verilog_path=engine.v engine.opt.ir
-python3 fix_verilog.py engine.v
+# Shared with every other board — remote_build.sh ships core/codegen.sh here alongside synth.x.
+XLS_DIR=$X STAGES=$STAGES WCT=$WCT SRC=synth.x OUT=engine.v bash ./codegen.sh
 
 W=$HOME/vivbuild; rm -rf $W; mkdir -p $W
 cp top.v engine.v basys3.xdc build_vivado.tcl $W/

@@ -12,14 +12,8 @@ IMG=regymm/openxc7:latest
 # synth_xilinx (yosys 0.62): DSP48E1 + BRAM inference are ON by default (disable via -nodsp/-nobram).
 SYNTH_FLAGS=${SYNTH_FLAGS:-"-flatten -abc9 -family xc7 -top top"}
 
-echo "== codegen (stages=$STAGES wct=$WCT) =="
-$X/ir_converter_main --top=engine synth.x > engine.ir
-$X/opt_main engine.ir > engine.opt.ir
-$X/codegen_main --generator=pipeline --pipeline_stages=$STAGES --worst_case_throughput=$WCT \
-  --delay_model=unit --use_system_verilog=false --reset=rst --reset_active_low=false \
-  --reset_asynchronous=false --top=engine --module_name=xls_engine \
-  --output_verilog_path=engine.v engine.opt.ir
-python3 fix_verilog.py engine.v
+# Shared with every other board — remote_build.sh ships core/codegen.sh here alongside synth.x.
+XLS_DIR=$X STAGES=$STAGES WCT=$WCT SRC=synth.x OUT=engine.v bash ./codegen.sh
 
 # --- assemble a project dir + run the openXC7 flow in one container (venv stays active) ---
 W=$HOME/nxbuild; rm -rf $W; mkdir -p $W/src $W/build

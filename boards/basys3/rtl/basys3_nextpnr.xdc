@@ -1,6 +1,6 @@
 ## Basys 3 constraints for the openXC7 (yosys synth_xilinx + nextpnr-xilinx) backend.
 ## nextpnr-xilinx wants `set_property LOC`/`IOSTANDARD` (not the Vivado `-dict { PACKAGE_PIN }`
-## form used by rtl/basys3.xdc for the F4PGA/VPR flow). Keep the two in sync.
+## form used by basys3.xdc for the F4PGA/VPR flow). Keep the two in sync.
 
 ## 100 MHz clock (W5)
 set_property LOC W5 [get_ports clk]

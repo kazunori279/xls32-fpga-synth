@@ -5,15 +5,19 @@
 #   BACKEND=nextpnr           -> vmbuild_nextpnr.sh (openXC7: synth_xilinx + nextpnr-xilinx; BRAM, no DSP)
 #   BACKEND=vivado            -> vmbuild_vivado.sh  (Vivado: DSP48 + BRAM + real timing)
 set -euo pipefail
-cd "$(dirname "$0")/.."   # project root (script lives in scripts/)
+cd "$(dirname "$0")/../../.."   # project root (script lives in boards/basys3/scripts/)
+S=boards/basys3/scripts
 # Set these to your own GCE VM (or export them in your environment).
 Z="${GCE_ZONE:-YOUR_ZONE}"; P="${GCE_PROJECT:-YOUR_GCP_PROJECT}"; VM="${GCE_VM:-YOUR_VM}"
 BACKEND="${BACKEND:-f4pga}"
 gcloud compute ssh "$VM" --zone="$Z" --project="$P" --command="mkdir -p ~/build" >/dev/null 2>&1
-# sources land FLAT on the VM (~/build/), which is what the vmbuild scripts expect.
+# sources land FLAT on the VM (~/build/), which is what the vmbuild scripts expect —
+# so core/ and boards/basys3/rtl/ collapse into one directory there.
 gcloud compute scp --zone="$Z" --project="$P" \
-  rtl/synth.x rtl/top.v rtl/basys3.xdc rtl/basys3_nextpnr.xdc rtl/fix_verilog.py rtl/build_vivado.tcl \
-  scripts/vmbuild.sh scripts/vmbuild_nextpnr.sh scripts/vmbuild_vivado.sh "$VM":~/build/ >/dev/null
+  core/synth.x core/codegen.sh core/fix_verilog.py \
+  boards/basys3/rtl/top.v boards/basys3/rtl/basys3.xdc boards/basys3/rtl/basys3_nextpnr.xdc \
+  boards/basys3/rtl/build_vivado.tcl \
+  "$S/vmbuild.sh" "$S/vmbuild_nextpnr.sh" "$S/vmbuild_vivado.sh" "$VM":~/build/ >/dev/null
 case "$BACKEND" in
   nextpnr) RB=vmbuild_nextpnr.sh ;;
   vivado)  RB=vmbuild_vivado.sh ;;

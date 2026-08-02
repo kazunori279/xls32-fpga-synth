@@ -1,0 +1,74 @@
+"""Board registry.
+
+A *board* is everything that is not DSP: pins, clock rate, how the host talks to it,
+how a bitstream gets loaded. The engine itself (``core/synth.x``) never appears here
+and never learns which board it is running on.
+
+Pick a board with ``--board`` or ``$XLS32_BOARD``; the default is ``basys3``, so every
+command that worked before the boards/ split still works unchanged.
+
+    from boards import get_board
+    b = get_board()          # honours $XLS32_BOARD
+    b.sr                     # 32000
+    b.transport              # "uart"
+"""
+import os
+from dataclasses import dataclass, field
+
+DEFAULT = "basys3"
+
+
+@dataclass(frozen=True)
+class Board:
+    """What the host needs to know to drive a board. No gateware details."""
+
+    name: str
+    fpga: str
+    #: Audio sample rate the gateware actually runs at.
+    sr: int
+    #: Which host/transport/ implementation to use: "uart" | "usbaudio".
+    transport: str
+    #: Keyword arguments for that transport's constructor.
+    transport_opts: dict = field(default_factory=dict)
+    #: True when the capture stream is L,R interleaved (see samples_from_bytes).
+    stereo: bool = True
+    #: Shell command that loads build/top.bit onto the board, for docs and scripts.
+    load_cmd: str = ""
+    #: Directory holding this board's gateware and scripts, relative to the repo root.
+    root: str = ""
+    #: Set when the board is declared but not yet buildable, with the reason.
+    unsupported: str = ""
+
+    def require_supported(self):
+        if self.unsupported:
+            raise NotImplementedError(f"board {self.name!r}: {self.unsupported}")
+        return self
+
+
+def _registry():
+    from boards.basys3.board import BOARD as basys3
+    from boards.tiliqua.board import BOARD as tiliqua
+
+    return {b.name: b for b in (basys3, tiliqua)}
+
+
+def names():
+    return sorted(_registry())
+
+
+def get_board(name=None):
+    """Resolve a board by name, then $XLS32_BOARD, then the default."""
+    name = name or os.environ.get("XLS32_BOARD") or DEFAULT
+    try:
+        return _registry()[name]
+    except KeyError:
+        raise SystemExit(
+            f"unknown board {name!r}; known boards: {', '.join(names())}"
+        ) from None
+
+
+def add_board_argument(parser, **kw):
+    """Add a uniform --board flag to an argparse parser."""
+    parser.add_argument("--board", default=None, choices=names(),
+                        help=f"target board (default: $XLS32_BOARD or {DEFAULT})", **kw)
+    return parser
