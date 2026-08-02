@@ -2080,62 +2080,70 @@
 <!-- ============ 23b · PRESET SEARCH ============ -->
 <section class="slide">
   <div class="h">プリセットは回して作らず、探索した</div>
-  <div class="hsub">1バンク128個、ノブは誰も回していません。1つずつ <a class="em" style="text-decoration:none" href="https://en.wikipedia.org/wiki/CMA-ES">CMA-ES</a> が23次元のCC空間（連続ノブ14＋ビットパックされたセレクト9）を探索し、実際の録音に一番近く鳴るパッチを見つけています。</div>
-  <div style="margin-top:16px;">
-    <svg viewBox="0 0 1152 470" style="width:100%;height:470px;">
-    <rect x="24" y="96" width="176" height="80" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(38,121.0) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5 V21.5"/><path d="M4.5 4 H17.5 L14.5 8 L17.5 12 H4.5"/></g>
-    <text x="70" y="134.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">シード</text>
-    <text x="70" y="152.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">カテゴリ別の初期点</text>
-    <rect x="236" y="96" width="210" height="80" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(250,121.0) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 1.8 v3.2 M15 1.8 v3.2 M9 19 v3.2 M15 19 v3.2 M1.8 9 h3.2 M1.8 15 h3.2 M19 9 h3.2 M19 15 h3.2"/><path d="M8.2 13.6 q1.9 -4.4 3.8 0 t3.8 0"/></g>
-    <text x="282" y="134.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">レンダリング</text>
-    <text x="282" y="152.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">engine.py：synth.xの再実装</text>
-    <rect x="482" y="96" width="214" height="80" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(496,121.0) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7.5 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M2 17 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M20.8 9.4 V15.1 M19.4 10.8 L20.8 9.4 L22.2 10.8 M19.4 13.7 L20.8 15.1 L22.2 13.7"/></g>
-    <text x="528" y="134.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">ロス</text>
-    <text x="528" y="152.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">STFT＋mel＋振幅包絡</text>
-    <rect x="732" y="96" width="204" height="80" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(746,121.0) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10.2" ry="6.4" transform="rotate(-22 12 12)"/><ellipse cx="12" cy="12" rx="5.4" ry="3.2" transform="rotate(-22 12 12)"/><circle cx="7.6" cy="14.6" r="1.05" fill="#1a73e8"/><circle cx="11.4" cy="9.6" r="1.05" fill="#1a73e8"/><circle cx="15.8" cy="9.2" r="1.05" fill="#1a73e8"/><circle cx="13.6" cy="14.2" r="1.05" fill="#1a73e8"/></g>
-    <text x="778" y="134.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">CMA-ES</text>
-    <text x="778" y="152.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">23次元ベクトルを更新</text>
-    <rect x="972" y="96" width="156" height="80" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(986,121.0) scale(0.92)" fill="none" stroke="#188038" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M7 8.6 h10 M7 12 h10 M7 15.4 h6.4"/></g>
-    <text x="1018" y="134.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">最良パッチ</text>
-    <text x="1018" y="152.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">presets_*.json へ</text>
-    <path d="M200 136.0 L236 136.0" stroke="#9aa0a6" stroke-width="1.6"/>
-    <path d="M236 136.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M446 136.0 L482 136.0" stroke="#9aa0a6" stroke-width="1.6"/>
-    <path d="M482 136.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M696 136.0 L732 136.0" stroke="#9aa0a6" stroke-width="1.6"/>
-    <path d="M732 136.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <path d="M936 136.0 L972 136.0" stroke="#9aa0a6" stroke-width="1.6"/>
-    <path d="M972 136.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
-    <rect x="464" y="4" width="250" height="56" rx="9" fill="#ffffff" stroke="#dadce0"/>
-    <g transform="translate(478,17.0) scale(0.92)" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 17.6 V5.6 L19.4 3.4 V15.4"/><ellipse cx="6.7" cy="18.2" rx="2.7" ry="2.1" fill="#d93025" stroke="none"/><ellipse cx="16.9" cy="16" rx="2.7" ry="2.1" fill="#d93025" stroke="none"/></g>
-    <text x="510" y="30.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">ターゲット</text>
-    <text x="510" y="48.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">実録音の単音（NSynth／GMサウンドフォント）</text>
-    <path d="M589 60 L589 96" stroke="#9aa0a6" stroke-width="1.6"/>
-    <path d="M589 96 l-4.5 7 l9 0 z" fill="#9aa0a6"/>
-    <path d="M834 176 V214 H341 V184" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-dasharray="5 4"/>
-    <path d="M341 176 l-4.5 8 l9 0 z" fill="#1a73e8"/>
-    <text x="587" y="232" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" text-anchor="middle">次の候補パッチ群 ― 1ターゲットあたり約800レンダリング</text>
-    <rect x="24" y="254" width="352" height="88" rx="9" fill="#f1f3f4"/>
-    <text x="42" y="292" font-family="Roboto, Arial, sans-serif" font-size="27" fill="#1a73e8" font-weight="700">128 × 2</text>
-    <text x="42" y="312" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">探索で作ったプリセット</text>
-    <text x="42" y="331" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">8カテゴリ×16を2バンク（NSynth／GMサウンドフォント）</text>
-    <rect x="400" y="254" width="352" height="88" rx="9" fill="#f1f3f4"/>
-    <text x="418" y="292" font-family="Roboto, Arial, sans-serif" font-size="27" fill="#1a73e8" font-weight="700">~800</text>
-    <text x="418" y="312" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">1プリセットあたりのレンダリング</text>
-    <text x="418" y="331" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">単発が2×400のリスタートに勝つ。800→1600は2.5%しか縮まない</text>
-    <rect x="776" y="254" width="352" height="88" rx="9" fill="#f1f3f4"/>
-    <text x="794" y="292" font-family="Roboto, Arial, sans-serif" font-size="27" fill="#1a73e8" font-weight="700">22.9</text>
-    <text x="794" y="312" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">ロス中央値（soundfontバンク）</text>
-    <text x="794" y="331" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">同一音≒0・1オクターブずれ≒49・ノイズ≒137</text>
-    <rect x="0" y="366" width="1152" height="92" rx="10" fill="#e8f0fe"/>
-    <text x="20" y="396" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#0b57d0" font-weight="700">基板はこのループに入れません。1ターゲットに10³〜10⁴回のレンダリングが要るので、探索は synth.x を写した engine.py の上で回します。</text>
-    <text x="20" y="421" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">つまり出てくるのはシム上での最適解であって、基板で鳴る保証はありません。</text>
-    <text x="20" y="443" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">validate_hw.py が128個すべてを実機で鳴らし、固定小数点のフィルタが発振してフルスケールのノイズに化けるものを洗い出します ― シム側のクランプが隠してしまう故障です。</text>
+  <div class="hsub">1バンク128個、ノブは誰も回していません。1つずつ <a class="em" style="text-decoration:none" href="https://en.wikipedia.org/wiki/CMA-ES">CMA-ES</a> に23次元のCC空間を探索させた結果です。</div>
+  <div style="margin-top:12px;">
+    <svg viewBox="0 0 1152 500" style="width:100%;height:500px;">
+    <rect x="24" y="72" width="150" height="74" rx="9" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+    <g transform="translate(38,94.96000000000001) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5 V21.5"/><path d="M4.5 4 H17.5 L14.5 8 L17.5 12 H4.5"/></g>
+    <text x="67.76" y="107.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">シード</text>
+    <text x="67.76" y="126.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">カテゴリ別の初期点</text>
+    <rect x="206" y="72" width="196" height="74" rx="9" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+    <g transform="translate(220,94.96000000000001) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 1.8 v3.2 M15 1.8 v3.2 M9 19 v3.2 M15 19 v3.2 M1.8 9 h3.2 M1.8 15 h3.2 M19 9 h3.2 M19 15 h3.2"/><path d="M8.2 13.6 q1.9 -4.4 3.8 0 t3.8 0"/></g>
+    <text x="249.76" y="107.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">レンダリング</text>
+    <text x="249.76" y="126.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">engine.py：synth.xの再実装</text>
+    <rect x="434" y="72" width="196" height="74" rx="9" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+    <g transform="translate(448,94.96000000000001) scale(0.92)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7.5 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M2 17 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M20.8 9.4 V15.1 M19.4 10.8 L20.8 9.4 L22.2 10.8 M19.4 13.7 L20.8 15.1 L22.2 13.7"/></g>
+    <text x="477.76" y="107.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">ロス</text>
+    <text x="477.76" y="126.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">STFT＋mel＋振幅包絡</text>
+    <rect x="662" y="62" width="264" height="94" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+    <g transform="translate(676,89.8) scale(1.35)" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10.2" ry="6.4" transform="rotate(-22 12 12)"/><ellipse cx="12" cy="12" rx="5.4" ry="3.2" transform="rotate(-22 12 12)"/><circle cx="7.6" cy="14.6" r="1.05" fill="#1a73e8"/><circle cx="11.4" cy="9.6" r="1.05" fill="#1a73e8"/><circle cx="15.8" cy="9.2" r="1.05" fill="#1a73e8"/><circle cx="13.6" cy="14.2" r="1.05" fill="#1a73e8"/></g>
+    <text x="717.8" y="107.0" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#202124" font-weight="700">CMA-ES</text>
+    <text x="717.8" y="126.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">23次元ベクトル／1世代13個</text>
+    <rect x="958" y="72" width="170" height="74" rx="9" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+    <g transform="translate(972,94.96000000000001) scale(0.92)" fill="none" stroke="#188038" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M7 8.6 h10 M7 12 h10 M7 15.4 h6.4"/></g>
+    <text x="1001.76" y="107.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">最良パッチ</text>
+    <text x="1001.76" y="126.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">1バンク128個のJSONへ</text>
+    <path d="M174 109.0 L206 109.0" stroke="#9aa0a6" stroke-width="1.6"/>
+    <path d="M206 109.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
+    <path d="M402 109.0 L434 109.0" stroke="#9aa0a6" stroke-width="1.6"/>
+    <path d="M434 109.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
+    <path d="M630 109.0 L662 109.0" stroke="#9aa0a6" stroke-width="1.6"/>
+    <path d="M662 109.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
+    <path d="M926 109.0 L958 109.0" stroke="#9aa0a6" stroke-width="1.6"/>
+    <path d="M958 109.0 l-7 -4.5 l0 9 z" fill="#9aa0a6"/>
+    <rect x="407" y="0" width="250" height="52" rx="9" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+    <g transform="translate(421,11.959999999999999) scale(0.92)" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 17.6 V5.6 L19.4 3.4 V15.4"/><ellipse cx="6.7" cy="18.2" rx="2.7" ry="2.1" fill="#d93025" stroke="none"/><ellipse cx="16.9" cy="16" rx="2.7" ry="2.1" fill="#d93025" stroke="none"/></g>
+    <text x="450.76" y="24.0" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#202124" font-weight="700">ターゲット</text>
+    <text x="450.76" y="43.0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368">実録音の単音（NSynth／GMサウンドフォント）</text>
+    <path d="M532 52 L532 72" stroke="#9aa0a6" stroke-width="1.6"/>
+    <path d="M532 72 l-4.5 7 l9 0 z" fill="#9aa0a6"/>
+    <path d="M794 156 V180 H304 V154" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <path d="M304 146 l-4.5 8 l9 0 z" fill="#1a73e8"/>
+    <text x="549" y="198" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" text-anchor="middle">次の候補パッチ群 ― 1ターゲットあたり約800レンダリング</text>
+    <path d="M886 156 V208" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="2 4"/>
+    <rect x="24" y="208" width="1104" height="186" rx="10" fill="#ffffff" stroke="#dadce0"/>
+    <text x="46" y="233" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">CMA-ESの箱の中身</text>
+    <text x="174" y="233" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">― ここでは2次元で描いていますが実際の探索軸は23本。輪の重なりがロスの地形で、× がターゲットの音</text>
+    <text x="46" y="256" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" font-weight="700">1 · サンプリング</text>
+    <clipPath id="cmaclip0"><rect x="46" y="264" width="336.0" height="70.0" rx="6"/></clipPath><rect x="46" y="264" width="336.0" height="70.0" rx="6" fill="#fafbfc"/><g clip-path="url(#cmaclip0)"><ellipse cx="304.0" cy="286.0" rx="11" ry="6" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#c6c9cd" stroke-width="1"/><ellipse cx="304.0" cy="286.0" rx="26" ry="13" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#cfd2d6" stroke-width="1"/><ellipse cx="304.0" cy="286.0" rx="54" ry="27" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#d8dbde" stroke-width="1"/><ellipse cx="304.0" cy="286.0" rx="86" ry="43" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#e0e2e5" stroke-width="1"/><ellipse cx="304.0" cy="286.0" rx="122" ry="61" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#e6e8ea" stroke-width="1"/><ellipse cx="304.0" cy="286.0" rx="162" ry="81" transform="rotate(-20 304.0 286.0)" fill="none" stroke="#ebedee" stroke-width="1"/><path d="M299.0 281.0 L309.0 291.0 M309.0 281.0 L299.0 291.0" stroke="#d93025" stroke-width="2" stroke-linecap="round"/><ellipse cx="112.0" cy="310.0" rx="44.0" ry="21.0" transform="rotate(-8.0 112.0 310.0)" fill="#1a73e8" fill-opacity=".10" stroke="#1a73e8" stroke-width="1.6"/><circle cx="80.0" cy="305.0" r="2.7" fill="#1a73e8"/><circle cx="95.0" cy="296.0" r="2.7" fill="#1a73e8"/><circle cx="113.0" cy="299.0" r="2.7" fill="#1a73e8"/><circle cx="129.0" cy="313.0" r="2.7" fill="#1a73e8"/><circle cx="142.0" cy="319.0" r="2.7" fill="#1a73e8"/><circle cx="88.0" cy="321.0" r="2.7" fill="#1a73e8"/><circle cx="107.0" cy="323.0" r="2.7" fill="#1a73e8"/><circle cx="123.0" cy="307.0" r="2.7" fill="#1a73e8"/><circle cx="138.0" cy="301.0" r="2.7" fill="#1a73e8"/><circle cx="101.0" cy="314.0" r="2.7" fill="#1a73e8"/><circle cx="118.0" cy="294.0" r="2.7" fill="#1a73e8"/><circle cx="133.0" cy="323.0" r="2.7" fill="#1a73e8"/><circle cx="83.0" cy="297.0" r="2.7" fill="#1a73e8"/><path d="M107.0 310.0 h10 M112.0 305.0 v10" stroke="#1a73e8" stroke-width="1.6"/></g>
+    <text x="46" y="352" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">候補パッチを楕円からサンプリング。</text>
+    <text x="46" y="367" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">中心が現時点の最良解で、楕円の形が</text>
+    <text x="46" y="382" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">「どの軸をどれだけ探るか」です。</text>
+    <text x="408" y="256" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" font-weight="700">2 · 順位をつけて半分に</text>
+    <clipPath id="cmaclip1"><rect x="408" y="264" width="336.0" height="70.0" rx="6"/></clipPath><rect x="408" y="264" width="336.0" height="70.0" rx="6" fill="#fafbfc"/><g clip-path="url(#cmaclip1)"><ellipse cx="666.0" cy="286.0" rx="11" ry="6" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#c6c9cd" stroke-width="1"/><ellipse cx="666.0" cy="286.0" rx="26" ry="13" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#cfd2d6" stroke-width="1"/><ellipse cx="666.0" cy="286.0" rx="54" ry="27" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#d8dbde" stroke-width="1"/><ellipse cx="666.0" cy="286.0" rx="86" ry="43" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#e0e2e5" stroke-width="1"/><ellipse cx="666.0" cy="286.0" rx="122" ry="61" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#e6e8ea" stroke-width="1"/><ellipse cx="666.0" cy="286.0" rx="162" ry="81" transform="rotate(-20 666.0 286.0)" fill="none" stroke="#ebedee" stroke-width="1"/><path d="M661.0 281.0 L671.0 291.0 M671.0 281.0 L661.0 291.0" stroke="#d93025" stroke-width="2" stroke-linecap="round"/><ellipse cx="474.0" cy="310.0" rx="44.0" ry="21.0" transform="rotate(-8.0 474.0 310.0)" fill="#1a73e8" fill-opacity=".10" stroke="#bdc1c6" stroke-width="1.6"/><circle cx="442.0" cy="305.0" r="2.4" fill="#c8cbcf"/><circle cx="457.0" cy="296.0" r="2.4" fill="#c8cbcf"/><circle cx="475.0" cy="299.0" r="2.4" fill="#c8cbcf"/><circle cx="491.0" cy="313.0" r="3.6" fill="#188038"/><circle cx="504.0" cy="319.0" r="3.6" fill="#188038"/><circle cx="450.0" cy="321.0" r="2.4" fill="#c8cbcf"/><circle cx="469.0" cy="323.0" r="2.4" fill="#c8cbcf"/><circle cx="485.0" cy="307.0" r="3.6" fill="#188038"/><circle cx="500.0" cy="301.0" r="3.6" fill="#188038"/><circle cx="463.0" cy="314.0" r="2.4" fill="#c8cbcf"/><circle cx="480.0" cy="294.0" r="3.6" fill="#188038"/><circle cx="495.0" cy="323.0" r="3.6" fill="#188038"/><circle cx="445.0" cy="297.0" r="2.4" fill="#c8cbcf"/><path d="M469.0 310.0 h10 M474.0 305.0 v10" stroke="#1a73e8" stroke-width="1.6"/></g>
+    <text x="408" y="352" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">13個すべてを鳴らして採点し、成績の</text>
+    <text x="408" y="367" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">良い半分だけ残す。微分は一切しません</text>
+    <text x="408" y="382" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">― ロスは評価するだけで、逆に解かない。</text>
+    <text x="770" y="256" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" font-weight="700">3 · 中心と形を更新</text>
+    <clipPath id="cmaclip2"><rect x="770" y="264" width="336.0" height="70.0" rx="6"/></clipPath><rect x="770" y="264" width="336.0" height="70.0" rx="6" fill="#fafbfc"/><g clip-path="url(#cmaclip2)"><ellipse cx="1028.0" cy="286.0" rx="11" ry="6" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#c6c9cd" stroke-width="1"/><ellipse cx="1028.0" cy="286.0" rx="26" ry="13" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#cfd2d6" stroke-width="1"/><ellipse cx="1028.0" cy="286.0" rx="54" ry="27" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#d8dbde" stroke-width="1"/><ellipse cx="1028.0" cy="286.0" rx="86" ry="43" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#e0e2e5" stroke-width="1"/><ellipse cx="1028.0" cy="286.0" rx="122" ry="61" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#e6e8ea" stroke-width="1"/><ellipse cx="1028.0" cy="286.0" rx="162" ry="81" transform="rotate(-20 1028.0 286.0)" fill="none" stroke="#ebedee" stroke-width="1"/><path d="M1023.0 281.0 L1033.0 291.0 M1033.0 281.0 L1023.0 291.0" stroke="#d93025" stroke-width="2" stroke-linecap="round"/><ellipse cx="836.0" cy="310.0" rx="44.0" ry="21.0" transform="rotate(-8.0 836.0 310.0)" fill="none" stroke="#dadce0" stroke-width="1.4" stroke-dasharray="4 3"/><ellipse cx="920.5" cy="299.4" rx="52" ry="15" transform="rotate(-7.1 920.5 299.4)" fill="#1a73e8" fill-opacity=".08" stroke="#1a73e8" stroke-width="1.8"/><circle cx="853.0" cy="313.0" r="2.4" fill="#cde3c7"/><circle cx="866.0" cy="319.0" r="2.4" fill="#cde3c7"/><circle cx="847.0" cy="307.0" r="2.4" fill="#cde3c7"/><circle cx="862.0" cy="301.0" r="2.4" fill="#cde3c7"/><circle cx="842.0" cy="294.0" r="2.4" fill="#cde3c7"/><circle cx="857.0" cy="323.0" r="2.4" fill="#cde3c7"/><path d="M836.0 310.0 L909.6 300.8" stroke="#1a73e8" stroke-width="1.8"/><path d="M909.6 300.8 L903.1 307.0" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/><path d="M909.6 300.8 L901.7 296.4" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/><path d="M915.5 299.4 h10 M920.5 294.4 v10" stroke="#1a73e8" stroke-width="1.8"/></g>
+    <text x="770" y="352" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">中心を勝ち残りの側へ動かし、楕円を</text>
+    <text x="770" y="367" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">その方向へ伸ばす。次の世代はそちらを</text>
+    <text x="770" y="382" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">より遠くまで探す。13個×約62世代で800回。</text>
+    <rect x="0" y="402" width="1152" height="98" rx="10" fill="#fef7e0"/>
+    <text x="20" y="428" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">スペクトログラム上で近いことと、耳で良い音であることは別物でした。</text>
+    <text x="20" y="451" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">中央値は22.9（GMサウンドフォント）と28.5（NSynth）。同一音≒0、1オクターブずれ≒49という目盛りなので、数字だけ見れば悪くありません。</text>
+    <text x="20" y="470" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">ただしロスが見ているのは振幅スペクトルと包絡だけ。位相もアタックの質感も、音楽的に使えるかどうかも入っていないので、数値は近いのに違う音、が普通に起きます。</text>
+    <text x="20" y="489" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">残りはエンジン側の限界です。減算合成のコアでは、探索がどれだけ収束してもブラスやアコースティックの音色そのものが作れません。</text>
     </svg>
   </div>
 </section>
