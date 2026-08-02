@@ -2566,22 +2566,25 @@
     <rect x="24" y="194" width="1104" height="84" rx="10" fill="#ffffff" stroke="#dadce0"/>
     <g transform="translate(44,204) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7.5 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M2 17 q2.6 -4 5.2 0 t5.2 0 t4.6 0"/><path d="M20.8 9.4 V15.1 M19.4 10.8 L20.8 9.4 L22.2 10.8 M19.4 13.7 L20.8 15.1 L22.2 13.7"/></g>
     <text x="72" y="220" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">Inside the Loss box</text>
-    <text x="213" y="220" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— both renders are resampled to 22.05 kHz and RMS-normalised first, then compared magnitude-only: three terms, summed</text>
+    <text x="213" y="220" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">— both sounds are turned down to the same loudness first, so only their character is compared, never how loud they are. Three scores, added up</text>
     <g transform="translate(46,226) scale(0.75)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="7.5" width="20.8" height="9" rx="1.5"/><rect x="5.6" y="4.6" width="12.8" height="14.8" rx="1.5"/><rect x="9.6" y="1.8" width="4.8" height="20.4" rx="1.5"/></g>
-    <text x="72" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Multi-res STFT</text>
+    <text x="72" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">What it is made of</text>
+    <text x="196" y="240" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#9aa0a6">multi-res STFT</text>
     <text x="382" y="240" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#1a73e8" font-weight="700" text-anchor="end">×1 each</text>
-    <text x="46" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">mean |A − B| plus half of mean |log A − log B|, over</text>
-    <text x="46" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">256 / 512 / 1024 / 2048 Hann windows at 75% overlap.</text>
+    <text x="46" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">Which pitches and overtones are in it — looked at</text>
+    <text x="46" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">both close up and zoomed out, so nothing slips past.</text>
     <g transform="translate(408,226) scale(0.75)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 21.5 H22.5"/><path d="M3.4 19 V10 M7 19 V5.5 M11.4 19 V13 M16.6 19 V7.5 M21.4 19 V15"/></g>
-    <text x="434" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Mel-ish bands</text>
+    <text x="434" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Its overall colour</text>
+    <text x="546" y="240" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#9aa0a6">mel-ish bands</text>
     <text x="744" y="240" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#1a73e8" font-weight="700" text-anchor="end">×2</text>
-    <text x="408" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">24 log-spaced bands from 50 Hz to Nyquist, so overall</text>
-    <text x="408" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">timbre counts for more than any individual bin.</text>
+    <text x="408" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">The same view, blurred into 24 wide bands: bright or</text>
+    <text x="408" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">dark, thin or full. One overtone off is not a miss.</text>
     <g transform="translate(770,226) scale(0.75)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 20 L6 3.5 L10.2 12 L15 12 L21.4 20"/></g>
-    <text x="796" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Amplitude envelope</text>
+    <text x="796" y="240" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">Its shape in time</text>
+    <text x="906" y="240" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#9aa0a6">amplitude envelope</text>
     <text x="1106" y="240" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#1a73e8" font-weight="700" text-anchor="end">×3</text>
-    <text x="770" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">A 10 ms moving-RMS contour, peak-normalised, so a pad</text>
-    <text x="770" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">cannot match a pluck on steady-state spectrum alone.</text>
+    <text x="770" y="258" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">How the note swells and fades away. Without this, a</text>
+    <text x="770" y="272" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">slow pad could score as a match for a short pluck.</text>
     <rect x="24" y="286" width="1104" height="146" rx="10" fill="#ffffff" stroke="#dadce0"/>
     <g transform="translate(44,296) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10.2" ry="6.4" transform="rotate(-22 12 12)"/><ellipse cx="12" cy="12" rx="5.4" ry="3.2" transform="rotate(-22 12 12)"/><circle cx="7.6" cy="14.6" r="1.05" fill="#1a73e8"/><circle cx="11.4" cy="9.6" r="1.05" fill="#1a73e8"/><circle cx="15.8" cy="9.2" r="1.05" fill="#1a73e8"/><circle cx="13.6" cy="14.2" r="1.05" fill="#1a73e8"/></g>
     <text x="72" y="312" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">Inside the CMA-ES box</text>
@@ -2600,7 +2603,7 @@
     <text x="770" y="422" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368">that way. 62 generations of 13 makes up the ~800 renders.</text>
     <rect x="0" y="440" width="1152" height="60" rx="10" fill="#fef7e0"/>
     <text x="20" y="466" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">Close on the spectrogram is not the same as good to the ear — which is where this stops.</text>
-    <text x="20" y="487" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">Medians of 22.9 and 28.5 look fine on a scale where identical ≈ 0 — but magnitude alone cannot say what a good sound is, and a subtractive core cannot make brass at all.</text>
+    <text x="20" y="487" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">Medians of 22.9 and 28.5 look fine on a scale where identical ≈ 0 — but a score like this cannot say what a good sound is, and a subtractive core cannot make brass at all.</text>
     </svg>
   </div>
 </section>
