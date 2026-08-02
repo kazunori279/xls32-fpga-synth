@@ -1313,398 +1313,431 @@
   and the synth emits one audio sample per tick.</div>
 </section>
 
+<!-- ============ 20 · TIMING ============ -->
+<section class="slide">
+  <div class="h">One clock, three cadences</div>
+  <table class="gt" style="margin-top:26px; font-size:16.5px;">
+    <thead><tr><th style="width:290px;">Cadence</th><th style="width:182px; white-space:nowrap;">Rate</th><th style="width:112px;">Period</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/></svg>Master clock</td><td>100 MHz</td><td>10 ns</td><td>Everything on the board — one oscillator, no MMCM/PLL</td></tr>
+      <tr><td style="background:#e6f4ea; border-left:4px solid #188038; color:#0d652d;"><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2.6" stroke-linejoin="round"/></svg><b>ce — the engine clock</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">33.3 MHz  (÷3)</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">30 ns</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d; font-weight:600;">Every pipeline register in engine.v is gated by this one enable. One tick = one voice.</b></td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h6 v-12 h4 v12 h24 v-12 h4" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/></svg>ce8 (effects)</td><td>16.7 MHz  (÷6)</td><td>60 ns</td><td>One step of the 28-state effects FSM — a BRAM read+write each</td></tr>
+      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 12 Q 12 -2 21 12 T 40 12" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/></svg>Sample period</td><td>32 kHz</td><td>31.25 µs</td><td>One 32 kHz stereo sample — 3,125 master clocks</td></tr>
+    </tbody>
+  </table>
+  <div style="margin-top:20px;">
+<svg viewBox="0 0 1152 166" width="100%" style="display:block;">
+<rect x="0" y="44" width="1152" height="68" rx="10" fill="#e6f4ea"/>
+<line x1="116" y1="6" x2="116" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="172" y1="6" x2="172" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="228" y1="6" x2="228" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="284" y1="6" x2="284" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="340" y1="6" x2="340" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="396" y1="6" x2="396" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="452" y1="6" x2="452" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="508" y1="6" x2="508" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="564" y1="6" x2="564" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="620" y1="6" x2="620" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="676" y1="6" x2="676" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="732" y1="6" x2="732" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="788" y1="6" x2="788" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="844" y1="6" x2="844" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="900" y1="6" x2="900" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="956" y1="6" x2="956" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="1012" y1="6" x2="1012" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="1068" y1="6" x2="1068" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<line x1="1124" y1="6" x2="1124" y2="158" stroke="#c8d0d8" stroke-width="1" stroke-dasharray="2 4"/>
+<path d="M 116 36 L 116 12 L 144.0 12 L 144.0 36 L 172 36 L 172 12 L 200.0 12 L 200.0 36 L 228 36 L 228 12 L 256.0 12 L 256.0 36 L 284 36 L 284 12 L 312.0 12 L 312.0 36 L 340 36 L 340 12 L 368.0 12 L 368.0 36 L 396 36 L 396 12 L 424.0 12 L 424.0 36 L 452 36 L 452 12 L 480.0 12 L 480.0 36 L 508 36 L 508 12 L 536.0 12 L 536.0 36 L 564 36 L 564 12 L 592.0 12 L 592.0 36 L 620 36 L 620 12 L 648.0 12 L 648.0 36 L 676 36 L 676 12 L 704.0 12 L 704.0 36 L 732 36 L 732 12 L 760.0 12 L 760.0 36 L 788 36 L 788 12 L 816.0 12 L 816.0 36 L 844 36 L 844 12 L 872.0 12 L 872.0 36 L 900 36 L 900 12 L 928.0 12 L 928.0 36 L 956 36 L 956 12 L 984.0 12 L 984.0 36 L 1012 36 L 1012 12 L 1040.0 12 L 1040.0 36 L 1068 36 L 1068 12 L 1096.0 12 L 1096.0 36 L 1124 36" fill="none" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
+<path d="M 116 83 L 116 57 L 172 57 L 172 83 L 228 83 L 284 83 L 284 57 L 340 57 L 340 83 L 396 83 L 452 83 L 452 57 L 508 57 L 508 83 L 564 83 L 620 83 L 620 57 L 676 57 L 676 83 L 732 83 L 788 83 L 788 57 L 844 57 L 844 83 L 900 83 L 956 83 L 956 57 L 1012 57 L 1012 83 L 1068 83 L 1124 83" fill="none" stroke="#188038" stroke-width="2.6" stroke-linejoin="round"/>
+<path d="M 116 153 L 116 131 L 172 131 L 172 153 L 228 153 L 284 153 L 340 153 L 396 153 L 452 153 L 452 131 L 508 131 L 508 153 L 564 153 L 620 153 L 676 153 L 732 153 L 788 153 L 788 131 L 844 131 L 844 153 L 900 153 L 956 153 L 1012 153 L 1068 153 L 1124 153" fill="none" stroke="#f9ab00" stroke-width="2.0" stroke-linejoin="round"/>
+<text x="104" y="29" font-family="Roboto Mono, monospace" text-anchor="end" font-size="14" fill="#1a73e8">clk</text>
+<text x="104" y="76" font-family="Roboto Mono, monospace" text-anchor="end" font-size="15" fill="#0d652d" font-weight="700">ce</text>
+<text x="104" y="147" font-family="Roboto Mono, monospace" text-anchor="end" font-size="14" fill="#b06000">ce8</text>
+<text x="116" y="106" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#0d652d" font-weight="700">30 ns · one engine cycle · one voice — nothing in engine.v moves except on this edge</text>
+</svg>
+  </div>
+  <div class="body" style="max-width:1120px; margin-top:14px;">
+    <p style="font-size:15.5px;">The compute uses only <span class="em">~264 of 3,125 clocks</span> per sample — the pipeline finishes with ~90% of the period to spare. The real ceiling is the <b>UART frame (~2,000 clocks)</b>, not the DSP — so the engine has generous room to grow.</p>
+  </div></section>
+
 <!-- ============ 19 · VOICE PARAMS ============ -->
 <section class="slide">
-  <div class="h">28 params per voice — none of them in the voice</div>
-  <div class="hsub">The patch is per-part: four copies of 28 fields, one per MIDI channel. A voice carries a 2-bit pointer to one of them.</div>
-  <div style="margin-top:16px;">
-    <svg viewBox="0 0 1152 484" width="100%" style="display:block;">
-  <text x="0" y="14" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#5f6368">parts[4] — one patch per MIDI channel</text>
-  <rect x="0" y="26" width="210" height="62" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
-  <text x="14" y="53" font-family="Roboto Mono, monospace" font-size="15.5" fill="#b06000">parts[0]</text>
-  <text x="14" y="74" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">MIDI ch 1 · 340 b</text>
-  <rect x="224" y="26" width="210" height="62" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-  <text x="238" y="53" font-family="Roboto Mono, monospace" font-size="15.5" fill="#5f6368">parts[1]</text>
-  <text x="238" y="74" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">MIDI ch 2 · 340 b</text>
-  <rect x="448" y="26" width="210" height="62" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-  <text x="462" y="53" font-family="Roboto Mono, monospace" font-size="15.5" fill="#5f6368">parts[2]</text>
-  <text x="462" y="74" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">MIDI ch 3 · 340 b</text>
-  <rect x="672" y="26" width="210" height="62" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-  <text x="686" y="53" font-family="Roboto Mono, monospace" font-size="15.5" fill="#5f6368">parts[3]</text>
-  <text x="686" y="74" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">MIDI ch 4 · 340 b</text>
-  <text x="0" y="118" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#5f6368">↓ inside one part — 28 fields, 340 bits, all of it patch data</text>
-  <rect x="0" y="134" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(8,148)"><path d="M 1 17 L 7 5 L 7 17 L 13 5 L 13 17 L 19 5 L 19 17" fill="none" stroke="#f9ab00" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></g><text x="40" y="164" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">oscillator</text><text x="265" y="163" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC70·75·73·78·80</text><text x="28" y="196" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">wave · pw · subsel · detsel</text><text x="28" y="217" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">unison</text><text x="28" y="246" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">waveform, pulse width, sub-osc,</text><text x="28" y="265" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">detune spread, unison voice count</text>
-  <rect x="291" y="134" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(299,148)"><circle cx="12.5" cy="11" r="7.5" fill="none" stroke="#f9ab00" stroke-width="1.9"/><path d="M 7.2 5.7 L 17.8 16.3 M 17.8 5.7 L 7.2 16.3" stroke="#f9ab00" stroke-width="1.7" stroke-linecap="round"/><path d="M 0 11 L 4 11" stroke="#f9ab00" stroke-width="1.9" stroke-linecap="round"/></g><text x="331" y="164" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">cross-mod</text><text x="556" y="163" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC85·86·87</text><text x="319" y="196" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">xmode · xdepth · xratio</text><text x="319" y="236" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">off / FM / ring, modulation depth,</text><text x="319" y="255" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">and the second oscillator's ratio</text>
-  <rect x="582" y="134" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(590,148)"><path d="M 1 8 L 10 8 Q 13.2 8 14.4 4.5 Q 15.6 1.5 16.8 7 Q 18.4 14.5 21 18" fill="none" stroke="#f9ab00" stroke-width="1.9" stroke-linecap="round"/><line x1="15.6" y1="1" x2="15.6" y2="20" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="2.5 2.5" opacity=".6"/></g><text x="622" y="164" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">filter</text><text x="847" y="163" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC74·71·72·79</text><text x="610" y="196" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">cutoff · reso · fmode · fdepth</text><text x="610" y="236" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">SVF cutoff and resonance, plus</text><text x="610" y="255" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">LP/HP/BP/notch and envelope swing</text>
-  <rect x="873" y="134" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(881,148)"><path d="M 1 11 Q 6.5 0.5 12 11 T 23 11" fill="none" stroke="#f9ab00" stroke-width="1.9" stroke-linecap="round"/></g><text x="913" y="164" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">LFO</text><text x="1138" y="163" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC76·77·1·92</text><text x="901" y="196" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">lfo_rate · lfo_depth · lfo_ph</text><text x="901" y="217" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">vibsel · trdep</text><text x="901" y="246" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">one per part — drives pitch, PWM,</text><text x="901" y="265" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">cutoff and tremolo (lfo_ph = phase)</text>
-  <rect x="146" y="314" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(154,328)"><path d="M 1 20 L 6 3 L 10 11 L 16 11 L 21 20 Z" fill="#f9ab00" fill-opacity=".22" stroke="#f9ab00" stroke-width="1.9" stroke-linejoin="round"/></g><text x="186" y="344" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">amp ADSR</text><text x="411" y="343" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC20-23</text><text x="174" y="376" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">a_att · a_dec · a_sus · a_rel</text><text x="174" y="416" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">the volume envelope — 8 time steps</text><text x="174" y="435" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">per stage, so no multiply is needed</text>
-  <rect x="437" y="314" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(445,328)"><path d="M 1 20 L 6 3 L 10 11 L 16 11 L 21 20" fill="none" stroke="#f9ab00" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/><line x1="6" y1="0.5" x2="6" y2="21.5" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="2.5 2.5" opacity=".65"/></g><text x="477" y="344" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">filter ADSR</text><text x="702" y="343" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC24-27</text><text x="465" y="376" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">f_att · f_dec · f_sus · f_rel</text><text x="465" y="416" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">a second envelope wired to cutoff:</text><text x="465" y="435" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">what makes a pluck sound plucked</text>
-  <rect x="728" y="314" width="277" height="160" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/><g transform="translate(736,328)"><rect x="2" y="3" width="7.5" height="17" rx="3.75" fill="none" stroke="#f9ab00" stroke-width="1.8"/><line x1="3" y1="12.5" x2="8.5" y2="12.5" stroke="#f9ab00" stroke-width="1.8" stroke-linecap="round"/><rect x="12.5" y="3" width="7.5" height="17" rx="3.75" fill="none" stroke="#f9ab00" stroke-width="1.8"/><line x1="13.5" y1="8" x2="19" y2="8" stroke="#f9ab00" stroke-width="1.8" stroke-linecap="round"/></g><text x="768" y="344" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#b06000" font-weight="700">performance</text><text x="993" y="343" font-family="Roboto Mono, monospace" font-size="11" fill="#9aa0a6" text-anchor="end">CC7 · bend · CC5</text><text x="756" y="376" font-family="Roboto Mono, monospace" font-size="13" fill="#3c4043">vol · bend · portsel</text><text x="756" y="416" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">part volume, pitch bend,</text><text x="756" y="435" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">portamento glide rate</text>
-  </svg>
+  <div class="h">A patch is 28 numbers — and those numbers are the tone</div>
+  <div class="hsub">The circuit never changes. Hand it a different 28 numbers and the same silicon becomes a bass, a pad or a bell.</div>
+  <div style="margin-top:14px;">
+<svg viewBox="0 0 1152 494" width="100%" style="display:block;">
+<defs><marker id="p30a" markerWidth="8" markerHeight="8" refX="6.6" refY="2.9" orient="auto"><path d="M0 0 L6.6 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="p30b" markerWidth="8" markerHeight="8" refX="6.6" refY="2.9" orient="auto"><path d="M0 0 L6.6 2.9 L0 5.8 z" fill="#f9ab00"/></marker></defs>
+<rect x="0" y="6" width="212" height="76" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<polyline points="14.0 60.0 15.15 59.25 16.3 58.5 17.45 57.75 18.6 57.0 19.75 56.25 20.9 55.5 22.05 54.75 23.2 54.0 24.35 53.25 25.5 52.5 26.65 51.75 27.8 51.0 28.95 50.25 30.1 49.5 31.25 48.75 32.4 48.0 33.55 47.25 34.7 46.5 35.85 45.75 37.0 45.0 38.15 44.25 39.3 43.5 40.45 42.75 41.6 42.0 42.75 41.25 43.9 40.5 45.05 39.75 46.2 39.0 47.35 38.25 48.5 37.5 49.65 36.75 50.8 36.0 51.95 35.25 53.1 34.5 54.25 33.75 55.4 33.0 56.55 32.25 57.7 31.5 58.85 30.75 60.0 30.0 61.15 29.25 62.3 28.5 63.45 27.75 64.6 27.0 65.75 26.25 66.9 25.5 68.05 24.75 69.2 24.0 70.35 23.25 71.5 22.5 72.65 21.75 73.8 21.0 74.95 20.25 76.1 59.5 77.25 58.75 78.4 58.0 79.55 57.25 80.7 56.5 81.85 55.75 83.0 55.0 84.15 54.25 85.3 53.5 86.45 52.75 87.6 52.0 88.75 51.25 89.9 50.5 91.05 49.75 92.2 49.0 93.35 48.25 94.5 47.5 95.65 46.75 96.8 46.0 97.95 45.25 99.1 44.5 100.25 43.75 101.4 43.0 102.55 42.25 103.7 41.5 104.85 40.75 106.0 40.0 107.15 39.25 108.3 38.5 109.45 37.75 110.6 37.0 111.75 36.25 112.9 35.5 114.05 34.75 115.2 34.0 116.35 33.25 117.5 32.5 118.65 31.75 119.8 31.0 120.95 30.25 122.1 29.5 123.25 28.75 124.4 28.0 125.55 27.25 126.7 26.5 127.85 25.75 129.0 25.0 130.15 24.25 131.3 23.5 132.45 22.75 133.6 22.0 134.75 21.25 135.9 20.5 137.05 59.75 138.2 59.0 139.35 58.25 140.5 57.5 141.65 56.75 142.8 56.0 143.95 55.25 145.1 54.5 146.25 53.75 147.4 53.0 148.55 52.25 149.7 51.5 150.85 50.75 152.0 50.0 153.15 49.25 154.3 48.5 155.45 47.75 156.6 47.0 157.75 46.25 158.9 45.5 160.05 44.75 161.2 44.0 162.35 43.25 163.5 42.5 164.65 41.75 165.8 41.0 166.95 40.25 168.1 39.5 169.25 38.75 170.4 38.0 171.55 37.25 172.7 36.5 173.85 35.75 175.0 35.0 176.15 34.25 177.3 33.5 178.45 32.75 179.6 32.0 180.75 31.25 181.9 30.5 183.05 29.75 184.2 29.0 185.35 28.25 186.5 27.5 187.65 26.75 188.8 26.0 189.95 25.25 191.1 24.5 192.25 23.75 193.4 23.0 194.55 22.25 195.7 21.5 196.85 20.75 198.0 60.0" fill="none" stroke="#9aa0a6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="14" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">one bare oscillator — no character</text>
+<path d="M 220 44 L 240 44" stroke="#5f6368" stroke-width="1.8" marker-end="url(#p30a)"/>
+<rect x="248" y="0" width="338" height="88" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
+<text x="262" y="22" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#b06000" font-weight="700">the patch — 28 numbers</text>
+<line x1="264.0" y1="34" x2="264.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="260.6" y="60" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="275.4" y1="34" x2="275.4" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="272.0" y="48" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="286.8" y1="34" x2="286.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="283.40000000000003" y="66" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="298.2" y1="34" x2="298.2" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="294.8" y="41" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="309.6" y1="34" x2="309.6" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="306.20000000000005" y="54" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="321.0" y1="34" x2="321.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="317.6" y="69" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="332.4" y1="34" x2="332.4" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="329.0" y="45" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="343.8" y1="34" x2="343.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="340.40000000000003" y="57" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="355.2" y1="34" x2="355.2" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="351.8" y="38" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="366.6" y1="34" x2="366.6" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="363.20000000000005" y="63" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="378.0" y1="34" x2="378.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="374.6" y="50" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="389.4" y1="34" x2="389.4" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="386.0" y="43" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="400.8" y1="34" x2="400.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="397.40000000000003" y="67" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="412.20000000000005" y1="34" x2="412.20000000000005" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="408.80000000000007" y="55" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="423.6" y1="34" x2="423.6" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="420.20000000000005" y="46" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="435.0" y1="34" x2="435.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="431.6" y="61" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="446.4" y1="34" x2="446.4" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="443.0" y="39" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="457.8" y1="34" x2="457.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="454.40000000000003" y="52" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="469.20000000000005" y1="34" x2="469.20000000000005" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="465.80000000000007" y="65" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="480.6" y1="34" x2="480.6" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="477.20000000000005" y="44" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="492.0" y1="34" x2="492.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="488.6" y="58" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="503.4" y1="34" x2="503.4" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="500.0" y="47" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="514.8" y1="34" x2="514.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="511.4" y="70" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="526.2" y1="34" x2="526.2" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="522.8000000000001" y="53" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="537.6" y1="34" x2="537.6" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="534.2" y="40" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="549.0" y1="34" x2="549.0" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="545.6" y="62" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="560.4000000000001" y1="34" x2="560.4000000000001" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="557.0000000000001" y="49" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<line x1="571.8" y1="34" x2="571.8" y2="76" stroke="#f9ab00" stroke-width="1.2" opacity=".35"/>
+<rect x="568.4" y="56" width="6.8" height="5" rx="2.5" fill="#f9ab00"/>
+<path d="M 594 44 L 614 44" stroke="#5f6368" stroke-width="1.8" marker-end="url(#p30a)"/>
+<rect x="622" y="6" width="212" height="76" rx="10" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+<polyline points="634.0 40.0 634.47 39.89 634.94 39.59 635.41 39.13 635.88 38.57 636.35 37.97 636.82 37.4 637.29 36.91 637.76 36.55 638.23 36.3 638.7 36.17 639.17 36.1 639.64 36.06 640.11 35.96 640.58 35.76 641.05 35.4 641.52 34.87 641.99 34.17 642.46 33.35 642.93 32.48 643.4 31.67 643.87 31.02 644.34 30.67 644.81 30.72 645.28 31.26 645.75 32.32 646.22 33.92 646.69 36.0 647.16 38.46 647.63 41.19 648.1 44.02 648.57 46.77 649.04 49.3 649.51 51.46 649.98 53.16 650.45 54.35 650.92 55.02 651.39 55.26 651.86 55.14 652.33 54.83 652.8 54.46 653.27 54.19 653.74 54.14 654.21 54.4 654.68 55.0 655.15 55.9 655.62 57.01 656.09 58.21 656.56 59.29 657.03 59.53 657.5 59.27 657.97 58.39 658.44 56.82 658.91 54.56 659.38 51.66 659.85 48.25 660.32 44.48 660.79 40.56 661.26 36.69 661.73 33.06 662.2 29.84 662.67 27.17 663.14 25.13 663.61 23.73 664.08 22.95 664.55 22.7 665.02 22.86 665.49 23.29 665.96 23.85 666.43 24.41 666.9 24.85 667.37 25.11 667.84 25.16 668.31 25.02 668.78 24.74 669.25 24.42 669.72 24.17 670.19 24.11 670.66 24.35 671.13 24.99 671.6 26.09 672.07 27.68 672.54 29.72 673.01 32.17 673.48 34.93 673.95 37.87 674.42 40.85 674.89 43.74 675.36 46.4 675.83 48.73 676.3 50.66 676.77 52.14 677.24 53.17 677.71 53.79 678.18 54.05 678.65 54.05 679.12 53.86 679.59 53.6 680.06 53.33 680.53 53.13 681.0 53.01 681.47 53.0 681.94 53.06 682.41 53.15 682.88 53.2 683.35 53.15 683.82 52.9 684.29 52.4 684.76 51.59 685.23 50.44 685.7 48.96 686.17 47.18 686.64 45.15 687.11 42.94 687.58 40.66 688.05 38.38 688.52 36.21 688.99 34.24 689.46 32.52 689.93 31.1 690.4 30.0 690.87 29.21 691.34 28.7 691.81 28.44 692.28 28.36 692.75 28.39 693.22 28.49 693.69 28.6 694.16 28.7 694.63 28.76 695.1 28.79 695.57 28.82 696.04 28.87 696.51 28.99 696.98 29.24 697.45 29.65 697.92 30.28 698.39 31.13 698.86 32.22 699.33 33.53 699.8 35.05 700.27 36.71 700.74 38.47 701.21 40.25 701.68 42.0 702.15 43.64 702.62 45.12 703.09 46.41 703.56 47.48 704.03 48.32 704.5 48.93 704.97 49.35 705.44 49.61 705.91 49.73 706.38 49.77 706.85 49.75 707.32 49.71 707.79 49.66 708.26 49.6 708.73 49.54 709.2 49.44 709.67 49.29 710.14 49.06 710.61 48.71 711.08 48.22 711.55 47.57 712.02 46.75 712.49 45.76 712.96 44.62 713.43 43.35 713.9 42.0 714.37 40.6 714.84 39.21 715.31 37.86 715.78 36.61 716.25 35.48 716.72 34.5 717.19 33.68 717.66 33.04 718.13 32.54 718.6 32.19 719.07 31.96 719.54 31.83 720.01 31.76 720.48 31.74 720.95 31.76 721.42 31.8 721.89 31.87 722.36 31.97 722.83 32.11 723.3 32.33 723.77 32.62 724.24 33.01 724.71 33.52 725.18 34.15 725.65 34.91 726.12 35.78 726.59 36.75 727.06 37.79 727.53 38.89 728.0 40.0 728.47 41.09 728.94 42.14 729.41 43.1 729.88 43.97 730.35 44.73 730.82 45.36 731.29 45.87 731.76 46.26 732.23 46.55 732.7 46.75 733.17 46.88 733.64 46.95 734.11 46.98 734.58 46.96 735.05 46.92 735.52 46.83 735.99 46.7 736.46 46.52 736.93 46.28 737.4 45.96 737.87 45.56 738.34 45.07 738.81 44.49 739.28 43.82 739.75 43.07 740.22 42.25 740.69 41.39 741.16 40.51 741.63 39.62 742.1 38.76 742.57 37.95 743.04 37.19 743.51 36.52 743.98 35.93 744.45 35.44 744.92 35.04 745.39 34.72 745.86 34.48 746.33 34.31 746.8 34.2 747.27 34.14 747.74 34.12 748.21 34.14 748.68 34.2 749.15 34.3 749.62 34.45 750.09 34.65 750.56 34.9 751.03 35.22 751.5 35.6 751.97 36.05 752.44 36.58 752.91 37.16 753.38 37.8 753.85 38.48 754.32 39.18 754.79 39.9 755.26 40.6 755.73 41.29 756.2 41.93 756.67 42.52 757.14 43.04 757.61 43.5 758.08 43.89 758.55 44.21 759.02 44.46 759.49 44.66 759.96 44.8 760.43 44.88 760.9 44.93 761.37 44.94 761.84 44.9 762.31 44.83 762.78 44.72 763.25 44.57 763.72 44.37 764.19 44.12 764.66 43.81 765.13 43.46 765.6 43.05 766.07 42.59 766.54 42.09 767.01 41.55 767.48 40.99 767.95 40.41 768.42 39.84 768.89 39.27 769.36 38.73 769.83 38.22 770.3 37.76 770.77 37.35 771.24 36.98 771.71 36.68 772.18 36.42 772.65 36.22 773.12 36.07 773.59 35.96 774.06 35.89 774.53 35.86 775.0 35.87 775.47 35.91 775.94 35.99 776.41 36.11 776.88 36.26 777.35 36.46 777.82 36.7 778.29 36.98 778.76 37.3 779.23 37.66 779.7 38.05 780.17 38.48 780.64 38.93 781.11 39.4 781.58 39.87 782.05 40.33 782.52 40.78 782.99 41.22 783.46 41.62 783.93 41.98 784.4 42.31 784.87 42.6 785.34 42.84 785.81 43.04 786.28 43.2 786.75 43.32 787.22 43.4 787.69 43.45 788.16 43.46 788.63 43.44 789.1 43.39 789.57 43.31 790.04 43.19 790.51 43.04 790.98 42.86 791.45 42.64 791.92 42.38 792.39 42.1 792.86 41.79 793.33 41.45 793.8 41.09 794.27 40.71 794.74 40.33 795.21 39.95 795.68 39.57 796.15 39.21 796.62 38.86 797.09 38.54 797.56 38.25 798.03 37.99 798.5 37.76 798.97 37.57 799.44 37.42 799.91 37.29 800.38 37.2 800.85 37.14 801.32 37.11 801.79 37.11 802.26 37.14 802.73 37.2 803.2 37.28 803.67 37.4 804.14 37.54 804.61 37.71 805.08 37.91 805.55 38.13 806.02 38.38 806.49 38.65 806.96 38.94 807.43 39.24 807.9 39.55 808.37 39.87 808.84 40.18 809.31 40.48 809.78 40.78 810.25 41.05 810.72 41.31 811.19 41.54 811.66 41.74 812.13 41.92 812.6 42.07 813.07 42.19 813.54 42.29 814.01 42.36 814.48 42.4 814.95 42.41 815.42 42.4 815.89 42.37 816.36 42.31 816.83 42.22 817.3 42.12 817.77 41.98 818.24 41.83 818.71 41.65 819.18 41.46 819.65 41.24 820.12 41.01 820.59 40.77 821.06 40.52 821.53 40.26 822.0 40.0" fill="none" stroke="#188038" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="634" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#188038">a tone: attack, closing filter, decay</text>
+<text x="856" y="18" font-family="Roboto, Arial, sans-serif" font-size="11.6" fill="#5f6368">Each number is one knob.</text>
+<text x="856" y="36" font-family="Roboto, Arial, sans-serif" font-size="11.6" fill="#5f6368">None of them is a sound on its own —</text>
+<text x="856" y="54" font-family="Roboto, Arial, sans-serif" font-size="11.6" fill="#5f6368">the tone is what they do together.</text>
+<text x="856" y="72" font-family="Roboto, Arial, sans-serif" font-size="11.6" fill="#5f6368">Below: the seven jobs they split.</text>
+<rect x="0" y="104" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(12,113) scale(1.45)"><path d="M 1 11.5 L 3.6 4 L 3.6 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.6 11.5 V 4 H 8.4 V 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10 11.5 Q 11.5 3.4 13 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="40" y="129" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">oscillator</text>
+<text x="262" y="128" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC70·75·73·78·80</text>
+<text x="12" y="148" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">the raw shape the note starts as</text>
+<g transform="translate(12,160)"><rect x="0" y="0" width="30" height="30" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><polyline points="4.0 23.5 4.37 22.65 4.73 21.8 5.1 20.95 5.47 20.1 5.83 19.25 6.2 18.4 6.57 17.55 6.93 16.7 7.3 15.85 7.67 15.0 8.03 14.15 8.4 13.3 8.77 12.45 9.13 11.6 9.5 10.75 9.87 9.9 10.23 9.05 10.6 8.2 10.97 7.35 11.33 23.5 11.7 22.65 12.07 21.8 12.43 20.95 12.8 20.1 13.17 19.25 13.53 18.4 13.9 17.55 14.27 16.7 14.63 15.85 15.0 15.0 15.37 14.15 15.73 13.3 16.1 12.45 16.47 11.6 16.83 10.75 17.2 9.9 17.57 9.05 17.93 8.2 18.3 7.35 18.67 23.5 19.03 22.65 19.4 21.8 19.77 20.95 20.13 20.1 20.5 19.25 20.87 18.4 21.23 17.55 21.6 16.7 21.97 15.85 22.33 15.0 22.7 14.15 23.07 13.3 23.43 12.45 23.8 11.6 24.17 10.75 24.53 9.9 24.9 9.05 25.27 8.2 25.63 7.35 26.0 23.5" fill="none" stroke="#9aa0a6" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><rect x="33" y="0" width="30" height="30" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><polyline points="37.0 6.5 37.37 6.5 37.73 6.5 38.1 6.5 38.47 6.5 38.83 6.5 39.2 6.5 39.57 6.5 39.93 6.5 40.3 6.5 40.67 23.5 41.03 23.5 41.4 23.5 41.77 23.5 42.13 23.5 42.5 23.5 42.87 23.5 43.23 23.5 43.6 23.5 43.97 23.5 44.33 6.5 44.7 6.5 45.07 6.5 45.43 6.5 45.8 6.5 46.17 6.5 46.53 6.5 46.9 6.5 47.27 6.5 47.63 6.5 48.0 23.5 48.37 23.5 48.73 23.5 49.1 23.5 49.47 23.5 49.83 23.5 50.2 23.5 50.57 23.5 50.93 23.5 51.3 23.5 51.67 6.5 52.03 6.5 52.4 6.5 52.77 6.5 53.13 6.5 53.5 6.5 53.87 6.5 54.23 6.5 54.6 6.5 54.97 6.5 55.33 23.5 55.7 23.5 56.07 23.5 56.43 23.5 56.8 23.5 57.17 23.5 57.53 23.5 57.9 23.5 58.27 23.5 58.63 23.5 59.0 6.5" fill="none" stroke="#9aa0a6" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><rect x="66" y="0" width="30" height="30" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><polyline points="70.0 6.5 70.37 8.2 70.73 9.9 71.1 11.6 71.47 13.3 71.83 15.0 72.2 16.7 72.57 18.4 72.93 20.1 73.3 21.8 73.67 23.5 74.03 21.8 74.4 20.1 74.77 18.4 75.13 16.7 75.5 15.0 75.87 13.3 76.23 11.6 76.6 9.9 76.97 8.2 77.33 6.5 77.7 8.2 78.07 9.9 78.43 11.6 78.8 13.3 79.17 15.0 79.53 16.7 79.9 18.4 80.27 20.1 80.63 21.8 81.0 23.5 81.37 21.8 81.73 20.1 82.1 18.4 82.47 16.7 82.83 15.0 83.2 13.3 83.57 11.6 83.93 9.9 84.3 8.2 84.67 6.5 85.03 8.2 85.4 9.9 85.77 11.6 86.13 13.3 86.5 15.0 86.87 16.7 87.23 18.4 87.6 20.1 87.97 21.8 88.33 23.5 88.7 21.8 89.07 20.1 89.43 18.4 89.8 16.7 90.17 15.0 90.53 13.3 90.9 11.6 91.27 9.9 91.63 8.2 92.0 6.5" fill="none" stroke="#9aa0a6" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><rect x="99" y="0" width="30" height="30" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><polyline points="103.0 15.0 103.37 12.37 103.73 10.0 104.1 8.12 104.47 6.92 104.83 6.5 105.2 6.92 105.57 8.12 105.93 10.0 106.3 12.37 106.67 15.0 107.03 17.63 107.4 20.0 107.77 21.88 108.13 23.08 108.5 23.5 108.87 23.08 109.23 21.88 109.6 20.0 109.97 17.63 110.33 15.0 110.7 12.37 111.07 10.0 111.43 8.12 111.8 6.92 112.17 6.5 112.53 6.92 112.9 8.12 113.27 10.0 113.63 12.37 114.0 15.0 114.37 17.63 114.73 20.0 115.1 21.88 115.47 23.08 115.83 23.5 116.2 23.08 116.57 21.88 116.93 20.0 117.3 17.63 117.67 15.0 118.03 12.37 118.4 10.0 118.77 8.12 119.13 6.92 119.5 6.5 119.87 6.92 120.23 8.12 120.6 10.0 120.97 12.37 121.33 15.0 121.7 17.63 122.07 20.0 122.43 21.88 122.8 23.08 123.17 23.5 123.53 23.08 123.9 21.88 124.27 20.0 124.63 17.63 125.0 15.0" fill="none" stroke="#9aa0a6" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><rect x="132" y="0" width="30" height="30" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><polyline points="136.0 13.3 136.55 13.3 137.1 13.3 137.65 20.95 138.2 20.95 138.75 20.95 139.3 10.75 139.85 10.75 140.4 10.75 140.95 17.55 141.5 17.55 142.05 7.35 142.6 7.35 143.15 7.35 143.7 19.25 144.25 19.25 144.8 19.25 145.35 14.15 145.9 14.15 146.45 22.65 147.0 22.65 147.55 22.65 148.1 9.9 148.65 9.9 149.2 9.9 149.75 16.7 150.3 16.7 150.85 8.2 151.4 8.2 151.95 8.2 152.5 20.1 153.05 20.1 153.6 20.1 154.15 12.45 154.7 12.45 155.25 21.8 155.8 21.8 156.35 21.8 156.9 9.05 157.45 9.05 158.0 9.05" fill="none" stroke="#9aa0a6" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><text x="0" y="46" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368">pick one of five</text><path d="M 168 15 L 180 15" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><rect x="188" y="0" width="62" height="30" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/><polyline points="192.0 24.0 192.9 23.1 193.8 22.2 194.7 21.3 195.6 20.4 196.5 19.5 197.4 18.6 198.3 17.7 199.2 16.8 200.1 15.9 201.0 15.0 201.9 14.1 202.8 13.2 203.7 12.3 204.6 11.4 205.5 10.5 206.4 9.6 207.3 8.7 208.2 7.8 209.1 6.9 210.0 24.0 210.9 23.1 211.8 22.2 212.7 21.3 213.6 20.4 214.5 19.5 215.4 18.6 216.3 17.7 217.2 16.8 218.1 15.9 219.0 15.0 219.9 14.1 220.8 13.2 221.7 12.3 222.6 11.4 223.5 10.5 224.4 9.6 225.3 8.7 226.2 7.8 227.1 6.9 228.0 24.0 228.9 23.1 229.8 22.2 230.7 21.3 231.6 20.4 232.5 19.5 233.4 18.6 234.3 17.7 235.2 16.8 236.1 15.9 237.0 15.0 237.9 14.1 238.8 13.2 239.7 12.3 240.6 11.4 241.5 10.5 242.4 9.6 243.3 8.7 244.2 7.8 245.1 6.9 246.0 24.0" fill="none" stroke="#b06000" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><text x="250" y="46" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368" text-anchor="end">one wave, detuned + doubled</text></g>
+<g transform="translate(12,233) scale(1.0)"><path d="M 1 11.5 L 3.6 4 L 3.6 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.6 11.5 V 4 H 8.4 V 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10 11.5 Q 11.5 3.4 13 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="31" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">wave</text>
+<g transform="translate(142,233) scale(1.0)"><path d="M 0.8 10.5 H 4 V 3 H 7 V 10.5 H 13.2" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4 13.2 H 7" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 6.2 11.299999999999999 L 4 13.2 L 6.2 15.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.8 11.299999999999999 L 7 13.2 L 4.8 15.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="161" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">pw</text>
+<g transform="translate(12,254) scale(1.0)"><path d="M 0.6 9 H 5 V 3 H 9.4 V 9 H 13.4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.4 11.4 L 7 13.6 L 9.6 11.4" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="31" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">subsel</text>
+<g transform="translate(142,254) scale(1.0)"><path d="M 1 6 Q 3.5 1.4 6 6 T 11 6" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3 9.4 Q 5.5 4.8 8 9.4 T 13 9.4" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/></g>
+<text x="161" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">detsel</text>
+<g transform="translate(12,275) scale(1.0)"><path d="M 1 12 L 4.4 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.3 12 L 8.7 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 9.6 12 L 13 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="31" y="286" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">unison</text>
+<rect x="292" y="104" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(304,113) scale(1.45)"><circle cx="5.2" cy="7" r="4.1" fill="none" stroke="#f9ab00" stroke-width="1.4"/><path d="M 2.9 4.7 L 7.5 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 7.5 4.7 L 2.9 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 12.4 2.4 V 11.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 4.6 L 12.4 2.4 L 14.3 4.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 9.399999999999999 L 12.4 11.6 L 14.3 9.399999999999999" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="332" y="129" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">cross-mod</text>
+<text x="554" y="128" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC85·86·87</text>
+<text x="304" y="148" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">one oscillator bending the other</text>
+<g transform="translate(304,160)"><polyline points="0.0 13.0 0.83 10.47 1.66 8.13 2.49 6.13 3.31 4.63 4.14 3.74 4.97 3.51 5.8 3.96 6.63 5.07 7.46 6.75 8.29 8.88 9.11 11.3 9.94 13.85 10.77 16.34 11.6 18.58 12.43 20.43 13.26 21.74 14.09 22.41 14.91 22.41 15.74 21.74 16.57 20.43 17.4 18.58 18.23 16.34 19.06 13.85 19.89 11.3 20.71 8.88 21.54 6.75 22.37 5.07 23.2 3.96 24.03 3.51 24.86 3.74 25.69 4.63 26.51 6.13 27.34 8.13 28.17 10.47 29.0 13.0 29.83 15.53 30.66 17.87 31.49 19.87 32.31 21.37 33.14 22.26 33.97 22.49 34.8 22.04 35.63 20.93 36.46 19.25 37.29 17.12 38.11 14.7 38.94 12.15 39.77 9.66 40.6 7.42 41.43 5.57 42.26 4.26 43.09 3.59 43.91 3.59 44.74 4.26 45.57 5.57 46.4 7.42 47.23 9.66 48.06 12.15 48.89 14.7 49.71 17.12 50.54 19.25 51.37 20.93 52.2 22.04 53.03 22.49 53.86 22.26 54.69 21.37 55.51 19.87 56.34 17.87 57.17 15.53 58.0 13.0" fill="none" stroke="#9aa0a6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><polyline points="0.0 41.0 0.48 35.83 0.97 32.32 1.45 31.62 1.93 33.94 2.42 38.54 2.9 43.94 3.38 48.38 3.87 50.45 4.35 49.46 4.83 45.75 5.32 40.5 5.8 35.42 6.28 32.13 6.77 31.71 7.25 34.28 7.73 39.02 8.22 44.4 8.7 48.69 9.18 50.49 9.67 49.23 10.15 45.31 10.63 40.01 11.12 35.02 11.6 31.96 12.08 31.82 12.57 34.64 13.05 39.51 13.53 44.86 14.02 48.97 14.5 50.5 14.98 48.97 15.47 44.86 15.95 39.51 16.43 34.64 16.92 31.82 17.4 31.96 17.88 35.02 18.37 40.01 18.85 45.31 19.33 49.23 19.82 50.49 20.3 48.69 20.78 44.4 21.27 39.02 21.75 34.28 22.23 31.71 22.72 32.13 23.2 35.42 23.68 40.5 24.17 45.75 24.65 49.46 25.13 50.45 25.62 48.38 26.1 43.94 26.58 38.54 27.07 33.94 27.55 31.62 28.03 32.32 28.52 35.83 29.0 41.0 29.48 46.17 29.97 49.68 30.45 50.38 30.93 48.06 31.42 43.46 31.9 38.06 32.38 33.62 32.87 31.55 33.35 32.54 33.83 36.25 34.32 41.5 34.8 46.58 35.28 49.87 35.77 50.29 36.25 47.72 36.73 42.98 37.22 37.6 37.7 33.31 38.18 31.51 38.67 32.77 39.15 36.69 39.63 41.99 40.12 46.98 40.6 50.04 41.08 50.18 41.57 47.36 42.05 42.49 42.53 37.14 43.02 33.03 43.5 31.5 43.98 33.03 44.47 37.14 44.95 42.49 45.43 47.36 45.92 50.18 46.4 50.04 46.88 46.98 47.37 41.99 47.85 36.69 48.33 32.77 48.82 31.51 49.3 33.31 49.78 37.6 50.27 42.98 50.75 47.72 51.23 50.29 51.72 49.87 52.2 46.58 52.68 41.5 53.17 36.25 53.65 32.54 54.13 31.55 54.62 33.62 55.1 38.06 55.58 43.46 56.07 48.06 56.55 50.38 57.03 49.68 57.52 46.17 58.0 41.0" fill="none" stroke="#9aa0a6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><text x="0" y="66" font-family="Roboto Mono, monospace" font-size="9.6" fill="#5f6368">osc 1 × osc 2</text><path d="M 62 13 Q 76 13 76 26" fill="none" stroke="#5f6368" stroke-width="1.3"/><path d="M 62 41 Q 76 41 76 34" fill="none" stroke="#5f6368" stroke-width="1.3"/><circle cx="90" cy="30" r="12" fill="#fff" stroke="#5f6368" stroke-width="1.6"/><path d="M 86 26 L 94 34 M 94 26 L 86 34" stroke="#5f6368" stroke-width="1.7" stroke-linecap="round"/><path d="M 104 30 L 118 30" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><rect x="126" y="6" width="124" height="48" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/><polyline points="131.0 30.0 131.57 29.39 132.14 27.73 132.71 25.44 133.28 23.13 133.85 21.48 134.42 21.08 134.99 22.3 135.56 25.21 136.13 29.55 136.7 34.75 137.27 40.02 137.84 44.52 138.41 47.45 138.98 48.26 139.55 46.72 140.12 42.98 140.69 37.54 141.26 31.18 141.83 24.83 142.4 19.38 142.97 15.58 143.54 13.87 144.11 14.36 144.68 16.75 145.25 20.5 145.82 24.84 146.39 28.99 146.96 32.28 147.53 34.24 148.1 34.75 148.67 33.98 149.24 32.38 149.81 30.55 150.38 29.13 150.95 28.65 151.52 29.41 152.09 31.4 152.66 34.33 153.23 37.64 153.8 40.62 154.37 42.56 154.94 42.88 155.51 41.26 156.08 37.73 156.65 32.65 157.22 26.69 157.79 20.71 158.36 15.62 158.93 12.2 159.5 11.0 160.07 12.2 160.64 15.62 161.21 20.71 161.78 26.69 162.35 32.65 162.92 37.73 163.49 41.26 164.06 42.88 164.63 42.56 165.2 40.62 165.77 37.64 166.34 34.33 166.91 31.4 167.48 29.41 168.05 28.65 168.62 29.13 169.19 30.55 169.76 32.38 170.33 33.98 170.9 34.75 171.47 34.24 172.04 32.28 172.61 28.99 173.18 24.84 173.75 20.5 174.32 16.75 174.89 14.36 175.46 13.87 176.03 15.58 176.6 19.38 177.17 24.83 177.74 31.18 178.31 37.54 178.88 42.98 179.45 46.72 180.02 48.26 180.59 47.45 181.16 44.52 181.73 40.02 182.3 34.75 182.87 29.55 183.44 25.21 184.01 22.3 184.58 21.08 185.15 21.48 185.72 23.13 186.29 25.44 186.86 27.73 187.43 29.39 188.0 30.0 188.57 29.39 189.14 27.73 189.71 25.44 190.28 23.13 190.85 21.48 191.42 21.08 191.99 22.3 192.56 25.21 193.13 29.55 193.7 34.75 194.27 40.02 194.84 44.52 195.41 47.45 195.98 48.26 196.55 46.72 197.12 42.98 197.69 37.54 198.26 31.18 198.83 24.83 199.4 19.38 199.97 15.58 200.54 13.87 201.11 14.36 201.68 16.75 202.25 20.5 202.82 24.84 203.39 28.99 203.96 32.28 204.53 34.24 205.1 34.75 205.67 33.98 206.24 32.38 206.81 30.55 207.38 29.13 207.95 28.65 208.52 29.41 209.09 31.4 209.66 34.33 210.23 37.64 210.8 40.62 211.37 42.56 211.94 42.88 212.51 41.26 213.08 37.73 213.65 32.65 214.22 26.69 214.79 20.71 215.36 15.62 215.93 12.2 216.5 11.0 217.07 12.2 217.64 15.62 218.21 20.71 218.78 26.69 219.35 32.65 219.92 37.73 220.49 41.26 221.06 42.88 221.63 42.56 222.2 40.62 222.77 37.64 223.34 34.33 223.91 31.4 224.48 29.41 225.05 28.65 225.62 29.13 226.19 30.55 226.76 32.38 227.33 33.98 227.9 34.75 228.47 34.24 229.04 32.28 229.61 28.99 230.18 24.84 230.75 20.5 231.32 16.75 231.89 14.36 232.46 13.87 233.03 15.58 233.6 19.38 234.17 24.83 234.74 31.18 235.31 37.54 235.88 42.98 236.45 46.72 237.02 48.26 237.59 47.45 238.16 44.52 238.73 40.02 239.3 34.75 239.87 29.55 240.44 25.21 241.01 22.3 241.58 21.08 242.15 21.48 242.72 23.13 243.29 25.44 243.86 27.73 244.43 29.39 245.0 30.0" fill="none" stroke="#b06000" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></g>
+<g transform="translate(304,233) scale(1.0)"><circle cx="2.4" cy="7" r="2.1" fill="none" stroke="#f9ab00" stroke-width="1.4"/><path d="M 5.4 2.6 L 12.6 5.4 L 12.6 8.6 L 5.4 11.4 Z" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="323" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">xmode</text>
+<g transform="translate(434,233) scale(1.0)"><circle cx="5.2" cy="7" r="4.1" fill="none" stroke="#f9ab00" stroke-width="1.4"/><path d="M 2.9 4.7 L 7.5 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 7.5 4.7 L 2.9 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 12.4 2.4 V 11.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 4.6 L 12.4 2.4 L 14.3 4.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 9.399999999999999 L 12.4 11.6 L 14.3 9.399999999999999" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="453" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">xdepth</text>
+<g transform="translate(304,254) scale(1.0)"><path d="M 1 4.4 Q 2.2 1.2 3.4 4.4 T 5.8 4.4 T 8.2 4.4 T 10.6 4.4 T 13 4.4" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 11 Q 4 6.4 7 11 T 13 11" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></g>
+<text x="323" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">xratio</text>
+<rect x="584" y="104" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(596,113) scale(1.45)"><path d="M 0.8 5.5 H 5.6 Q 8 5.5 9 8.4 Q 9.8 10.8 13.2 12.8" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 2.2 H 12.6" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 6.8 0.30000000000000027 L 4.6 2.2 L 6.8 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.399999999999999 0.30000000000000027 L 12.6 2.2 L 10.399999999999999 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="624" y="129" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">filter</text>
+<text x="846" y="128" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC74·71·72·79</text>
+<text x="596" y="148" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">which harmonics survive</text>
+<g transform="translate(596,160)"><polyline points="0.0 50.0 0.48 49.0 0.97 48.0 1.45 47.0 1.93 46.0 2.42 45.0 2.9 44.0 3.38 43.0 3.87 42.0 4.35 41.0 4.83 40.0 5.32 39.0 5.8 38.0 6.28 37.0 6.77 36.0 7.25 35.0 7.73 34.0 8.22 33.0 8.7 32.0 9.18 31.0 9.67 30.0 10.15 29.0 10.63 28.0 11.12 27.0 11.6 26.0 12.08 25.0 12.57 24.0 13.05 23.0 13.53 22.0 14.02 21.0 14.5 20.0 14.98 19.0 15.47 18.0 15.95 17.0 16.43 16.0 16.92 15.0 17.4 14.0 17.88 13.0 18.37 12.0 18.85 11.0 19.33 50.0 19.82 49.0 20.3 48.0 20.78 47.0 21.27 46.0 21.75 45.0 22.23 44.0 22.72 43.0 23.2 42.0 23.68 41.0 24.17 40.0 24.65 39.0 25.13 38.0 25.62 37.0 26.1 36.0 26.58 35.0 27.07 34.0 27.55 33.0 28.03 32.0 28.52 31.0 29.0 30.0 29.48 29.0 29.97 28.0 30.45 27.0 30.93 26.0 31.42 25.0 31.9 24.0 32.38 23.0 32.87 22.0 33.35 21.0 33.83 20.0 34.32 19.0 34.8 18.0 35.28 17.0 35.77 16.0 36.25 15.0 36.73 14.0 37.22 13.0 37.7 12.0 38.18 11.0 38.67 50.0 39.15 49.0 39.63 48.0 40.12 47.0 40.6 46.0 41.08 45.0 41.57 44.0 42.05 43.0 42.53 42.0 43.02 41.0 43.5 40.0 43.98 39.0 44.47 38.0 44.95 37.0 45.43 36.0 45.92 35.0 46.4 34.0 46.88 33.0 47.37 32.0 47.85 31.0 48.33 30.0 48.82 29.0 49.3 28.0 49.78 27.0 50.27 26.0 50.75 25.0 51.23 24.0 51.72 23.0 52.2 22.0 52.68 21.0 53.17 20.0 53.65 19.0 54.13 18.0 54.62 17.0 55.1 16.0 55.58 15.0 56.07 14.0 56.55 13.0 57.03 12.0 57.52 11.0 58.0 50.0" fill="none" stroke="#9aa0a6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><text x="0" y="62" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368">buzzy in</text><path d="M 64 30 L 78 30" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><rect x="86" y="2" width="82" height="52" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><path d="M 92 26 H 120 Q 130 26 133 14 Q 136 4 139 26 Q 142 46 162 50" fill="none" stroke="#f9ab00" stroke-width="2"/><line x1="134" y1="6" x2="134" y2="50" stroke="#f9ab00" stroke-width="1.1" stroke-dasharray="3 3" opacity=".7"/><text x="127" y="62" font-family="Roboto Mono, monospace" font-size="9.5" fill="#b06000">cutoff</text><path d="M 172 30 L 186 30" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><rect x="194" y="6" width="56" height="48" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/><polyline points="198.0 30.0 198.6 26.03 199.2 22.28 199.8 18.96 200.4 16.25 201.0 14.29 201.6 13.21 202.2 13.05 202.8 13.83 203.4 15.51 204.0 17.98 204.6 21.12 205.2 24.75 205.8 28.67 206.4 32.66 207.0 36.51 207.6 39.99 208.2 42.93 208.8 45.15 209.4 46.53 210.0 47.0 210.6 46.53 211.2 45.15 211.8 42.93 212.4 39.99 213.0 36.51 213.6 32.66 214.2 28.67 214.8 24.75 215.4 21.12 216.0 17.98 216.6 15.51 217.2 13.83 217.8 13.05 218.4 13.21 219.0 14.29 219.6 16.25 220.2 18.96 220.8 22.28 221.4 26.03 222.0 30.0 222.6 33.97 223.2 37.72 223.8 41.04 224.4 43.75 225.0 45.71 225.6 46.79 226.2 46.95 226.8 46.17 227.4 44.49 228.0 42.02 228.6 38.88 229.2 35.25 229.8 31.33 230.4 27.34 231.0 23.49 231.6 20.01 232.2 17.07 232.8 14.85 233.4 13.47 234.0 13.0 234.6 13.47 235.2 14.85 235.8 17.07 236.4 20.01 237.0 23.49 237.6 27.34 238.2 31.33 238.8 35.25 239.4 38.88 240.0 42.02 240.6 44.49 241.2 46.17 241.8 46.95 242.4 46.79 243.0 45.71 243.6 43.75 244.2 41.04 244.8 37.72 245.4 33.97 246.0 30.0" fill="none" stroke="#b06000" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><text x="194" y="62" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368">mellow out</text></g>
+<g transform="translate(596,233) scale(1.0)"><path d="M 0.8 5.5 H 5.6 Q 8 5.5 9 8.4 Q 9.8 10.8 13.2 12.8" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 2.2 H 12.6" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 6.8 0.30000000000000027 L 4.6 2.2 L 6.8 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.399999999999999 0.30000000000000027 L 12.6 2.2 L 10.399999999999999 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="615" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">cutoff</text>
+<g transform="translate(726,233) scale(1.0)"><path d="M 0.8 7.4 H 5.2 Q 7.4 7.4 8.2 4.2 Q 9 1.4 9.8 7.4 Q 10.6 12.4 13.2 13.2" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 12.2 1.8 V 8.2" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.299999999999999 4.0 L 12.2 1.8 L 14.1 4.0" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.299999999999999 5.999999999999999 L 12.2 8.2 L 14.1 5.999999999999999" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="745" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">reso</text>
+<g transform="translate(596,254) scale(1.0)"><path d="M 0.6 4.6 H 2 Q 3 4.6 3.4 7.6" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.2 2.8 L 12.6 5.6 L 12.6 8.4 L 5.2 11.2 Z" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="615" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">fmode</text>
+<g transform="translate(726,254) scale(1.0)"><path d="M 0.8 5.5 H 5.6 Q 8 5.5 9 8.4 Q 9.8 10.8 13.2 12.8" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".4"/><path d="M 4.4 5.5 H 9.2 Q 11.6 5.5 12.6 8.4" fill="none" stroke="#f9ab00" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3.6 1.8 H 10.4" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 8.4 0.4 L 10.6 1.8 L 8.4 3.2" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="745" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">fdepth</text>
+<rect x="876" y="104" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(888,113) scale(1.45)"><path d="M 1 7 Q 2.5 2.6 4 7 T 7 7 T 10 7 T 13 7" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 12.6 H 7" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3.2 10.7 L 1 12.6 L 3.2 14.5" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.8 10.7 L 7 12.6 L 4.8 14.5" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="916" y="129" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">LFO</text>
+<text x="1138" y="128" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC76·77·1·92</text>
+<text x="888" y="148" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">a slow wave that keeps things moving</text>
+<g transform="translate(888,160)"><polyline points="0.0 30.0 0.82 28.6 1.64 27.22 2.47 25.84 3.29 24.49 4.11 23.16 4.93 21.87 5.76 20.61 6.58 19.4 7.4 18.24 8.22 17.14 9.04 16.11 9.87 15.14 10.69 14.24 11.51 13.42 12.33 12.68 13.16 12.02 13.98 11.46 14.8 10.98 15.62 10.59 16.44 10.3 17.27 10.11 18.09 10.01 18.91 10.01 19.73 10.11 20.56 10.3 21.38 10.59 22.2 10.98 23.02 11.46 23.84 12.02 24.67 12.68 25.49 13.42 26.31 14.24 27.13 15.14 27.96 16.11 28.78 17.14 29.6 18.24 30.42 19.4 31.24 20.61 32.07 21.87 32.89 23.16 33.71 24.49 34.53 25.84 35.36 27.22 36.18 28.6 37.0 30.0 37.82 31.4 38.64 32.78 39.47 34.16 40.29 35.51 41.11 36.84 41.93 38.13 42.76 39.39 43.58 40.6 44.4 41.76 45.22 42.86 46.04 43.89 46.87 44.86 47.69 45.76 48.51 46.58 49.33 47.32 50.16 47.98 50.98 48.54 51.8 49.02 52.62 49.41 53.44 49.7 54.27 49.89 55.09 49.99 55.91 49.99 56.73 49.89 57.56 49.7 58.38 49.41 59.2 49.02 60.02 48.54 60.84 47.98 61.67 47.32 62.49 46.58 63.31 45.76 64.13 44.86 64.96 43.89 65.78 42.86 66.6 41.76 67.42 40.6 68.24 39.39 69.07 38.13 69.89 36.84 70.71 35.51 71.53 34.16 72.36 32.78 73.18 31.4 74.0 30.0" fill="none" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><path d="M 78 30 C 96 30 96 4 112 4" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="3.5 3" marker-end="url(#p30b)"/><text x="120" y="8" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#b06000">pitch — vibrato</text><path d="M 78 30 C 96 30 96 21 112 21" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="3.5 3" marker-end="url(#p30b)"/><text x="120" y="25" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#b06000">pulse width</text><path d="M 78 30 C 96 30 96 38 112 38" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="3.5 3" marker-end="url(#p30b)"/><text x="120" y="42" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#b06000">filter cutoff</text><path d="M 78 30 C 96 30 96 55 112 55" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="3.5 3" marker-end="url(#p30b)"/><text x="120" y="59" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#b06000">volume — tremolo</text></g>
+<g transform="translate(888,233) scale(1.0)"><path d="M 1 7 Q 2.5 2.6 4 7 T 7 7 T 10 7 T 13 7" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 12.6 H 7" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3.2 10.7 L 1 12.6 L 3.2 14.5" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.8 10.7 L 7 12.6 L 4.8 14.5" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="907" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">lfo_rate</text>
+<g transform="translate(1018,233) scale(1.0)"><path d="M 1 7 Q 3.9 1.6 6.8 7 T 12.6 7" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 13.2 1.5 V 12.5" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 11.299999999999999 3.7 L 13.2 1.5 L 15.1 3.7" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 11.299999999999999 10.3 L 13.2 12.5 L 15.1 10.3" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="1037" y="244" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">lfo_depth</text>
+<g transform="translate(888,254) scale(1.0)"><path d="M 3.2 7 Q 5.7 2.2 8.2 7 T 13.2 7" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3.2 1.6 V 12.4" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2"/><path d="M 0.6 7 H 3.2" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3.2" cy="7" r="1.5" fill="#f9ab00"/></g>
+<text x="907" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">lfo_ph</text>
+<g transform="translate(1018,254) scale(1.0)"><circle cx="2.4" cy="7" r="2.1" fill="#f9ab00"/><path d="M 5.4 7 Q 7.4 3 9.4 7 T 13.4 7" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="1037" y="265" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">vibsel</text>
+<g transform="translate(888,275) scale(1.0)"><path d="M 1 4.6 Q 4 1.6 7 4.6 T 13 4.6" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 9.4 Q 4 12.4 7 9.4 T 13 9.4" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 7 5.4 V 8.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/></g>
+<text x="907" y="286" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">trdep</text>
+<rect x="147" y="306" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(159,315) scale(1.45)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12 L 1 12 Z" fill="#f9ab00" fill-opacity=".24" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="187" y="331" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">amp ADSR</text>
+<text x="409" y="330" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC20-23</text>
+<text x="159" y="350" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">how loud it is, moment to moment</text>
+<g transform="translate(159,362)"><path d="M 0 54 L 22 6 L 40 30 L 92 30 L 118 54 Z" fill="#f9ab00" fill-opacity=".16" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/><text x="8" y="66" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">A</text><text x="28" y="66" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">D</text><text x="63" y="66" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">S</text><text x="103" y="66" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">R</text><path d="M 128 30 L 142 30" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><polyline points="152.0 30.0 152.45 29.85 152.89 29.4 153.34 28.73 153.78 27.92 154.23 27.09 154.67 26.37 155.12 25.87 155.56 25.71 156.01 25.98 156.45 26.72 156.9 27.94 157.35 29.58 157.79 31.56 158.24 33.74 158.68 35.95 159.13 38.0 159.57 39.7 160.02 40.87 160.46 41.35 160.91 41.03 161.35 39.85 161.8 37.84 162.25 35.06 162.69 31.66 163.14 27.84 163.58 23.87 164.03 20.01 164.47 16.56 164.92 13.81 165.36 12.0 165.81 11.33 166.25 11.93 166.7 13.82 167.15 16.96 167.59 21.19 168.04 26.28 168.48 31.92 168.93 37.74 169.37 43.34 169.82 48.14 170.26 51.54 170.71 53.52 171.15 53.96 171.6 52.83 172.05 50.19 172.49 46.23 172.94 41.2 173.38 35.44 173.83 29.31 174.27 23.24 174.72 17.61 175.16 12.79 175.61 9.1 176.05 6.79 176.5 6.0 176.95 6.79 177.39 9.1 177.84 12.79 178.28 17.61 178.73 23.24 179.17 29.31 179.62 35.44 180.06 41.2 180.51 46.23 180.95 50.19 181.4 52.83 181.85 53.96 182.29 53.52 182.74 51.54 183.18 48.14 183.63 43.55 184.07 38.07 184.52 32.05 184.96 25.91 185.41 20.03 185.85 14.81 186.3 10.58 186.75 7.64 187.19 6.16 187.64 6.24 188.08 7.89 188.53 10.99 188.97 15.34 189.42 20.66 189.86 26.58 190.31 32.74 190.75 38.71 191.2 44.11 191.65 48.58 192.09 51.83 192.54 53.65 192.98 53.91 193.43 52.6 193.87 49.81 194.32 45.72 194.76 40.59 195.21 34.77 195.65 28.63 196.1 22.58 196.55 17.02 196.99 12.32 197.44 8.77 197.88 6.62 198.33 6.01 198.77 6.97 199.22 9.45 199.66 13.27 200.11 18.2 200.55 23.9 201.0 30.0 201.45 36.1 201.89 41.8 202.34 46.73 202.78 50.55 203.23 53.03 203.67 53.99 204.12 53.38 204.56 51.23 205.01 47.68 205.45 42.98 205.9 36.08 206.35 31.11 206.79 26.17 207.24 21.58 207.68 17.63 208.13 14.58 208.57 12.59 209.02 11.78 209.46 12.18 209.91 13.73 210.35 16.3 210.8 19.72 211.25 23.73 211.69 28.05 212.14 32.4 212.58 36.5 213.03 40.08 213.47 42.91 213.92 44.83 214.36 45.74 214.81 45.6 215.25 44.45 215.7 42.38 216.15 39.56 216.59 36.19 217.04 32.51 217.48 28.76 217.93 25.19 218.37 22.03 218.82 19.48 219.26 17.69 219.71 16.75 220.15 16.7 220.6 17.52 221.05 19.13 221.49 21.4 221.94 24.16 222.38 27.21 222.83 30.35 223.27 33.36 223.72 36.06 224.16 38.27 224.61 39.87 225.05 40.77 225.5 40.93 225.95 40.38 226.39 39.17 226.84 37.41 227.28 35.24 227.73 32.8 228.17 30.28 228.62 27.84 229.06 25.64 229.51 23.82 229.95 22.47 230.4 21.68 230.85 21.47 231.29 21.82 231.74 22.69 232.18 23.99 232.63 25.62 233.07 27.46 233.52 29.37 233.96 31.22 234.41 32.89 234.85 34.28 235.3 35.31 235.75 35.93 236.19 36.12 236.64 35.9 237.08 35.31 237.53 34.41 237.97 33.28 238.42 32.01 238.86 30.71 239.31 29.46 239.75 28.34 240.2 27.43 240.65 26.77 241.09 26.38 241.54 26.28 241.98 26.43 242.43 26.82 242.87 27.37 243.32 28.05 243.76 28.77 244.21 29.49 244.65 30.14 245.1 30.68 245.55 31.07 245.99 31.32 246.44 31.41 246.88 31.36 247.33 31.19 247.77 30.95 248.22 30.68 248.66 30.42 249.11 30.2 249.55 30.05 250.0 30.0" fill="none" stroke="#b06000" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/><text x="152" y="66" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368">swells, then fades</text></g>
+<g transform="translate(159,435) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 1 12 L 4.5 2.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="178" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">a_att</text>
+<g transform="translate(289,435) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 4.5 2.5 L 7 7.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="308" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">a_dec</text>
+<g transform="translate(159,456) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 7 7.5 L 10 7.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="178" y="467" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">a_sus</text>
+<g transform="translate(289,456) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="308" y="467" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">a_rel</text>
+<rect x="439" y="306" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(451,315) scale(1.45)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 1.8"/></g>
+<text x="479" y="331" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">filter ADSR</text>
+<text x="701" y="330" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC24-27</text>
+<text x="451" y="350" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">how bright it is, moment to moment</text>
+<g transform="translate(451,362)"><path d="M 0 50 L 18 6 L 34 28 L 76 28 L 98 50" fill="none" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4 2.5"/><text x="6" y="64" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">A</text><text x="23" y="64" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">D</text><text x="52" y="64" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">S</text><text x="86" y="64" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#b06000" font-weight="700">R</text><path d="M 106 28 L 122 28" stroke="#5f6368" stroke-width="1.5" marker-end="url(#p30a)"/><rect x="132" y="2" width="118" height="52" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.2"/><path d="M 138 44 H 156 Q 164 44 167 34 Q 170 26 173 46 Q 175 50 180 51" fill="none" stroke="#f9ab00" stroke-width="1.4" opacity=".38"/><path d="M 138 22 H 196 Q 206 22 210 12 Q 214 4 218 26 Q 221 44 240 50" fill="none" stroke="#f9ab00" stroke-width="2"/><path d="M 172 46 L 202 22" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="3 2.5" marker-end="url(#p30b)"/><text x="132" y="64" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#5f6368">the cutoff sweeps up</text></g>
+<g transform="translate(451,435) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 1 12 L 4.5 2.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="470" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">f_att</text>
+<g transform="translate(581,435) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 4.5 2.5 L 7 7.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="600" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">f_dec</text>
+<g transform="translate(451,456) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 7 7.5 L 10 7.5" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="470" y="467" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">f_sus</text>
+<g transform="translate(581,456) scale(1.0)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".34"/><path d="M 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="600" y="467" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">f_rel</text>
+<rect x="731" y="306" width="274" height="186" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<g transform="translate(743,315) scale(1.45)"><path d="M 1 12 H 4.6" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 12 Q 10 12 10 5.4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 8.3 7 L 10 4.6 L 11.7 7" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="771" y="331" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#b06000" font-weight="700">performance</text>
+<text x="993" y="330" font-family="Roboto Mono, monospace" font-size="10" fill="#9aa0a6" text-anchor="end">CC7 · bend · CC5</text>
+<text x="743" y="350" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#5f6368">what your hands add on top</text>
+<g transform="translate(743,362)"><rect x="0" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="10" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="20" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="30" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="40" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="50" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="60" y="8" width="9" height="40" rx="2" fill="#fff" stroke="#bdc1c6" stroke-width="1"/><rect x="6.5" y="8" width="6" height="24" rx="1.5" fill="#5f6368"/><rect x="16.5" y="8" width="6" height="24" rx="1.5" fill="#5f6368"/><rect x="36.5" y="8" width="6" height="24" rx="1.5" fill="#5f6368"/><rect x="46.5" y="8" width="6" height="24" rx="1.5" fill="#5f6368"/><rect x="56.5" y="8" width="6" height="24" rx="1.5" fill="#5f6368"/><rect x="94" y="6" width="26" height="44" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/><line x1="107" y1="12" x2="107" y2="44" stroke="#f9ab00" stroke-width="1.1" stroke-dasharray="2.5 2.5"/><rect x="97" y="30" width="20" height="7" rx="3.5" fill="#f9ab00"/><text x="107" y="64" font-family="Roboto Mono, monospace" font-size="9.5" fill="#b06000" text-anchor="middle">vol</text><path d="M 136 46 Q 158 46 158 14" fill="none" stroke="#f9ab00" stroke-width="2"/><path d="M 153 19 L 158 11 L 163 19" fill="none" stroke="#f9ab00" stroke-width="1.6" stroke-linejoin="round"/><text x="152" y="64" font-family="Roboto Mono, monospace" font-size="9.5" fill="#b06000" text-anchor="middle">bend</text><circle cx="200" cy="44" r="4" fill="#f9ab00"/><circle cx="244" cy="14" r="4" fill="#f9ab00"/><path d="M 204 41 Q 222 38 240 17" fill="none" stroke="#f9ab00" stroke-width="1.6" stroke-dasharray="4 3"/><text x="222" y="64" font-family="Roboto Mono, monospace" font-size="9.5" fill="#b06000" text-anchor="middle">portsel</text></g>
+<g transform="translate(743,435) scale(1.0)"><path d="M 1 12 L 13 12 L 13 3 Z" fill="#f9ab00" fill-opacity=".22" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="762" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">vol</text>
+<g transform="translate(873,435) scale(1.0)"><path d="M 1 12 H 4.6" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 12 Q 10 12 10 5.4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 8.3 7 L 10 4.6 L 11.7 7" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="892" y="446" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">bend</text>
+<g transform="translate(743,456) scale(1.0)"><circle cx="2.2" cy="11.4" r="1.9" fill="#f9ab00"/><circle cx="11.8" cy="3.4" r="1.9" fill="#f9ab00"/><path d="M 4 10.2 L 10 4.6" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 1.8"/></g>
+<text x="762" y="467" font-family="Roboto Mono, monospace" font-size="11" fill="#b06000" font-weight="500">portsel</text>
+</svg>
   </div>
 </section>
 
 <!-- ============ 19a · ONE SAMPLE ============ -->
 <section class="slide">
   <div class="h">One sample = the patch × the voice's 189 bits</div>
-  <div class="hsub">The part's params pick the routes and the amounts. The voice's own state remembers where it is. Adders, multipliers and muxes turn that pair into one point on the wave.</div>
+  <div class="hsub">The amber glyphs are the same 28 numbers you just saw — here is where each one lands. The blue side is the voice's own state, remembering where this note has got to.</div>
   <div style="margin-top:14px;">
-<svg viewBox="0 0 1152 458" width="100%" style="display:block;">
+<svg viewBox="0 0 1152 448" width="100%" style="display:block;">
 <defs><marker id="dB" markerWidth="8" markerHeight="8" refX="6.6" refY="2.9" orient="auto"><path d="M0 0 L6.6 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="dA" markerWidth="8" markerHeight="8" refX="6.6" refY="2.9" orient="auto"><path d="M0 0 L6.6 2.9 L0 5.8 z" fill="#f9ab00"/></marker><marker id="dN" markerWidth="8" markerHeight="8" refX="6.6" refY="2.9" orient="auto"><path d="M0 0 L6.6 2.9 L0 5.8 z" fill="#5f6368"/></marker></defs>
 <rect x="0" y="4" width="11" height="11" rx="2.5" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1.3"/>
-<text x="18" y="14" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" font-weight="700">the voice's 189 b — where it is right now</text>
-<rect x="306" y="4" width="11" height="11" rx="2.5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/>
-<text x="324" y="14" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#b06000" font-weight="700">the part's 340 b patch — how it should sound</text>
-<rect x="0" y="24" width="132" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(9,32)"><path d="M 1 18 H 6 V 13.2 H 11 V 8.4 H 16 V 3.6 H 20" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>
-<text x="35" y="48" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">cinc</text>
-<text x="123" y="48" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="end">26 b</text>
-<text x="9" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#3c4043">phase step per sample</text>
-<rect x="148" y="24" width="112" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(157,32)"><circle cx="10" cy="10" r="8" fill="none" stroke="#1a73e8" stroke-width="1.8"/><path d="M 10 10 L 10 3.2" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/><path d="M 16.4 6.2 A 7.2 7.2 0 0 1 14.6 16.1" fill="none" stroke="#1a73e8" stroke-width="1.5" stroke-linecap="round"/></g>
-<text x="183" y="48" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">phase</text>
-<text x="251" y="48" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="end">32 b</text>
-<text x="157" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#3c4043">osc 1 position</text>
-<rect x="276" y="24" width="132" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(285,32)"><circle cx="7" cy="10" r="7" fill="none" stroke="#1a73e8" stroke-width="1.5" opacity=".35"/><circle cx="12" cy="10" r="7.2" fill="none" stroke="#1a73e8" stroke-width="1.8"/><path d="M 12 10 L 17 5.2" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
-<text x="311" y="48" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">ph2</text>
-<text x="399" y="48" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="end">32 b</text>
-<text x="285" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#3c4043">osc 2 / modulator</text>
-<rect x="572" y="24" width="108" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(581,32)"><path d="M 1 15.5 H 7 V 4.5 H 14 V 15.5 H 20" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>
-<text x="607" y="48" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">subhi</text>
-<text x="671" y="48" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="end">1 b</text>
-<text x="581" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#3c4043">sub-osc square</text>
-<rect x="696" y="24" width="112" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(705,32)"><path d="M 1 18 L 5 3 L 9 10 L 14 10 L 19 18" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="11.5" cy="10" r="2.4" fill="#1a73e8"/></g>
-<text x="731" y="48" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">env</text>
-<text x="799" y="48" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#5f6368" text-anchor="end">19 b</text>
-<text x="705" y="74" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#3c4043">amp env + stage</text>
-<rect x="824" y="24" width="62" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(845.0,31)"><path d="M 1 17 L 5 3 L 9 10 L 14 10 L 18 17" fill="none" stroke="#1a73e8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="3 2"/><circle cx="6.4" cy="6.2" r="2.3" fill="#1a73e8"/></g>
-<text x="855.0" y="68" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">fenv</text>
-<text x="855.0" y="81" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
-<rect x="889" y="24" width="62" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(910.0,31)"><path d="M 1 5.5 H 9 Q 14 5.5 18.5 17" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
-<text x="920.0" y="68" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">flo</text>
-<text x="920.0" y="81" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
-<rect x="954" y="24" width="62" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<g transform="translate(975.0,31)"><path d="M 1 16.5 Q 7 16.5 9.8 4.5 Q 12.6 16.5 18.5 16.5" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
-<text x="985.0" y="68" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">fbnd</text>
-<text x="985.0" y="81" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
-<path d="M 66.0 86 L 66.0 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 204.0 86 L 204.0 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 342.0 86 L 342.0 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 626.0 86 L 626.0 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 752.0 86 L 752.0 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 855 86 L 855 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 920 86 L 920 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<path d="M 985 86 L 985 140" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
-<rect x="0" y="146" width="132" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="16" cy="164" r="9" fill="#e8f0fe"/>
-<text x="16" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">1</text>
-<text x="30" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">pitch step</text>
-<circle cx="66.0" cy="208" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 60.0 208 H 72.0 M 66.0 202 V 214" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<text x="12" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">inc = cinc « 6</text>
-<text x="12" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">± bend, vibrato</text>
-<text x="12" y="268" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">± unison detune</text>
-<text x="120" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ inc</text>
-<path d="M 132 208 L 145 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="148" y="146" width="112" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="164" cy="164" r="9" fill="#e8f0fe"/>
-<text x="164" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">2</text>
-<text x="178" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">accumulate</text>
-<path d="M 217.0 205 H 231.0 V 180 H 177.0 V 205 H 189.0" fill="none" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="3.5 3" marker-end="url(#dN)"/>
-<circle cx="204.0" cy="208" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 198.0 208 H 210.0 M 204.0 202 V 214" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<text x="160" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">phase += inc</text>
-<text x="160" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">wrap = one cycle</text>
-<text x="248" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ phase′</text>
-<path d="M 260 208 L 273 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="276" y="146" width="132" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="292" cy="164" r="9" fill="#e8f0fe"/>
-<text x="292" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">3</text>
-<text x="306" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">osc 2 / mod</text>
-<circle cx="316.0" cy="208" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 310.0 208 H 322.0 M 316.0 202 V 214" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<path d="M 331.0 208 L 344.0 208" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
-<path d="M 352.0 215 q 7 -14 13 0 t 13 0" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round"/>
-<text x="288" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">ph2 += inc × ratio</text>
-<text x="288" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">mod = sin(ph2)</text>
-<text x="396" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ mod</text>
-<path d="M 408 208 L 421 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="424" y="146" width="132" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="440" cy="164" r="9" fill="#e8f0fe"/>
-<text x="440" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">4</text>
-<text x="454" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">pick the wave</text>
-<path d="M 455.0 193 L 473.0 199 L 473.0 217 L 455.0 223 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="463.0" y="211.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">5:1</text>
-<path d="M 475.0 208 L 486.0 208" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
-<path d="M 503.0 193 L 521.0 199 L 521.0 217 L 503.0 223 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="511.0" y="211.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">3:1</text>
-<text x="436" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">saw sq tri sin nz</text>
-<text x="436" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">dry / ring / FM</text>
-<text x="544" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ o12</text>
-<path d="M 556 208 L 569 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="572" y="146" width="108" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="588" cy="164" r="9" fill="#e8f0fe"/>
-<text x="588" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">5</text>
-<text x="602" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">sub-osc</text>
-<circle cx="626.0" cy="208" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 620.0 208 H 632.0 M 626.0 202 V 214" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<text x="584" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">±1800 square,</text>
-<text x="584" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">one octave down</text>
-<text x="668" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ w</text>
-<path d="M 680 208 L 693 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="696" y="146" width="112" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="712" cy="164" r="9" fill="#e8f0fe"/>
-<text x="712" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">6</text>
-<text x="726" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">VCA</text>
-<circle cx="752.0" cy="208" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 747.6 203.6 L 756.4 212.4 M 756.4 203.6 L 747.6 212.4" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<text x="708" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">g = env·vel·trem</text>
-<text x="708" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">amp = w × g</text>
-<text x="796" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ amp</text>
-<path d="M 808 208 L 821 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="824" y="146" width="196" height="152" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
-<circle cx="840" cy="164" r="9" fill="#e8f0fe"/>
-<text x="840" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">7</text>
-<text x="854" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">state-variable filter</text>
-<circle cx="852" cy="208" r="12" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 846 208 H 858 M 852 202 V 214" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
-<path d="M 866 208 L 878 208" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
-<rect x="882" y="194" width="46" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="905" y="212.5" font-family="Roboto Mono, monospace" font-size="11.5" fill="#174ea6" font-weight="500" text-anchor="middle">flo</text>
-<path d="M 928 208 L 936 208" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
-<rect x="936" y="194" width="46" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="959" y="212.5" font-family="Roboto Mono, monospace" font-size="11.5" fill="#174ea6" font-weight="500" text-anchor="middle">fbnd</text>
-<path d="M 982 208 L 988 208" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
-<path d="M 989 193 L 1007 199 L 1007 217 L 989 223 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="997" y="211.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">4:1</text>
-<path d="M 959 193 V 182 H 905 V 193" fill="none" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#dB)"/>
-<text x="836" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">f = cutoff + key·note</text>
-<text x="836" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">  + fenv·fdepth + LFO</text>
-<text x="836" y="268" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">flo, fbnd: 3 integrator steps</text>
-<text x="1008" y="288" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ filt</text>
-<path d="M 1020 208 L 1033 208" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
-<rect x="1036" y="146" width="116" height="152" rx="11" fill="#fff" stroke="#188038" stroke-width="2"/>
-<circle cx="1052" cy="164" r="9" fill="#e8f0fe"/>
-<text x="1052" y="168" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">8</text>
-<text x="1066" y="169" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">one sample</text>
-<path d="M 1050 208 q 11 -26 22 0 t 22 0 t 22 0" fill="none" stroke="#9aa0a6" stroke-width="1.6"/>
-<line x1="1105" y1="196.5" x2="1105" y2="228" stroke="#188038" stroke-width="1.3" stroke-dasharray="3 3"/>
-<circle cx="1105" cy="196.5" r="5" fill="#188038"/>
-<text x="1114" y="230" font-family="Roboto Mono, monospace" font-size="11" fill="#188038" font-weight="700">t</text>
-<text x="1048" y="238" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">this voice, this tick</text>
-<text x="1048" y="253" font-family="Roboto, Arial, sans-serif" font-size="10.8" fill="#3c4043">→ into the mix</text>
-<rect x="0" y="312" width="132" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 66.0 310 L 66.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="10" y="331" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">portamento · bend</text>
-<text x="10" y="346" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">vibrato · unison</text>
-<rect x="148" y="312" width="112" height="44" rx="9" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2" stroke-dasharray="4 4"/>
-<text x="204.0" y="339" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#bdc1c6" text-anchor="middle">—</text>
-<rect x="276" y="312" width="132" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 342.0 310 L 342.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="286" y="331" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">detune · ratio</text>
-<text x="286" y="346" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">xmode · xdepth</text>
-<rect x="424" y="312" width="132" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 490.0 310 L 490.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="434" y="339" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">wave · pulse width</text>
-<rect x="572" y="312" width="108" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 626.0 310 L 626.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="582" y="339" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">sub level</text>
-<rect x="696" y="312" width="112" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 752.0 310 L 752.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="706" y="331" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">amp ADSR · velocity</text>
-<text x="706" y="346" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">volume · tremolo</text>
-<rect x="824" y="312" width="196" height="44" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<path d="M 922.0 310 L 922.0 302" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
-<text x="834" y="331" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">cutoff · reso · fdepth · filter ADSR</text>
-<text x="834" y="346" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#b06000">LP / HP / BP / notch</text>
-<rect x="1036" y="312" width="116" height="44" rx="9" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2" stroke-dasharray="4 4"/>
-<text x="1094.0" y="339" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#bdc1c6" text-anchor="middle">—</text>
-<text x="0" y="386" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">167 b of that is rewritten every cycle; the other 22 b (note · vel · uni · part) are latched at note-on and just ride along.</text>
-<rect x="0" y="400" width="1152" height="58" rx="10" fill="#e6f4ea"/>
-<text x="20" y="424" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#188038" font-weight="700">Same silicon for all 32 voices. What differs is 189 bits of state and which of the four parts it points at.</text>
-<text x="20" y="446" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">Turn a knob and the amber side changes. Press a key and the blue side starts moving. The output sample is just where the two meet this cycle.</text>
+<text x="18" y="14" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#1a73e8" font-weight="700">the voice's 189 b — where this note is right now</text>
+<rect x="336" y="4" width="11" height="11" rx="2.5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/>
+<text x="354" y="14" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#b06000" font-weight="700">the patch — the 28 numbers from the last slide</text>
+<rect x="0" y="24" width="128" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(9,31)"><path d="M 1 18 H 6 V 13.2 H 11 V 8.4 H 16 V 3.6 H 20" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>
+<text x="34" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">cinc</text>
+<text x="9" y="69" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#3c4043">26 b · pitch step</text>
+<rect x="144" y="24" width="116" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(153,31)"><circle cx="10" cy="10" r="8" fill="none" stroke="#1a73e8" stroke-width="1.8"/><path d="M 10 10 L 10 3.2" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/><path d="M 16.4 6.2 A 7.2 7.2 0 0 1 14.6 16.1" fill="none" stroke="#1a73e8" stroke-width="1.5" stroke-linecap="round"/></g>
+<text x="178" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">phase</text>
+<text x="153" y="69" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#3c4043">32 b · osc 1 angle</text>
+<rect x="276" y="24" width="128" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(285,31)"><circle cx="7" cy="10" r="7" fill="none" stroke="#1a73e8" stroke-width="1.5" opacity=".35"/><circle cx="12" cy="10" r="7.2" fill="none" stroke="#1a73e8" stroke-width="1.8"/><path d="M 12 10 L 17 5.2" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
+<text x="310" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">ph2</text>
+<text x="285" y="69" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#3c4043">32 b · osc 2 angle</text>
+<rect x="552" y="24" width="100" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(561,31)"><path d="M 1 15.5 H 7 V 4.5 H 14 V 15.5 H 20" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>
+<text x="586" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">subhi</text>
+<text x="561" y="69" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#3c4043">1 b · sub state</text>
+<rect x="668" y="24" width="136" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(677,31)"><path d="M 1 18 L 5 3 L 9 10 L 14 10 L 19 18" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="11.5" cy="10" r="2.4" fill="#1a73e8"/></g>
+<text x="702" y="46" font-family="Roboto Mono, monospace" font-size="13.5" fill="#174ea6" font-weight="500">env</text>
+<text x="677" y="69" font-family="Roboto, Arial, sans-serif" font-size="10.4" fill="#3c4043">19 b · amp env + stage</text>
+<rect x="820" y="24" width="62" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(841.0,29)"><path d="M 1 17 L 5 3 L 9 10 L 14 10 L 18 17" fill="none" stroke="#1a73e8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="3 2"/><circle cx="6.4" cy="6.2" r="2.3" fill="#1a73e8"/></g>
+<text x="851.0" y="65" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">fenv</text>
+<text x="851.0" y="77" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
+<rect x="887" y="24" width="62" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(908.0,29)"><path d="M 1 5.5 H 9 Q 14 5.5 18.5 17" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
+<text x="918.0" y="65" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">flo</text>
+<text x="918.0" y="77" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
+<rect x="954" y="24" width="62" height="58" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<g transform="translate(975.0,29)"><path d="M 1 16.5 Q 7 16.5 9.8 4.5 Q 12.6 16.5 18.5 16.5" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/></g>
+<text x="985.0" y="65" font-family="Roboto Mono, monospace" font-size="12.5" fill="#174ea6" font-weight="500" text-anchor="middle">fbnd</text>
+<text x="985.0" y="77" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#5f6368" text-anchor="middle">19 b</text>
+<path d="M 64.0 82 L 64.0 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 202.0 82 L 202.0 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 340.0 82 L 340.0 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 602.0 82 L 602.0 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 736.0 82 L 736.0 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 851 82 L 851 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 918 82 L 918 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<path d="M 985 82 L 985 138" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#dB)"/>
+<rect x="0" y="144" width="128" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="15" cy="162" r="9" fill="#e8f0fe"/>
+<text x="15" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">1</text>
+<text x="29" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">pitch step</text>
+<circle cx="64.0" cy="206" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 58.0 206 H 70.0 M 64.0 200 V 212" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<text x="10" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">inc = cinc « 6</text>
+<text x="10" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">± bend, vibrato</text>
+<text x="10" y="266" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">± unison detune</text>
+<text x="118" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ inc</text>
+<path d="M 128 206 L 141 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="144" y="144" width="116" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="159" cy="162" r="9" fill="#e8f0fe"/>
+<text x="159" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">2</text>
+<text x="173" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">accumulate</text>
+<path d="M 215.0 203 H 229.0 V 178 H 175.0 V 203 H 187.0" fill="none" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="3.5 3" marker-end="url(#dN)"/>
+<circle cx="202.0" cy="206" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 196.0 206 H 208.0 M 202.0 200 V 212" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<text x="154" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">phase += inc</text>
+<text x="154" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">wrap = one cycle</text>
+<text x="250" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ phase′</text>
+<path d="M 260 206 L 273 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="276" y="144" width="128" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="291" cy="162" r="9" fill="#e8f0fe"/>
+<text x="291" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">3</text>
+<text x="305" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">osc 2 / mod</text>
+<circle cx="314.0" cy="206" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 308.0 206 H 320.0 M 314.0 200 V 212" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<path d="M 329.0 206 L 342.0 206" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
+<path d="M 350.0 213 q 7 -14 13 0 t 13 0" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round"/>
+<text x="286" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">ph2 += inc × ratio</text>
+<text x="286" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">mod = sin(ph2)</text>
+<text x="394" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ mod</text>
+<path d="M 404 206 L 417 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="420" y="144" width="116" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="435" cy="162" r="9" fill="#e8f0fe"/>
+<text x="435" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">4</text>
+<text x="449" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">pick the wave</text>
+<path d="M 445.0 191 L 463.0 197 L 463.0 215 L 445.0 221 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="453.0" y="209.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">5:1</text>
+<path d="M 465.0 206 L 476.0 206" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
+<path d="M 491.0 191 L 509.0 197 L 509.0 215 L 491.0 221 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="499.0" y="209.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">3:1</text>
+<text x="430" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">saw sq tri sin nz</text>
+<text x="430" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">dry / ring / FM</text>
+<text x="526" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ o12</text>
+<path d="M 536 206 L 549 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="552" y="144" width="100" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="567" cy="162" r="9" fill="#e8f0fe"/>
+<text x="567" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">5</text>
+<text x="581" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">sub-osc</text>
+<circle cx="602.0" cy="206" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 596.0 206 H 608.0 M 602.0 200 V 212" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<text x="562" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">±1800 square,</text>
+<text x="562" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">one octave down</text>
+<text x="642" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ w</text>
+<path d="M 652 206 L 665 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="668" y="144" width="136" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="683" cy="162" r="9" fill="#e8f0fe"/>
+<text x="683" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">6</text>
+<text x="697" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">VCA</text>
+<circle cx="736.0" cy="206" r="12.5" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 731.6 201.6 L 740.4 210.4 M 740.4 201.6 L 731.6 210.4" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<text x="678" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">g = env · vel · trem</text>
+<text x="678" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">amp = w × g</text>
+<text x="794" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ amp</text>
+<path d="M 804 206 L 817 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="820" y="144" width="196" height="148" rx="11" fill="#fff" stroke="#dadce0" stroke-width="1.4"/>
+<circle cx="835" cy="162" r="9" fill="#e8f0fe"/>
+<text x="835" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">7</text>
+<text x="849" y="167" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#202124" font-weight="700">state-variable filter</text>
+<circle cx="845" cy="206" r="12" fill="#fff" stroke="#3c4043" stroke-width="1.8"/><path d="M 839 206 H 851 M 845 200 V 212" stroke="#3c4043" stroke-width="1.9" stroke-linecap="round"/>
+<path d="M 859 206 L 869 206" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
+<rect x="873" y="192" width="44" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="895" y="210.5" font-family="Roboto Mono, monospace" font-size="11.5" fill="#174ea6" font-weight="500" text-anchor="middle">flo</text>
+<path d="M 917 206 L 925 206" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
+<rect x="925" y="192" width="44" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="947" y="210.5" font-family="Roboto Mono, monospace" font-size="11.5" fill="#174ea6" font-weight="500" text-anchor="middle">fbnd</text>
+<path d="M 969 206 L 979 206" stroke="#5f6368" stroke-width="1.6" marker-end="url(#dN)"/>
+<path d="M 981 191 L 999 197 L 999 215 L 981 221 Z" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-linejoin="round"/><text x="989" y="209.2" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#5f6368" font-weight="700" text-anchor="middle">4:1</text>
+<path d="M 947 191 V 180 H 895 V 191" fill="none" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#dB)"/>
+<text x="830" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">f = cutoff + key·note</text>
+<text x="830" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">  + fenv·fdepth + LFO</text>
+<text x="830" y="266" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">flo, fbnd: 3 integrator steps</text>
+<text x="1006" y="282" font-family="Roboto Mono, monospace" font-size="11.5" fill="#1a73e8" font-weight="500" text-anchor="end">→ filt</text>
+<path d="M 1016 206 L 1029 206" stroke="#5f6368" stroke-width="1.8" marker-end="url(#dN)"/>
+<rect x="1032" y="144" width="120" height="148" rx="11" fill="#fff" stroke="#188038" stroke-width="2"/>
+<circle cx="1047" cy="162" r="9" fill="#e8f0fe"/>
+<text x="1047" y="166" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1a73e8" font-weight="700" text-anchor="middle">8</text>
+<text x="1061" y="167" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#202124" font-weight="700">one sample</text>
+<path d="M 1046 206 q 11 -26 23 0 t 23 0 t 23 0" fill="none" stroke="#9aa0a6" stroke-width="1.6"/>
+<line x1="1103.5" y1="194.5" x2="1103.5" y2="226" stroke="#188038" stroke-width="1.3" stroke-dasharray="3 3"/>
+<circle cx="1103.5" cy="194.5" r="5" fill="#188038"/>
+<text x="1111.5" y="228" font-family="Roboto Mono, monospace" font-size="11" fill="#188038" font-weight="700">t</text>
+<text x="1042" y="236" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">this voice, this tick</text>
+<text x="1042" y="251" font-family="Roboto, Arial, sans-serif" font-size="10.2" fill="#3c4043">→ into the mix</text>
+<rect x="0" y="306" width="128" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 64.0 304 L 64.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(8.0,314) scale(0.92)"><circle cx="2.2" cy="11.4" r="1.9" fill="#f9ab00"/><circle cx="11.8" cy="3.4" r="1.9" fill="#f9ab00"/><path d="M 4 10.2 L 10 4.6" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 1.8"/></g>
+<text x="24.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">portsel</text>
+<g transform="translate(64.0,314) scale(0.92)"><path d="M 1 12 H 4.6" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 12 Q 10 12 10 5.4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 8.3 7 L 10 4.6 L 11.7 7" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="80.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">bend</text>
+<g transform="translate(8.0,335) scale(0.92)"><circle cx="2.4" cy="7" r="2.1" fill="#f9ab00"/><path d="M 5.4 7 Q 7.4 3 9.4 7 T 13.4 7" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="24.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">vibsel</text>
+<g transform="translate(64.0,335) scale(0.92)"><path d="M 1 12 L 4.4 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.3 12 L 8.7 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 9.6 12 L 13 4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="80.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">unison</text>
+<rect x="144" y="306" width="116" height="50" rx="9" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2" stroke-dasharray="4 4"/>
+<text x="202.0" y="336" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#bdc1c6" text-anchor="middle">—</text>
+<rect x="276" y="306" width="128" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 340.0 304 L 340.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(284.0,314) scale(0.92)"><path d="M 1 6 Q 3.5 1.4 6 6 T 11 6" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3 9.4 Q 5.5 4.8 8 9.4 T 13 9.4" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/></g>
+<text x="300.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">detsel</text>
+<g transform="translate(340.0,314) scale(0.92)"><path d="M 1 4.4 Q 2.2 1.2 3.4 4.4 T 5.8 4.4 T 8.2 4.4 T 10.6 4.4 T 13 4.4" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 11 Q 4 6.4 7 11 T 13 11" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></g>
+<text x="356.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">xratio</text>
+<g transform="translate(284.0,335) scale(0.92)"><circle cx="2.4" cy="7" r="2.1" fill="none" stroke="#f9ab00" stroke-width="1.4"/><path d="M 5.4 2.6 L 12.6 5.4 L 12.6 8.6 L 5.4 11.4 Z" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="300.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">xmode</text>
+<g transform="translate(340.0,335) scale(0.92)"><circle cx="5.2" cy="7" r="4.1" fill="none" stroke="#f9ab00" stroke-width="1.4"/><path d="M 2.9 4.7 L 7.5 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 7.5 4.7 L 2.9 9.3" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M 12.4 2.4 V 11.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 4.6 L 12.4 2.4 L 14.3 4.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.5 9.399999999999999 L 12.4 11.6 L 14.3 9.399999999999999" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="356.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">xdepth</text>
+<rect x="420" y="306" width="116" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 478.0 304 L 478.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(428.0,314) scale(0.92)"><path d="M 1 11.5 L 3.6 4 L 3.6 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.6 11.5 V 4 H 8.4 V 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10 11.5 Q 11.5 3.4 13 11.5" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="444.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">wave</text>
+<g transform="translate(478.0,314) scale(0.92)"><path d="M 0.8 10.5 H 4 V 3 H 7 V 10.5 H 13.2" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4 13.2 H 7" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 6.2 11.299999999999999 L 4 13.2 L 6.2 15.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.8 11.299999999999999 L 7 13.2 L 4.8 15.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="494.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">pw</text>
+<rect x="552" y="306" width="100" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 602.0 304 L 602.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(560.0,314) scale(0.92)"><path d="M 0.6 9 H 5 V 3 H 9.4 V 9 H 13.4" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.4 11.4 L 7 13.6 L 9.6 11.4" fill="none" stroke="#f9ab00" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="576.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">subsel</text>
+<rect x="668" y="306" width="136" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 736.0 304 L 736.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(676.0,314) scale(0.92)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12 L 1 12 Z" fill="#f9ab00" fill-opacity=".24" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="692.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">a_att…a_rel</text>
+<g transform="translate(676.0,335) scale(0.92)"><path d="M 1 12 L 13 12 L 13 3 Z" fill="#f9ab00" fill-opacity=".22" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="692.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">vol</text>
+<g transform="translate(736.0,335) scale(0.92)"><path d="M 1 4.6 Q 4 1.6 7 4.6 T 13 4.6" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1 9.4 Q 4 12.4 7 9.4 T 13 9.4" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M 7 5.4 V 8.6" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/></g>
+<text x="752.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">trdep</text>
+<rect x="820" y="306" width="196" height="50" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<path d="M 918.0 304 L 918.0 296" stroke="#f9ab00" stroke-width="1.8" marker-end="url(#dA)"/>
+<g transform="translate(828.0,314) scale(0.92)"><path d="M 0.8 5.5 H 5.6 Q 8 5.5 9 8.4 Q 9.8 10.8 13.2 12.8" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 4.6 2.2 H 12.6" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 6.8 0.30000000000000027 L 4.6 2.2 L 6.8 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.399999999999999 0.30000000000000027 L 12.6 2.2 L 10.399999999999999 4.1" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="844.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">cutoff</text>
+<g transform="translate(888.0,314) scale(0.92)"><path d="M 0.8 7.4 H 5.2 Q 7.4 7.4 8.2 4.2 Q 9 1.4 9.8 7.4 Q 10.6 12.4 13.2 13.2" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M 12.2 1.8 V 8.2" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.299999999999999 4.0 L 12.2 1.8 L 14.1 4.0" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M 10.299999999999999 5.999999999999999 L 12.2 8.2 L 14.1 5.999999999999999" fill="none" stroke="#f9ab00" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="904.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">reso</text>
+<g transform="translate(948.0,314) scale(0.92)"><path d="M 0.6 4.6 H 2 Q 3 4.6 3.4 7.6" fill="none" stroke="#f9ab00" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M 5.2 2.8 L 12.6 5.6 L 12.6 8.4 L 5.2 11.2 Z" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="964.0" y="325" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">fmode</text>
+<g transform="translate(828.0,335) scale(0.92)"><path d="M 0.8 5.5 H 5.6 Q 8 5.5 9 8.4 Q 9.8 10.8 13.2 12.8" fill="none" stroke="#f9ab00" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity=".4"/><path d="M 4.4 5.5 H 9.2 Q 11.6 5.5 12.6 8.4" fill="none" stroke="#f9ab00" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M 3.6 1.8 H 10.4" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 8.4 0.4 L 10.6 1.8 L 8.4 3.2" fill="none" stroke="#f9ab00" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="844.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">fdepth</text>
+<g transform="translate(888.0,335) scale(0.92)"><path d="M 1 12 L 4.5 2.5 L 7 7.5 L 10 7.5 L 13 12" fill="none" stroke="#f9ab00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 1.8"/></g>
+<text x="904.0" y="346" font-family="Roboto Mono, monospace" font-size="9.6" fill="#b06000" font-weight="500">f_att…f_rel</text>
+<rect x="1032" y="306" width="120" height="50" rx="9" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2" stroke-dasharray="4 4"/>
+<text x="1092.0" y="336" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#bdc1c6" text-anchor="middle">—</text>
+<text x="0" y="372" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368">167 b of that is rewritten every cycle; the other 22 b (note · vel · uni · part) are latched at note-on and just ride along.</text>
+<rect x="0" y="386" width="1152" height="58" rx="10" fill="#e6f4ea"/>
+<text x="20" y="410" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#188038" font-weight="700">Same silicon for all 32 voices. What differs is 189 bits of state and which patch it points at.</text>
+<text x="20" y="432" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">Turn a knob and the amber side changes. Press a key and the blue side starts moving. The output sample is just where the two meet this cycle.</text>
 </svg>
-  </div>
-</section>
-
-<!-- ============ 19b · VOICE RING ============ -->
-<section class="slide">
-  <div class="h">Why a ring? The 32:1 mux was the timing wall</div>
-  <div class="hsub">A dynamic array index is not free in hardware. It is a mux, and this one was the widest thing on the chip.</div>
-  <div style="margin-top:26px;">
-    <svg viewBox="0 0 1152 452" style="width:100%;height:452px;">
-    <defs><marker id="rA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="rR" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#d93025"/></marker><marker id="rB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="rG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
-    <text x="0" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#d93025">✗ Index the array</text>
-    <text x="0" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#d93025">voices[vidx]</text>
-    <rect x="2" y="68" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
-    <text x="49" y="86" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 0</text>
-    <path d="M96 81 L150 81" stroke="#dadce0" stroke-width="1.3"/>
-    <rect x="2" y="102" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
-    <text x="49" y="120" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 1</text>
-    <path d="M96 115 L150 115" stroke="#dadce0" stroke-width="1.3"/>
-    <rect x="2" y="136" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
-    <text x="49" y="154" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 2</text>
-    <path d="M96 149 L150 149" stroke="#dadce0" stroke-width="1.3"/>
-    <rect x="2" y="232" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
-    <text x="49" y="250" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 30</text>
-    <path d="M96 245 L150 245" stroke="#dadce0" stroke-width="1.3"/>
-    <rect x="2" y="266" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
-    <text x="49" y="284" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 31</text>
-    <path d="M96 279 L150 279" stroke="#dadce0" stroke-width="1.3"/>
-    <text x="49" y="200" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#5f6368" text-anchor="middle">⋮</text>
-    <path d="M150 62 L196 96 L196 266 L150 300 Z" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
-    <text x="173" y="175" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="700" fill="#d93025" text-anchor="middle">32:1</text>
-    <text x="173" y="193" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#d93025" text-anchor="middle">mux</text>
-    <path d="M173 334 L173 302" stroke="#d93025" stroke-width="1.6" marker-end="url(#rR)"/>
-    <text x="173" y="350" font-family="Roboto Mono, monospace" font-size="12.5" fill="#d93025" text-anchor="middle">vidx</text>
-    <path d="M196 181 L248 181" stroke="#5f6368" stroke-width="1.6" marker-end="url(#rA)"/>
-    <text x="254" y="177" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">to the datapath</text>
-    <rect x="0" y="386" width="340" height="60" rx="9" fill="#fce8e6"/>
-    <text x="16" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#d93025">A mux with 6,048 input bits (189 b × 32)</text>
-    <text x="16" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">≈21 ns — over a 30 ns budget. Fails timing.</text>
-    <path d="M362 20 L362 366" stroke="#dadce0" stroke-width="1.4" stroke-dasharray="4 5"/>
-    <text x="392" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#188038">✓ Rotate the array</text>
-    <text x="392" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#188038">voices[0]</text>
-    <text x="460" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1a73e8">slot 0</text>
-    <text x="1146" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" text-anchor="end">slot 31</text>
-    <text x="446" y="93" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">cycle N</text>
-    <rect x="460.0" y="70" width="19" height="36" rx="4" fill="#1a73e8"/>
-    <text x="470" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v0</text>
-    <rect x="481.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="491" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v1</text>
-    <rect x="503.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="512" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
-    <rect x="524.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="534" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
-    <rect x="546.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="556" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
-    <rect x="567.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="577" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
-    <rect x="589.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="598" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
-    <rect x="610.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="620" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
-    <rect x="632.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="642" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
-    <rect x="653.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="663" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
-    <rect x="675.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="684" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
-    <rect x="696.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="706" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
-    <rect x="718.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="728" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
-    <rect x="739.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="749" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
-    <rect x="761.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="770" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
-    <rect x="782.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="792" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
-    <rect x="804.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="814" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
-    <rect x="825.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="835" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
-    <rect x="847.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="856" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
-    <rect x="868.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="878" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
-    <rect x="890.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="900" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
-    <rect x="911.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="921" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
-    <rect x="933.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="942" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
-    <rect x="954.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="964" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
-    <rect x="976.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="986" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
-    <rect x="997.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1007" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
-    <rect x="1019.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1028" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
-    <rect x="1040.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1050" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
-    <rect x="1062.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1072" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
-    <rect x="1083.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1093" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
-    <rect x="1105.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1114" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
-    <rect x="1126.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1136" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
-    <text x="446" y="323" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">cycle N+1</text>
-    <rect x="460.0" y="300" width="19" height="36" rx="4" fill="#1a73e8"/>
-    <text x="470" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v1</text>
-    <rect x="481.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="491" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
-    <rect x="503.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="512" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
-    <rect x="524.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="534" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
-    <rect x="546.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="556" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
-    <rect x="567.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="577" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
-    <rect x="589.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="598" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
-    <rect x="610.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="620" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
-    <rect x="632.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="642" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
-    <rect x="653.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="663" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
-    <rect x="675.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="684" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
-    <rect x="696.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="706" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
-    <rect x="718.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="728" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
-    <rect x="739.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="749" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
-    <rect x="761.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="770" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
-    <rect x="782.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="792" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
-    <rect x="804.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="814" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
-    <rect x="825.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="835" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
-    <rect x="847.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="856" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
-    <rect x="868.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="878" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
-    <rect x="890.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="900" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
-    <rect x="911.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="921" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
-    <rect x="933.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="942" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
-    <rect x="954.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="964" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
-    <rect x="976.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="986" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
-    <rect x="997.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1007" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
-    <rect x="1019.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1028" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
-    <rect x="1040.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1050" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
-    <rect x="1062.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1072" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
-    <rect x="1083.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1093" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
-    <rect x="1105.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1114" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
-    <rect x="1126.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
-    <text x="1136" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v0′</text>
-    <path d="M470 106 L470 174" stroke="#1a73e8" stroke-width="2" marker-end="url(#rB)"/>
-    <rect x="460" y="176" width="212" height="54" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-    <text x="566" y="200" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043" text-anchor="middle">process_voice()</text>
-    <text x="566" y="219" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">the one shared datapath</text>
-    <path d="M672 203 L1136 203 L1136 296" stroke="#188038" fill="none" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#rG)"/>
-    <text x="684" y="196" font-family="Roboto Mono, monospace" font-size="12" fill="#188038">rotate_in(v0′)</text>
-    <path d="M1146 142 L980 142" stroke="#5f6368" stroke-width="1.5" marker-end="url(#rA)"/>
-    <text x="972" y="147" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368" text-anchor="end">every slot shifts left by one</text>
-    <rect x="392" y="386" width="760" height="60" rx="9" fill="#e6f4ea"/>
-    <text x="410" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038">The index is the literal 0 — the read and the write become plain wires.</text>
-    <text x="410" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">rotate_in() only uses loop-constant indices, so XLS unrolls it into a fixed shift. No mux is built at all.</text>
-    </svg>
   </div>
 </section>
 
@@ -1955,36 +1988,195 @@
     <text x="1152" y="357" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368" text-anchor="end">● = that voice's sample is finished</text>
     <rect x="0" y="378" width="1152" height="64" rx="10" fill="#e6f4ea"/>
     <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">Latency is 48 cycles. Throughput is 1 voice per cycle. Only the second one sets the scan cost.</text>
-    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">So 32 voices take 32 engine cycles — not 48 × 32 — which is the ~96 master clocks on the previous slide (32 × 3).</text>
+    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">So 32 voices take 32 engine cycles — not 48 × 32 — which is ~96 master clocks (32 × 3).</text>
     </svg>
   </div>
 </section>
 
-<!-- ============ 20 · TIMING ============ -->
+<!-- ============ 19b · VOICE RING ============ -->
 <section class="slide">
-  <div class="h">One clock, three cadences</div>
-  <table class="gt">
-    <thead><tr><th style="width:280px;">Cadence</th><th style="width:180px;">Period</th><th>What happens</th></tr></thead>
-    <tbody>
-      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
-        <path d="M 2 19 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/>
-      </svg>Master clock</td><td>10 ns</td><td>Everything — one 100 MHz oscillator, no MMCM/PLL</td></tr>
-      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
-        <path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2" stroke-linejoin="round"/>
-      </svg>ce (engine, ÷3)</td><td>30 ns</td><td>One voice processed; every pipeline register gated by one clock-enable</td></tr>
-      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
-        <path d="M 2 19 h6 v-12 h4 v12 h24 v-12 h4" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
-      </svg>ce8 (effects, ÷6)</td><td>60 ns</td><td>One step of the 28-state effects FSM — one BRAM read+write per step</td></tr>
-      <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none">
-        <path d="M 2 12 Q 12 -2 21 12 T 40 12" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
-      </svg>Sample period</td><td>31.25 µs</td><td>One 32 kHz stereo sample — 3,125 master clocks</td></tr>
-    </tbody>
-  </table>
-  <div class="body" style="max-width:1120px; margin-top:36px;">
-    <p>The compute uses only <span class="em">~264 of 3,125 clocks</span> per sample — the pipeline finishes
-    with ~90% of the period to spare. The real ceiling is the <b>UART frame (~2,000 clocks)</b>, not the DSP —
-    so the engine has generous room to grow.</p>
-  </div></section>
+  <div class="h">Why a ring? The 32:1 mux was the timing wall</div>
+  <div class="hsub">A dynamic array index is not free in hardware. It is a mux, and this one was the widest thing on the chip.</div>
+  <div style="margin-top:26px;">
+    <svg viewBox="0 0 1152 452" style="width:100%;height:452px;">
+    <defs><marker id="rA" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#5f6368"/></marker><marker id="rR" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#d93025"/></marker><marker id="rB" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#1a73e8"/></marker><marker id="rG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
+    <text x="0" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#d93025">✗ Index the array</text>
+    <text x="0" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#d93025">voices[vidx]</text>
+    <rect x="2" y="68" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="86" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 0</text>
+    <path d="M96 81 L150 81" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="102" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="120" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 1</text>
+    <path d="M96 115 L150 115" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="136" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="154" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 2</text>
+    <path d="M96 149 L150 149" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="232" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="250" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 30</text>
+    <path d="M96 245 L150 245" stroke="#dadce0" stroke-width="1.3"/>
+    <rect x="2" y="266" width="94" height="26" rx="5" fill="#fff" stroke="#dadce0"/>
+    <text x="49" y="284" font-family="Roboto Mono, monospace" font-size="12" fill="#5f6368" text-anchor="middle">voice 31</text>
+    <path d="M96 279 L150 279" stroke="#dadce0" stroke-width="1.3"/>
+    <text x="49" y="200" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#5f6368" text-anchor="middle">⋮</text>
+    <path d="M150 62 L196 96 L196 266 L150 300 Z" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+    <text x="173" y="175" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="700" fill="#d93025" text-anchor="middle">32:1</text>
+    <text x="173" y="193" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#d93025" text-anchor="middle">mux</text>
+    <path d="M173 334 L173 302" stroke="#d93025" stroke-width="1.6" marker-end="url(#rR)"/>
+    <text x="173" y="350" font-family="Roboto Mono, monospace" font-size="12.5" fill="#d93025" text-anchor="middle">vidx</text>
+    <path d="M196 181 L248 181" stroke="#5f6368" stroke-width="1.6" marker-end="url(#rA)"/>
+    <text x="254" y="177" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">to the datapath</text>
+    <rect x="0" y="386" width="340" height="60" rx="9" fill="#fce8e6"/>
+    <text x="16" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#d93025">A mux with 6,048 input bits (189 b × 32)</text>
+    <text x="16" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">≈21 ns — over a 30 ns budget. Fails timing.</text>
+    <path d="M362 20 L362 366" stroke="#dadce0" stroke-width="1.4" stroke-dasharray="4 5"/>
+    <text x="392" y="15" font-family="Roboto, Arial, sans-serif" font-size="16.5" font-weight="700" fill="#188038">✓ Rotate the array</text>
+    <text x="392" y="42" font-family="Roboto Mono, monospace" font-size="14.5" fill="#188038">voices[0]</text>
+    <text x="460" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1a73e8">slot 0</text>
+    <text x="1146" y="60" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#5f6368" text-anchor="end">slot 31</text>
+    <text x="446" y="93" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">cycle N</text>
+    <rect x="460.0" y="70" width="19" height="36" rx="4" fill="#1a73e8"/>
+    <text x="470" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v0</text>
+    <rect x="481.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="491" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v1</text>
+    <rect x="503.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="512" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
+    <rect x="524.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="534" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
+    <rect x="546.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="556" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
+    <rect x="567.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="577" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
+    <rect x="589.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="598" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
+    <rect x="610.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="620" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
+    <rect x="632.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="642" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
+    <rect x="653.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="663" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
+    <rect x="675.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="684" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
+    <rect x="696.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="706" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
+    <rect x="718.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="728" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
+    <rect x="739.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="749" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
+    <rect x="761.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="770" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
+    <rect x="782.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="792" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
+    <rect x="804.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="814" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
+    <rect x="825.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="835" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
+    <rect x="847.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="856" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
+    <rect x="868.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="878" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
+    <rect x="890.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="900" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
+    <rect x="911.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="921" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
+    <rect x="933.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="942" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
+    <rect x="954.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="964" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
+    <rect x="976.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="986" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
+    <rect x="997.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1007" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
+    <rect x="1019.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1028" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
+    <rect x="1040.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1050" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
+    <rect x="1062.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1072" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
+    <rect x="1083.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1093" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
+    <rect x="1105.0" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1114" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
+    <rect x="1126.5" y="70" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1136" y="93" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
+    <text x="446" y="323" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368" text-anchor="end">cycle N+1</text>
+    <rect x="460.0" y="300" width="19" height="36" rx="4" fill="#1a73e8"/>
+    <text x="470" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#fff" text-anchor="middle">v1</text>
+    <rect x="481.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="491" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v2</text>
+    <rect x="503.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="512" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v3</text>
+    <rect x="524.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="534" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v4</text>
+    <rect x="546.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="556" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v5</text>
+    <rect x="567.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="577" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v6</text>
+    <rect x="589.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="598" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v7</text>
+    <rect x="610.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="620" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v8</text>
+    <rect x="632.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="642" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v9</text>
+    <rect x="653.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="663" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v10</text>
+    <rect x="675.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="684" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v11</text>
+    <rect x="696.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="706" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v12</text>
+    <rect x="718.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="728" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v13</text>
+    <rect x="739.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="749" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v14</text>
+    <rect x="761.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="770" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v15</text>
+    <rect x="782.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="792" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v16</text>
+    <rect x="804.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="814" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v17</text>
+    <rect x="825.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="835" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v18</text>
+    <rect x="847.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="856" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v19</text>
+    <rect x="868.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="878" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v20</text>
+    <rect x="890.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="900" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v21</text>
+    <rect x="911.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="921" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v22</text>
+    <rect x="933.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="942" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v23</text>
+    <rect x="954.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="964" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v24</text>
+    <rect x="976.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="986" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v25</text>
+    <rect x="997.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1007" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v26</text>
+    <rect x="1019.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1028" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v27</text>
+    <rect x="1040.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1050" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v28</text>
+    <rect x="1062.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1072" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v29</text>
+    <rect x="1083.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1093" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v30</text>
+    <rect x="1105.0" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1114" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v31</text>
+    <rect x="1126.5" y="300" width="19" height="36" rx="4" fill="#d2e3fc"/>
+    <text x="1136" y="323" font-family="Roboto Mono, monospace" font-size="9" fill="#3c4043" text-anchor="middle">v0′</text>
+    <path d="M470 106 L470 174" stroke="#1a73e8" stroke-width="2" marker-end="url(#rB)"/>
+    <rect x="460" y="176" width="212" height="54" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+    <text x="566" y="200" font-family="Roboto Mono, monospace" font-size="12.5" fill="#3c4043" text-anchor="middle">process_voice()</text>
+    <text x="566" y="219" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#5f6368" text-anchor="middle">the one shared datapath</text>
+    <path d="M672 203 L1136 203 L1136 296" stroke="#188038" fill="none" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#rG)"/>
+    <text x="684" y="196" font-family="Roboto Mono, monospace" font-size="12" fill="#188038">rotate_in(v0′)</text>
+    <path d="M1146 142 L980 142" stroke="#5f6368" stroke-width="1.5" marker-end="url(#rA)"/>
+    <text x="972" y="147" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368" text-anchor="end">every slot shifts left by one</text>
+    <rect x="392" y="386" width="760" height="60" rx="9" fill="#e6f4ea"/>
+    <text x="410" y="411" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038">The index is the literal 0 — the read and the write become plain wires.</text>
+    <text x="410" y="432" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">rotate_in() only uses loop-constant indices, so XLS unrolls it into a fixed shift. No mux is built at all.</text>
+    </svg>
+  </div>
+</section>
 
 <!-- ============ 19d · END-TO-END TIMING ============ -->
 <section class="slide">
