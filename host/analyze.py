@@ -27,7 +27,7 @@ def read_stdin():
 def read_serial(dev, secs):
     import os, termios
     if not dev:
-        from uartaudio import find_port          # honours XLS32_PORT when 2 boards are plugged in
+        from transport.uart import find_port
         dev = find_port()
     fd = os.open(dev, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
     a = termios.tcgetattr(fd)

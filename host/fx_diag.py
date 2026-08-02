@@ -5,7 +5,8 @@ import os, sys, time
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "presetgen"))
-import uartaudio as u
+import transport.uart as uart
+import synth as u
 from validate_hw import recover
 
 NOTE = 57  # A3
@@ -15,7 +16,7 @@ def cap_stereo(fd, secs=1.2):
     """Return (L, R) float arrays in [-1,1), byte-aligned on the 4-byte frame.
     The firmware watermarks the stream: consecutive 16-bit samples alternate LSB
     (0,1,0,1,...). Align on that (works even on true silence)."""
-    rec = u.Recorder(fd); time.sleep(secs); raw = bytes(rec.buf); rec._run = False
+    rec = uart.Recorder(fd); time.sleep(secs); raw = bytes(rec.buf); rec._run = False
     if len(raw) < 4100:
         return np.zeros(1), np.zeros(1)
     # pick the 4-byte frame offset whose 16-bit-sample LSBs best match parity 0,1,0,1,...
@@ -66,7 +67,7 @@ def run_mode(fd, fxname, fxval, room=3):
 
 
 def main():
-    dev, fd = u.open_port(rw=True)
+    dev, fd = uart.open_port(rw=True)
     print("port:", dev)
     if not recover(fd):
         print("WARNING: board did not go quiet (railed?)")

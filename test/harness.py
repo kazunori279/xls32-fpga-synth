@@ -8,8 +8,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "host"))
 sys.path.insert(0, os.path.join(_ROOT, "webui"))
-from uartaudio import (open_port, Recorder, samples_from_bytes, to_signed, normalize,   # noqa: E402
-                       glitches, note_on, note_off, cc, pitch_bend, SR)
+from transport.uart import open_port, Recorder, samples_from_bytes  # noqa: E402
+from synth import to_signed, normalize, glitches, note_on, note_off, cc, pitch_bend, SR
 import synthspec                                                                          # noqa: E402
 import analysis as A                                                                      # noqa: E402
 

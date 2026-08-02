@@ -4,10 +4,11 @@
 # (so each LED swells then fades). Watch the Basys 3 LEDs, not the terminal.
 import os, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import uartaudio as u
+import transport.uart as uart
+import synth as u
 
 def main():
-    dev, fd = u.open_port(rw=True)
+    dev, fd = uart.open_port(rw=True)
     w = lambda b: (os.write(fd, b), time.sleep(0.01))
     # envelope tuned for a visible swell + trailing fade
     w(u.cc(70, 32))    # saw

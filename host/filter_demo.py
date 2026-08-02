@@ -5,8 +5,8 @@ roll off above a cutoff edge that sweeps upward.
 Usage: filter_demo.py [out.wav] [note] [reso]
 """
 import os, sys, time, struct, wave
-from uartaudio import (open_port, read_bytes, samples_from_bytes, to_signed, normalize,
-                       note_on, note_off, set_wave, set_cutoff, set_reso, SR)
+from transport.uart import open_port, read_bytes, samples_from_bytes
+from synth import to_signed, normalize, note_on, note_off, set_wave, set_cutoff, set_reso, SR
 
 def main():
     a = sys.argv[1:]

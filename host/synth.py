@@ -1,97 +1,31 @@
-"""Shared host helpers for the M4 synth: 1 Mbaud serial (macOS custom baud via
-IOSSIOSPEED), 16-bit little-endian sample reassembly with byte-alignment
-auto-detect, and MIDI helpers."""
-import os, sys, time, glob, termios, fcntl, array
+"""What the host says to the synth, and what it makes of what comes back.
 
-IOSSIOSPEED = 0x80045402      # macOS ioctl to set an arbitrary baud rate
-SR = 32000                    # 100 MHz / 3125 — real-time rate with the ÷3 DSP pipeline (Vivado)
-BAUD = 2000000               # 100 MHz / 50 (2 Mbaud: lets the board stream 32 kHz in real time)
+Board-agnostic by construction: MIDI/CC message builders, sample-domain maths, and
+the sample rate read off the selected board descriptor. Nothing here knows whether
+the bytes travel over a UART or a USB sound card — that lives in host/transport/.
 
-def find_port():
-    """The board's UART. With more than one board plugged in, set XLS32_PORT to a full
-    /dev path or to any substring of one (e.g. the board's FTDI serial) to pick — otherwise
-    which board you get is just whichever serial number happens to sort last."""
-    want = os.environ.get("XLS32_PORT", "")
-    if want.startswith("/dev/"):
-        return want
-    for _ in range(10):
-        p = sorted(glob.glob("/dev/cu.usbserial-*"))
-        if want:
-            p = [d for d in p if want in d]
-        if p:
-            return p[-1]                      # channel B (…1) = UART; …0 = JTAG
-        time.sleep(0.5)
-    seen = sorted(glob.glob("/dev/cu.*"))
-    sys.exit(f"no {'matching ' if want else ''}/dev/cu.usbserial-* port found "
-             f"(board connected, powered on, and flashed?)"
-             + (f"\n  XLS32_PORT={want!r} matched none of: " if want else "\n  serial ports present: ")
-             + (", ".join(seen) or "(none)"))
+Split out of host/uartaudio.py in M20. The MIDI encoders are byte-for-byte the same;
+SR now comes from boards/<name>/board.py instead of being hardcoded to Basys 3's.
+"""
+import os, sys
 
-def list_ports():
-    """Every board UART currently enumerated — both channels of every FTDI on the bus."""
-    return sorted(glob.glob("/dev/cu.usbserial-*"))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from boards import get_board                                          # noqa: E402
 
-def open_port(rw=False, baud=BAUD):
-    dev = find_port()
-    flags = (os.O_RDWR if rw else os.O_RDONLY) | os.O_NOCTTY | os.O_NONBLOCK
-    fd = os.open(dev, flags)
-    a = termios.tcgetattr(fd)
-    a[2] = termios.CS8 | termios.CLOCAL | termios.CREAD; a[0] = 0; a[1] = 0; a[3] = 0
-    a[4] = a[5] = termios.B9600               # placeholder; real speed set below
-    termios.tcsetattr(fd, termios.TCSANOW, a)
-    fcntl.ioctl(fd, IOSSIOSPEED, array.array('i', [baud]), True)
-    return dev, fd
+BOARD = get_board()
+SR = BOARD.sr                 # Basys 3: 100 MHz / 3125 = 32 kHz, set by the ÷3 engine clock enable
 
-def read_bytes(fd, secs):
-    termios.tcflush(fd, termios.TCIFLUSH); time.sleep(0.05); termios.tcflush(fd, termios.TCIFLUSH)
-    buf = bytearray(); t0 = time.time()
-    while time.time() - t0 < secs:
-        try:
-            c = os.read(fd, 16384); buf += c if c else b""
-            if not c: time.sleep(0.001)
-        except BlockingIOError:
-            time.sleep(0.001)
-    return bytes(buf)
+def open_transport(board=None):
+    """The selected board's Transport. See host/transport/base.py."""
+    from transport.base import open_transport as _open
+    return _open(board or BOARD)
 
-class Recorder:
-    """Background thread that continuously drains the FTDI RX buffer so it never
-    overflows while the main thread sends MIDI. At 1 Mbaud a single dropped byte
-    misaligns the whole 16-bit stream (-> noise), so draining must not stall."""
-    def __init__(self, fd):
-        import threading
-        termios.tcflush(fd, termios.TCIFLUSH)
-        self.fd = fd; self.buf = bytearray(); self._run = True
-        self._t = threading.Thread(target=self._loop, daemon=True); self._t.start()
-    def _loop(self):
-        while self._run:
-            try:
-                c = os.read(self.fd, 65536)
-                if c: self.buf.extend(c)
-                else: time.sleep(0.0003)
-            except BlockingIOError:
-                time.sleep(0.0003)
-    def stop(self):
-        self._run = False; self._t.join(); return bytes(self.buf)
-
+# --- sample-domain maths (independent of how the samples arrived) ---
 def glitches(signed, thresh=18000):
     """Count sample-to-sample jumps > thresh (dropout/misalignment signature)."""
     return sum(1 for i in range(1, len(signed)) if abs(signed[i] - signed[i-1]) > thresh)
-
-def samples_from_bytes(buf, stereo=True):
-    """Little-endian unsigned 16-bit (centered 32768). Auto-pick byte alignment:
-    real audio is smooth, a 1-byte-shifted stream is noise. The board streams STEREO
-    (L,R interleaved, 4 bytes/frame), so by default we de-interleave to one channel at
-    the true Fs — otherwise every tone reads an octave low (2x samples). Pass stereo=False
-    for a mono board build."""
-    def decode(off):
-        n = (len(buf) - off) // 2
-        return [buf[off + 2*i] | (buf[off + 2*i + 1] << 8) for i in range(n)]
-    a0, a1 = decode(0), decode(1)
-    def rough(a):
-        seg = a[200:1200] if len(a) > 1200 else a
-        return sum(abs(seg[i] - seg[i-1]) for i in range(1, len(seg))) or 1
-    chosen = a0 if rough(a0) <= rough(a1) else a1
-    return chosen[::2] if stereo else chosen
 
 def to_signed(samples):
     return [s - 32768 for s in samples]       # unsigned(center 32768) -> signed 16-bit

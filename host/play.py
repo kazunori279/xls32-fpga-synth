@@ -3,7 +3,8 @@
 Usage: play.py [--wave sine|saw|square|tri] [note ...]   (default Amaj7)
 """
 import os, sys, time, termios
-from uartaudio import open_port, read_bytes, samples_from_bytes, note_on, note_off, set_wave, note_to_hz
+from transport.uart import open_port, read_bytes, samples_from_bytes
+from synth import note_on, note_off, set_wave, note_to_hz
 from analyze_fft import spectrum, find_peaks, pick_window
 
 WAVES = {"sine": 0, "saw": 1, "square": 2, "tri": 3}

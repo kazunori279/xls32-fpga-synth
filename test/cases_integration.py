@@ -4,10 +4,8 @@ import os, sys, time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "webui"))
-import uartaudio as U                        # noqa: E402
-from uartaudio import (note_on, note_off, cc, pitch_bend,               # noqa: E402
-                       set_wave, set_cutoff, set_reso, set_fmode, set_sub, set_pw,
-                       set_detune, set_unison, set_porta, set_fx, set_trem, set_room, set_reverb)
+from synth import (note_on, note_off, cc, pitch_bend, set_wave, set_cutoff, set_reso, set_fmode, set_sub,  # noqa: E402
+                   set_pw, set_detune, set_unison, set_porta, set_fx, set_trem, set_room, set_reverb)
 from harness import TestCase, mk            # noqa: E402
 import harness as H
 import analysis as A                         # noqa: E402

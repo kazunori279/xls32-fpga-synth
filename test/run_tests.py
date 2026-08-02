@@ -22,7 +22,7 @@ import harness as H            # noqa: E402
 import analysis as A           # noqa: E402
 import captions               # noqa: E402
 import cases_basic, cases_integration, cases_stress   # noqa: E402
-from uartaudio import SR       # noqa: E402
+from synth import SR  # noqa: E402
 
 OUT = os.path.join(_HERE, "out")
 SMOKE_IDS = {"pitch_a4", "wave_saw", "filter_lp_closed", "amp_release", "combo_lead", "stress_retrigger"}

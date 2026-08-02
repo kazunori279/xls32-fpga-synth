@@ -4,7 +4,8 @@
   analyze_fft.py --serial [sec]       # read from the UART (hardware)
 """
 import sys, math, statistics
-from uartaudio import SR, open_port, read_bytes, samples_from_bytes
+from transport.uart import open_port, read_bytes, samples_from_bytes
+from synth import SR
 
 def read_stdin():
     v = []

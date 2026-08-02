@@ -9,7 +9,8 @@ jumps (peak>0.9 & glitch-rate high) while the sim render is quiet. Stop webui/se
 import os, sys, json, glob, time
 import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host")))
-import uartaudio as u
+import transport.uart as uart
+import synth as u
 import engine
 from calibrate import NOTE, GATE, TAIL
 
@@ -22,7 +23,7 @@ CC_MAP = [("wave",70),("pw",75),("detune",78),("sub",73),("cutoff",74),("reso",7
 
 
 def _peak(fd, secs=0.3):
-    rec = u.Recorder(fd); time.sleep(secs); raw = bytes(rec.buf); rec._run = False
+    rec = uart.Recorder(fd); time.sleep(secs); raw = bytes(rec.buf); rec._run = False
     if len(raw) < 40: return 1.0
     s = np.array([(raw[2*i] | (raw[2*i+1] << 8)) - 32768 for i in range(len(raw)//2)], dtype=np.float32) / 32768
     return float(np.max(np.abs(s)))
@@ -45,7 +46,7 @@ def capture(fd, vals, note=NOTE, secs=CAP):
     for cid, cc in CC_MAP:
         if cid in vals: os.write(fd, u.cc(cc, vals[cid] & 0x7f)); time.sleep(0.003)
     time.sleep(0.04)
-    rec = u.Recorder(fd); os.write(fd, u.note_on(note, 100)); time.sleep(secs)
+    rec = uart.Recorder(fd); os.write(fd, u.note_on(note, 100)); time.sleep(secs)
     os.write(fd, u.note_off(note)); time.sleep(0.04); raw = bytes(rec.buf); rec._run = False
     off = min(range(4), key=lambda o: sum(1 for k in range(2000)
               if ((raw[o+2*k] | (raw[o+2*k+1] << 8)) & 1) != (k & 1))) if len(raw) > 4100 else 0
@@ -57,7 +58,7 @@ def capture(fd, vals, note=NOTE, secs=CAP):
 def main():
     src = os.environ.get("SRC", "soundfont")
     presets = json.load(open(os.path.join(WEBUI, f"presets_{src}.json")))["presets"]
-    dev, fd = u.open_port(rw=True)
+    dev, fd = uart.open_port(rw=True)
     print(f"board: {dev}   source: {src}   presets: {len(presets)}\n")
     engine.render(presets[0]["values"], gate_s=GATE, tail_s=TAIL)
     rail = []

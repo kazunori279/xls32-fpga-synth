@@ -5,8 +5,9 @@ chord without vs with the detuned 2nd oscillator (thin -> fat/beating).
 Usage: demo_m10.py [out.wav]"""
 import os, sys, time, struct, wave, termios
 import os as _o, sys as _s; _s.path.insert(0, _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))))  # put host/ on sys.path
-from uartaudio import (open_port, samples_from_bytes, to_signed, normalize, note_on, note_off,
-                       set_wave, set_cutoff, set_reso, set_pw, set_detune, cc, SR)
+from transport.uart import open_port, samples_from_bytes
+from synth import (to_signed, normalize, note_on, note_off, set_wave, set_cutoff, set_reso, set_pw,
+                   set_detune, cc, SR)
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "demo_m10.wav"

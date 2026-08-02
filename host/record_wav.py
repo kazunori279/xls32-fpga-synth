@@ -2,7 +2,8 @@
 """Play a chord and record the FPGA synth's 16-bit audio to a .wav.
 Usage: record_wav.py [seconds] [out.wav] [--wave sine|saw|square|tri] [note ...]"""
 import os, sys, time, struct, wave, termios
-from uartaudio import open_port, read_bytes, samples_from_bytes, to_signed, normalize, note_on, note_off, set_wave, SR
+from transport.uart import open_port, read_bytes, samples_from_bytes
+from synth import to_signed, normalize, note_on, note_off, set_wave, SR
 
 WAVES = {"sine": 0, "saw": 1, "square": 2, "tri": 3}
 

@@ -7,7 +7,8 @@ board, and reports the spectrogram loss split by feature usage (dry vs FX vs uni
 import os, sys, json, glob
 import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host")))
-import uartaudio as u
+import transport.uart as uart
+import synth as u
 import time
 import engine, loss
 from calibrate import board_capture, NOTE, GATE, TAIL
@@ -51,7 +52,7 @@ def main():
     src = os.environ.get("SRC", "soundfont")
     banks = load_bank()
     presets = sample(banks[src], PER_CAT)
-    dev, fd = u.open_port(rw=True)
+    dev, fd = uart.open_port(rw=True)
     print(f"board: {dev}   source: {src}   sampled: {len(presets)}")
     engine.render(presets[0]["values"], gate_s=GATE, tail_s=TAIL)   # warm JIT
     rows = []

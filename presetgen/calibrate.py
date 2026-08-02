@@ -9,7 +9,8 @@ Needs the board connected and the serial port free (stop webui/server.py first).
 import os, sys, time
 import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host")))
-import uartaudio as u
+import transport.uart as uart
+import synth as u
 import engine, loss, params
 
 def _w(v): return (v & 7) << 4
@@ -37,7 +38,7 @@ def board_capture(fd, preset, note=NOTE, secs=1.7):
                     ("trem",92),("unison",80),("porta",5),("fx",83),("room",91)]:
         if cid in preset: os.write(fd, u.cc(cc, preset[cid] & 0x7f)); time.sleep(0.004)
     time.sleep(0.05)
-    rec = u.Recorder(fd)
+    rec = uart.Recorder(fd)
     os.write(fd, u.note_on(note, 100)); time.sleep(secs); os.write(fd, u.note_off(note))
     time.sleep(0.05); raw = bytes(rec.buf); rec._run = False
     # de-interleave stereo (L marker LSB=0), return L as signed float
@@ -48,7 +49,7 @@ def board_capture(fd, preset, note=NOTE, secs=1.7):
     return L / 32768.0
 
 def main():
-    dev, fd = u.open_port(rw=True)
+    dev, fd = uart.open_port(rw=True)
     print(f"board: {dev}")
     engine.render(PROBES[0][1], gate_s=GATE, tail_s=TAIL)   # warm JIT
     ls = []

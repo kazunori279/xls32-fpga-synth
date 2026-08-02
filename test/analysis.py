@@ -7,7 +7,7 @@ import os, sys, math
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))   # import host helpers
 import analyze_fft                                                  # noqa: E402
-from uartaudio import SR, glitches                                  # noqa: E402
+from synth import SR, glitches  # noqa: E402
 
 # ---------- level ----------
 def rms(s):

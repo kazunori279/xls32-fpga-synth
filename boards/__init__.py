@@ -4,13 +4,18 @@ A *board* is everything that is not DSP: pins, clock rate, how the host talks to
 how a bitstream gets loaded. The engine itself (``core/synth.x``) never appears here
 and never learns which board it is running on.
 
-Pick a board with ``--board`` or ``$XLS32_BOARD``; the default is ``basys3``, so every
-command that worked before the boards/ split still works unchanged.
+Pick a board with ``$XLS32_BOARD``; the default is ``basys3``, so every command that
+worked before the boards/ split still works unchanged.
 
     from boards import get_board
     b = get_board()          # honours $XLS32_BOARD
     b.sr                     # 32000
     b.transport              # "uart"
+
+``host/synth.py`` binds ``SR`` at import time, so the variable has to be set in the
+environment before python starts — not from an argparse flag halfway down a main().
+A real ``--board`` flag can land once a second board actually builds (M25); adding one
+now would only look like it worked.
 """
 import os
 from dataclasses import dataclass, field
@@ -65,10 +70,3 @@ def get_board(name=None):
         raise SystemExit(
             f"unknown board {name!r}; known boards: {', '.join(names())}"
         ) from None
-
-
-def add_board_argument(parser, **kw):
-    """Add a uniform --board flag to an argparse parser."""
-    parser.add_argument("--board", default=None, choices=names(),
-                        help=f"target board (default: $XLS32_BOARD or {DEFAULT})", **kw)
-    return parser

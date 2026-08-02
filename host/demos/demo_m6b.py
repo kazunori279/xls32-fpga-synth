@@ -5,8 +5,8 @@ Part 2 plays an ascending run at a *fixed* cutoff so key-tracking is audible/vis
 (higher notes get brighter). Records to a .wav. Usage: demo_m6b.py [out.wav]"""
 import os, sys, time, struct, wave, termios
 import os as _o, sys as _s; _s.path.insert(0, _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))))  # put host/ on sys.path
-from uartaudio import (open_port, samples_from_bytes, to_signed, normalize,
-                       note_on, note_off, set_wave, set_cutoff, set_reso, cc, SR)
+from transport.uart import open_port, samples_from_bytes
+from synth import to_signed, normalize, note_on, note_off, set_wave, set_cutoff, set_reso, cc, SR
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "demo_m6b.wav"

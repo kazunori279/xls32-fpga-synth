@@ -4,9 +4,8 @@ can FAIL). Primary metrics: glitch count, clip ratio, and post-release silence."
 import os, sys, time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
-import uartaudio as U                        # noqa: E402
-from uartaudio import (note_on, note_off, cc,                          # noqa: E402
-                       set_wave, set_cutoff, set_reso, set_fmode, set_unison, set_fx, set_room, set_reverb)
+from synth import (note_on, note_off, cc, set_wave, set_cutoff, set_reso, set_fmode, set_unison, set_fx,  # noqa: E402
+                   set_room, set_reverb)
 from harness import TestCase, mk            # noqa: E402
 import harness as H
 import analysis as A                         # noqa: E402

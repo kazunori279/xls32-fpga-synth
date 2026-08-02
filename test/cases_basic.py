@@ -3,11 +3,9 @@ the board and grades the captured audio against an expected-outcome rubric (0-10
 import os, sys, time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
-import uartaudio as U                       # noqa: E402
-from uartaudio import (note_on, note_off, cc, pitch_bend,                 # noqa: E402
-                       set_wave, set_cutoff, set_reso, set_fmode, set_sub, set_pw,
-                       set_detune, set_unison, set_vib, set_porta, set_fx, set_trem, set_room,
-                       set_reverb, set_echo_depth, set_delay_time)
+from synth import (note_on, note_off, cc, pitch_bend, set_wave, set_cutoff, set_reso, set_fmode, set_sub,  # noqa: E402
+                   set_pw, set_detune, set_unison, set_vib, set_porta, set_fx, set_trem, set_room,
+                   set_reverb, set_echo_depth, set_delay_time)
 from harness import TestCase, mk           # noqa: E402
 import harness as H
 import analysis as A                        # noqa: E402

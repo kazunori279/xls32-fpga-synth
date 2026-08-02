@@ -11,9 +11,9 @@ import os, sys, asyncio, threading, time, array, json, contextlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "host"))       # import the project's uartaudio helpers
+sys.path.insert(0, str(HERE.parent / "host"))       # import the project's host helpers
 sys.path.insert(0, str(HERE.parent / "presetgen"))  # import the demo generator (for /api/demo)
-import uartaudio                                # noqa: E402
+import transport.uart as uart              # noqa: E402  (the board's audio/MIDI link)
 import synthspec                                # noqa: E402
 import build_demos                              # noqa: E402  (make_random for the DEMO "replace")
 
@@ -117,7 +117,7 @@ class Bridge:
 
     def open(self):
         try:
-            self.dev, self.fd = uartaudio.open_port(rw=True)
+            self.dev, self.fd = uart.open_port(rw=True)
             print(f"[bridge] serial open: {self.dev}")
         except SystemExit as e:
             print(f"[bridge] no board ({e}); UI will serve without audio/MIDI")
