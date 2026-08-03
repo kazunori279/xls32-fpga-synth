@@ -4,9 +4,10 @@ A plan to run the XLS32 engine on **[Tiliqua](https://apfaudio.github.io/tiliqua
 `TLQ-SCREEN`) alongside the existing Basys 3 target, and to restructure the repo so both boards are
 first-class.
 
-Status: **plan only** — nothing here is built yet, but §1.1 records measurements taken on the real
-module, so the constraints below are no longer estimates. Milestones continue the numbering in
-[DEVELOPMENT.md](../DEVELOPMENT.md) (M1 → M19 + Web UI), so this starts at **M20**.
+Status: **M20 and M21 are done**; M22 onward is still plan. §1.1 records measurements taken on the
+real module and M21 records measurements taken on the real toolchain, so the constraints below are
+not estimates. Milestones continue the numbering in [DEVELOPMENT.md](../DEVELOPMENT.md)
+(M1 → M19 + Web UI), so this starts at **M20**.
 
 ---
 
@@ -157,32 +158,47 @@ The answer is the HyperRAM: Tiliqua ships `tiliqua/periph/psram.py`, `tiliqua/ds
 `tiliqua/dsp/delay_effect.py` — PSRAM-backed delay lines are the idiomatic Tiliqua way to do exactly
 this. The effects get **rewritten against that library**, not ported line-by-line.
 
-### 2.3 Clocking — 32 voices × 32 clocks/sample
+### 2.3 Clocking — the cost of a sample is `--pipeline_stages`, not 32
 
-The engine is one voice per engine-cycle, 32 cycles per sample (`rtl/synth.x`, `proc engine`). At
-32 kHz that needs an effective engine clock of **≥ ~32.8 MHz**, and the design currently closes at
-**~18.5 ns** on Artix-7 with DSP48 — hence ÷3 from 100 MHz (30 ns budget, ~10 ns margin).
+> **This section was wrong until M21 measured it.** It read "one voice per engine-cycle, 32 cycles
+> per sample… at 32 kHz that needs ≥ ~32.8 MHz". Those two claims cannot both be true — 32 cycles
+> at 32 kHz is 1.02 MHz, not 32.8 MHz, a factor of 32. The right number was never derived, only
+> back-fitted from the Basys 3 ÷3 divider that happened to work. It is now measured directly
+> (`boards/tiliqua/spike/tb_rate.v`: count clocks between `audio_out` handshakes with `ce` tied
+> high), and the answer is neither figure.
 
-On Tiliqua:
+**One sample costs 32 × (roughly `STAGES`/2) engine cycles.** The voice ring is 32 iterations, but
+each iteration re-enters a pipeline whose recurrence forces an initiation interval that scales with
+the schedule depth. Measured, at 32 voices:
 
-| Option | Effective engine clock | Path budget | Verdict |
-|---|---|---|---|
-| `sync` ÷1 | 60 MHz | **16.7 ns** | 1.8× throughput headroom, but ~2× faster paths than proven — unlikely on ECP5 fabric |
-| `sync` ÷2 | 30 MHz | **33 ns** | Budget matches what already closes — but 8.5% short of 32.8 MHz → 29 kHz @ 32 voices, or 32 kHz @ 29 voices |
-| dedicated PLL output ≈ 33–35 MHz | 33–35 MHz | ~30 ns | **Recommended.** Exactly the proven budget with full 32 voices @ 32 kHz. Needs a free `EHXPLLL` output and an async FIFO on the MIDI/audio channels |
+| `STAGES` | 6 | 8 | 10 | 12 | 16 | 20 | 24 | 32 | 40 | 48 | 64 | 80 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cycles/sample | 128 | 160 | 192 | 224 | 320 | 384 | 416 | 512 | 640 | 768 | 928 | 1216 |
 
-**Measured evidence for the third row.** Building the vendor's own `usb_audio` top — a *shell*, with
-no DSP in it at all — nextpnr reports `$glbnet$clk` **58.66 MHz, FAIL against the 60 MHz
-constraint** on the first pass, recovering to **66.49 MHz PASS** only after retiming. The stock
-`sync` domain barely makes its own timing with nothing of ours in it. Hanging a 30 ns DSP pipeline
-off that clock is not a realistic plan; give the engine its own PLL output.
+This reframes the whole clocking question. The shipping Basys 3 build is `STAGES=48` → **768 cycles
+per sample**, and its ÷3 enable gives 33.3 MHz, i.e. a 43.4 kHz ceiling against the 32 kHz it
+actually runs. That matches the note in `boards/basys3/rtl/top.v` that ÷4 "capped at 28 kHz".
 
-ECP5 LUT4 fabric is generally slower per level than Artix-7, so even 30 ns is not free — expect to
-re-tune `--pipeline_stages` upward. That trades FFs, and FFs are also tight (17,445 used of 24,288
-available).
+Because both the required clock *and* the achievable Fmax rise with `STAGES`, raising it does not
+buy throughput — it buys timing slack and spends flip-flops. The sustainable sample rate is
+`Fmax / cycles_per_sample`, and on ECP5 that stays **above 57 kHz at every `STAGES` that fits**
+(§M21 table). **Sample rate is therefore not a constraint on this port at all.** Area is.
 
-**Fallback ladder, in order:** 32 voices → 24 voices → 16 voices → 2 parts instead of 4. Each step
-is a `synth.x` constant, and each buys both timing and area.
+| Option | Verdict |
+|---|---|
+| `sync` ÷1 (60 MHz) | **Not available.** No `STAGES` reaches 60 MHz on ECP5; the best is 59.2 MHz at `STAGES=48`, which also costs 70% of the device's flip-flops |
+| `sync` with a clock enable | **Not available either.** A clock enable does not relax a register-to-register path — the design still has to close at 60 MHz. Basys 3 gets away with ÷3 only because Vivado is given a multicycle constraint; nextpnr-ecp5 has no equivalent |
+| dedicated PLL output, ~12–25 MHz | **Recommended, and now with numbers.** At the chosen `STAGES=12` the engine closes at 27.5 MHz and needs 224 × 48 kHz = **10.8 MHz**. Needs a free `EHXPLLL` output and an async FIFO on the MIDI/audio channels |
+
+**Why the third row was already the right call.** Building the vendor's own `usb_audio` top — a
+*shell*, with no DSP in it at all — nextpnr reports `$glbnet$clk` **58.66 MHz, FAIL against the
+60 MHz constraint** on the first pass, recovering to **66.49 MHz PASS** only after retiming. The
+stock `sync` domain barely makes its own timing with nothing of ours in it.
+
+**Fallback ladder, in order:** 32 voices → 24 voices → 16 voices → 2 parts instead of 4. M21
+measured the first two rungs and **found them unnecessary** — 32 voices × 4 parts fits. They are
+kept here costed, because the video/SoC shell is a much larger tenant than the audio-only one this
+was measured against.
 
 ### 2.4 The verification loop — 115200 baud kills it
 
@@ -338,12 +354,78 @@ The gateware was byte-identical across the move, so this isolates the host split
 -M` shows `synth.x` and `top.v` as pure renames with zero content change, and the one line that did
 change is a comment in `basys3_nextpnr.xdc`.
 
-**M21 · ECP5 feasibility spike** *(decision gate)*
+**M21 ✅ · ECP5 feasibility spike** *(decision gate — passed)*
 Build `core/engine.v` standalone for `LFE5U-25F` with yosys + nextpnr-ecp5 — no Tiliqua
 infrastructure, no effects, a stub top that ties the channels off. Sweep `STAGES` and voice count.
 *Exit:* a table of `TRELLIS_COMB` / `TRELLIS_FF` / `DP16KD` / `MULT18X18D` / Fmax vs
 (STAGES, VOICES, PARTS), and a chosen operating point. This decides everything downstream — if
 32 voices/4 parts cannot fit, the fallback ladder (§2.3) is applied here, once, in DSLX.
+
+**Verdict: 32 voices × 4 parts fits an `LFE5U-25F`. No fallback rung is needed.**
+
+Harness in `boards/tiliqua/spike/` — `stub_top.v` (drives every engine input from a real pin so
+nothing constant-folds away, XOR-reduces every output so nothing is dead logic), `ecp5_build.sh`,
+`scrape.py`, `sweep.sh`, `tb_rate.v`, `voices_variant.py`. Device `--25k --package CABGA256
+--speed 6`; yosys 0.67 / nextpnr-ecp5 0.10 via yowasp, XLS codegen via the existing amd64 container.
+All runs constrained to 60 MHz, so the reported Fmax is best-effort rather than "just met".
+
+**32 voices / 4 parts, `STAGES` swept**
+
+| `STAGES` | TRELLIS_COMB | TRELLIS_FF | DP16KD | MULT18X18D | Fmax | cycles/sample | max SR |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6 | 16,025 (66%) | 9,961 (41%) | 0 | 23 (82%) | 15.72 MHz | 128 | 123 kHz |
+| 8 | 16,716 (69%) | 9,133 (38%) | 0 | 24 (86%) | 18.21 MHz | 160 | 114 kHz |
+| 10 | 16,489 (68%) | 9,245 (38%) | 0 | 24 (86%) | 24.43 MHz | 192 | 127 kHz |
+| **12** | **15,944 (66%)** | **9,122 (38%)** | **0** | **24 (86%)** | **27.49 MHz** | **224** | **123 kHz** |
+| 16 | 16,503 (68%) | 12,075 (50%) | 0 | 24 (86%) | 36.06 MHz | 320 | 113 kHz |
+| 20 | 15,954 (66%) | 11,334 (47%) | 0 | 24 (86%) | 37.96 MHz | 384 | 99 kHz |
+| 24 | 16,051 (66%) | 12,710 (52%) | 0 | 24 (86%) | 45.30 MHz | 416 | 109 kHz |
+| 32 | 15,951 (66%) | 13,646 (56%) | 0 | 24 (86%) | 46.99 MHz | 512 | 92 kHz |
+| 40 | 16,802 (69%) | 16,016 (66%) | 0 | 24 (86%) | 49.04 MHz | 640 | 77 kHz |
+| 48 | 16,566 (68%) | 16,913 (70%) | 0 | 24 (86%) | 59.20 MHz | 768 | 77 kHz |
+| 64 | 16,518 (68%) | 21,690 (89%) | 0 | 24 (86%) | 52.80 MHz | 928 | 57 kHz |
+| 80 | 20,609 (85%)¹ | 24,190 (100%)¹ | 0 | 24 | — | 1216 | **NOFIT** |
+
+¹ pre-pack yosys counts — a run that never places leaves no nextpnr report.
+
+**`STAGES=12`, voice count swept** (4 parts throughout; `voices_variant.py` rewrites a throwaway
+copy of `synth.x`, and asserts the count of every rewrite so a future edit fails loudly rather than
+producing a 32-voice build under a 16-voice filename):
+
+| VOICES | TRELLIS_COMB | TRELLIS_FF | DP16KD | MULT18X18D | Fmax | cycles/sample | max SR |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 11,014 (45%) | 4,528 (19%) | 0 | 24 (86%) | 33.30 MHz | 80 | 416 kHz |
+| 24 | 11,662 (48%) | 5,517 (23%) | 0 | 24 (86%) | 32.06 MHz | 144 | 223 kHz |
+| **32** | **15,944 (66%)** | **9,122 (38%)** | **0** | **24 (86%)** | **27.49 MHz** | **224** | **123 kHz** |
+
+**Chosen operating point: 32 voices, 4 parts, `STAGES=12`, on a dedicated `EHXPLLL` output.**
+`STAGES=12` is the knee: below it flip-flops stop falling and Fmax keeps dropping (`STAGES=8` costs
+*more* FFs than 12 and runs 34% slower). Against the measured audio-only shell (1,768 COMB / 731 FF
+/ 0 BRAM / 1 DSP, §1):
+
+| | engine | + shell | available | |
+|---|---:|---:|---:|---|
+| TRELLIS_COMB | 15,944 | 17,712 | 24,288 | 73% |
+| TRELLIS_FF | 9,122 | 9,853 | 24,288 | 41% |
+| DP16KD | 0 | 0 | 56 | **0%** |
+| MULT18X18D | 24 | 25 | 28 | **89%** |
+
+Three findings that outlive this milestone:
+
+- **`MULT18X18D` is the binding resource, and voice count does not touch it.** 24 multipliers at
+  every point in both sweeps — they sit in the shared one-voice-per-cycle datapath, not in the ring,
+  so cutting to 16 voices frees LUTs and FFs and *no* DSPs. Three spare after the shell. This is
+  exactly what **M22** exists to fix, and M21 confirms it is not optional busywork.
+- **Zero of 56 BRAM tiles are used.** yosys reports 42 `Replacing memory … with list of registers`
+  warnings: the voice and part arrays are being flattened into flip-flops. That is the single
+  largest untapped lever on this device — but it is an optimisation, not a blocker, so it is not
+  being spent now.
+- **`TRELLIS_COMB` is flat at ~16k across every `STAGES`.** Pipeline depth moves flip-flops, never
+  combinational area. Any real LUT reduction has to come from the DSLX, not the schedule.
+
+**Scope note.** These numbers are against the *audio-only* shell. The video/SoC shell (DVI
+framebuffer + VexRiscv) is a far larger tenant and was not measured; if M27/M28 take that path, the
+16- and 24-voice rungs above are already costed.
 
 **M22 · Narrow the arithmetic to 18×18**
 Rework the multiplies in `synth.x` that currently exploit DSP48's 25×18 asymmetry so each fits one

@@ -79,6 +79,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **Web UI ✅** | Browser **synth panel** (live MIDI in + audio out + ADSR over CC) | **RMS rises on note; slow-attack pad vs fast bass audible** |
 | 16+ | 24 dB filter / self-osc / drive (cascade a 2nd SVF pole + saturation), **ring/FM ✅ (M19)**, osc sync, exp. envelopes, LFO shapes, aftertouch / mod matrix | — |
 | **20 ✅** | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | **A/B against the pre-move commit on the same board: 98.4 → 98.6, 152/175 bit-identical, same 3 pre-existing FAILs** |
+| **21 ✅** | **ECP5 feasibility spike** (decision gate): engine alone on `LFE5U-25F`, `STAGES` × voice-count sweep | **32 voices × 4 parts fit: 66% LUT / 38% FF / 0 BRAM / 86% DSP at `STAGES=12`. No fallback rung needed** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -945,6 +946,64 @@ bank and the control list, and still raises.
 is not. It is a property of the offline model — the `BASE_INC` phase increments are tuned to it and
 the calibration bank was fitted at it. Repointing it at the board's 32 kHz would have invalidated
 every stored preset while looking like a tidy-up.
+
+## Milestone 21 — does it fit on an ECP5? (decision gate, passed)
+
+**The question:** the whole Tiliqua port is conditional on the engine fitting an `LFE5U-25F`, which
+has 24,288 LUT4-equivalents against the Artix-7's 20,800 LUT6 — *fewer* logic cells, in a coarser
+form. If 32 voices × 4 parts could not fit, the fallback ladder had to be applied once, in DSLX,
+before any Tiliqua infrastructure was written. **It fits**, at 66% LUT / 38% FF / 0 BRAM / 86% DSP.
+The full table is in [the port plan](docs/TILIQUA_PORT.md) (M21); what follows is what the exercise
+taught that the table does not say.
+
+**Two toolchains, two sandboxes, and they disagree about what a path is.** XLS ships linux-x64 only,
+so codegen runs in an amd64 container — which can mount `/tmp`, so that is where the slow codegen
+output is cached. yosys and nextpnr come from yowasp, which is WebAssembly under WASI and **can only
+open files beneath its working directory**. Handing it `/tmp/…/engine.v` fails with `File '…' not
+found or is a directory` — a message that reads like a missing file and is actually a permissions
+model. An hour went into "fixing" the file before a two-line probe (`read_verilog /tmp/x.v` vs
+`read_verilog build/x.v`) found it. The build script now caches in `/tmp` and stages a copy into the
+repo tree, passing only relative paths to the wasm tools.
+
+**A spike top that ties its inputs off measures nothing.** Constant-drive an engine input and yosys
+constant-folds the datapath behind it; the resulting utilisation number describes a design that does
+not exist. `stub_top.v` drives every input from a real pin (the MIDI byte through a shift register,
+so even the byte cannot be folded), and XOR-reduces every output into a real pin so nothing is dead.
+The reduction tree costs a few dozen LUTs against an engine in the thousands.
+
+**The measurement that changed the conclusion.** The resource sweep alone cannot pick an operating
+point, because whether a build sustains 48 kHz depends on its *achieved* initiation interval — and
+this document already recorded that the real II sits far below the `worst_case_throughput` cap
+without ever saying what it was. The port plan meanwhile claimed both "32 cycles per sample" and
+"needs ≥ 32.8 MHz", which differ by a factor of 32; the second was back-fitted from the Basys 3
+divider that happened to work. `boards/tiliqua/spike/tb_rate.v` just counts clocks between
+`audio_out` handshakes with `ce` tied high. The answer is **32 × roughly `STAGES`/2** — 768 cycles
+per sample at the shipping `STAGES=48`, matching `top.v`'s note that ÷4 "capped at 28 kHz".
+
+That inverts how the sweep reads. Raising `STAGES` raises Fmax *and* raises the clock you need, so
+it buys no throughput — only timing slack, paid for in flip-flops. Sustainable rate is
+`Fmax / cycles`, which never drops below 57 kHz anywhere in the table. **Sample rate was never a
+constraint on this port; area is.** Read as a Fmax column the table says `STAGES=48`; read correctly
+it says `STAGES=12`, which is 7,791 flip-flops — 32% of the device — cheaper.
+
+**What the sweep found that no single build would have.** `TRELLIS_COMB` is flat at ~16k across
+every `STAGES` from 6 to 64: pipeline depth moves flip-flops and never combinational area. And
+`MULT18X18D` is pinned at 24 across *both* sweeps, voice count included — the multipliers live in
+the shared one-voice-per-cycle datapath, not in the ring, so dropping to 16 voices frees 4,930 LUTs
+and zero DSPs. With the shell that is 25 of 28, three spare, and it is the only resource anywhere
+near its limit. M22 (narrow the arithmetic to 18×18) was speculative when it was written; it is now
+the load-bearing next step.
+
+**Not spent:** all 56 BRAM tiles are idle, because yosys flattens the voice and part arrays into
+registers (42 `Replacing memory … with list of registers` warnings at the chosen point). That is the largest untapped
+lever on the device. It is an optimisation, not a blocker, so it stays banked.
+
+**On rewriting production DSLX to measure it.** The voice count in `synth.x` is bare literals, not a
+constant, so a voice sweep meant either parameterising the shipping Basys 3 gateware for a
+measurement or rewriting a throwaway copy. `voices_variant.py` does the latter, and asserts the
+match count of every rewrite — which immediately caught two of its own bugs (`Voice[32]` occurs 10
+times, not 6; `\bu5\b` also matches the `u5` inside `u5:31`). Its self-check is that `--voices 32`
+must reproduce `core/synth.x` byte for byte.
 
 ---
 

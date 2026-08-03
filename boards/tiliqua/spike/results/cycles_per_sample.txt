@@ -1,0 +1,25 @@
+# Engine cycles between successive audio_out handshakes, ce tied high, sink always ready.
+# Measured with boards/tiliqua/spike/tb_rate.v under iverilog. In steady state min == max == mean
+# at every point, so one number per config is the whole story.
+#
+# Required engine clock for a target rate = cycles * SR.
+# Sustainable rate for a given build      = Fmax / cycles.
+#
+# 32 voices, 4 parts:
+STAGES=6    128
+STAGES=8    160
+STAGES=10   192
+STAGES=12   224
+STAGES=16   320
+STAGES=20   384
+STAGES=24   416
+STAGES=32   512
+STAGES=40   640
+STAGES=48   768
+STAGES=64   928
+STAGES=80   1216
+
+# STAGES=12, 4 parts:
+VOICES=16   80
+VOICES=24   144
+VOICES=32   224
