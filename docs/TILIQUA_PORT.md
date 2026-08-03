@@ -50,9 +50,14 @@ this document, this subsection wins.
 
 - Screen EDID resolves to `DVIModeline { h_active: 720, v_active: 720, pixel_clk_mhz: 39.07,
   rotate: Left }`, and the firmware logs `detected tiliqua screen! rotate framebuffer 90 degrees`.
-- **The SI5351 is reconfigured per bitstream.** The bootloader runs `clk0=12288000Hz` (→ 48 kHz);
-  XBEAM runs `clk0=49152000Hz` (→ 192 kHz). `clk1` is the pixel clock, 39.07 MHz here. So the
-  audio rate is a property of the bitstream, and XLS32 picks the 12.288 MHz / 48 kHz variant.
+- **The SI5351 is reconfigured per *boot*, by the bootloader — not per bitstream.** The bootloader
+  runs `clk0=12288000Hz` (→ 48 kHz); booting XBEAM from the menu reprograms it to
+  `clk0=49152000Hz` (→ 192 kHz) from that slot's manifest. `clk1` is the pixel clock, 39.07 MHz
+  here. XLS32 wants the 12.288 MHz / 48 kHz variant. **An SRAM load over JTAG programs nothing**,
+  so it inherits whatever the last-booted slot left behind — which is how M25 lost a day to a note
+  2,616 cents sharp, and is the lead (an unsatisfying one) for the withdrawn dropout numbers
+  below. See §2.7 and risk 3c; `check_loop.py` and `run_tests.py` now measure the clock before
+  grading anything.
 - `ak4619/codec: register config looks healthy`, `audio/calibration: looks good! switch to it`.
 - PSRAM is exercised on every boot — the bootloader copies 163 KiB of firmware into
   `0x20200000..0x20228d30`. §2.2's escape hatch is real hardware that demonstrably works.
@@ -141,7 +146,10 @@ in the design, or read the EEPROM from a small state machine and apply the offse
 
 ---
 
-## 2. The four hard constraints (read this before planning work)
+## 2. The six hard constraints (read this before planning work)
+
+Four were known before the port started (§2.1–§2.4); §2.6 and §2.7 were found in M25 and are
+numbered in the order they were hit, not by severity.
 
 ### 2.1 Multipliers — the binding constraint
 
@@ -220,9 +228,10 @@ milestone** — until it works, the agent loop is blind, so it comes early (M25)
 
 **Confirmed on hardware (§1.1).** Recording 4×24-bit from Tiliqua over `usb2` with `sounddevice`
 works today using the stock XBEAM bitstream, so M25 is *integration*, not invention: wire
-`tiliqua/usb_audio/` into our own top and port the host side onto it. What is *not* yet solved is
-gap-free capture — ~2.5% of frames still arrive zero-filled. Treat "0 dropped frames over 10 s at
-48 kHz" as M25's real exit criterion, not mere enumeration.
+`tiliqua/usb_audio/` into our own top and port the host side onto it. Gap-free capture was written
+here as the open question, on the strength of a ~2.5% zero-frame rate that has since been
+**withdrawn** (§1.1). M25 kept the exit criterion anyway — "0 dropped frames over 10 s at 48 kHz",
+not mere enumeration — and met it: `check_loop.py` reports **0.00% gaps**.
 
 Stopgap if USB audio slips: a decimated debug stream (e.g. 4 kHz mono 8-bit ≈ 32 kbps) fits inside
 115200 and is enough for pitch/envelope grading, which is what M1–M3 used anyway.
