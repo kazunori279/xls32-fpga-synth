@@ -313,18 +313,30 @@ existing loop.
 
 ### Phase A — foundations
 
-**M20 · Restructure for two boards** — *code done; awaiting the hardware regression*
+**M20 · Restructure for two boards** — ✅ **done, hardware-verified**
 Move to the layout in §3. Split `host/uartaudio.py` into `host/transport/uart.py` +
 `host/synth.py`. Add `boards/*/board.py` descriptors and `$XLS32_BOARD` plumbing through `host/`,
 `webui/`, `test/`, `presetgen/`.
 *Exit:* `uv run python test/run_tests.py` on Basys 3 scores within noise of the pre-move report.
 
-Done so far, with no board attached: 26 importers rewritten, `core/codegen.sh` extracted, docs
-repathed. Verified statically — all 35 MIDI builders plus `pitch_bend`, `note_to_hz`, `glitches`,
-`samples_from_bytes`, `to_signed` and `normalize` snapshotted to JSON before the split produce
-**byte-identical** output after it; every entry point still resolves its imports; every doc link
-and script path points at a file that exists. That covers the pure functions and the wiring, but
-not the wire — the exit criterion above still needs the Basys 3 plugged in.
+**Met.** No pre-move report existed to diff against — `test/out/` is generated and no score was
+ever committed — so the baseline was produced by checking `59d1e8e` out into a worktree and running
+the suite there on the *same board, same bitstream, same session*, back to back with the new tree:
+
+| | overall | PASS | WARN | FAIL |
+|---|---|---|---|---|
+| before (`59d1e8e`) | 98.4 A+ | 170 | 2 | 3 |
+| after (M20) | **98.6 A+** | 172 | 0 | 3 |
+
+**152 of 175 cases scored bit-identically**, mean delta +0.17, per-case stdev 2.10. The three FAILs
+are the *same three* on both sides (`pitch_a4`, `filter_sweep`, `combo_wah`) — pre-existing, not
+introduced here. The only two verdict flips both went WARN→PASS, and their metrics say why: the
+before run clipped those presets (peak 32640, 5.0% clip) where the after run did not (peak 17026,
+0.0%) — residual level from the preceding case, not a code difference.
+
+The gateware was byte-identical across the move, so this isolates the host split cleanly: `git diff
+-M` shows `synth.x` and `top.v` as pure renames with zero content change, and the one line that did
+change is a comment in `basys3_nextpnr.xdc`.
 
 **M21 · ECP5 feasibility spike** *(decision gate)*
 Build `core/engine.v` standalone for `LFE5U-25F` with yosys + nextpnr-ecp5 — no Tiliqua

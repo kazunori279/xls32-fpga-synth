@@ -78,7 +78,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **15 ✅** | ⭐ **unison** (voice-stacking, detune + phase-decorrelation) | **thick super-saw; beating 2%→37% as voices stack** |
 | **Web UI ✅** | Browser **synth panel** (live MIDI in + audio out + ADSR over CC) | **RMS rises on note; slow-attack pad vs fast bass audible** |
 | 16+ | 24 dB filter / self-osc / drive (cascade a 2nd SVF pole + saturation), **ring/FM ✅ (M19)**, osc sync, exp. envelopes, LFO shapes, aftertouch / mod matrix | — |
-| 20 ◐ | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | pure functions byte-identical across the split; **Basys 3 e2e regression pending** |
+| **20 ✅** | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | **A/B against the pre-move commit on the same board: 98.4 → 98.6, 152/175 bit-identical, same 3 pre-existing FAILs** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -885,7 +885,7 @@ once they arrive the plan is: flash, wire (breakout at 3.3 V → JA1; DAC → JB
 > DIN-IN. *FPGA→speakers:* UDA1334A BCLK←JB1, WSEL←JB2, DIN←JB3, VIN←JB pin 6 (3.3 V), GND←JB pin 5;
 > DAC 3.5 mm line-out → speaker aux-in. Flash with `openFPGALoader -b basys3 build/top.bit`.
 
-## Milestone 20 — one synth, two boards (code done; Basys 3 regression pending)
+## Milestone 20 — one synth, two boards (done, hardware-verified)
 
 The first milestone that adds no sound. A second target — the [Tiliqua](docs/TILIQUA_PORT.md), an
 ECP5 Eurorack module — meant the tree had to stop assuming there was only ever one board, and the
@@ -910,13 +910,36 @@ build scripts, and the copies had drifted: `build.sh` hardcoded `--pipeline_stag
 scripts honoured `$STAGES`. Sweeping `STAGES` therefore did nothing on a local build. One script
 now, called by every board.
 
-**Verifying a refactor with no board attached.** The exit criterion is a hardware e2e score, but
-the Basys 3 wasn't plugged in — so the check was pushed as far as it would go statically. All 35
-MIDI builders, plus `pitch_bend` across a sweep, `note_to_hz`, `glitches`, `to_signed`, `normalize`
-and `samples_from_bytes` (stereo and mono), were snapshotted to JSON *before* the split and
-re-run after: byte-identical. Every entry point still resolves its imports; every doc link and
-script path resolves to a file that exists. That pins the pure functions and the wiring. It says
-nothing about the wire, which is exactly what the hardware run is for.
+**Verifying a refactor with no board attached.** The board wasn't plugged in when the work was
+done, so the check was pushed as far as it would go statically. All 35 MIDI builders, plus
+`pitch_bend` across a sweep, `note_to_hz`, `glitches`, `to_signed`, `normalize` and
+`samples_from_bytes` (stereo and mono), were snapshotted to JSON *before* the split and re-run
+after: byte-identical. Every entry point still resolves its imports; every doc link and script path
+resolves to a file that exists. That pins the pure functions and the wiring, and says nothing about
+the wire — which is what the hardware run below is for.
+
+**The baseline that didn't exist.** "Scores the same as before the move" needs a *before*, and
+there wasn't one: `test/out/` is generated, gitignored, and no score had ever been committed. So
+the baseline was manufactured — `git worktree add` at the pre-move commit, and both trees run
+back-to-back against the same board, the same flashed bitstream and the same session. That is a
+better control than a stored number anyway, since it cancels out board temperature, host load and
+whatever the converters were doing that day.
+
+The gateware being byte-identical across the move is what makes the comparison clean: `git diff -M`
+reports `synth.x` and `top.v` as pure renames, zero content change, so any score delta has to come
+from the host split. Result: **98.4 → 98.6**, 152 of 175 cases bit-identical, mean delta +0.17,
+per-case stdev 2.10, and the same three pre-existing FAILs on both sides. The two verdict flips
+both went WARN→PASS because the *before* run happened to clip those presets (peak 32640, 5.0% clip
+vs 17026, 0.0%) — residual level from the preceding case, which is exactly the noise the stdev
+describes.
+
+**Running the suite at all needed a fix first.** It died at test 41 on `KeyError: 'fx'`. All 128
+factory presets carry an `fx` value from when CC83 selected an effect mode; CC83 is ignored now
+(effects are depth-gated via CC93/94/95) and `synthspec` dropped the control, but the stored bank
+kept the key. Pre-existing — it reproduces at the pre-move commit — so the same one-line patch went
+into *both* trees before the A/B, or the comparison would have been measuring the patch. The fix
+skips `fx` **by name**: a preset naming any *other* undefined control is real drift between the
+bank and the control list, and still raises.
 
 **A correction worth recording:** `presetgen/engine.py`'s `SR = 28000` looks like a board rate and
 is not. It is a property of the offline model — the `BASE_INC` phase increments are tuned to it and
