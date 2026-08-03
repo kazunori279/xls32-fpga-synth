@@ -447,6 +447,10 @@ bit-exact — see [DEVELOPMENT.md](../DEVELOPMENT.md) (Milestone 22) for the rea
 With the audio-only shell that is **20 of 28 tiles (71%)**, eight spare where there were three.
 `MULT18X18D` is no longer the binding resource — `TRELLIS_COMB` is, at 73%.
 
+The Basys 3 side paid nothing for it. A full Vivado run on `xc7a35t` at `STAGES=48`: **26 DSP48E1
+unchanged**, Slice LUTs **10,483 → 10,405**, worst data-path delay **18.872 → 18.556 ns**, and
+3,000 audio samples bit-identical.
+
 ### Phase B — first sound
 
 **M23 · Hello Tiliqua — audio-only bitstream**

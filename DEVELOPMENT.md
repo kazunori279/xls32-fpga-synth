@@ -80,7 +80,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | 16+ | 24 dB filter / self-osc / drive (cascade a 2nd SVF pole + saturation), **ring/FM ✅ (M19)**, osc sync, exp. envelopes, LFO shapes, aftertouch / mod matrix | — |
 | **20 ✅** | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | **A/B against the pre-move commit on the same board: 98.4 → 98.6, 152/175 bit-identical, same 3 pre-existing FAILs** |
 | **21 ✅** | **ECP5 feasibility spike** (decision gate): engine alone on `LFE5U-25F`, `STAGES` × voice-count sweep | **32 voices × 4 parts fit: 66% LUT / 38% FF / 0 BRAM / 86% DSP at `STAGES=12`. No fallback rung needed** |
-| **22 ✅** | **18×18 arithmetic**: reshape the DSP48-tuned multiplies in `synth.x` for the ECP5's narrower tile | **`MULT18X18D` 24 → 19 (86% → 68%); 3,000 audio samples bit-identical on both boards' configs** |
+| **22 ✅** | **18×18 arithmetic**: reshape the DSP48-tuned multiplies in `synth.x` for the ECP5's narrower tile | **`MULT18X18D` 24 → 19 (86% → 68%); 3,000 audio samples bit-identical, and Basys 3 got *cheaper* — 78 fewer LUTs, 0.32 ns shorter path, same 26 DSP48** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1043,15 +1043,30 @@ engine accepts it. A datapath edit shifts XLS's pipeline schedule, and a free-ru
 land a note-on on a different slot of the 32-voice ring — a diff that is a scheduling artefact and
 not an arithmetic one. Pacing to sample boundaries makes the comparison mean what it claims.
 
-**Both boards, from one source.** The Basys 3 side is unchanged where it counts: 768 cycles per
-sample (identical), audio bit-identical at `STAGES=48`, and on `synth_xilinx -family xc7` the engine
-goes **20 → 19 DSP48E1** for **+450 LCs** (+4.1%) — the DSP48's 25×18 shape already absorbed three
-of the four wide operands, so only the unison rewrite shows up there. Against the shipped Vivado
-numbers (50.4% LUT, 65% BRAM binding, ~18.5 ns critical path in a 30 ns ÷3 budget) that is a small
-cost in the resource that is *not* binding. What has **not** been verified is a real Vivado timing
-run: neither Vivado nor `nextpnr-xilinx` exists for arm64 macOS, and the GCE build VM in
-`remote_build.sh` was not started. ECP5 Fmax rose slightly (27.49 → 27.61 MHz) at `STAGES=12`, whose
-per-stage logic is *deeper* than `STAGES=48`'s, which is evidence but not a substitute.
+**Both boards, from one source — and the Artix-7 got *cheaper*, not dearer.** The expectation going
+in was that trading a multiplier for shift-adds would cost LUTs on the board that did not need the
+trade. A full Vivado run against `xc7a35t` says otherwise:
+
+| `xc7a35t`, top + engine, `STAGES=48` | before | after | |
+|---|---:|---:|---|
+| Slice LUTs | 10,483 (50.4%) | **10,405 (50.0%)** | **−78** |
+| Slice Registers | 17,445 (41.9%) | 17,874 (43.0%) | +429 |
+| F7 / F8 muxes | 297 / 18 | **155 / 8** | −142 / −10 |
+| Block RAM | 32.5 (65%) | 33 (66%) | +0.5 |
+| DSP48E1 | 26 (28.9%) | **26 (28.9%)** | **0** |
+| Worst data-path delay | 18.872 ns | **18.556 ns** | **−0.32 ns** |
+
+The DSP count holds — the DSP48's 25×18 shape already absorbed three of the four wide operands, and
+the fourth (unison) freed a tile that Vivado spent elsewhere. The LUT saving is where the surprise
+is: the multiplies that got narrower **stopped dragging wide mux trees behind them**, and F7/F8
+usage roughly halved. yosys had predicted +450 LCs from the same netlist; Vivado's mapper found the
+opposite, which is a reminder that a synthesis-only estimate is a screening tool and not a result.
+Critical path improved slightly, in a 30 ns ÷3 budget. Unconstrained-path noise also fell by half
+(11,591 → 5,643 failing endpoints, TNS −18,318 → −6,129 ns) — cosmetic, since those are the ÷3 paths
+the tool is not told about, but it makes the report easier to read.
+
+So M22 costs the Basys 3 nothing and buys the ECP5 five tiles. That is the case for doing this kind
+of narrowing in the shared DSLX rather than forking the source per board.
 
 ---
 
