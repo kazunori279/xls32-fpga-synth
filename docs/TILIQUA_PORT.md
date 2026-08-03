@@ -462,6 +462,18 @@ input. Built by `boards/tiliqua/build.sh`; the gateware is `boards/tiliqua/gatew
 is deferred to M28**: flashing writes the nine-slot flash layout, and this port has deliberately
 never written it. SRAM loading via `openFPGALoader -c dirtyJtag` covers everything M23 needs.
 
+**One precondition on the SRAM path: power-cycle the module first.** Two things a bitstream needs
+are not in the bitstream. The AK4619 codec is fine — `EurorackPmod`'s `I2CMaster` configures it
+from pure RTL, no softcore, which is why the non-SoC `usb_audio` bitstream makes sound at all. But
+the `audio` domain is clocked by the SI5351's clk0, and *nothing in gateware programs the SI5351*:
+that is done by the bootloader firmware
+(`src/top/bootloader/fw/src/main.rs`), which reads `external_pll_config` out of the manifest of
+the slot it is about to boot. An `openFPGALoader` SRAM load runs none of that, so it inherits
+whatever clk0 was last set to. At power-on the bootloader sets clk0 to its own `CLOCK_AUDIO_HZ` —
+the same 12.288 MHz this design asks for — so a load onto a freshly booted module is correct.
+Loading on top of a slot that had reconfigured clk0 is not, and the failure is silent: the engine
+simply clocks at the wrong rate, or never clocks.
+
 *Three findings that changed the plan:*
 
 **The engine runs in `audio` (12.288 MHz), and that costs a CDC.** The plan assumed no CDC was

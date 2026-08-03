@@ -19,7 +19,11 @@ BOARD = Board(
     transport="usbaudio",
     transport_opts={"channels": 4, "dtype": "int32"},
     stereo=True,
-    load_cmd="openFPGALoader -c dirtyJtag build/top.bit",   # SRAM; never touches the flash slots
+    # SRAM only; never touches the nine flash slots. Power-cycle the module first: the audio
+    # domain is clocked by the SI5351's clk0, which no bitstream configures -- the bootloader
+    # does, at power-on, to the same 12.288 MHz this design wants. Load over a stale clk0 from
+    # some other slot and the engine clocks at the wrong rate or not at all.
+    load_cmd="openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit",
     root="boards/tiliqua",
     unsupported="gateware builds as of M23, but there is no host loop yet: "
                 "MIDI in lands at M24 and USB audio capture at M25 — see docs/TILIQUA_PORT.md",
