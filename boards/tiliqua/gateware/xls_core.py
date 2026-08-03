@@ -15,10 +15,23 @@
 #
 # 2. Nothing here generates a 32 kHz tick. The engine's sample rate is whatever its consumer
 #    pulls at. `dsp.Resample` gates its input `ready` on the internal FIR, which stalls on
-#    output backpressure, so the codec's 48 kHz demand propagates backwards through 3/2 and
-#    lands on the engine as exactly 32 kHz on average -- phase-locked to the same mclk, with no
-#    divider to drift. Free-running, the engine would emit 12.288e6/192 = 64 kHz, so it is
-#    always the one waiting; the FIFO sits full and the pull sets the rate.
+#    output backpressure (filters.py's FIR waits in WAIT-READY on `o.ready`), and `i_cal` is a
+#    real FIFO whose `w_rdy` drops when the codec is behind. So the codec's demand propagates
+#    backwards through 3/2 and lands on the engine as exactly 2/3 of the codec's frame rate --
+#    phase-locked to the same mclk, with no divider to drift. The engine is always the one
+#    waiting; the FIFO sits full and the pull sets the rate. M25 verified this end to end on
+#    hardware with the frame counter on USB channel 3.
+#
+#    The corollary is that *the whole tuning of the instrument is the audio clock*. There is no
+#    divider anywhere to notice a wrong one. `clk0` on the SI5351 has to be 12.288 MHz, giving
+#    a 48 kHz codec and 32 kHz at the engine, which is what synth.x's pitch table assumes. No
+#    bitstream sets it -- only the bootloader does, over I2C -- so an SRAM load made while the
+#    module is running some other slot inherits that slot's rate silently and every note comes
+#    out sharp by the ratio. That cost most of a day in M25 (49.152 MHz left behind by XBEAM:
+#    4x). The module has to be in the bootloader when the load happens, which a power cycle
+#    alone does not achieve; see boards/tiliqua/board.py. USB channel 2 now carries an
+#    `audio`-cycle counter so check_loop.py can measure the clock and say so instead of
+#    reporting a mysterious pitch error.
 #
 # 3. The engine's audio word is offset binary (`scale_mix` returns `(c + 32768) as u16`), while
 #    ASQ is signed Q1.15. The conversion is an MSB inversion, and the 6 dB pad is one
@@ -75,9 +88,9 @@ class XlsSynth(wiring.Component):
     i_midi_bytes: In(stream.Signature(unsigned(8)))
 
     bitstream_help = BitstreamHelp(
-        brief="XLS32 synth: TRS MIDI in (ch 1-4), audio out",
+        brief="XLS32 synth: MIDI in (ch 1-4) over TRS or USB, audio out",
         io_left=['', '', '', '', 'synth out', 'synth out', '', ''],
-        io_right=['', '', '', '', '', ''],
+        io_right=['', 'USB MIDI + audio', '', '', '', ''],
     )
 
     def __init__(self, engine_path=None):

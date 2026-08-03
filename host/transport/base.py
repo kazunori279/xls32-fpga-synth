@@ -40,6 +40,20 @@ class Transport(ABC):
         """Return up to n frames of signed audio, blocking until they arrive or the
         link goes idle. Frames are interleaved when ``channels`` > 1."""
 
+    @abstractmethod
+    def record_start(self):
+        """Begin accumulating audio, discarding anything captured before now.
+
+        Tests do not know how many frames they want: they play a stimulus of
+        unpredictable length and take whatever came back. So capture is bracketed
+        rather than sized, and ``read_frames`` is the special case built on top.
+        """
+
+    @abstractmethod
+    def record_stop(self):
+        """Stop accumulating and return everything since ``record_start`` as signed
+        samples, one channel, ready to grade."""
+
     def __enter__(self):
         return self.open()
 
@@ -57,6 +71,10 @@ def open_transport(board=None):
         from transport.uart import UartTransport
 
         return UartTransport(board)
+    if board.transport == "usbaudio":
+        from transport.usbaudio import UsbAudioTransport
+
+        return UsbAudioTransport(board)
     raise NotImplementedError(
         f"board {board.name!r} wants transport {board.transport!r}, "
         f"which is not implemented yet ({board.unsupported or 'see docs/TILIQUA_PORT.md'})"

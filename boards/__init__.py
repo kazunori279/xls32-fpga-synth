@@ -14,8 +14,9 @@ worked before the boards/ split still works unchanged.
 
 ``host/synth.py`` binds ``SR`` at import time, so the variable has to be set in the
 environment before python starts — not from an argparse flag halfway down a main().
-A real ``--board`` flag can land once a second board actually builds (M25); adding one
-now would only look like it worked.
+``test/run_tests.py`` gained a ``--board`` flag in M25 and works around that the only way
+it can: it scans ``sys.argv`` by hand and writes ``$XLS32_BOARD`` *above* its own
+``import harness`` line. Anything reading this registry from argparse is already too late.
 """
 import os
 from dataclasses import dataclass, field

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-# M24 — Tiliqua top level for the XLS32 engine.
+# M25 — Tiliqua top level for the XLS32 engine.
 #
 # Modelled on the SDK's src/top/dsp/top.py CoreTop, minus PSRAM and video: this bitstream needs
-# the codec, the clocks, the TRS MIDI-In jack, and a reboot button. Build it through
-# boards/tiliqua/build.sh, which stages the engine Verilog and points the SDK's toolchain
-# variables at yowasp.
+# the codec, the clocks, the TRS MIDI-In jack, a reboot button, and — since M25 — a USB device on
+# `usb2` carrying MIDI down and audio up. Build it through boards/tiliqua/build.sh, which stages
+# the engine Verilog and points the SDK's toolchain variables at yowasp.
 #
 # The MIDI chain here is deliberately *not* the SDK's. src/top/dsp/top.py:1122 auto-wires
 # SerialRx -> MidiDecodeSerial -> core.i_midi for any core exposing `i_midi`, handing the core
 # decoded MidiMessage structs. The XLS engine parses MIDI itself, in DSLX, so it takes raw bytes
 # and this file names the port `i_midi_bytes` precisely so that auto-wiring does not fire.
+#
+# Everything USB is behind `sim.is_hw`. The Verilator flow has no ULPI to talk to, and keeping it
+# out of simulation means M23's check_pitch.py and M24's check_midi.py stay exactly the regression
+# guards they were.
 
 import os
 import sys
@@ -17,6 +21,7 @@ import sys
 from amaranth import *
 from amaranth.lib import wiring
 from amaranth.lib.cdc import FFSynchronizer
+from amaranth.lib.fifo import AsyncFIFO, SyncFIFO
 
 from tiliqua import midi
 from tiliqua.build import sim
@@ -26,6 +31,7 @@ from tiliqua.platform import RebootProvider
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from midi_filter import SysCommonFilter
+from usb_iface import XlsUsbInterface
 from xls_core import XlsSynth
 
 
@@ -81,10 +87,123 @@ class CoreTop(Elaboratable):
         m.submodules.rt_filter = rt_filter = midi.MidiRTFilter()
         m.submodules.sysex_filter = sysex_filter = midi.MidiSysexFilter()
         m.submodules.common_filter = common_filter = SysCommonFilter()
-        wiring.connect(m, serialrx.o, rt_filter.i)
         wiring.connect(m, rt_filter.o, sysex_filter.i)
         wiring.connect(m, sysex_filter.o, common_filter.i)
         wiring.connect(m, common_filter.o, self.core.i_midi_bytes)
+
+        if not sim.is_hw(platform):
+            wiring.connect(m, serialrx.o, rt_filter.i)
+            return m
+
+        # --- USB: MIDI down, audio up -----------------------------------------------------
+        m.submodules.usbif = usbif = XlsUsbInterface(
+            audio_clock=self.clock_settings.audio_clock, nr_channels=4)
+
+        # `usb` and `sync` are both 60 MHz but they are separate domains -- `usb` is recovered
+        # from the ULPI's own 60 MHz clock -- so the bytes need a real crossing. Depth 4 matches
+        # the engine-side CDC in xls_core.py, and for the same reason: MIDI is slow and the
+        # consumer drains a byte per cycle.
+        m.submodules.usb_midi_cdc = usb_midi_cdc = AsyncFIFO(
+            width=8, depth=4, w_domain="usb", r_domain="sync")
+        m.d.comb += [
+            usb_midi_cdc.w_data.eq(usbif.o_midi.payload),
+            usb_midi_cdc.w_en.eq(usbif.o_midi.valid),
+            usbif.o_midi.ready.eq(usb_midi_cdc.w_rdy),
+        ]
+
+        # USB wins the mux, so a keyboard left plugged into the TRS jack can never starve the
+        # automated test loop. Playing both at once interleaves bytes mid-message and is not
+        # supported -- there is one running-status register in the engine, not two.
+        m.d.comb += [
+            rt_filter.i.payload.eq(
+                Mux(usb_midi_cdc.r_rdy, usb_midi_cdc.r_data, serialrx.o.payload)),
+            rt_filter.i.valid.eq(usb_midi_cdc.r_rdy | serialrx.o.valid),
+            usb_midi_cdc.r_en.eq(usb_midi_cdc.r_rdy & rt_filter.i.ready),
+            serialrx.o.ready.eq(~usb_midi_cdc.r_rdy & rt_filter.i.ready),
+        ]
+
+        # Audio up, tapped digitally rather than looped back through a patch cable. Without an
+        # SoC the codec's calibration constants are never loaded, which puts 80-120 mV of DC on
+        # every converter (~1.2% of full scale) -- enough to skew FFT grading. Teeing `core.o`
+        # means the graded signal never touches the DAC or the ADC. The jack still plays in
+        # parallel, unchanged.
+        #
+        # The tee must never backpressure `pmod0.i_cal`: a host that is not recording would
+        # otherwise stall the codec. So it takes a copy only when the FIFO has room and silently
+        # drops otherwise. Rates match by construction (both sides are 48 kHz off the same
+        # mclk), so in a live capture the FIFO only ever absorbs jitter.
+        #
+        # Channels 2 and 3 do not carry audio. Together they carry one 31-bit counter of `audio`
+        # clock cycles, sampled at the instant the frame was teed -- ch2 the low 15 bits, ch3 the
+        # high 16. The host subtracts the counter at each end of a capture, divides by the
+        # elapsed wall-clock time, and has the board's real audio clock in Hz, measured from
+        # outside the FPGA against a reference the FPGA has no part in.
+        #
+        # This exists because M25 spent most of a day on a stale SI5351 `clk0` -- 49.152 MHz left
+        # behind by another slot, so every rate in the design ran 4x high and the only visible
+        # symptom was an inexplicable pitch error. check_loop.py reads it and says so now. See
+        # the rate note at the top of xls_core.py.
+        #
+        # Why one wide counter and not, say, a cycle counter plus a frame counter: USB delivery
+        # is bursty. Measured on hardware, most adjacent delivered frames are 256 audio cycles
+        # apart -- one codec frame, since I2STDM takes lrck from clkdiv[7] -- but every twentieth
+        # pair jumps by 5120 as the tee FIFO refills. So no per-frame statistic is the rate: the
+        # median sees only inside a burst, the mean is thrown by the tail, and any delta wide
+        # enough to span a burst can wrap a 16-bit counter. Only end-to-end advance is honest,
+        # and 31 bits does not wrap inside any capture (175 s at 12.288 MHz).
+        #
+        # The counter is gray-coded before the CDC and decoded on the far side: a binary counter
+        # sampled by a foreign clock can be caught mid-carry and read as any value at all, while
+        # gray puts at most one bit in flight, so the worst case is off by one count -- 81 ns.
+        # Bit 15 of ch2 is then forced high, which is what lets it double as the never-zero
+        # "alive" marker the gap detector below depends on; without it the counter would pass
+        # through zero once per wrap and that frame would read as a dropout.
+        audio_ctr  = Signal(31)
+        audio_next = Signal(31)
+        audio_gray = Signal(31)
+        m.d.comb  += audio_next.eq(audio_ctr + 1)
+        m.d.audio += [
+            audio_ctr.eq(audio_next),
+            audio_gray.eq(audio_next ^ audio_next[1:]),
+        ]
+        gray_s = Signal(31)
+        m.submodules.audio_ctr_ff = FFSynchronizer(audio_gray, gray_s, o_domain="sync")
+        # Gray -> binary: bit i is the parity of every gray bit at or above it. yosys balances
+        # each reduction into a LUT4 tree, so this is wide but shallow.
+        ctr_s = Signal(31)
+        m.d.comb += [ctr_s[i].eq(gray_s[i:].xor()) for i in range(31)]
+
+        m.submodules.usb_tee = usb_tee = SyncFIFO(width=64, depth=16)
+        m.d.comb += [
+            usb_tee.w_data.eq(Cat(self.core.o.payload[0].as_value(),
+                                  self.core.o.payload[1].as_value(),
+                                  ctr_s[0:15], C(1, 1),         # ch2: low bits + alive marker
+                                  ctr_s[15:31])),               # ch3: high bits
+            usb_tee.w_en.eq(self.core.o.valid & self.core.o.ready),
+        ]
+
+        # Channel 2 is never zero, and that is what makes the host's gap detector exact.
+        #
+        # This was built when frames were believed to be arriving all-zero at 2.5-5%; that
+        # figure was withdrawn after re-measurement (docs/TILIQUA_USB_DROPOUTS.md) and the real
+        # rate is ~0.001%. The channel stays, because the host still has to *measure* the rate
+        # to know that, and cannot do so without an unambiguous marker. Against the ADC that
+        # was free, because a converter's noise floor is never exactly zero; against a digital
+        # tee it is not, because digital silence *is* exactly zero and a note's release tail
+        # would read as one long dropout. One channel that is never zero settles it: all-zero
+        # means dropped, full stop. It costs nothing on the jacks -- `usbif.i` feeds the USB IN
+        # stream only, and out2 still comes from `core.o` like every other output.
+        m.d.comb += [
+            usbif.i.payload[0].as_value().eq(usb_tee.r_data[0:16]),
+            usbif.i.payload[1].as_value().eq(usb_tee.r_data[16:32]),
+            usbif.i.payload[2].as_value().eq(usb_tee.r_data[32:48]),
+            usbif.i.payload[3].as_value().eq(usb_tee.r_data[48:64]),
+            usbif.i.valid.eq(usb_tee.r_rdy),
+            usb_tee.r_en.eq(usb_tee.r_rdy & usbif.i.ready),
+            # Nothing consumes host-to-device audio, but the stream still has to be drained:
+            # macOS opens the output direction whenever it opens the input one.
+            usbif.o.ready.eq(1),
+        ]
 
         return m
 

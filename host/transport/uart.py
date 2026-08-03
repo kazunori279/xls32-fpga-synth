@@ -114,6 +114,28 @@ def samples_from_bytes(buf, stereo=True):
     return chosen[::2] if stereo else chosen
 
 
+def _decode(raw, off):
+    n = (len(raw) - off) // 2
+    return [(raw[off + 2 * i] | (raw[off + 2 * i + 1] << 8)) - 32768 for i in range(n)]
+
+def best_align(raw):
+    """Pick the 2-byte phase with fewer glitches over the WHOLE signal — more robust
+    than samples_from_bytes' fixed [200:1200] smoothness window for choppy audio
+    (rapid retrigger, plucks) where that window can land on silence.
+
+    Lived in test/harness.py until M25. Guessing byte alignment is a property of a
+    framing-free UART, not of the test harness: USB delivers whole frames and has
+    nothing to guess, so the Tiliqua transport has no counterpart to this.
+
+    Note it does *not* de-interleave, where samples_from_bytes does — moved verbatim,
+    because changing it would move every Basys 3 score at the same time as the port."""
+    if len(raw) < 8:
+        return []
+    from synth import glitches
+    a, b = _decode(raw, 0), _decode(raw, 1)
+    return a if glitches(a) <= glitches(b) else b
+
+
 class UartTransport(Transport):
     """Transport view of the helpers above, for code written against the ABC."""
 
@@ -128,7 +150,6 @@ class UartTransport(Transport):
     def open(self):
         if self.fd is None:
             self.dev, self.fd = open_port(rw=True)
-            self._rec = Recorder(self.fd)
         return self
 
     def close(self):
@@ -140,8 +161,21 @@ class UartTransport(Transport):
     def send_midi(self, data):
         writeall(self.fd, data)
 
+    def record_start(self):
+        if self._rec is not None:
+            self._rec.stop()
+        self._rec = Recorder(self.fd)         # its ctor flushes, so old audio is dropped
+
+    def record_stop(self):
+        if self._rec is None:
+            return []
+        raw, self._rec = self._rec.stop(), None
+        return best_align(raw)
+
     def read_frames(self, n):
         from synth import to_signed
+        if self._rec is None:
+            self.record_start()
         want = n * 4 + 4096                   # 4 bytes/frame, plus slack for alignment
         t0 = time.time()
         while len(self._rec.buf) < want and time.time() - t0 < n / self.sr + 1.0:

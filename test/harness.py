@@ -1,6 +1,12 @@
-"""Test harness: owns the board, resets it between tests, captures audio (with a
-misalignment-retry), and models a TestCase / Result + 0-100 scoring. Reuses the
-proven host helpers; drives the real board over the FT2232 channel-B UART."""
+"""Test harness: owns the board, resets it between tests, captures audio, and models a
+TestCase / Result + 0-100 scoring.
+
+Since M25 the board is a ``Transport`` (``host/transport/base.py``) rather than a file
+descriptor, so the same cases grade a Basys 3 over its 2 Mbaud UART and a Tiliqua over
+USB. The case files never noticed: every one of them reaches the board through
+``H.send`` and nothing else, which is why the object they are handed could change
+underneath them. The argument is still spelled ``fd`` in those files; it is a Transport.
+"""
 import os, sys, time, wave, struct
 from dataclasses import dataclass, field
 
@@ -8,40 +14,29 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "host"))
 sys.path.insert(0, os.path.join(_ROOT, "webui"))
-from transport.uart import open_port, Recorder, samples_from_bytes  # noqa: E402
-from synth import to_signed, normalize, glitches, note_on, note_off, cc, pitch_bend, SR
+sys.path.insert(0, _ROOT)                        # for `boards`, the board registry
+from boards import get_board                                                            # noqa: E402
+from transport.base import open_transport                                                 # noqa: E402
+from synth import normalize, glitches, note_on, note_off, cc, pitch_bend, SR
 import synthspec                                                                          # noqa: E402
 import analysis as A                                                                      # noqa: E402
 
-# ---- robust write: the port is O_NONBLOCK, so a big burst (reset = 150+ MIDI
-# messages) partial-writes and silently drops bytes -> dropped note-ons / corrupt CCs.
-# writeall loops until every byte is out.
-def writeall(fd, data):
-    mv = memoryview(bytes(data))
-    while mv:
-        try:
-            n = os.write(fd, mv)
-        except BlockingIOError:
-            n = 0
-        mv = mv[n:] if n else mv
-        if not n:
-            time.sleep(0.001)
-
-def send(fd, *msgs):
-    """Robust MIDI send — the port is O_NONBLOCK so a plain os.write can partial-write
-    and drop bytes (a dropped CC silently leaves the wrong waveform/setting)."""
-    writeall(fd, b"".join(msgs))
+def send(t, *msgs):
+    """Send MIDI to the board. Every transport promises the whole burst goes out --
+    on the UART that means looping past partial writes, since a dropped CC silently
+    leaves the wrong waveform behind and reads as a failing feature."""
+    t.send_midi(b"".join(msgs))
 
 # ---- between-test reset: all notes off, every CC to its synthspec default ----
 RESET_CCS = [(c["cc"], c["default"]) for c in synthspec.CONTROLS] + [(1, 0)]  # +mod wheel
 
-def reset_board(fd):
+def reset_board(t):
     # Only all-notes-off across the range tests actually use (33-84). A full 128-note
     # blast (384 bytes back-to-back) overwhelms the board's UART RX and makes it drop
     # ~40% of the *following* CCs (measured) — a smaller burst is reliable.
-    writeall(fd, b"".join(note_off(n) for n in range(33, 85)))
+    t.send_midi(b"".join(note_off(n) for n in range(33, 85)))
     time.sleep(0.25)                     # let any prior note's release finish (no bleed)
-    writeall(fd, b"".join(cc(c, v) for c, v in RESET_CCS) + pitch_bend(0.0))
+    t.send_midi(b"".join(cc(c, v) for c, v in RESET_CCS) + pitch_bend(0.0))
     time.sleep(0.06)
 
 # ---- results / scoring ----
@@ -76,20 +71,7 @@ class TestCase:
     weight: float = 1.0
     expected: str = ""     # short human blurb shown on the caption card
 
-# ---- capture with robust byte-alignment + misalignment retry ----
-def _decode(raw, off):
-    n = (len(raw) - off) // 2
-    return [(raw[off + 2 * i] | (raw[off + 2 * i + 1] << 8)) - 32768 for i in range(n)]
-
-def best_align(raw):
-    """Pick the 2-byte phase with fewer glitches over the WHOLE signal — more robust
-    than samples_from_bytes' fixed [200:1200] smoothness window for choppy audio
-    (rapid retrigger, plucks) where that window can land on silence."""
-    if len(raw) < 8:
-        return []
-    a, b = _decode(raw, 0), _decode(raw, 1)
-    return a if glitches(a) <= glitches(b) else b
-
+# ---- capture, with a retry for takes the link mangled ----
 def _bad_take(s):
     """Reject a capture that must be re-run: too short, silent (a dropped note-on),
     or corrupted (partial byte-misalignment leaves big sample-to-sample jumps that
@@ -102,24 +84,27 @@ def _bad_take(s):
         return "corrupt"
     return None
 
-def _one_capture(fd, tc):
-    reset_board(fd)
+def _one_capture(t, tc):
+    reset_board(t)
     if tc.setup:
-        tc.setup(fd)
+        tc.setup(t)
         time.sleep(0.05)
-    rec = Recorder(fd)
-    tc.perform(fd)
-    return best_align(rec.stop())
+    t.record_start()
+    tc.perform(t)
+    return t.record_stop()
 
-def run_case(fd, tc, retries=5, pass_score=85.0):
-    """Capture + grade, keeping the BEST take across retries. The board's 1 Mbaud MIDI
-    RX drops the occasional CC/note under bursty traffic (~30-40%), which would show as
-    a spurious low score; a dropped setup → low score → retry → a clean take wins. A
+def run_case(t, tc, retries=5, pass_score=85.0):
+    """Capture + grade, keeping the BEST take across retries. The Basys 3's MIDI RX
+    drops the occasional CC/note under bursty traffic (~30-40%), which would show as a
+    spurious low score; a dropped setup → low score → retry → a clean take wins. A
     genuinely broken feature scores low on every take. So drops become invisible while
-    real regressions still fail."""
+    real regressions still fail.
+
+    On Tiliqua the MIDI path backpressures end to end (bulk endpoint → unpack → filters
+    → CDC → engine), so nothing is dropped and the retry only ever costs time."""
     best, best_s = None, []
     for _ in range(retries):
-        s = _one_capture(fd, tc)
+        s = _one_capture(t, tc)
         if _bad_take(s):
             time.sleep(0.15); continue          # silent/corrupt take — don't even grade it
         try:
@@ -132,7 +117,7 @@ def run_case(fd, tc, retries=5, pass_score=85.0):
             break
         time.sleep(0.15)
     if best is None:                             # every take was garbage
-        best_s = _one_capture(fd, tc) or [0] * int(0.5 * SR)
+        best_s = _one_capture(t, tc) or [0] * int(0.5 * SR)
         try:
             best = tc.check(best_s)
         except Exception as e:
@@ -146,32 +131,43 @@ def save_wav(path, s):
         w.writeframes(b"".join(struct.pack("<h", max(-32768, min(32767, x))) for x in normalize(s)))
 
 # ---- reflash / board bring-up ----
-def reflash():
-    import subprocess
-    bit = os.path.join(_ROOT, "build", "top.bit")
-    if not os.path.exists(bit):
-        raise SystemExit(f"no bitstream at {bit} — run scripts/build.sh first")
-    print(f"==> reflashing {bit}")
-    subprocess.run(["openFPGALoader", "-b", "basys3", bit], check=True,
+def reflash(board=None):
+    """Load the selected board's bitstream with the command the board declares.
+
+    On Tiliqua that is an SRAM load, deliberately: it never writes the nine flash slots.
+    Re-loading *our own* bitstream this way is safe without a power cycle, because
+    nothing in it reprograms the SI5351 — arriving from some other slot is not, since
+    the audio domain would then clock off whatever clk0 that slot left behind."""
+    import shlex, subprocess
+    board = board or get_board()
+    if not board.load_cmd:
+        raise SystemExit(f"board {board.name!r} declares no load_cmd")
+    bit = next((a for a in shlex.split(board.load_cmd) if a.endswith(".bit")), None)
+    if bit and not os.path.exists(os.path.join(_ROOT, bit)):
+        raise SystemExit(f"no bitstream at {bit} — build it first ({board.root}/build.sh)")
+    print(f"==> reflashing: {board.load_cmd}")
+    subprocess.run(board.load_cmd, shell=True, cwd=_ROOT, check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.0)
 
-def warmup(fd):
+def warmup(t):
     """Prime the pipeline after reflash: discard the startup-DC note, then run one full
     reset+note+drain cycle (discarded) so the FIRST real test starts from exactly the
     same steady state as every subsequent one (else test #1 catches residue)."""
-    os.write(fd, note_on(57, 90)); time.sleep(0.3); os.write(fd, note_off(57)); time.sleep(0.8)
-    reset_board(fd)
-    rec = Recorder(fd)
-    os.write(fd, note_on(69, 100)); time.sleep(0.5); os.write(fd, note_off(69))
-    time.sleep(0.2); rec.stop()               # discard this priming capture
+    t.send_midi(note_on(57, 90)); time.sleep(0.3)
+    t.send_midi(note_off(57)); time.sleep(0.8)
+    reset_board(t)
+    t.record_start()
+    t.send_midi(note_on(69, 100)); time.sleep(0.5); t.send_midi(note_off(69))
+    time.sleep(0.2); t.record_stop()          # discard this priming capture
     time.sleep(0.3)
 
-def open_board():
+def open_board(board=None):
+    """The selected board's Transport, opened."""
     try:
-        return open_port(rw=True)
-    except SystemExit:
+        return open_transport(board).open()
+    except (SystemExit, NotImplementedError):
         raise
     except OSError as e:
-        raise SystemExit(f"could not open serial port ({e}); is the web server holding it? "
-                         "stop it with:  pkill -f webui/server.py")
+        raise SystemExit(f"could not open the board ({e}); is something else holding it? "
+                         "for the Basys 3 web UI:  pkill -f webui/server.py")
