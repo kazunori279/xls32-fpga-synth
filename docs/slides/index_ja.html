@@ -1957,64 +1957,13 @@
     </svg>
   </div>
 </section>
-<!-- ============ 19c · PIPELINE ============ -->
+<!-- ============ 19c0b · THE TWO VIEWS, ANIMATED (docs/gen_pipeline_gif.py) ============ -->
 <section class="slide">
-  <div class="h">時分割多重 ＋ パイプライン</div>
-  <div class="hsub">別々の2つが重なっています — データパスは時間方向に共有され、さらにXLSがそれを48段に切り分けます。</div>
-  <div style="margin-top:26px;">
-    <svg viewBox="0 0 1152 446" style="width:100%;height:446px;">
-    <defs><marker id="pG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
-    <text x="150" y="16" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">エンジンサイクル（1サイクル = 1 ce = マスタ3クロック = 30ns）</text>
-    <path d="M150 44 L150 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="150" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">0</text>
-    <path d="M290 44 L290 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="290" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">24</text>
-    <path d="M430 44 L430 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="430" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">48</text>
-    <path d="M570 44 L570 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="570" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">72</text>
-    <path d="M710 44 L710 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="710" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">96</text>
-    <path d="M850 44 L850 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="850" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">120</text>
-    <path d="M990 44 L990 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="990" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">144</text>
-    <path d="M1130 44 L1130 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="1130" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">168</text>
-    <text x="136" y="79" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 0</text>
-    <rect x="150" y="58" width="280" height="32" rx="6" fill="#d2e3fc" opacity="1.00"/>
-    <rect x="150" y="58" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <text x="290" y="79" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#174ea6" text-anchor="middle">48段のパイプライン、各段にレジスタ1つ</text>
-    <circle cx="430" cy="74" r="5" fill="#188038"/>
-    <text x="136" y="123" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 1</text>
-    <rect x="290" y="102" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.90"/>
-    <rect x="290" y="102" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="570" cy="118" r="5" fill="#188038"/>
-    <text x="136" y="167" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 2</text>
-    <rect x="430" y="146" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.80"/>
-    <rect x="430" y="146" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="710" cy="162" r="5" fill="#188038"/>
-    <text x="136" y="211" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 3</text>
-    <rect x="570" y="190" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.70"/>
-    <rect x="570" y="190" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="850" cy="206" r="5" fill="#188038"/>
-    <text x="136" y="255" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 4</text>
-    <rect x="710" y="234" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.60"/>
-    <rect x="710" y="234" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="990" cy="250" r="5" fill="#188038"/>
-    <text x="136" y="299" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 5</text>
-    <rect x="850" y="278" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.50"/>
-    <rect x="850" y="278" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1130" cy="294" r="5" fill="#188038"/>
-    <text x="136" y="336" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">⋮</text>
-    <text x="150" y="336" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">…以下、ボイス31まで同様</text>
-    <path d="M430 74 L1130 294" stroke="#188038" stroke-width="1.8" stroke-dasharray="4 4"/>
-    <text x="1152" y="336" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038" text-anchor="end">ボイスの投入は約24サイクルに1つ ― 毎サイクルではない</text>
-    <text x="1152" y="357" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368" text-anchor="end">● = そのボイスのサンプルが完成</text>
-    <rect x="0" y="378" width="1152" height="64" rx="10" fill="#e6f4ea"/>
-    <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">レイテンシは48サイクル、スループットは実測で1ボイスあたり約24サイクル。スキャン時間を決めるのは後者だけです。</text>
-    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">つまり32ボイスは約768エンジンサイクル。48 × 32 でも32でもなく、約2,300マスタクロック — サンプル周期の74%です。</text>
-    </svg>
+  <div class="h">1本のパイプラインを、32ボイスが順番に使う</div>
+  <div class="hsub">上は、いま各ボイスがハードのどこにいるか。下は同じ動きを時間軸で — 再生位置は両方共通です。深さは48段ですが、新しいボイスは24サイクルに1つしか入らないので、走っているのは常に2本 — 残り46段はバブルです。</div>
+  <div style="margin-top:14px;">
+    <img src="assets/pipeline_anim_ja.gif" style="width:100%; border-radius:10px;"
+         alt="アニメーション：共有された48段のパイプラインを、各ボイスがエンジン1サイクルごとに1段ずつ進んでいく様子と、対応するガントチャート。">
   </div>
 </section>
 

@@ -1953,64 +1953,13 @@
     </svg>
   </div>
 </section>
-<!-- ============ 19c · PIPELINE ============ -->
+<!-- ============ 19c0b · THE TWO VIEWS, ANIMATED (docs/gen_pipeline_gif.py) ============ -->
 <section class="slide">
-  <div class="h">Time-multiplexing + pipelining</div>
-  <div class="hsub">Two different things, stacked — the datapath is shared in time, and XLS also cuts it into 48 stages.</div>
-  <div style="margin-top:26px;">
-    <svg viewBox="0 0 1152 446" style="width:100%;height:446px;">
-    <defs><marker id="pG" markerWidth="8" markerHeight="8" refX="6.8" refY="2.9" orient="auto"><path d="M0 0 L6.8 2.9 L0 5.8 z" fill="#188038"/></marker></defs>
-    <text x="150" y="16" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">engine cycles  (1 cycle = 1 ce = 3 master clocks = 30 ns)</text>
-    <path d="M150 44 L150 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="150" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">0</text>
-    <path d="M290 44 L290 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="290" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">24</text>
-    <path d="M430 44 L430 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="430" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">48</text>
-    <path d="M570 44 L570 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="570" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">72</text>
-    <path d="M710 44 L710 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="710" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">96</text>
-    <path d="M850 44 L850 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="850" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">120</text>
-    <path d="M990 44 L990 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="990" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">144</text>
-    <path d="M1130 44 L1130 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="1130" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">168</text>
-    <text x="136" y="79" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 0</text>
-    <rect x="150" y="58" width="280" height="32" rx="6" fill="#d2e3fc" opacity="1.00"/>
-    <rect x="150" y="58" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <text x="290" y="79" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#174ea6" text-anchor="middle">48 pipeline stages, one register each</text>
-    <circle cx="430" cy="74" r="5" fill="#188038"/>
-    <text x="136" y="123" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 1</text>
-    <rect x="290" y="102" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.90"/>
-    <rect x="290" y="102" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="570" cy="118" r="5" fill="#188038"/>
-    <text x="136" y="167" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 2</text>
-    <rect x="430" y="146" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.80"/>
-    <rect x="430" y="146" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="710" cy="162" r="5" fill="#188038"/>
-    <text x="136" y="211" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 3</text>
-    <rect x="570" y="190" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.70"/>
-    <rect x="570" y="190" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="850" cy="206" r="5" fill="#188038"/>
-    <text x="136" y="255" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 4</text>
-    <rect x="710" y="234" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.60"/>
-    <rect x="710" y="234" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="990" cy="250" r="5" fill="#188038"/>
-    <text x="136" y="299" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">voice 5</text>
-    <rect x="850" y="278" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.50"/>
-    <rect x="850" y="278" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1130" cy="294" r="5" fill="#188038"/>
-    <text x="136" y="336" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">⋮</text>
-    <text x="150" y="336" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">…and so on, through voice 31</text>
-    <path d="M430 74 L1130 294" stroke="#188038" stroke-width="1.8" stroke-dasharray="4 4"/>
-    <text x="1152" y="336" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038" text-anchor="end">a voice is issued every ~24 cycles, not every cycle</text>
-    <text x="1152" y="357" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368" text-anchor="end">● = that voice's sample is finished</text>
-    <rect x="0" y="378" width="1152" height="64" rx="10" fill="#e6f4ea"/>
-    <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">Latency is 48 cycles. Measured throughput is one voice per ~24 cycles. Only the second one sets the scan cost.</text>
-    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">So 32 voices take ~768 engine cycles — not 48 × 32, but not 32 either — which is ~2,300 master clocks, 74% of the sample period.</text>
-    </svg>
+  <div class="h">One pipeline, 32 voices taking turns</div>
+  <div class="hsub">Top: where each voice sits in the hardware. Bottom: the same run on a time axis — one playhead drives both. It is 48 stages deep, but a new voice enters only every 24 cycles, so two are ever in flight and the other 46 stages carry bubbles.</div>
+  <div style="margin-top:14px;">
+    <img src="assets/pipeline_anim.gif" style="width:100%; border-radius:10px;"
+         alt="Animation: voices advancing one stage per engine cycle through the shared 48-stage pipeline, with the matching Gantt chart filling in below.">
   </div>
 </section>
 
