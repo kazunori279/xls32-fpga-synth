@@ -93,33 +93,35 @@ and one `EHXPLLL` output is free for the dedicated engine clock §2.3 recommends
 way, all of which constrain `host/transport/usbaudio.py`:
 
 - The interface enumerates unconditionally, but **no frames flow until `MISC → usb-mode = enable`**
-  in the XBEAM menu, and the vendor docs say to set it *before* plugging the host in — doing it in
-  the wrong order halved throughput quality (5.1% → 2.6% dropped frames after a re-plug).
-- **Isochronous dropouts remain, and they originate in the device.** 2.5–5% of frames arrive
-  all-zero, with no PortAudio status flag ever raised. Traced by logging every callback's
-  `inputBufferAdcTime`, frame count and zero count: every callback is *full* (4096/4096 frames),
-  the zeros sit *inside* those full buffers, and the ADC timeline jumps forward 44–500 ms about
-  30 times in 10 s so only ~67% of the expected audio ever arrives. Isochronous transfer drops
-  whole packets and never retries — it cannot insert a partial zero run into a full packet — so
-  this is not the cable and not the host.
+  in the XBEAM menu, and the vendor docs say to set it *before* plugging the host in. This one
+  survived re-measurement; the throughput numbers originally attached to it did not.
+- ⛔ **The isochronous-dropout finding is withdrawn.** This section used to report 2.5–5% of frames
+  arriving all-zero, ADC-timeline jumps of 44–500 ms, and only ~67% of expected audio arriving,
+  on the vendor's own bitstream. **None of it reproduces.** Re-measured on hardware 2026-08-03
+  across eleven runs, XBEAM v1.2.1 menu-booted at 192 kHz delivers **100.27% of expected frames,
+  zero all-zero frames, zero timeline jumps**; a 60 s endurance run gives 100.34% with one zero
+  frame in 11,558,912. Withdrawn with it: the per-config table that used to sit here (XBEAM
+  2.56%, `usb_audio` 3.82–4.84% at 48 kHz, and the inference that 48 kHz was the worse rate —
+  which was the report's headline), the `blocksize=1024` collapse to ~14%, the open/close wedge,
+  and the ~256 ms periodicity. Our own bitstream is a clean control at 99.84% / 0.000% / 0 jumps
+  at 48 kHz, and the M25 suite measures a worst-case gap rate of **0.001%** over six 34-case runs.
 
-  | Config | zero frames |
-  |---|---|
-  | XBEAM, 192 kHz, 3 s, documented plug order | 2.56% |
-  | `usb_audio`, 48 kHz, 10 s | 4.84% |
-  | …with the CDC serial reader stopped | 3.82% |
-  | …with `dbg` physically unplugged from the host | 4.17% |
-
-  Eliminated: bandwidth (48 kHz was *worse* than 192 kHz), cable, host underrun, and our own
-  gateware — it reproduces on the stock vendor `usb_audio` bitstream. **Report upstream at
-  `apfaudio/tiliqua`; do not debug the vendor USB stack as part of this port.** M25 works around it
-  with the gap detector below.
-- **Let PortAudio choose the block size.** `blocksize=0` delivered 97.4% of expected frames;
-  forcing `blocksize=1024` collapsed delivery to ~14%.
-- **Open the stream once and keep it open.** Nine consecutive open/close cycles drove the device
-  into a state where it returned one block and stopped; single-shot use recovered it.
+  What the original runs actually measured is not known. A misclocked SRAM load is a lead —
+  §2.7's SI5351 inheritance was real and was fixed — but it does not fit quantitatively: a 4×
+  clock mismatch predicts delivery near 25% or near 400%, and 67–69% is neither. The XBEAM
+  figure has no explanation at all, since that slot was menu-booted and therefore correctly
+  clocked. The full retraction, the re-measurement, a claim in the hand-off that turned out
+  flatly wrong against vendor source ("the USB side runs off the ULPI's own 60 MHz recovered
+  clock" — the real tree is in §2.7), and a post-mortem on how the report came to be written
+  are in [TILIQUA_USB_DROPOUTS.md](TILIQUA_USB_DROPOUTS.md). Reproduction probes are in
+  `boards/tiliqua/probe/`.
+- **Let PortAudio choose the block size, and open the stream once.** The measurements that
+  motivated both rules are withdrawn above, but the code follows them anyway: they cost nothing,
+  and the configuration they describe is the one every clean run has been taken on.
 - A cheap, reliable gap detector falls out of the DC offsets below: a genuine frame is never
   all-zero on all four channels, so the transport can self-validate every capture and retry.
+  With the gap rate now at 0.001% this repairs almost nothing, but it is also what *measures*
+  the rate, which is the number the report publishes.
 
 **Factory calibration**, measured with nothing patched (median DC offset, ±8.192 V full scale):
 ch0 −2.81 mV · ch1 −4.44 mV · ch2 −1.13 mV · ch3 −3.94 mV — all inside the quoted ±5 mV. Noise
@@ -235,6 +237,119 @@ Stopgap if USB audio slips: a decimated debug stream (e.g. 4 kHz mono 8-bit ≈ 
 - **8 slots.** The bootloader holds 8 user bitstreams, so a 32-voice build and a 16-voice+video
   build can coexist on one module.
 
+### 2.6 The fifth constraint, found in M25: the engine crowds luna off the die
+
+Adding USB fits — 20,806 / 24,288 TRELLIS_COMB, **85%**, and 21,103 / **86%** once M25's clock
+probe went in — and misses timing. `sync` places at
+**48.7–55.3 MHz against 60 MHz required** across sixteen seeds. This was not in the original risk
+register. It runs on hardware anyway — see the resolution at the end of this section — but it is
+still out of spec, so the reasoning is kept in full.
+
+**`sync` and `usb` are one net.** `pll.py` drives both from `feedback60` (lines 464, 605, 835), so
+yosys merges them and nextpnr reports a single `$glbnet$clk`. The engine cannot be given a slower
+clock than luna, and luna's 60 MHz is fixed by ULPI.
+
+**The failing path is entirely inside luna** — about twenty LUT levels from an interpacket timer
+(`luna/gateware/usb/usb2/packet.py:1415`) through the control endpoint, the endpoint mux and
+`ChannelsToUSBStream` to the ULPI TX data register. Logic accounts for roughly 5 ns of it and
+routing for roughly 15 ns, with single hops of 0.9–1.2 ns between adjacent tiles. That ratio is
+the diagnosis: **congestion, not depth.** The same block makes 66.49 MHz in the stock `usb_audio`
+bitstream at ~20% occupancy.
+
+**Which kills the two levers this milestone had pre-committed.** A per-module census of `top.json`
+(16,958 LUT4 before packing):
+
+| module | LUT4 | share |
+|---|---:|---:|
+| `core.engine` | 14,209 | 83.8% |
+| `usbif.*` (luna + UAC2 + MIDI) | 1,588 | 9.4% |
+| `pmod0.i2c_master` | 413 | 2.4% |
+| everything else | 748 | 4.4% |
+
+Dropping `nr_channels` from 4 to 2 saves ~100 LUTs and dropping the host→device audio direction
+saves ~10. Neither touches the thing doing the crowding. **luna is not big; the engine is.**
+
+**Nothing in the tool flow closes it either.** Sixteen placer seeds on the final netlist span
+**48.74–55.33 MHz**, best at seed 2 — still 7.8% short, and seed rankings do *not* transfer between
+netlists: seed 11 gave 55.98 MHz on the previous netlist and 51.27 MHz on this one, and seed 2's
+55.33 MHz became **52.27 MHz** on the rebuild that actually emitted `top.bit`. A seed is not a fix
+you can bank; it is a lottery you have to re-run after every edit, and win again at build time.
+`--placer-heap-timingweight` 35/60/100 buys 1–5 MHz; `--tmg-ripup` is marginal; `--router router2`
+is *worse*; `--placer-heap-critexp` 4/6/8 and `--placer-heap-beta` 0.95/0.99 change nothing at all.
+Adding `-abc9` to `synth_ecp5` — absent from Amaranth's default script, and the obvious thing to
+try for a deep path — gives no improvement and a slightly larger design, confirming the diagnosis
+from the other side. nextpnr-0.10 from `yowasp` has no Python bindings and its LPF reader has no
+`REGION`/`UGROUP`, so luna cannot simply be fenced into a corner of the die, which is what this
+design actually wants.
+
+**The engine has no soft area.** XLS unrolls the voice loop: `____state_0_tuple_element_*` are
+32-entry arrays read at all 32 constant indices every cycle (`xls_engine.v:4882`ff), so they are a
+flat register file, not an inferrable memory. That is why 3 of 56 DP16KD are used while 11,225 FFs
+are not. There is no BRAM or LUT-RAM win hiding here; engine area is proportional to voice count,
+at roughly 440 LUTs per voice.
+
+So the remaining choices were (a) load the 85% bitstream and find out whether −6 worst-case static
+timing is as pessimistic as it usually is at room temperature — the shortfall is 6–15%, and the
+failing cone is control-transfer logic that only toggles during enumeration — or (b) cut voices,
+which means the suite would grade a bitstream we do not ship. Note `--timing-allow-fail` on the
+nextpnr line comes from the SDK, not from Amaranth's default template: overriding `nextpnr_opts`
+silently drops it and turns the warning into a build failure.
+
+**Resolved by (a), empirically: it runs.** Built at 86% and placed at 48.2–49.5 MHz against the
+60 MHz requirement, the bitstream enumerates as a 4-in/4-out UAC2 device, accepts USB-MIDI, and
+streams audio the host can grade — repeatedly, across many loads over a working day. The failing
+cone was diagnosed as control-transfer logic that only toggles during enumeration, and that is
+exactly how it behaves. This is a **risk being carried, not a risk retired**: static timing says
+the part is out of spec, so it is not proof of margin at temperature, over voltage, or on another
+die. Cutting voices stays available if the loop ever proves flaky. The number to watch is the
+frame gap rate, which every report prints.
+
+### 2.7 The sixth constraint, found in M25: the loop needs a human finger
+
+M25's whole point is a verification loop an agent can run unattended. On Basys 3 it is: reflash
+over JTAG, capture over UART, no hands. On Tiliqua there is one step nobody can automate yet.
+
+The `audio` domain is the SI5351's `clk0` wired straight in, and only the bootloader programs that
+chip. That would be harmless — the bootloader's own rate is the 12.288 MHz this design wants — if
+the bootloader stayed put. It does not: the mobo EEPROM holds `last_boot_slot`, and every cold boot
+autoboots that slot after a five-second countdown, taking its manifest's `clk0` with it. **So the
+module has to be caught in the countdown**, by hand: one click of the encoder, which nothing on the
+JTAG or USB side can reach.
+
+It is once, not every time. Cancelling the countdown also writes `last_boot_slot: None`, so every
+later cold boot sits in the bootloader at 12.288 MHz and the loop is hands-free again — until
+somebody boots a vendor slot from the menu, which re-arms it. That makes this a bring-up ritual
+rather than a per-run one, but it still means the loop cannot recover itself from a power cycle
+that follows a manual slot boot, and an agent has no way to tell which state the module is in
+except by measuring the clock, which is why both entry points now do.
+
+Three ways to remove it entirely, none free:
+
+1. **Program the SI5351 from gateware.** The precedent is in the SDK: `periph/i2c.py`'s
+   `I2CStreamer` plus an FSM of `i2c_addr` / `i2c_w_arr` / `i2c_wait` is exactly how
+   `eurorack_pmod.py` configures the AK4619 with no softcore. The same pattern could set `clk0` to
+   12.288 MHz from our bitstream, which would make the design self-sufficient and delete this
+   constraint outright. Cost is the SI5351 register sequence (portable from the vendor's
+   `si5351.rs`) plus a second I2C master on the mobo bus, and the risk is that reprogramming the
+   clock *underneath* a running `audio` domain needs care about reset ordering.
+2. **Write our own slot to flash and let autoboot pick it.** Cheapest by far, and it makes the
+   problem disappear rather than solving it — but it spends one of the nine slots and writes flash,
+   which is a decision for the module's owner, not for the agent.
+3. **Live with it**, and treat "power-cycled since the last run" as a manual precondition, the way
+   the load recipe in `boards/tiliqua/board.py` documents it today. Fine for a session that starts
+   with a load; not fine for a loop that expects to survive a reboot.
+
+A fourth was tried and abandoned: JTAG-load the *bootloader* bitstream to SRAM, let it program
+clk0, then load ours within the five seconds before the countdown fires — the reconfiguration kills
+the countdown, and no flash or EEPROM is touched. It would have been fully scriptable. But the SDK
+builds its VexiiRiscv core by shelling out to `sbt`, so reproducing the bootloader means a Scala
+toolchain and a half-hour first build for a softcore we otherwise have no use for. Noted in case a
+prebuilt bootloader bitstream ever comes to hand, since the trick itself is sound.
+
+Until one of these lands, the loop is autonomous within a session, autonomous across power cycles
+*provided* no vendor slot gets booted by hand, and needs one encoder click to recover when one has.
+Worth stating plainly, because that is a narrower claim than "M25 restored autonomous verification."
+
 ---
 
 ## 3. Directory restructuring (M20)
@@ -300,8 +415,10 @@ docs/
 3. **Board selection is `$XLS32_BOARD`, defaulting to `basys3`** so nothing existing breaks.
    *Deliberately no `--board` flag yet:* `host/synth.py` binds `SR` at **import** time, so a flag
    parsed halfway down a `main()` would be read after every module that depends on it has already
-   captured the old value — it would look like it worked and silently grade at the wrong rate. The
-   flag can land at M25, when a second board actually produces samples to be wrong about.
+   captured the old value — it would look like it worked and silently grade at the wrong rate.
+   *Landed in M25*, once a second board actually produced samples to be wrong about:
+   `run_tests.py` picks `--board` out of `sys.argv` by hand and sets `$XLS32_BOARD` **above** the
+   `import harness` line, because argparse still runs far too late.
 4. **Use `git mv`** so history follows the files.
 5. **Exit criterion for M20: the Basys 3 e2e suite scores the same as before the move.** The
    restructure is not allowed to change behaviour.
@@ -463,17 +580,25 @@ onto a power-cycled Tiliqua, out0 sustains an audible A4. The bitstream archive 
 is deferred to M28**: flashing writes the nine-slot flash layout, and this port has deliberately
 never written it. SRAM loading via `openFPGALoader -c dirtyJtag` covers everything M23 needs.
 
-**One precondition on the SRAM path: power-cycle the module first.** Two things a bitstream needs
-are not in the bitstream. The AK4619 codec is fine — `EurorackPmod`'s `I2CMaster` configures it
-from pure RTL, no softcore, which is why the non-SoC `usb_audio` bitstream makes sound at all. But
-the `audio` domain is clocked by the SI5351's clk0, and *nothing in gateware programs the SI5351*:
-that is done by the bootloader firmware
+**One precondition on the SRAM path: the module has to be sitting in the bootloader when the load
+happens.** Two things a bitstream needs are not in the bitstream. The AK4619 codec is fine —
+`EurorackPmod`'s `I2CMaster` configures it from pure RTL, no softcore, which is why the non-SoC
+`usb_audio` bitstream makes sound at all. But the `audio` domain is clocked by the SI5351's clk0
+— straight through, no FPGA PLL in between on R5 (`TiliquaDomainGeneratorPLLExternal`) — and
+*nothing in gateware programs the SI5351*: that is done by the bootloader firmware
 (`src/top/bootloader/fw/src/main.rs`), which reads `external_pll_config` out of the manifest of
 the slot it is about to boot. An `openFPGALoader` SRAM load runs none of that, so it inherits
-whatever clk0 was last set to. At power-on the bootloader sets clk0 to its own `CLOCK_AUDIO_HZ` —
-the same 12.288 MHz this design asks for — so a load onto a freshly booted module is correct.
-Loading on top of a slot that had reconfigured clk0 is not, and the failure is silent: the engine
-simply clocks at the wrong rate, or never clocks.
+whatever clk0 was last set to.
+
+At power-on the bootloader does set clk0 to its own `CLOCK_AUDIO_HZ` — the same 12.288 MHz this
+design asks for — but it holds that for only five seconds. The mobo EEPROM remembers the last slot
+booted by hand as `last_boot_slot`, and every *cold* boot autoboots it after a five-second
+countdown, reprogramming clk0 from that slot's manifest on the way. So if the last slot anyone
+booted was a 192 kHz one, a power cycle lands right back on 49.152 MHz, and a JTAG refresh cannot
+help either. **Touching the encoder during the countdown cancels the autoboot** and writes
+`last_boot_slot: None`; a long press from a running slot warm-boots to the bootloader, which also
+clears it. The failure this guards against is silent: the engine simply clocks at the wrong rate,
+or never clocks.
 
 *Three findings that changed the plan:*
 
@@ -621,13 +746,127 @@ standard) with optoisolation") — a Type B adapter will not work. That last ste
 
 **M25 · Restore autonomous verification** *(blocking for everything after)*
 USB Audio Class 2 device on `usb2` (from `tiliqua/usb_audio/`) so the host records the synth's own
-output; **USB-MIDI in the other direction, inherited from M24** — it rides the same luna device
-stack, and `MidiDecodeUSB` is the wrong tool for the same reason `MidiDecodeSerial` was: it
-consumes 4-byte USB-MIDI packets and emits `MidiMessage`, so the bytes have to be unpacked from
-the packet rather than taken from its output, then run through the same filter chain M24 built.
-Implement `host/transport/usbaudio.py`. Port `test/harness.py` and `webui/server.py` onto it.
+output, and USB-MIDI in the other direction on the same cable. `boards/tiliqua/gateware/usb_iface.py`
+holds the gateware half, `host/transport/usbaudio.py` the host half, and `test/harness.py` now
+drives a `Transport` rather than a file descriptor, which is what makes one suite grade both boards.
+
+*Five things this milestone learned the hard way.*
+
+**There was no USB-MIDI device stack to inherit.** The sentence above used to read "it rides the
+same luna device stack, inherited from M24". Half right. The SDK's only USB-MIDI is `USBMIDIHost`
+from the `guh` package (`src/top/usb_host/top.py:52`), which makes Tiliqua the *host* for a
+keyboard plugged into it — the opposite direction, and it cannot share `usb2` with a device-mode
+stack anyway. luna itself ships no MIDI class at all. What *is* inheritable is the descriptor set:
+`usb_protocol.emitters.descriptors.midi1` has every MIDI 1.0 emitter except the MIDI function's
+UAC1-style AudioControl header, which is nine fixed bytes. So `XlsUsbInterface` subclasses the
+SDK's `USB2AudioInterface`, restates `create_descriptors()` with a second IAD inside the
+configuration block, and appends one bulk OUT endpoint on EP 3 after `super().elaborate()`.
+
+**Tee the engine digitally and the calibration problem in §1.1 disappears.** The −86 to −116 mV
+converter offsets only apply to audio that goes *through* the converters. `usbif.i` is fed from a
+depth-16 FIFO on `core.o`, so the graded signal never touches the DAC or the ADC — no patch lead,
+no calibration drift, no DC offset, and the jack still plays in parallel. The tee also keeps
+channel 2 non-zero at all times, which turns §1.1's dropout detector into "all four channels
+zero" even during digital silence, when the audio itself is legitimately zero.
+
+**The audio clock is the whole tuning of the instrument, and nothing was watching it.** M25 lost
+most of a day to a note that came out 2,616 cents sharp with exact semitone ratios between notes —
+every symptom of a gateware bug, and none of it was. `clk0` on the SI5351 was still at XBEAM's
+49.152 MHz, because only the bootloader programs that chip and an SRAM load made while another
+slot is running inherits whatever that slot left behind. Everything in the design is paced by the codec
+(§M23's resampler chain has no divider anywhere), so a 4× clock is a 4× synth and the only visible
+symptom is pitch. Worse, `check_pitch.py` and `check_midi.py` are ratio-only: they compare the
+engine against its own resampled output, so they pass just as happily at the wrong rate — which is
+why M23 and M24 could have been graded on a misclocked board and nobody would know.
+
+The fix is a measurement, not a workaround. Channels 2 and 3 of the tee carry one 31-bit count of
+`audio` clock cycles, gray-coded across the CDC, latched with the frame; the host subtracts the
+ends of a capture, divides by wall-clock time, and has the board's real clock in Hz.
+`check_loop.py` checks it *before* the pitch and fails with the recipe for getting back to the
+bootloader instead of an
+inexplicable cents error; `run_tests.py` makes the same check after warmup and aborts the run
+rather than grading 34 cases against the wrong clock, and records the clock it did grade at in
+`report.md` and `report.json`. One subtlety is worth keeping: per-frame deltas cannot do this job,
+because USB delivery is bursty — most adjacent frames are 256 audio cycles apart but every
+twentieth pair jumps by 5,120 as the FIFO refills, so the median measures only inside a burst and
+the mean is thrown by the tail. Only end-to-end advance over a known interval is honest, and that
+is what needs the 31 bits.
+
+The host side of the same ratio has the mirror-image trap, and repeatability did not catch it. A
+least-squares fit of callback arrival times against frames delivered gave **47.8 MHz** on three
+consecutive runs, agreeing to 0.01% — precise and 2.7% wrong, because PortAudio's delivery has not
+settled during the first capture after the stream opens (per-frame intervals of 20.8–34.8 µs there
+against 23.55–23.68 µs later), and a fit smears that transient over the whole slope. Taking the
+**median** per-frame interval instead reads **49.28–49.33 MHz**: XBEAM's 49.152 MHz to 0.3%, which
+is what the theory predicted and the first evidence that the counter half is right. Two
+independent measurements now agree — the counter says the device produces 4.53 frames per frame
+the host receives, and the FFT says the note is 4.532× sharp.
+
+**Repair the gaps; do not select around them.** The plan said "return the longest contiguous
+gap-free run — select, never splice." Measured, that is unusable: at 3% dropout arriving in
+6-sample microframe bursts the longest clean run is **1,080 samples — 22.5 ms**, far too short for
+an envelope or a delay-time measurement. Run through the real `harness._bad_take` on a plucked
+saw, selection returns 1,284 samples at 2.5% dropout and 954 at 5% — rejected as `short` both
+times — while linear interpolation across the holes returns the full 144,000 and passes (peak
+12,995, 201 glitches against a 1,440 limit). Interpolating is not splicing: a dropped frame
+*arrives*, as zeros, so the timeline is intact and each hole has a known length, which is exactly
+what the phase-sensitive checks (pitch, echo delay, LFO rate, ADSR timing) depend on. It costs
+noise floor — on a synthetic 440 Hz tone at 3% dropout, SNR goes from −20.9 dB holed to 14.2 dB
+repaired, against a clean reference — so `record_stop` publishes `gap_rate` and `run_tests.py`
+prints it in the report rather than hiding the trade. `select_clean=True` is still there for the
+rare case where artefact-free matters more than duration.
+
+(The 2.5–5% those figures were calibrated against is the withdrawn number; the measured rate is
+0.001%, so in practice the repair path repairs nothing. The decision stands on its own merits —
+selection is the fragile design at *any* rate above zero — and the published `gap_rate` is now the
+more valuable half of it.)
+
+**Area fits; `sync` timing does not.** See §2.6.
+
 *Exit:* `uv run python test/run_tests.py --board tiliqua --only basic` produces a scored
 `report.md` from real hardware. From here the agent loop is closed again on Tiliqua.
+
+**The dropout finding is withdrawn in full — including the half we thought was safe.** §1.1
+measured 2.5–5% of frames arriving all-zero. At a verified 12.288 MHz the same board, cable and
+host give **0.001% worst case across six full 34-case runs**, so the figure for our bitstream is
+gone.
+
+The first reading here was that this retracted only our rows and left the vendor-side ones
+standing: XBEAM's 2.56% was taken on a slot booted from the menu, which programs `clk0` from its
+own manifest, so that run was correctly clocked and the misclock could not explain it. The correct
+conclusion from that observation is the opposite one. Re-measured on hardware the same day, that
+same menu-booted XBEAM slot delivers 100.27% with **zero** all-zero frames over eleven runs, and
+100.34% with one zero frame in 11.5 M on a 60 s endurance run. Nothing in the original report
+reproduces on either bitstream.
+
+Which also means the misclock is not the answer, only a lead. A 4× clock error predicts delivery
+near 25% or near 400%; the reported 67–69% is neither, and the XBEAM figure has no explanation at
+all. What the original captures measured remains unknown. `docs/TILIQUA_USB_DROPOUTS.md` — written
+as a hand-off to apf.audio, and sent — now carries the retraction, the re-measurement, and a
+post-mortem on the five things the first draft did wrong. The one substantive thing left for the
+vendor is a question, not a finding: capture packet size is derived by counting bytes on the
+*playback* stream (`usb_audio/__init__.py:316-329`), whose reset value implies 48,000 frames/s
+regardless of configured rate — though our own input-only 192 kHz runs deliver 100.27%, so the
+question may have an answer we simply have not found.
+
+The interpolating repair path above stays either way. It is cheap, it is exercised, and it is what
+*measures* `gap_rate` — the number that would catch this class of problem the next time, instead
+of leaving it to be inferred from a pitch error a day later.
+
+**Status: exit bar met.** The bitstream builds (86% TRELLIS_COMB), both simulation regressions pass
+unchanged, and on the module it enumerates as a 4-in/4-out UAC2 device and streams — at `sync` ≈
+48–50 MHz against a 60 MHz requirement, so §2.6 is a risk being carried rather than a blocker.
+`check_loop.py` passes: **12.292 MHz, A4 at 440.02 Hz (+0.1 cents), 0.00% gaps.** Three consecutive
+`--only basic` runs then produced **91.0 / 91.0 / 90.8 (A−), 30 pass / 1 warn / 3 fail, with all 34
+cases returning an identical verdict every time** and the audio clock logged at 12.2874–12.2877 MHz.
+
+The three failures are `echo`, `reverb` and `reverb_cathedral`, and they are correct: M23 did not
+port the effects FSM (`xls_core.py`), so this bitstream has no effects to measure. They are the
+M26 exit criteria, sitting there as a red line until M26 turns them green. `filter_sweep` warns at
+78–85 across runs, straddling its own threshold; that is honest analogue variance, not a flip.
+
+Getting there cost one encoder press (§2.7) and one test bug — see the M25 entry in
+`DEVELOPMENT.md` for `sub_osc`, which had been grading a working sub-oscillator by coin toss.
 
 ### Phase C — feature parity
 
@@ -715,9 +954,11 @@ graded by hand or by simulation.
 | 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | — | — | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` is now the binding resource |
 | 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **High** | Reduced spec | Fallback ladder (§2.3); split into two bitstream slots |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Medium | Lower sample rate or fewer voices | More `--pipeline_stages`; dedicated engine PLL output; 24/16 voices |
+| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired** | Out-of-spec bitstream in the loop | Not the engine's own path and not fixable in the tool flow — 86% occupancy scatters luna (§2.6). Loaded anyway and it enumerates, takes MIDI and streams at 48–50 MHz, so the −6 model is as pessimistic as hoped; but static timing still fails, so this is not proof of margin over temperature or across dies. Cutting voices remains the fallback. A dedicated engine PLL output does *not* help: `pll.py` drives `sync` and `usb` from one signal, and congestion is not a clock-rate problem |
+| 3c | Stale SI5351 `clk0` silently detunes everything | **Hit in M25** | Every rate wrong by one ratio; presents only as a pitch error | Only the bootloader programs `clk0`; an SRAM load inherits the last-booted slot's rate, and neither a JTAG refresh nor a power cycle clears it — a cold boot autoboots that same slot five seconds later (§2.7). The ratio-only sim checks cannot see it. *Mitigated in M25*: the tee carries a 31-bit `audio`-cycle counter, and both `check_loop.py` and `run_tests.py` measure the clock and refuse to grade before reporting anything else |
 | 4 | 115200 CDC can't carry audio | **Certain** | Loop is blind until M25 | *Retired as a design risk* — UAC2 over `usb2` records 4×24-bit on real hardware (§1.1). M25 is integration work |
-| 4b | USB audio delivers 2.5–5% of frames as zeros | **Confirmed; device-side, upstream** | Noisy FFT grading; unreliable scores | Isolated to the device on the stock vendor bitstream — not cable, bandwidth or host (§1.1). File upstream; in M25 keep the stream open, `blocksize=0`, and gap-detect + retry in `usbaudio.py` |
-| 4c | Non-SoC bitstreams get no ADC/DAC calibration (−86…−116 mV offsets) | **Confirmed** | ~1.2% DC error pollutes M23 grading | Keep a minimal SoC, or read the cal EEPROM in gateware (§1.1). Alternatively high-pass in the grader and accept the offset |
+| 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce** | Would have been noisy FFT grading | Re-measured 2026-08-03: our bitstream 99.84% / 0.000%, vendor XBEAM 100.27% / 0 zeros over eleven runs, M25 suite worst case 0.001% over six 34-case runs. What the original captures measured is unknown; the misclock is a lead that does not fit the numbers (§1.1, `TILIQUA_USB_DROPOUTS.md`). The M25 machinery stays: stream opened once, `blocksize=0`, channel 2 kept non-zero by the tee, holes interpolated in place — now mostly as the *measurement* that publishes `gap_rate` in every report |
+| 4c | Non-SoC bitstreams get no ADC/DAC calibration (−86…−116 mV offsets) | **Confirmed** | ~1.2% DC error pollutes M23 grading | *Sidestepped in M25*: the graded signal is teed off `core.o` digitally and never reaches a converter, so there is nothing to calibrate. Still applies to anything graded at the jacks (M28 CV) |
 | 5 | Effects don't fit on-chip | **Certain** | Rewrite, not port | M26 against `tiliqua.dsp.delay_line` (PSRAM) |
 | 6 | Video + full polyphony don't coexist | Medium | Two bitstreams instead of one | Use the 8 bootloader slots; decide with M21 numbers |
 | 7 | Tiliqua submodule / Amaranth version drift | Medium | Build breakage | Pin the submodule; build gateware in Tiliqua's own `pdm` env, keep `uv` for host tooling |
