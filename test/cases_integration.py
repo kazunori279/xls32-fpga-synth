@@ -107,11 +107,21 @@ add(id="combo_poly_reverb", title="Poly chord through filter + reverb", desc="A 
 
 # ---- the 5 factory presets ----
 _CC_OF = {c["id"]: c["cc"] for c in synthspec.CONTROLS}
+# Presets outlive the controls they were saved with. Every stored patch still carries an
+# "fx" value from when CC83 selected an effect mode; the shell ignores CC83 now (effects are
+# depth-gated via CC93/94/95) and synthspec dropped the control, so sending it would be a
+# no-op even if we could. Anything else missing is a real drift between the preset bank and
+# the control list, and should be loud.
+_RETIRED = {"fx"}
 
 def _apply_preset(values):
+    unknown = sorted(set(values) - set(_CC_OF) - _RETIRED)
+    if unknown:
+        raise KeyError(f"preset uses controls synthspec does not define: {unknown}")
     def setup(fd):
         for cid, val in values.items():
-            H.send(fd, cc(_CC_OF[cid], val))
+            if cid in _CC_OF:
+                H.send(fd, cc(_CC_OF[cid], val))
     return setup
 
 def _chk_preset(name):
