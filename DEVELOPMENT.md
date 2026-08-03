@@ -80,6 +80,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | 16+ | 24 dB filter / self-osc / drive (cascade a 2nd SVF pole + saturation), **ring/FM ✅ (M19)**, osc sync, exp. envelopes, LFO shapes, aftertouch / mod matrix | — |
 | **20 ✅** | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | **A/B against the pre-move commit on the same board: 98.4 → 98.6, 152/175 bit-identical, same 3 pre-existing FAILs** |
 | **21 ✅** | **ECP5 feasibility spike** (decision gate): engine alone on `LFE5U-25F`, `STAGES` × voice-count sweep | **32 voices × 4 parts fit: 66% LUT / 38% FF / 0 BRAM / 86% DSP at `STAGES=12`. No fallback rung needed** |
+| **22 ✅** | **18×18 arithmetic**: reshape the DSP48-tuned multiplies in `synth.x` for the ECP5's narrower tile | **`MULT18X18D` 24 → 19 (86% → 68%); 3,000 audio samples bit-identical on both boards' configs** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1004,6 +1005,53 @@ measurement or rewriting a throwaway copy. `voices_variant.py` does the latter, 
 match count of every rewrite — which immediately caught two of its own bugs (`Voice[32]` occurs 10
 times, not 6; `\bu5\b` also matches the `u5` inside `u5:31`). Its self-check is that `--voices 32`
 must reproduce `core/synth.x` byte for byte.
+
+## Milestone 22 — narrowing the arithmetic to 18×18 (done)
+
+M21 left one resource near its limit: **24 of 28 `MULT18X18D`**, 25 with the shell. The cause is in
+this document's own history — the multiplies in `synth.x` were shaped for the DSP48E1, which is
+**25×18**. The ECP5 tile is **18×18**. Four operands sat in the gap: 20, 22 and 23 bits wide, each
+one DSP48 on Artix-7 and two tiles on ECP5. Narrowing them took **24 → 19**, and the
+`MULT18X18D`/`TRELLIS_COMB` ranking flipped: multipliers 68%, LUTs 73%.
+
+**The trap: yosys maps *every* `*` to a DSP tile, however narrow.** The obvious fix for a 23×4
+multiply is to split the wide operand into an 18-bit chunk plus a 5-bit remainder and multiply each.
+A `build/dspprobe/` sweep — one trivial module per operand shape, synthesized and counted — says
+otherwise: 2×16 costs a tile, 3×16 costs a tile, 6×10 costs a tile. The split would have cost the
+same two tiles it was meant to save. **The saving only exists if the small chunk contains no `*` at
+all**, so each rewrite ends in shifts and muxes:
+
+- **SVF band update** — one `as s19` cast. `clampx` had already bounded the value to ±180,000, well
+  inside s19, but a clamp narrows the *value* and not the *type*, so XLS carried 24 bits into the
+  multiplier. The cast is lossless and costs nothing.
+- **Pitch mod, and the mix accumulate** — split the wide operand at bit 18; the low half pairs with
+  the narrow operand inside one tile, and the 2- or 4-bit top folds in as a shift-add of the *other*
+  operand (top bit subtracted, for sign). LUTs, not a second multiplier.
+- **Unison detune** — `uni` is a 4-bit signed stack index, so the whole multiply is four conditional
+  shifts. This is the one that removes a tile outright rather than halving one.
+
+**Bit-exactness, not score-equivalence.** A change that is supposed to alter nothing should be held
+to more than "the test suite still scores 98.6". `core/sim/tb_equiv.v` drives the engine's MIDI
+channel directly and dumps 3,000 audio words; two engines from two revisions must produce identical
+files. The stimulus deliberately lights every path touched — max unison, pitch bend on two parts,
+resonance high enough to push the SVF state near its clamps, and notes at 108 and 120 where
+`inc0>>12` and `inc>>9` actually exceed 18 bits. **Identical over 3,000 samples with 2,809 distinct
+values**, at both `STAGES=12` and the shipping `STAGES=48`.
+
+One detail matters more than it looks: MIDI is fed **one byte per audio pull**, not as fast as the
+engine accepts it. A datapath edit shifts XLS's pipeline schedule, and a free-running feed would
+land a note-on on a different slot of the 32-voice ring — a diff that is a scheduling artefact and
+not an arithmetic one. Pacing to sample boundaries makes the comparison mean what it claims.
+
+**Both boards, from one source.** The Basys 3 side is unchanged where it counts: 768 cycles per
+sample (identical), audio bit-identical at `STAGES=48`, and on `synth_xilinx -family xc7` the engine
+goes **20 → 19 DSP48E1** for **+450 LCs** (+4.1%) — the DSP48's 25×18 shape already absorbed three
+of the four wide operands, so only the unison rewrite shows up there. Against the shipped Vivado
+numbers (50.4% LUT, 65% BRAM binding, ~18.5 ns critical path in a 30 ns ÷3 budget) that is a small
+cost in the resource that is *not* binding. What has **not** been verified is a real Vivado timing
+run: neither Vivado nor `nextpnr-xilinx` exists for arm64 macOS, and the GCE build VM in
+`remote_build.sh` was not started. ECP5 Fmax rose slightly (27.49 → 27.61 MHz) at `STAGES=12`, whose
+per-stage logic is *deeper* than `STAGES=48`'s, which is evidence but not a substitute.
 
 ---
 

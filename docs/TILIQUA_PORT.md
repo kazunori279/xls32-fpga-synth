@@ -4,7 +4,7 @@ A plan to run the XLS32 engine on **[Tiliqua](https://apfaudio.github.io/tiliqua
 `TLQ-SCREEN`) alongside the existing Basys 3 target, and to restructure the repo so both boards are
 first-class.
 
-Status: **M20 and M21 are done**; M22 onward is still plan. §1.1 records measurements taken on the
+Status: **M20, M21 and M22 are done**; M23 onward is still plan. §1.1 records measurements taken on the
 real module and M21 records measurements taken on the real toolchain, so the constraints below are
 not estimates. Milestones continue the numbering in [DEVELOPMENT.md](../DEVELOPMENT.md)
 (M1 → M19 + Web UI), so this starts at **M20**.
@@ -427,11 +427,25 @@ Three findings that outlive this milestone:
 framebuffer + VexRiscv) is a far larger tenant and was not measured; if M27/M28 take that path, the
 16- and 24-voice rungs above are already costed.
 
-**M22 · Narrow the arithmetic to 18×18**
+**M22 · Narrow the arithmetic to 18×18 — done**
 Rework the multiplies in `synth.x` that currently exploit DSP48's 25×18 asymmetry so each fits one
 `MULT18X18D`. Keep the Vivado build's DSP count from regressing.
 *Exit:* `MULT18X18D` ≤ ~20 on ECP5 **and** Basys 3 e2e unchanged. (Both boards build from the same
 `synth.x`; every DSLX change is dual-verified from here on.)
+
+**Result: 24 → 19 `MULT18X18D`** (68% of 28; 20 including the shell's one). Four edits, all
+bit-exact — see [DEVELOPMENT.md](../DEVELOPMENT.md) (Milestone 22) for the reasoning and the trap.
+
+| ECP5, `STAGES=12`, engine alone | before | after | |
+|---|---:|---:|---|
+| MULT18X18D | 24 | **19** | **−5** |
+| TRELLIS_COMB | 15,944 | 16,501 | +557 |
+| TRELLIS_FF | 9,122 | 9,239 | +117 |
+| DP16KD | 0 | 0 | — |
+| Fmax | 27.49 MHz | 27.61 MHz | +0.12 |
+
+With the audio-only shell that is **20 of 28 tiles (71%)**, eight spare where there were three.
+`MULT18X18D` is no longer the binding resource — `TRELLIS_COMB` is, at 73%.
 
 ### Phase B — first sound
 
@@ -543,7 +557,7 @@ graded by hand or by simulation.
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| 1 | 26 DSP48 explode past 28 `MULT18X18D` | **High** | Blocks the port | M22 — narrow to 18×18 in DSLX; fall back on voice count |
+| 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | — | — | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` is now the binding resource |
 | 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **High** | Reduced spec | Fallback ladder (§2.3); split into two bitstream slots |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Medium | Lower sample rate or fewer voices | More `--pipeline_stages`; dedicated engine PLL output; 24/16 voices |
 | 4 | 115200 CDC can't carry audio | **Certain** | Loop is blind until M25 | *Retired as a design risk* — UAC2 over `usb2` records 4×24-bit on real hardware (§1.1). M25 is integration work |

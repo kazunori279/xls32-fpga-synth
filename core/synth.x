@@ -70,7 +70,10 @@ fn clampx(x: s32, lim: s32) -> s32 { if x > lim { lim } else if x < s32:0 - lim 
 fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32) {
     let low1  = clampx(low + ((f * band) >> u32:13), s32:131072);
     let high  = clampx(x - low1 - ((q * band) >> u32:13), s32:180000);
-    let band1 = clampx(band + ((f * high) >> u32:13), s32:131072);
+    // `high as s19` is free: clampx just bounded it to +-180000, inside s19's +-262144. Without
+    // the cast XLS carries it as 24 bits -- the clamp narrows the value but not the type -- and a
+    // 24-bit operand needs two MULT18X18D on ECP5 where band's 19 needs one. Lossless. [M22]
+    let band1 = clampx(band + ((f * (high as s19 as s32)) >> u32:13), s32:131072);
     // DE-LATCH: leak the integrator state a hair each sample so a fixed-point overflow limit
     // cycle can't sustain full-scale (the clamp alone latches). Poles pulled just inside the
     // unit circle -> any self-oscillation decays. >>6/>>7 is ~1.5%/0.8%/sample: inaudible on
@@ -200,11 +203,30 @@ fn process_voice(v: Voice, wave: u3, cutoff: u16, reso: u16, lfo_mod: s32, fdept
     // so the multiply is ~19x10 bits (no 32x32 / no u64 overflow).
     // (pmod as s16) forces XLS to a 16-bit operand so this multiply is one DSP48 (pmod is clamped
     // to +-2047 in next(), so the truncation is lossless).
-    let inc = (inc0 as s32 + (((inc0 >> u32:12) as s32) * (pmod as s16 as s32))) as u32;
+    // [M22] inc0>>12 is 20 bits, which is one DSP48 (25x18) but two MULT18X18D on ECP5, whose
+    // tile tops out at 19-bit operands. Split it at 18: the low half pairs with pmod inside one
+    // tile, and the 2-bit top folds in as a shift-mux -- LUTs, not a second multiplier. Bit-exact.
+    let pm    = pmod as s16 as s32;
+    let inc_a = inc0 >> u32:12;
+    let a_lo  = (inc_a & u32:0x3FFFF) as s32;                  // 18 bits -> 19 signed
+    let a_hi  = (inc_a >> u32:18) as u2;                       // 0..3
+    let pmul  = a_lo * pm
+              + ((match a_hi { u2:0 => s32:0, u2:1 => pm,
+                               u2:2 => pm << u32:1, _ => pm + (pm << u32:1) }) << u32:18);
+    let inc = (inc0 as s32 + pmul) as u32;
     // unison detune: shift this voice's pitch by its stack slot (~3.4 cents/unit, inc>>9).
     // The slot grows with the voice count so the spread widens 2->4 voices; each stacked
     // voice has its own phase accumulator, so they beat against each other.
-    let inc = (inc as s32 + ((inc >> u32:9) as s32) * (v.uni as s32)) as u32;
+    // [M22] `uni` is a 4-bit signed stack slot, but inc>>9 is 23 bits, so this cost two of the
+    // ECP5's 28 MULT18X18D tiles -- yosys maps every `*` to a multiplier no matter how narrow the
+    // operands are. Four conditional shifts (bit 3 carries the sign) cost LUTs and no tile at all.
+    let det = (inc >> u32:9) as s32;
+    let uni = v.uni as s32;
+    let inc = (inc as s32
+               + (if (uni & s32:1) != s32:0 { det }           else { s32:0 })
+               + (if (uni & s32:2) != s32:0 { det << u32:1 }  else { s32:0 })
+               + (if (uni & s32:4) != s32:0 { det << u32:2 }  else { s32:0 })
+               - (if (uni & s32:8) != s32:0 { det << u32:3 }  else { s32:0 })) as u32;
     let phase_n = v.phase + inc;
     // sub-oscillator one octave down: toggle a 1-bit square each time the main phase
     // wraps (a 32b/voice 2nd accumulator overflowed VPR's packer -> use 1 bit instead).
@@ -357,7 +379,16 @@ proc engine {
         // single amp*compv DSP48. vol=127 -> ~unity. (amp as s24) forces a <=24-bit operand so
         // amp*compv is one DSP48 (amp is clamped to +-2^21 in process_voice, truncation lossless).
         let compv = (comp * (p.vol as s32)) >> u32:7;
-        let mix1 = st.mixacc + (((amp as s24 as s32) * compv) >> u32:8);
+        // [M22] process_voice clamps amp to +-(2^21-1), i.e. 22 bits -- one DSP48, two
+        // MULT18X18D. Same split as the pitch-mod multiply: low 18 bits into the tile alongside
+        // compv (9 bits), the 4-bit top folded in as shifts, bit 3 subtracted for its sign.
+        let m_lo = amp & s32:0x3FFFF;                          // 18 bits -> 19 signed
+        let m_hi = amp >> u32:18;                              // -8..7
+        let m_hp = (if (m_hi & s32:1) != s32:0 { compv }          else { s32:0 })
+                 + (if (m_hi & s32:2) != s32:0 { compv << u32:1 } else { s32:0 })
+                 + (if (m_hi & s32:4) != s32:0 { compv << u32:2 } else { s32:0 })
+                 - (if (m_hi & s32:8) != s32:0 { compv << u32:3 } else { s32:0 });
+        let mix1 = st.mixacc + (((m_lo * compv) + (m_hp << u32:18)) >> u32:8);
         let last = st.vidx == u5:31;
         send_if(tok, audio_out, last, scale_mix(mix1));
         // advance every part's LFO phase once per sample (on the ring's last slot)
