@@ -457,7 +457,8 @@ unchanged**, Slice LUTs **10,483 → 10,405**, worst data-path delay **18.872 �
 Amaranth top instantiating `engine.v`, a boot patch played into the engine's own MIDI parser at
 reset, 32 kHz → 48 kHz resampling into eurorack-pmod output channels 0/1. No effects, no MIDI
 input. Built by `boards/tiliqua/build.sh`; the gateware is `boards/tiliqua/gateware/`.
-*Exit:* met in simulation — see the pitch check below. The bitstream archive is well-formed
+*Exit:* met in simulation (see the pitch check below) **and heard on the module** — SRAM-loaded
+onto a power-cycled Tiliqua, out0 sustains an audible A4. The bitstream archive is well-formed
 (`top.bit` + manifest, `hw_rev: 5`, tag matching HEAD, `clk0_hz: 12288000`). **"Boots from a slot"
 is deferred to M28**: flashing writes the nine-slot flash layout, and this port has deliberately
 never written it. SRAM loading via `openFPGALoader -c dirtyJtag` covers everything M23 needs.
@@ -503,6 +504,15 @@ really 12.5 MHz. Resampling must divide normalised frequency by exactly 3/2, and
 ratio **0.6674** against 0.6667, error **0.12%**. Peak level 2480 against the engine's 5515, i.e.
 the −6 dB pad. That measures the audio path — CDC, resampler, codec — and says nothing about
 tuning, which is the point.
+
+*Monitoring, for anyone without a Eurorack case.* out0 goes straight into a consumer line input
+over a plain 3.5 mm cable: the −6 dB pad plus the boot patch's level puts the sustain at **0.265 V
+RMS** (~0.75 Vpp) against the −10 dBV consumer standard of 0.316 V RMS, where an ordinary Eurorack
+signal would be 10 Vpp. The Tiliqua jack is mono TS, so a stereo cable grounds the right channel
+and you hear one side — harmless. Do not use headphones directly: the pmod outputs are DC-coupled
+and a non-SoC bitstream is uncalibrated (§1.1), so ~100 mV of DC rides along. `XLS_SIM_MS=3000`
+plus a WAV writer at 48828 Hz — the harness's real capture rate — gives the expected sound to A/B
+against before touching hardware.
 
 *Utilisation* (nextpnr-ecp5, `LFE5U-25F-6BG256C`, full design including pmod and PLL):
 

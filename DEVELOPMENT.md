@@ -1068,14 +1068,14 @@ the tool is not told about, but it makes the report easier to read.
 So M22 costs the Basys 3 nothing and buys the ECP5 five tiles. That is the case for doing this kind
 of narrowing in the shared DSLX rather than forking the source per board.
 
-## Milestone 23 — hello Tiliqua: the first bitstream (done, simulation-verified)
+## Milestone 23 — hello Tiliqua: the first bitstream (done, heard on hardware)
 
 M21 proved the engine fits an `LFE5U-25F`; M22 made it fit comfortably. M23 is the first time
 anything actually runs there: `boards/tiliqua/gateware/` — an Amaranth shell around the same
 `engine.v` every board gets from `core/codegen.sh` — plays a fixed boot patch out eurorack-pmod
 channels 0/1. No effects, no MIDI input, no host loop. The point is to close the path from DSLX to
-a jack, and it does: a full nextpnr run passes timing on both clocks, and the simulated output
-carries the engine's waveform.
+a jack, and it does: a full nextpnr run passes timing on both clocks, the simulated output carries
+the engine's waveform, and the bitstream loaded to the module's SRAM is audible on out0.
 
 **The engine cannot live in `sync`, and that means a CDC.** The plan said otherwise — it assumed
 the whole core could sit in the `audio` domain with the pmod, no crossing needed. Reading
@@ -1144,6 +1144,21 @@ Read those numbers from the **end** of `top.tim`, not the first match. nextpnr p
 "Max frequency for clock" twice: once as a post-placement estimate and again after routing. On
 this design the two disagree in both directions — the estimate said 28.63 / 87.75 — so grepping
 the first occurrence quietly reports a number that was never achieved.
+
+**Heard on the module, and no Eurorack gear was needed to hear it.** The load is
+`openFPGALoader -c dirtyJtag` onto a freshly power-cycled module; out0 went into the analogue AUX
+input of a pair of powered desktop speakers over a plain 3.5 mm cable, and the sustained A4 came
+out. That works because of an accident worth writing down: the −6 dB pad plus the boot patch's own
+level puts the sustain at **0.265 V RMS** (0.377 Vpk, ~0.75 Vpp), and consumer line level is
+0.316 V RMS. A normal Eurorack audio signal is 10 Vpp and would need a −20 dB pad to face a line
+input; this one is already there. Two caveats that do not apply here but will later: the pmod
+outputs are DC-coupled, and a non-SoC bitstream gets no converter calibration, so ~100 mV of DC
+offset rides on the signal — fine into a line input's coupling capacitor, not fine into headphones.
+
+Rendering the Verilator capture to a WAV first is worth the two minutes. `XLS_SIM_MS=3000` gives
+three seconds; write it at **48828 Hz** rather than 48000, because the harness's mclk is really
+12.5 MHz and declaring the true capture rate is what makes the pitch come out right. Having the
+expected sound on hand turns "is it working?" into an A/B rather than a guess.
 
 **What is deliberately not done.** The written exit criterion also said "boots from a slot". It
 does not, and that is deferred to M28: flashing writes the module's nine-slot layout, and this
