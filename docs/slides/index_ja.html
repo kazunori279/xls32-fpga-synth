@@ -528,7 +528,7 @@
         <rect x="2" y="12" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".4"/>
         <rect x="5" y="7" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2" opacity=".65"/>
         <rect x="8" y="2" width="18" height="12" rx="2.5" stroke="#4285f4" stroke-width="2.2"/>
-      </svg>同時発音数</td><td>32音の時分割多重 — エンジン1サイクルにつき1ボイス</td><td>4パートマルチティンバー（MIDI ch 1–4）、動的に共有されるボイスプール</td></tr>
+      </svg>同時発音数</td><td>32音の時分割多重 — procティック1回につき1ボイス（約24エンジンサイクル）</td><td>4パートマルチティンバー（MIDI ch 1–4）、動的に共有されるボイスプール</td></tr>
       <tr><td><svg class="ric" width="30" height="28" viewBox="0 0 30 28" fill="none">
         <path d="M 2 10 Q 6.5 1 11 10 T 20 10 T 29 10" stroke="#34a853" stroke-width="2.2" stroke-linecap="round"/>
         <path d="M 2 20 Q 6.5 11 11 20 T 20 20 T 29 20" stroke="#34a853" stroke-width="2.2" stroke-linecap="round" opacity=".5"/>
@@ -655,7 +655,7 @@
         <line x1="20" y1="3" x2="20" y2="9" stroke="#4285f4" stroke-width="2.4"/>
       </svg></div>
       <div class="lbl">決定的で極小のレイテンシ</div>
-      <p>固定長パイプラインが1クロックにつき1サンプルを計算。データパスの遅延は常に数サイクルで一定 —
+      <p>固定長パイプラインが毎サンプルを同じスケジュールで作ります。データパスの遅延は常に数マイクロ秒で一定 —
       <b>1ミリ秒未満、ジッターなし</b>です。</p>
       <p class="small">Web Audioは10–40 msのOSバッファの上で128サンプル単位にレンダリングし、
       UIやガベージコレクタとCPUを共有します。</p>
@@ -1244,7 +1244,7 @@
     </div>
     <div class="ev up" style="left:1%;"><div class="pad"><b>最初の音</b>DDSサイン波1本 + ADSR。UART越しに遠隔で検証。</div></div>
     <div class="ev dn" style="left:15.5%;"><div class="pad"><b>本物のMIDI入力</b>UART RX、パーサ、ボイスアサイン。音程はFFTで確認。</div></div>
-    <div class="ev up" style="left:30%;"><div class="pad"><b>パイプライン化</b>32ボイスを時分割するprocへ全面書き直し。1サイクル1ボイス。</div></div>
+    <div class="ev up" style="left:30%;"><div class="pad"><b>パイプライン化</b>32ボイスを時分割するprocへ全面書き直し。procの1ティックで1ボイス。</div></div>
     <div class="ev dn" style="left:44.5%;"><div class="pad"><b>ボイス毎フィルター</b>全ボイスに独立のレゾナントSVFとキートラック。</div></div>
     <div class="ev up" style="left:59%;"><div class="pad"><b>BRAMエフェクト</b>コーラス、ピンポンディレイ、Freeverbリバーブをブロック RAM に。</div></div>
     <div class="ev dn" style="left:73.5%;"><div class="pad"><b>ブラウザパネル</b>Serum風UI。プリセットは逆合成（CMA-ES）で生成。</div></div>
@@ -1343,7 +1343,7 @@
     <thead><tr><th style="width:290px;">リズム</th><th style="width:182px; white-space:nowrap;">周波数</th><th style="width:112px;">周期</th><th>何が起きるか</th></tr></thead>
     <tbody>
       <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3 v-12 h3 v12 h3" stroke="#4285f4" stroke-width="2" stroke-linejoin="round"/></svg>マスタークロック</td><td>100 MHz</td><td>10 ns</td><td>ボード全体の土台 — 発振器1つのみ。MMCM/PLLなし</td></tr>
-      <tr><td style="background:#e6f4ea; border-left:4px solid #188038; color:#0d652d;"><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2.6" stroke-linejoin="round"/></svg><b>ce — エンジンのクロック</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">33.3 MHz（÷3）</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">30 ns</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d; font-weight:600;">engine.v の全パイプラインレジスタがこの1本のイネーブルで動く。1発 = ボイス1つ。</b></td></tr>
+      <tr><td style="background:#e6f4ea; border-left:4px solid #188038; color:#0d652d;"><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h4 v-12 h4 v12 h9 v-12 h4 v12 h9 v-12 h4 v12 h4" stroke="#34a853" stroke-width="2.6" stroke-linejoin="round"/></svg><b>ce — エンジンのクロック</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">33.3 MHz（÷3）</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d;">30 ns</b></td><td style="background:#e6f4ea;"><b style="color:#0d652d; font-weight:600;">engine.v の全パイプラインレジスタがこの1本のイネーブルで動く。ボイス1つに約24発。</b></td></tr>
       <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 19 h6 v-12 h4 v12 h24 v-12 h4" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/></svg>ce8（エフェクト）</td><td>16.7 MHz（÷6）</td><td>60 ns</td><td>28状態のエフェクトFSMを1ステップ。BRAMを1回読み書き</td></tr>
       <tr><td><svg class="ric" width="42" height="24" viewBox="0 0 42 24" fill="none"><path d="M 2 12 Q 12 -2 21 12 T 40 12" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/></svg>サンプル周期</td><td>32 kHz</td><td>31.25 µs</td><td>32 kHzステレオのサンプル1つ分 — マスタークロック3,125発</td></tr>
     </tbody>
@@ -1376,11 +1376,11 @@
 <text x="104" y="29" font-family="Roboto Mono, monospace" text-anchor="end" font-size="14" fill="#1a73e8">clk</text>
 <text x="104" y="76" font-family="Roboto Mono, monospace" text-anchor="end" font-size="15" fill="#0d652d" font-weight="700">ce</text>
 <text x="104" y="147" font-family="Roboto Mono, monospace" text-anchor="end" font-size="14" fill="#b06000">ce8</text>
-<text x="116" y="106" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#0d652d" font-weight="700">30 ns · エンジン1サイクル · ボイス1つ — engine.v はこのエッジ以外では一切動かない</text>
+<text x="116" y="106" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#0d652d" font-weight="700">30 ns · エンジン1サイクル — engine.v はこのエッジ以外では一切動かない</text>
 </svg>
   </div>
   <div class="body" style="max-width:1120px; margin-top:14px;">
-    <p style="font-size:15.5px;">演算に使うのは1サンプルあたり<span class="em">3,125クロック中わずか約264クロック</span>。パイプラインは周期の約90%を残して終わります。本当の上限はDSPではなく<b>UARTのフレーム（約2,000クロック）</b>なので、エンジンにはまだ十分な伸びしろがあります。</p>
+    <p style="font-size:15.5px;">32ボイスのスキャンに要するのは1サンプルあたり<span class="em">3,125クロック中の約2,304クロック</span>、周期の74%です。エフェクト（168クロック）と<b>UARTのフレーム（約2,000クロック）</b>はこれと並行して走るので、先に効いてくる上限はUARTではなく演算のほう。残る余裕は約26%です。</p>
   </div></section>
 
 <!-- ============ 19 · VOICE PARAMS ============ -->
@@ -1967,51 +1967,53 @@
     <text x="150" y="16" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">エンジンサイクル（1サイクル = 1 ce = マスタ3クロック = 30ns）</text>
     <path d="M150 44 L150 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
     <text x="150" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">0</text>
-    <path d="M298 44 L298 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="298" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">8</text>
-    <path d="M446 44 L446 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="446" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">16</text>
-    <path d="M594 44 L594 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="594" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">24</text>
-    <path d="M742 44 L742 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="742" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">32</text>
-    <path d="M890 44 L890 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="890" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">40</text>
-    <path d="M1038 44 L1038 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
-    <text x="1038" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">48</text>
+    <path d="M290 44 L290 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="290" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">24</text>
+    <path d="M430 44 L430 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="430" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">48</text>
+    <path d="M570 44 L570 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="570" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">72</text>
+    <path d="M710 44 L710 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="710" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">96</text>
+    <path d="M850 44 L850 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="850" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">120</text>
+    <path d="M990 44 L990 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="990" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">144</text>
+    <path d="M1130 44 L1130 310" stroke="#dadce0" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="1130" y="36" font-family="Roboto Mono, monospace" font-size="11.5" fill="#5f6368" text-anchor="middle">168</text>
     <text x="136" y="79" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 0</text>
-    <rect x="150" y="58" width="888" height="32" rx="6" fill="#d2e3fc" opacity="1.00"/>
-    <rect x="150" y="58" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <text x="594" y="79" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#174ea6" text-anchor="middle">48段のパイプライン、各段にレジスタ1つ</text>
-    <circle cx="1038" cy="74" r="5" fill="#188038"/>
+    <rect x="150" y="58" width="280" height="32" rx="6" fill="#d2e3fc" opacity="1.00"/>
+    <rect x="150" y="58" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <text x="290" y="79" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#174ea6" text-anchor="middle">48段のパイプライン、各段にレジスタ1つ</text>
+    <circle cx="430" cy="74" r="5" fill="#188038"/>
     <text x="136" y="123" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 1</text>
-    <rect x="168" y="102" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.90"/>
-    <rect x="168" y="102" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1056" cy="118" r="5" fill="#188038"/>
+    <rect x="290" y="102" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.90"/>
+    <rect x="290" y="102" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="570" cy="118" r="5" fill="#188038"/>
     <text x="136" y="167" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 2</text>
-    <rect x="187" y="146" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.80"/>
-    <rect x="187" y="146" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1075" cy="162" r="5" fill="#188038"/>
+    <rect x="430" y="146" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.80"/>
+    <rect x="430" y="146" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="710" cy="162" r="5" fill="#188038"/>
     <text x="136" y="211" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 3</text>
-    <rect x="206" y="190" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.70"/>
-    <rect x="206" y="190" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1094" cy="206" r="5" fill="#188038"/>
+    <rect x="570" y="190" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.70"/>
+    <rect x="570" y="190" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="850" cy="206" r="5" fill="#188038"/>
     <text x="136" y="255" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 4</text>
-    <rect x="224" y="234" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.60"/>
-    <rect x="224" y="234" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
-    <circle cx="1112" cy="250" r="5" fill="#188038"/>
+    <rect x="710" y="234" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.60"/>
+    <rect x="710" y="234" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <circle cx="990" cy="250" r="5" fill="#188038"/>
     <text x="136" y="299" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">ボイス 5</text>
-    <rect x="242" y="278" width="888" height="32" rx="6" fill="#d2e3fc" opacity="0.50"/>
-    <rect x="242" y="278" width="888" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
+    <rect x="850" y="278" width="280" height="32" rx="6" fill="#d2e3fc" opacity="0.50"/>
+    <rect x="850" y="278" width="280" height="32" rx="6" fill="none" stroke="#1a73e8" stroke-width="1.2" opacity=".6"/>
     <circle cx="1130" cy="294" r="5" fill="#188038"/>
     <text x="136" y="336" font-family="Roboto Mono, monospace" font-size="12.5" fill="#5f6368" text-anchor="end">⋮</text>
     <text x="150" y="336" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">…以下、ボイス31まで同様</text>
-    <path d="M1038 74 L1130 294" stroke="#188038" stroke-width="1.8" stroke-dasharray="4 4"/>
-    <text x="1152" y="336" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038" text-anchor="end">毎サイクル 1ボイス投入・1ボイス完了</text>
+    <path d="M430 74 L1130 294" stroke="#188038" stroke-width="1.8" stroke-dasharray="4 4"/>
+    <text x="1152" y="336" font-family="Roboto, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#188038" text-anchor="end">ボイスの投入は約24サイクルに1つ ― 毎サイクルではない</text>
     <text x="1152" y="357" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#5f6368" text-anchor="end">● = そのボイスのサンプルが完成</text>
     <rect x="0" y="378" width="1152" height="64" rx="10" fill="#e6f4ea"/>
-    <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">レイテンシは48サイクル、スループットは1サイクルに1ボイス。スキャン時間を決めるのは後者だけです。</text>
-    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">つまり32ボイスは 48 × 32 ではなく32エンジンサイクル。約96マスタクロック（32 × 3）に相当します。</text>
+    <text x="20" y="404" font-family="Roboto, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#188038">レイテンシは48サイクル、スループットは実測で1ボイスあたり約24サイクル。スキャン時間を決めるのは後者だけです。</text>
+    <text x="20" y="427" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#5f6368">つまり32ボイスは約768エンジンサイクル。48 × 32 でも32でもなく、約2,300マスタクロック — サンプル周期の74%です。</text>
     </svg>
   </div>
 </section>
@@ -2357,14 +2359,14 @@
     <text x="164" y="26" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">― 32kHzサンプル1つ分。100MHzで3,125クロック、長さは実寸比</text>
     <rect x="36" y="38" width="3.5" height="39" rx="1.75" fill="#12b5cb"/>
     <text x="50" y="48" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#12b5cb" font-weight="700">サンプル N+1 ― これから作る分</text>
-    <text x="228" y="48" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">・Nを引き渡した瞬間にエンジンが走り出し、96クロック後にはもう出来ている</text>
+    <text x="228" y="48" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">・Nを引き渡した瞬間にエンジンが走り出し、次を作るのに約2,300クロックかかる</text>
     <rect x="36" y="88" width="3.5" height="71" rx="1.75" fill="#1a73e8"/>
     <text x="50" y="98" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#1a73e8" font-weight="700">サンプル N ― これから送り出す分</text>
     <text x="240" y="98" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#80868b">・エンジンが前の周期に作り終えていたもの。ティックはそれを引き出すだけ</text>
     <rect x="46" y="52" width="1060" height="25" rx="4" fill="#fafbfc"/>
     <g transform="translate(52,55) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 1.8 v3.2 M15 1.8 v3.2 M9 19 v3.2 M15 19 v3.2 M1.8 9 h3.2 M1.8 15 h3.2 M19 9 h3.2 M19 15 h3.2"/></g>
     <text x="210" y="64" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">エンジン</text>
-    <text x="210" y="76" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">32ボイス・1/ce</text>
+    <text x="210" y="76" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">32ボイス・各約24ce</text>
     <rect x="46" y="102" width="1060" height="25" rx="4" fill="#fafbfc"/>
     <g transform="translate(52,105) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10 q2.6 -6 5.2 0 t5.2 0 t5.2 0 t4.4 0"/><path d="M2 17.5 q2.6 -4 5.2 0 t5.2 0 t5.2 0 t4.4 0"/></g>
     <text x="210" y="114" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">エフェクトFSM</text>
@@ -2373,14 +2375,14 @@
     <g transform="translate(52,137) scale(0.62)" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="3.6" width="6.6" height="16.8" rx="1.6"/><path d="M11.6 12 H22.4"/><path d="M18.8 8 L22.8 12 L18.8 16"/></g>
     <text x="210" y="146" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#202124" font-weight="700" text-anchor="end">UART TX</text>
     <text x="210" y="158" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#80868b" text-anchor="end">4バイト @ 2Mbaud</text>
-    <rect x="245.3" y="56" width="860.7" height="17" rx="3" fill="#f1f3f4" stroke="#c8cbcf" stroke-width="1.4" stroke-dasharray="4 3"/>
-    <text x="1096" y="68" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">オーディオ引き渡し待ちで停止 ― avldは上げたまま約3,000clk</text>
+    <rect x="872.7" y="56" width="233.3" height="17" rx="3" fill="#f1f3f4" stroke="#c8cbcf" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text x="1096" y="68" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">avldを上げてティック待ち ― 約820clk</text>
     <rect x="265.7" y="106" width="840.3" height="17" rx="3" fill="#f1f3f4" stroke="#c8cbcf" stroke-width="1.4" stroke-dasharray="4 3"/>
     <text x="1096" y="118" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">dstは0に戻り、この周期の仕事は終わり</text>
     <rect x="834.1" y="138" width="271.9" height="17" rx="3" fill="#f1f3f4" stroke="#c8cbcf" stroke-width="1.4" stroke-dasharray="4 3"/>
-    <text x="1096" y="150" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">約960clk 何もしない</text>
-    <rect x="218.0" y="56" width="27.3" height="17" rx="3" fill="#d7f1f6" stroke="#12b5cb" stroke-width="1.4"/>
-    <text x="255.27936" y="68" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#0b7b8a" font-weight="700">96 clk（32 × 3）</text>
+    <text x="1096" y="150" font-family="Roboto, Arial, sans-serif" font-size="10.5" fill="#80868b" text-anchor="end">約960clk このレーンは空き</text>
+    <rect x="218.0" y="56" width="654.7" height="17" rx="3" fill="#d7f1f6" stroke="#12b5cb" stroke-width="1.4"/>
+    <text x="545.4" y="68" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#0b7b8a" font-weight="700" text-anchor="middle">約2,300 clk（32ボイス × 約24ce × 3）</text>
     <rect x="218.0" y="106" width="47.7" height="17" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
     <text x="275.73888" y="118" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#174ea6" font-weight="700">168 clk（28 × 6）</text>
     <rect x="265.7" y="138" width="568.3" height="17" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
@@ -2399,7 +2401,7 @@
     <rect x="24" y="228" width="1104" height="216" rx="10" fill="#ffffff" stroke="#dadce0"/>
     <g transform="translate(44,238) scale(0.72)" fill="none" stroke="#1a73e8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 18 V7 H6.4 V18 H11.2 V7 H16 V18 H20.8 V7 H22.4"/></g>
     <text x="72" y="254" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#202124" font-weight="700">クロック単位</text>
-    <text x="166" y="254" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">― 同じ周期をティック周辺で拡大。長い区間は ‖ で省略（96clkの走査、約2000clkのTX、アイドル）</text>
+    <text x="166" y="254" font-family="Roboto, Arial, sans-serif" font-size="11.5" fill="#80868b">― 同じ周期をティック周辺で拡大。長い区間は ‖ で省略（約2,300clkの走査、約2,000clkのTX、アイドル）</text>
     <rect x="46" y="262.0" width="1060" height="17.0" fill="#f8f9fa"/>
     <rect x="46" y="296.0" width="1060" height="17.0" fill="#f8f9fa"/>
     <rect x="46" y="330.0" width="1060" height="17.0" fill="#f8f9fa"/>
@@ -2433,7 +2435,7 @@
     <rect x="770.0" y="419.0" width="72.0" height="9.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/><text x="806.0" y="426.9" font-family="Roboto, Arial, sans-serif" font-size="9.5" fill="#d93025" font-weight="700" text-anchor="middle">TX</text>
     <rect x="0" y="452" width="1152" height="48" rx="10" fill="#e8f0fe"/>
     <text x="20" y="473" font-family="Roboto, Arial, sans-serif" font-size="14.5" fill="#174ea6" font-weight="700">エンジンは常に1サンプル先 ― エフェクトがNを加工している裏で、エンジンはもうN+1を作っています。</text>
-    <text x="20" y="492" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">別々の回路なので、重なりはタダ。ティックがNをエフェクトFSMに渡し、同じハンドシェイクがエンジンをN+1へ走らせます。周期を埋めかけるのは約2,000clkのUARTフレームだけ。</text>
+    <text x="20" y="492" font-family="Roboto, Arial, sans-serif" font-size="12.5" fill="#5f6368">別々の回路なので、重なりはタダ。ティックがNをエフェクトFSMに渡し、同じハンドシェイクがエンジンをN+1へ走らせます。上限を決めるのはエンジンの約2,300clkのスキャンです。</text>
     </svg>
   </div>
 </section>

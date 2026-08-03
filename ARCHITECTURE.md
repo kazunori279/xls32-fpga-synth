@@ -52,10 +52,12 @@ Supporting: [`codegen.sh`](core/codegen.sh) runs the XLS toolchain;
 milestone-1 artifact — [see E4](#e4-luts--fix_verilogpy).)
 
 **Execution model.** The engine is a **time-multiplexed pipeline**: one `proc engine` whose
-`next()` runs **one voice per enabled cycle**, with the 32 voices held in a rotating ring so the
+`next()` processes **one voice per invocation**, with the 32 voices held in a rotating ring so the
 "current" voice is always at slot 0 (constant-index — no 32:1 mux). A finished audio sample is
-emitted every **32** cycles. At 100 MHz the engine advances on a ÷3 clock-enable
-([C1](#c1-clocking)); a sample leaves every `SAMPDIV = 3125` master clocks → **32 kHz**.
+emitted every **32** invocations — **~768 engine cycles** at `STAGES=48`, because the achieved
+initiation interval is ~24 cycles per voice, not 1 ([A1](#a1-the-engine-proc)). At 100 MHz the
+engine advances on a ÷3 clock-enable ([C1](#c1-clocking)); a sample leaves every
+`SAMPDIV = 3125` master clocks → **32 kHz**.
 
 **Fixed-point formats** (the recurring ones):
 
@@ -86,14 +88,14 @@ involved. (Per-stage detail: [engine schedule](#a1-the-engine-proc), [clocking](
 [stereo framing](#c4-stereo-framing).)
 
 **The path.** A MIDI byte arrives *asynchronously* over UART (2 Mbaud host, or 31250-baud DIN) and
-is handed to the engine on a `ce` cycle. The engine free-runs through its 32 voices (one per `ce`)
+is handed to the engine on a `ce` cycle. The engine free-runs through its 32 voices (~24 `ce` each)
 and, when the 32 kHz tick pulls a sample, `send_if` delivers it. The shell then runs the 28-state
 effects FSM (on `ce8`), and streams the finished 16-bit stereo sample back out as 4 UART bytes.
 
 ```mermaid
 flowchart LR
   H["host / DIN keyboard"] -->|"UART bytes<br/>~5 µs/byte, async"| RX["UART RX"]
-  RX -->|"midi_in — xfer on ce"| ENG["engine<br/>32 voices, 1 per ce (30 ns)"]
+  RX -->|"midi_in — xfer on ce"| ENG["engine<br/>32 voices, ~24 ce each (~23 µs/sample)"]
   TICK["32 kHz tick<br/>every 3125 clk"] -. paces .-> ENG
   ENG -->|"1 sample / 32 voices"| FX["effects FSM<br/>28 steps, 1 per ce8 (60 ns)"]
   FX -->|"4 bytes/frame"| TX["UART TX<br/>~20 µs/frame"]
@@ -107,8 +109,9 @@ flowchart LR
 | master clock | 10 ns | 1 | everything |
 | `ce` (engine) | 30 ns | 3 | one voice processed |
 | `ce8` (effects) | 60 ns | 6 | one effects-FSM step |
+| engine II (per voice) | ~240 ns | 24 (≈ `pipeline_stages` / 2) | one voice retires |
 | MIDI byte in | ~5 µs | ~500 | one 10-bit UART frame @ 2 Mbaud |
-| 32-voice scan | ~1 µs | ~96 | a full pass of the voice ring |
+| 32-voice scan | ~23 µs | **~2300** (768 engine cycles × 3) | a full pass of the voice ring |
 | effects pass | ~1.7 µs | 168 (28×6) | full stereo Freeverb (echo/chorus + combs + all-pass) |
 | audio frame out | ~20 µs | ~2000 | 4 bytes (`Llo Lhi Rlo Rhi`) @ 2 Mbaud |
 | **sample period** | **31.25 µs** | **3125** (`SAMPDIV`) | one 32 kHz stereo sample |
@@ -118,13 +121,13 @@ cadences. Note the engine's output is **already valid** (`avld` high) *before* t
 free-runs and computes the sample ahead of time ([C3](#c3-engine-handshake)) — so `stick` (a 1-clock
 pulse) just pulls it on the next `ce`; there's no "engine computes now" step between them, only the
 ready/valid handshake. After the pull, the engine **immediately scans the next sample's 32 voices**
-(96 clk on `ce`) *in parallel* with the effects FSM (on `ce8`) and the UART TX — that's why the scan
-needs no snip of its own: it overlaps the runs already snipped, and `avld` goes high again the moment
-it finishes. The long runs (the 96-clock scan, the effects tail, the ~2000-clock UART TX, the
-~960-clock idle tail) are **snipped** (‖), so the visible columns are real 100 MHz cycles. The idle
-tail is `3125 − 168 − 2000 ≈ 957` — only the effects pass and the UART frame are in series (TX starts
-when `dst` reaches 28, [`top.v`](boards/basys3/rtl/top.v)); the 96-clock scan overlaps them and belongs to the
-*next* sample, so it doesn't come out of this period:
+(~2300 clk — 768 cycles on `ce`) *in parallel* with the effects FSM (on `ce8`) and the UART TX —
+that's why the scan needs no snip of its own: it overlaps the runs already snipped, and `avld` goes
+high again the moment it finishes. The long runs (the ~2300-clock scan, the effects tail, the
+~2000-clock UART TX, the ~820-clock idle tail) are **snipped** (‖), so the visible columns are real
+100 MHz cycles. The effects pass and the UART frame are in series with each other (TX starts when
+`dst` reaches 28, [`top.v`](boards/basys3/rtl/top.v)) but both hide under the scan, which is the
+longest of the three — so the idle tail is set by the scan alone: `3125 − 2304 = 821`:
 
 ![End-to-end timing — clock-cycle view around the sample tick: clk, ce (÷3), ce8 (÷6), the pre-computed sample (avld), the parallel 32-voice scan, the audio pull, the effects-FSM kick, and the UART TX, with the long runs snipped](docs/assets/wd_e2e.svg)
 
@@ -144,34 +147,49 @@ when `dst` reaches 28, [`top.v`](boards/basys3/rtl/top.v)); the 96-clock scan ov
   {"name": "UART TX out",                "wave": "0......|=|0..", "data": ["TX"]}
 ],
   "head": {"text": "clock-cycle view around the tick — long runs snipped (‖)"},
-  "foot": {"text": "engine scans the next sample (96 clk) in parallel with effects+TX; ‖ skips ~2900 clk"}
+  "foot": {"text": "engine scans the next sample (~2300 clk) in parallel with effects+TX; ‖ skips ~2900 clk"}
 }
 ```
 
 </details>
 
-**The budget.** The engine's voice scan (~96 clocks) and the effects pass (168 clocks) together use
-only **~264 of the 3125** clocks per sample — the pipeline finishes with ~90 % of the period to
-spare. That headroom is why real-time 32 kHz holds on the DSP48/Vivado build (`ce` = ÷3), and why the
-slower soft-multiplier backends (`ce` = ÷4) still work but only sustain ~28 kHz — the per-sample work
-grows past what ÷4 can retire inside 3125 clocks. MIDI in is decoupled from all of this: bytes are
-accepted whenever they arrive (on the next `ce`), independent of the sample cadence.
+> **`avld` is not a busy indicator.** In simulation the gap from the pull to the next `avld` is
+> only ~478 clocks — but that is a *latency*, not the cost. While `avld` sits high waiting for the
+> next pull, the engine has already advanced 768 − 478 = ~290 cycles into the following sample. The
+> scan costs 768 engine cycles; only part of it is visible after the pull.
 
-**The real ceiling is the UART frame, not the compute.** Of the 3125-clock period, the compute
-pipeline uses only ~264 clocks; the **audio frame out costs ~2000 clocks** (4 bytes × 10-bit 8N1 ×
-50 clk/bit at 2 Mbaud — see the [timescales table](#end-to-end-timing-midi-in--pipeline--audio-out)).
-So the streaming path — not the DSP — is what caps the sample rate: even with a perfect
-compute-∥-TX pipeline the floor is `max(compute, TX) = 2000` clocks → ~50 kHz over this link. This
-also means the engine has generous room to *grow* (more voices, deeper per-voice DSP, more effects)
-without touching the sample rate — the binding resources there are **BRAM and timing closure**, not
-the clock budget ([E5 floorplan](#e5-chip-floorplan-rough-resource-map)).
+**The budget.** The engine's voice scan costs **2,304 of the 3,125** clocks per sample
+(768 engine cycles × 3) — **74 %** of the period. The effects pass (168 clocks) and the UART frame
+(~2,000 clocks) run *concurrently* with it, so they don't add: the engine is the binding term and
+true headroom is **~820 clocks, 26 %**. That margin is why real-time 32 kHz holds on the
+DSP48/Vivado build (`ce` = ÷3), and it is also exactly why the slower soft-multiplier backends
+(`ce` = ÷4) only sustain ~28 kHz — at ÷4 a 3125-clock period contains just 781 engine cycles
+against the 768 the scan needs, i.e. 98 % occupancy, and 32 kHz falls over. MIDI in is decoupled
+from all of this: bytes are accepted whenever they arrive (on the next `ce`), independent of the
+sample cadence.
 
-**Future improvements — lifting the streaming ceiling.** To raise the *UART* sample rate you attack
-the 2000-clock frame, not the compute:
+**Two ceilings, and the compute one binds first.** Of the 3125-clock period, the voice scan takes
+~2,304 clocks and the **audio frame out costs ~2000 clocks** (4 bytes × 10-bit 8N1 × 50 clk/bit at
+2 Mbaud — see the [timescales table](#end-to-end-timing-midi-in--pipeline--audio-out)). The two
+overlap, so the sample-rate floor is `max(compute, TX) = max(2304, 2000) = 2304` clocks →
+**~43 kHz** over this link — and it is the **compute**, not the stream, that sets it. The practical
+consequence is that the engine does *not* have free room to grow: at 74 % occupancy, ~35 % more
+engine work breaks 32 kHz. More voices or deeper per-voice DSP costs either a lower
+`--pipeline_stages` (cycles/sample scale with `STAGES` — see
+[`docs/TILIQUA_PORT.md`](docs/TILIQUA_PORT.md) §2.3) or a faster `ce`. **BRAM and timing closure**
+([E5 floorplan](#e5-chip-floorplan-rough-resource-map)) are still limits too — the clock budget has
+simply joined them.
+
+**Future improvements — lifting the ceilings.** Both terms have to move; halving the UART frame on
+its own leaves the engine's 2,304 clocks as the floor and the ceiling stays ~43 kHz:
+- **Lower `--pipeline_stages`.** Cycles/sample scale with `STAGES` (M21 measured 128 cycles at
+  `STAGES=6` through 768 at 48), so this is the lever that actually moves the *compute* ceiling —
+  paid for in critical path, i.e. a slower `ce` or a lower clock.
 - **Raise the baud.** The Basys 3's FTDI **FT2232HQ** bridge tops out at **12 Mbaud**; the FPGA UART
   wants an integer `BAUD = 100 MHz / baud` (currently 50). The clean next step is **4 Mbaud**
   (`BAUD = 25`, a native FTDI rate, comfortable for the macOS VCP driver) → the frame halves to
-  **1000 clocks**, doubling the ceiling to ~100 kHz. 5/10 Mbaud (`BAUD` = 20/10) are the next integer
+  **1000 clocks**, which takes the UART out of the binding term entirely and leaves the compute's
+  2,304 clocks setting the ceiling alone. 5/10 Mbaud (`BAUD` = 20/10) are the next integer
   points; the practical reliable max on a given **Mac + cable** is ~4–6 Mbaud (driver/signal-limited,
   below the chip's 12 Mbaud) and is best found empirically. Changing it touches the `BAUD` localparam
   in [`top.v`](boards/basys3/rtl/top.v) and the matching baud in
@@ -179,7 +197,8 @@ the 2000-clock frame, not the compute:
 - **Send fewer bytes** (mono, or packed 12-bit) — fewer bytes/frame directly shrinks the 2000.
 - **Bypass the UART for listening.** The [I2S DAC path (E1)](#e1-i2s-dac-out) clocks samples out at
   its own ~48.8 kHz and is *not* bound by the 2 Mbaud link — the UART's frame cost only exists because
-  it doubles as the headless verify/stream path.
+  it doubles as the headless verify/stream path. (It doesn't lift the engine's rate: the I2S master
+  free-runs and re-latches whatever `sampL/R` holds, so it is a sample-and-hold of the 32 kHz stream.)
 
 ---
 
@@ -242,15 +261,17 @@ flowchart LR
   PV --> VIZ["viz_out (LED comet)"]
 ```
 
-**Timing** — one voice per enabled cycle; a sample every 32 (columns = enabled engine cycles):
+**Timing** — one voice per **proc tick**; a sample every 32 ticks. The columns are proc ticks, *not*
+clocks: one tick costs ~24 engine cycles at `STAGES=48` ([II](#a1-the-engine-proc)), so the 32-tick
+window below is ~768 engine cycles ≈ 2,304 master clocks.
 
-![Engine schedule — one voice per enabled cycle; a sample emitted every 32](docs/assets/wd_engine_schedule.svg)
+![Engine schedule — one voice per proc tick; a sample emitted every 32 ticks](docs/assets/wd_engine_schedule.svg)
 
 <details><summary>WaveDrom source</summary>
 
 ```wavedrom
 { "signal": [
-  {"name": "engine step (÷3)", "wave": "==========", "data": ["v0","v1","v2","…","v30","v31","v0","v1","v2","…"]},
+  {"name": "proc tick", "wave": "==========", "data": ["v0","v1","v2","…","v30","v31","v0","v1","v2","…"]},
   {"name": "vidx == 31 (last)", "wave": "0....10..."},
   {"name": "audio_out send",    "wave": "0....10..."}
 ]}
@@ -271,11 +292,15 @@ bundles two distinct ideas; only one is *pipelining*:
   pipelining.
 - **Pipelining = register stages.** XLS compiles the `engine` proc with
   `--generator=pipeline --pipeline_stages=48` ([E4](#e4-luts--fix_verilogpy)), inserting **48
-  register stages** through the datapath so many voices are in flight at once (one enters and one
-  finishes each engine cycle). `--worst_case_throughput=48` lets the recurrent `Eng` state feed
-  back across the full pipeline; the actual initiation interval is far below that, so ~one voice
-  retires per engine cycle and all 32 finish in **~96 master clocks** — deep inside the 3125-clock
-  sample budget ([end-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out)).
+  register stages** through the datapath so several voices are in flight at once.
+  `--worst_case_throughput=48` lets the recurrent `Eng` state feed back across the full pipeline,
+  and that feedback — not the stage count — sets the **initiation interval**: measured at
+  `STAGES=48` it is **~24 engine cycles per voice** (≈ `STAGES / 2`), below the WCT cap but nowhere
+  near 1. So all 32 voices take **~768 engine cycles ≈ 2,304 master clocks**, or **74 %** of the
+  3125-clock sample budget ([end-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out)).
+  The reusable lesson: a proc with recurrent state does *not* retire one item per cycle just
+  because it is pipelined — measure the II
+  (`boards/tiliqua/spike/results/cycles_per_sample.txt`), don't assume it.
 
 **What rides the 48-stage pipeline:** everything inside the proc — MIDI parse → voice
 alloc (`apply_on`/`off`/`cc`) → ring rotate → the per-voice DSP chain (DDS osc → waveform →
@@ -879,7 +904,7 @@ mixacc:   a0   a0+a1   a0+a1+a2   …   Σa0..30   Σa0..31 ──► scale_mix 
                                                     └────────────────────► reset to 0
 ```
 
-**Gotcha.** Accumulating **one voice per clock** (not a 32-wide adder tree) keeps the critical
+**Gotcha.** Accumulating **one voice per proc tick** (not a 32-wide adder tree) keeps the critical
 path short and makes voice count a one-constant change. Saturation is essential: a wrap is a huge
 discontinuity → a broadband click. Output is offset-binary (`+32768`); the shell subtracts it back
 to signed ([C1/C4](#part-c--the-verilog-shell)).
@@ -936,11 +961,13 @@ always @(posedge clk100) sdiv <= rst ? 16'd0 : (stick ? 16'd0 : sdiv + 1);
    feedback (Q15 gain multiplies on the fed-back sample, [D5](#d5-reverb)). That path doesn't close at
    30 ns but sits comfortably inside 60 ns. The engine's per-voice step is the SVF datapath, tuned to
    *fit* 30 ns — so the two datapaths have genuinely different natural speeds.
-2. **There's a huge clock surplus, so slowing them is free.** The effects use only **28 × 6 = 168**
-   of the 3125 master clocks per sample ([D2 gotcha](#d2-bram-layout)); the engine's voice scan is
-   ~96. Together a few hundred of 3125 — thousands to spare. Because throughput isn't the constraint,
-   halving the effects rate costs nothing and buys timing margin on that long path. (If throughput
-   *were* tight you'd be forced to speed them up and fight timing closure; here you're not.)
+2. **They run concurrently with the engine, so slowing them is free.** The effects use **28 × 6 =
+   168** of the 3125 master clocks per sample ([D2 gotcha](#d2-bram-layout)) and they overlap the
+   engine's ~2,300-clock voice scan rather than queueing behind it. The scan is what the period has
+   to absorb (74 % of it); the effects hide inside the shadow it already casts, so halving their
+   rate doesn't lengthen the period at all — it just buys timing margin on that long path. Note the
+   reason is *concurrency*, not surplus: the period is 74 % busy, not nearly empty. (Were the
+   effects serial with the scan you'd be forced to speed them up and fight timing closure.)
 3. **Free phase-alignment.** `ce8` fires on `cec==0`, a strict subset of `ce` (`cec==0`||`cec==3`),
    so every effects tick lands on an engine tick — picking ÷6 (a clean divisor of the mod-6 counter
    that already exists for ÷3) makes the alignment automatic: no second counter, no clock crossing.

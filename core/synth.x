@@ -297,7 +297,8 @@ fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
 
 // Time-multiplexed voice engine. Voices live in a rotating ring so the "current"
 // voice is ALWAYS at slot 0 -> constant-index read/write, no 32:1 mux (the 21.4ns
-// wall was that dynamic `voices[vidx]` access). One voice/clock; 32 clocks/sample.
+// wall was that dynamic `voices[vidx]` access). One voice per proc tick; 32 ticks/sample
+// (~768 engine cycles after pipelining -- the achieved II is ~24 cycles/voice at STAGES=48).
 proc engine {
     midi_in: chan<u8> in;
     audio_out: chan<u16> out;

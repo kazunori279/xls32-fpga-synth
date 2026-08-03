@@ -31,7 +31,7 @@ module top (
     always @(posedge clk100) mrxs <= {mrxs[0], midi_din};
     wire mrx = mrxs[1];
 
-    localparam integer BAUD    = 50;     // 100 MHz / 2 Mbaud (2 bytes/sample TX must fit the
+    localparam integer BAUD    = 50;     // 100 MHz / 2 Mbaud (4 bytes/sample TX must fit the
                                          // 3125-clock sample budget in real time -> 32 kHz)
     localparam integer MBAUD   = 3200;   // 100 MHz / 31250 baud = standard DIN MIDI bit period
     localparam integer SAMPDIV = 3125;   // 100 MHz / 32 kHz (the ÷3 DSP pipeline sustains this
