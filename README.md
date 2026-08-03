@@ -218,9 +218,9 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     UART check), `firmware/` (committed bitstream).
   - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
     [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
-    plus its Verilator harness), `sim/` (iverilog reference for the pitch check), `build.sh`,
-    `spike/` (the M21/M22 fit sweeps). As of M23 the bitstream is audio-only — a fixed boot patch
-    on outputs 0/1; MIDI in and the host loop are M24/M25.
+    plus `midi_filter.py` and its Verilator harness), `sim/` (iverilog reference for the pitch
+    check), `build.sh`, `spike/` (the M21/M22 fit sweeps). As of M24 the bitstream plays MIDI
+    from the TRS jack out channels 0/1; the host loop (USB audio + USB-MIDI) is M25.
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`

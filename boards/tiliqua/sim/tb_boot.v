@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
-// Reference run for the M23 pitch check: the bare engine, driven by the same boot patch the
-// Tiliqua gateware plays at reset, with nothing between it and the capture.
+// Reference run for the M23 pitch check: the bare engine, driven by the same MIDI the Tiliqua
+// gateware feeds it, with nothing between it and the capture.
 //
 //   iverilog -g2005 -o ref build/tiliqua/engine.v boards/tiliqua/sim/tb_boot.v
 //   vvp ref +out=build/tiliqua/ref32.txt +n=12000
@@ -18,14 +18,21 @@ module tb_boot;
     reg clk = 0, rst = 1;
     always #5 clk = ~clk;
 
-    // Must match BOOT_MIDI in boards/tiliqua/gateware/xls_core.py.
-    localparam integer NBYTES = 12;
+    // The first 36 bytes must match BOOT_MIDI in boards/tiliqua/gateware/xls_core.py; the note-on
+    // after them is what the Verilator harness's "pitch" script sends over the MIDI wire, since
+    // M24's boot patch is CCs only. Together they are what the engine hears in the gateware run.
+    localparam integer NBYTES = 39;
     reg [7:0] msg [0:NBYTES-1];
+    integer ch, k;
     initial begin
-        msg[ 0]=8'hB0; msg[ 1]=8'd74; msg[ 2]=8'd100;   // CC74 cutoff
-        msg[ 3]=8'hB0; msg[ 4]=8'd71; msg[ 5]=8'd40;    // CC71 resonance
-        msg[ 6]=8'hB0; msg[ 7]=8'd7;  msg[ 8]=8'd110;   // CC7  volume
-        msg[ 9]=8'h90; msg[10]=8'd69; msg[11]=8'd100;   // note on, A4
+        k = 0;
+        for (ch = 0; ch < 4; ch = ch + 1) begin      // broadcast: part = channel nibble[1:0]
+            msg[k+0]=8'hB0+ch; msg[k+1]=8'd74; msg[k+2]=8'd100;  // CC74 cutoff
+            msg[k+3]=8'hB0+ch; msg[k+4]=8'd71; msg[k+5]=8'd40;   // CC71 resonance
+            msg[k+6]=8'hB0+ch; msg[k+7]=8'd7;  msg[k+8]=8'd110;  // CC7  volume
+            k = k + 9;
+        end
+        msg[36]=8'h90; msg[37]=8'd69; msg[38]=8'd100;            // note on, A4, channel 1
     end
 
     reg  [7:0]  mdata = 8'd0;

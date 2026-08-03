@@ -1,9 +1,10 @@
 """apf.audio Tiliqua R5 (SoldierCrab R3, ECP5 LFE5U-25F) — the M21+ target.
 
 Gateware lives in boards/tiliqua/gateware/, built by boards/tiliqua/build.sh; see
-docs/TILIQUA_PORT.md. As of M23 the bitstream is audio-only -- a fixed boot patch on
-outputs 0/1, no MIDI input and no host transport -- so the automated suite cannot drive
-it yet. That arrives with M24 (MIDI in) and M25 (USB audio back to the host).
+docs/TILIQUA_PORT.md. As of M24 the bitstream plays MIDI arriving at the TRS jack out
+channels 0/1, but there is still no host transport, so the automated suite cannot drive
+it: the host has no way to send notes or to record what came back. That arrives with M25
+(USB audio in one direction, USB-MIDI in the other).
 
 The numbers below are measured on the module, not guessed: the audio clock comes from
 an external SI5351 that each bitstream reconfigures, and the vendor's own usb_audio top
@@ -25,6 +26,6 @@ BOARD = Board(
     # some other slot and the engine clocks at the wrong rate or not at all.
     load_cmd="openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit",
     root="boards/tiliqua",
-    unsupported="gateware builds as of M23, but there is no host loop yet: "
-                "MIDI in lands at M24 and USB audio capture at M25 — see docs/TILIQUA_PORT.md",
+    unsupported="gateware plays TRS MIDI as of M24, but there is no host loop yet: "
+                "USB audio and USB-MIDI land at M25 — see docs/TILIQUA_PORT.md",
 )

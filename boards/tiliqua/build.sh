@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# M23: XLS engine -> Tiliqua bitstream (or Verilator simulation).
+# M24: XLS engine -> Tiliqua bitstream (or Verilator simulation).
 #
 #   bash boards/tiliqua/build.sh              # build build/tiliqua/build/xls32-<hw>/top.bit
 #   SIM=1 bash boards/tiliqua/build.sh        # verilate + run, leaves build/tiliqua/out0.txt
 #   SKIP_BUILD=1 bash boards/tiliqua/build.sh # elaborate only (fast wiring check)
+#
+# In SIM mode, XLS_SIM_MS, XLS_SIM_OUT and XLS_SIM_MIDI reach the harness; see sim_xls_core.cpp.
 #
 # Three toolchains, three different ideas of what a path is:
 #   * XLS ships linux-x64 only, so codegen runs in the amd64 container core/build uses. The
@@ -67,7 +69,7 @@ if [ -n "${SIM:-}" ]; then
   # 250 ms is past the ADSR attack and decay with ~8k sustain samples left over, which is what
   # check_pitch.py needs to resolve a peak. It costs about ten seconds.
   export XLS_SIM_MS="${XLS_SIM_MS:-250}"
-  export XLS_SIM_OUT="$WORK/out0.txt"
+  export XLS_SIM_OUT="${XLS_SIM_OUT:-$WORK/out0.txt}"
   exec "$PY" "$REPO/boards/tiliqua/gateware/top.py" sim --name "$NAME" "$@"
 fi
 exec "$PY" "$REPO/boards/tiliqua/gateware/top.py" build --name "$NAME" \

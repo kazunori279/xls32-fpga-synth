@@ -1165,6 +1165,121 @@ does not, and that is deferred to M28: flashing writes the module's nine-slot la
 port has never written it. `openFPGALoader -c dirtyJtag` loads SRAM and touches nothing
 persistent, which covers everything M23 needs to prove.
 
+## Milestone 24 — MIDI in over TRS (done in simulation, hardware pending)
+
+M23 got sound out of a jack, but the note was hard-coded: the module was not yet an instrument.
+M24 makes it one. The TRS MIDI-In jack now feeds the engine's `u8 midi_in` ready/valid channel, so
+a keyboard or DAW plays all four parts. Written scope was "TRS + USB"; USB-MIDI moved to M25,
+because it needs the luna device stack that M25 stands up for UAC2 audio anyway and building it
+twice is waste.
+
+The wiring itself is short — `midi.SerialRx` already emits `stream.Signature(unsigned(8))`, which
+is the engine's input shape exactly, so no adapter is needed and the SDK's decoder is skipped
+entirely. Four things around it were not short.
+
+**A real MIDI cable would have destroyed the engine's parser, silently.** `core/synth.x:114`
+treats *any* byte ≥ 0x80 as a new running status:
+
+```
+if mb >= u8:0x80 { (mb, data1, u2:1, ...) }
+```
+
+That is correct for channel messages and it is exactly what the Basys 3 host transport sends,
+because the host hand-feeds clean messages. A cable does not. Every System message that reaches
+the engine costs up to two further bytes: it is latched as a status, then the next two data bytes
+are consumed against a `0xFn` that matches no case in the parser. Active Sensing (`0xFE`) is
+emitted every ~300 ms by many keyboards, and MIDI Clock (`0xF8`) floods at 24 pulses per quarter
+note the moment a DAW hits play — so the failure would have been continuous, note-dependent
+corruption with no error anywhere, on hardware only, after everything passed in simulation. Three
+filters go in front of the engine: the SDK's `MidiRTFilter` and `MidiSysexFilter`, plus a new
+`SysCommonFilter` in `boards/tiliqua/gateware/midi_filter.py`. System Common (`0xF1`–`0xF7`) has no
+SDK filter, and the reason is worth knowing rather than guessing: the SDK's own decoder does not
+need one, because it absorbs those messages inline in the SKIP-1 / SKIP-2 states of
+`MidiDecodeSerial`. A design that skips the decoder skips that too. Running status itself needs no
+help — the engine supports it via `p_status`.
+
+**The UART belongs in `sync`, and the divisor there is exact.** 60 MHz / 31250 baud = **1920**,
+with no remainder at all. The `audio` domain, which would have avoided a crossing, gives
+12.288 MHz / 31250 = 393.216 → 393, i.e. +0.055%. That error is harmless on its own, but zero is
+better than harmless and the price is one depth-4 byte-wide `AsyncFIFO` — the same pattern the
+audio path already uses in the other direction. The boot ROM keeps absolute priority over that
+FIFO until it drains, which takes ~36 audio cycles, about 3 µs; a MIDI byte takes 320 µs, so there
+is no contention to resolve.
+
+**The simulated `sync` clock is 62.5 MHz, and a naive harness fails on it for a reason that does
+not exist.** This is the M23 mclk trap again, in a new place. `sim_xls_core.cpp` computes
+`ns_in_sync_cycle = 1e9/60000000` in integer arithmetic and gets **16**, so the simulated sync
+period is 16 ns rather than 16.667 — 4.17% fast. A transmitter bit-banging at a literal 31250 baud
+would face a receiver dividing that fast clock by 1920, slip 42% of a bit width by the stop bit,
+and fail right at the edge. The harness therefore derives its bit period as
+`1920 × ns_in_sync_cycle`, from the same divisor the gateware uses. The rule generalises: when the
+timebase is wrong, the test must be written in the units the design works in, not in physical
+ones. Baud accuracy on hardware is then a separate and purely arithmetic claim.
+
+**Four notes do not prove per-part routing.** The natural test — one note per MIDI channel, check
+the pitches — proves nothing about the thing M24 is actually adding. `core/synth.x:337` is
+`let ch = ps[0:2]`: the channel nibble's low two bits pick the part. But a part is polyphonic, so
+if that routing collapsed and all four channels landed on part 0, four notes played *in sequence*
+would still come out at four correct pitches. The discriminator is CC7, which `synth.x:171` makes
+per-part volume: give each channel a different CC7 and four different amplitudes must come out. If
+there is only one part, the last CC7 wins and all four segments are identical. Those CC7 values
+live in the harness's test script rather than in the shipped boot patch, sent over the wire — the
+boot patch is a product decision, not a fixture, and this way the CC bytes are exercised through
+the UART and the filters too.
+
+`boards/tiliqua/check_midi.py` runs both assertions on one capture. Pitches are compared as ratios
+to the first segment, for the same reason M23 compared cycles per sample: neither simulated clock
+is physically exact, and a ratio is immune to that.
+
+| ch | note | CC7 | ratio | expected | error | segment rms |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 69 (A4) | 110 | 1.0000 | 1.0000 | — | 1062 |
+| 2 | 63 (D♯4) | 80 | 0.7074 | 0.7071 | 0.039% | 763 |
+| 3 | 78 (F♯5) | 55 | 1.6837 | 1.6818 | 0.114% | 557 |
+| 4 | 60 (C4) | 30 | 0.5943 | 0.5946 | 0.052% | 285 |
+
+The check also asserts the 35 ms before each note-on is silent, and it is (rms 0.0 on all three
+gaps). That guard earned its place immediately: the first version measured the *whole* 150 ms
+between notes and failed, because the release tail runs about 60 ms and dominated the window. The
+tail is real and harmless — the assertion was measuring the wrong thing, not finding a bug — but a
+version of that overlap that *did* contaminate the amplitude comparison would have been invisible
+without it.
+
+**The boot patch lost its note-on.** `BOOT_MIDI` is now CCs only — cutoff, resonance and volume,
+broadcast on all four channels because a CC on channel 1 alone leaves parts 2–4 at their DSLX
+defaults. 36 bytes. The module comes up silent and sounds when you play it, which is what an
+instrument should do; the CCs stay so that a keyboard plugged into a fresh boot makes a reasonable
+noise without touching a knob. `check_pitch.py` still passes (ratio 0.6674, error 0.12%) with its
+A4 now arriving over the simulated wire instead of from the ROM, which quietly upgrades the M23
+regression: it exercises the entire MIDI path as well as the audio path.
+
+**MIDI cost more area than predicted, and the reason is worth watching.** The plan called a UART,
+three filters and a byte FIFO "small". They are not, in aggregate:
+
+| | M23 | M24 | |
+|---|---:|---:|---|
+| TRELLIS_COMB | 16,721 (68%) | 17,909 (73%) | +1,188 |
+| TRELLIS_FF | 9,843 (40%) | 9,941 (40%) | +98 |
+| MULT18X18D | 21 (75%) | 21 (75%) | — |
+| DP16KD | 0 | 0 | — |
+
+Post-routing Fmax **28.00 MHz** on `audio` against 12.288 required and **80.77 MHz** on `sync`
+against 60; the critical path is still inside `core.engine`. So it fits and it clears timing, but
+that is +1,188 LUTs for a few hundred LUTs' worth of visible logic. 218 of them came back for free
+by setting `SerialRx(rx_depth=8)` instead of the SDK default of 64 — buffering 64 MIDI bytes is
+20 ms of wire time for a consumer that drains one per cycle, so the elasticity bought nothing.
+The rest is not attributed. The likely explanation, **unverified**, is that M23's number was
+flattered: the engine's `_midi_in` was driven by a 12-byte ROM of known constants, all on channel
+1 and all of two message kinds, so yosys could constant-fold a slice of the DSLX parser away. Fed
+an arbitrary byte, the whole parser has to exist. If that is right the cost is not waste, it is
+the price of being a real instrument — but M29's video core has to fit in what is left, so the
+next milestone that adds area should re-measure rather than assume.
+
+**What is not done.** Hardware. The gateware and both automated checks pass, but nothing has been
+played into the physical jack yet. When it is, note the jack is **TRS Type A** with optoisolation
+(`gateware/docs/hardware_design.rst:38`) — a Type B adapter will not work. That step also closes
+M7's long-standing "built, HW-pending" DIN MIDI item, since it is the same DSLX parser being fed.
+
 ---
 
 # Friction logs & learnings

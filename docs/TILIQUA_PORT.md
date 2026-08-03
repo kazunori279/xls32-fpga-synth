@@ -532,26 +532,100 @@ post-placement estimate and the post-routing result; take the second.)
 > preset bank, the demo songs, `presetgen/engine.py`'s calibration, and all 130+ test expectations.
 > A native-48 kHz retune (`BASE_INC`, ADSR rates, comb lengths) is a later, optional milestone.
 
-**M24 · MIDI in — TRS + USB**
-Feed the engine's `u8 midi_in` ready/valid channel from the TRS-A jack and from USB. Note that the
-engine takes the **channel nibble's low 2 bits as the part**, so channels 1–4 work unchanged.
+**M24 · MIDI in — TRS** — **done in simulation** (2026-08-03), hardware pending
+The engine's `u8 midi_in` ready/valid channel is fed from the module's TRS MIDI-In jack, so a
+keyboard or DAW plays all four parts. The engine takes the **channel nibble's low 2 bits as the
+part** (`core/synth.x:337`), so channels 1–4 work unchanged.
+
+**USB-MIDI moved to M25, deliberately.** It needs the luna USB device stack, which M25 stands up
+anyway for UAC2 audio; building it twice would be waste. M24 is TRS only.
 
 *Checked against the SDK during M23, because both obvious routes are wrong.* `CoreTop` will
 auto-wire TRS MIDI for any core that declares an `i_midi` port, but what it wires is
 `MidiDecodeSerial`'s output — *decoded* `MidiMessage` structs. The XLS engine has its own MIDI
 parser in DSLX and wants the raw byte stream, so decoding and re-encoding would be pure loss.
-Take `midi.decode_serial.SerialRx` directly instead: its `o` is already
-`stream.Signature(unsigned(8))`, which is exactly the engine's input, and skip the decoder and the
-auto-wiring both. USB needs its own small piece of work for the same reason — `MidiDecodeUSB`
-consumes 4-byte USB-MIDI packets and emits `MidiMessage`, so the bytes have to be unpacked from
-the packet rather than taken from its output.
-*Exit:* play the TRS jack from a hardware keyboard/DAW and hear correct pitches on all 4 parts;
-this also closes M7's "built, HW-pending" DIN MIDI.
+`midi.SerialRx` is taken directly instead: its `o` is already `stream.Signature(unsigned(8))`,
+exactly the engine's input. Our port is named `i_midi_bytes` precisely so the auto-wiring does not
+fire.
+
+*Three findings that shaped the implementation:*
+
+**The engine's DSLX parser cannot survive an unfiltered MIDI cable.** `core/synth.x:114` treats
+*any* byte ≥ 0x80 as a new running status. That is fine for the clean channel messages the Basys 3
+host transport hand-feeds, but a real cable also carries System messages, and each one that
+reaches the engine costs the next two bytes: it is latched as a status, then two data bytes are
+consumed against a `0xFn` that matches no case. Active Sensing (`0xFE`) arrives every ~300 ms from
+many keyboards and MIDI Clock (`0xF8`) floods at 24 ppqn during DAW playback, so this would have
+been a constant, baffling corruption. Three filters go in front: the SDK's `MidiRTFilter` (System
+Real-Time) and `MidiSysexFilter` (SysEx), plus `boards/tiliqua/gateware/midi_filter.py`'s
+`SysCommonFilter` for `0xF1`/`0xF2`/`0xF3` and their data bytes — System Common has no SDK filter
+because the SDK's own decoder handles it inline, in the SKIP-1/SKIP-2 states of
+`MidiDecodeSerial`. Running status itself needs no help; the engine supports it via `p_status`.
+
+**The UART belongs in `sync`, where the divisor is exact.** 60 MHz / 31250 = **1920 exactly**, zero
+baud error. The `audio` alternative (12.288 MHz / 31250 = 393.216 → 393) carries +0.055%. The price
+is a byte-wide CDC into the engine's domain, which is one depth-4 `AsyncFIFO` — the same pattern
+the audio path already uses. The boot ROM keeps absolute priority over that FIFO until it drains,
+which takes ~36 audio cycles, about 3 µs.
+
+**The simulated `sync` clock is 62.5 MHz, and a naive harness would fail on it.**
+`sim_xls_core.cpp` computes `ns_in_sync_cycle = 1e9/60000000 = 16` in integer arithmetic, so the
+simulated sync period is 16 ns rather than 16.667 — 4.17% fast, the same class of artefact as the
+12.5 MHz mclk above. A transmitter bit-banging at a literal 31250 baud would have slipped 42% of a
+bit by the stop bit and failed for a reason that does not exist on hardware. The harness therefore
+derives its bit period from the receiver's own divisor, `1920 × ns_in_sync_cycle`. Hardware baud
+accuracy is then a separate and purely arithmetic claim.
+
+**The boot patch lost its note-on.** Since M24 `BOOT_MIDI` is CCs only — cutoff, resonance and
+volume, broadcast on all four channels, 36 bytes — so the module comes up silent and sounds when
+you play it. The CCs stay because they land every part somewhere more musical than the DSLX
+defaults, so a keyboard plugged into a fresh boot makes a reasonable noise without touching a knob.
+
+*Verification.* `boards/tiliqua/check_midi.py` reads the harness's `parts` script: channels 1–4 in
+turn, each given its own note **and** its own CC7 volume, with 150 ms of silence between them. Two
+independent assertions.
+
+*Pitch* — each segment's peak frequency as a ratio to segment 0's must match equal temperament,
+which proves the note number survived the UART, the filters and the CDC. Measured, against a 1%
+tolerance:
+
+| ch | note | CC7 | ratio | expected | error | segment rms |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 69 (A4) | 110 | 1.0000 | 1.0000 | — | 1062 |
+| 2 | 63 (D♯4) | 80 | 0.7074 | 0.7071 | 0.039% | 763 |
+| 3 | 78 (F♯5) | 55 | 1.6837 | 1.6818 | 0.114% | 557 |
+| 4 | 60 (C4) | 30 | 0.5943 | 0.5946 | 0.052% | 285 |
+
+*Per-part routing* — segment amplitude must be strictly decreasing, matching the descending CC7.
+This is the assertion four notes alone cannot make: a part is polyphonic, so if routing collapsed
+and all four channels landed on part 0, the notes would still sound correct one after another.
+They would not have four different volumes — with one part the last CC7 wins and every segment
+comes out identical. The check also confirms the 35 ms before each note-on is *silent* (rms 0.0),
+so no release tail is contaminating the next measurement.
+
+`check_pitch.py` still passes with the note now arriving over the simulated wire instead of from
+the boot ROM (ratio 0.6674, error 0.12%), which makes the M23 regression a stronger test than it
+was: it now exercises the whole MIDI path as well as the audio path.
+
+*Utilisation.* TRELLIS_COMB **17,909 / 24,288 (73%)**, up from M23's 16,721 (68%); TRELLIS_FF
+9,941 (40%); MULT18X18D and DP16KD unchanged at 21 and 0. Post-routing Fmax **28.00 MHz** on
+`audio` against 12.288 required and **80.77 MHz** on `sync` against 60. The +1,188 LUTs is more
+than the visible logic accounts for — see the M24 section of `DEVELOPMENT.md` — and it eats into
+the margin the §M29 area warning depends on. `SerialRx` is instantiated with `rx_depth=8` rather
+than the SDK default 64, which recovered 218 of them for nothing.
+
+*Exit:* met in simulation. **Hardware still pending**: DIN MIDI → adapter → the module's jack.
+Note the jack is **TRS Type A** (`gateware/docs/hardware_design.rst:38`, "MIDI-In jack (TRS-A
+standard) with optoisolation") — a Type B adapter will not work. That last step also closes M7's
+"built, HW-pending" DIN MIDI item, since the same DSLX parser is being fed.
 
 **M25 · Restore autonomous verification** *(blocking for everything after)*
 USB Audio Class 2 device on `usb2` (from `tiliqua/usb_audio/`) so the host records the synth's own
-output; USB-MIDI in the other direction. Implement `host/transport/usbaudio.py`. Port
-`test/harness.py` and `webui/server.py` onto it.
+output; **USB-MIDI in the other direction, inherited from M24** — it rides the same luna device
+stack, and `MidiDecodeUSB` is the wrong tool for the same reason `MidiDecodeSerial` was: it
+consumes 4-byte USB-MIDI packets and emits `MidiMessage`, so the bytes have to be unpacked from
+the packet rather than taken from its output, then run through the same filter chain M24 built.
+Implement `host/transport/usbaudio.py`. Port `test/harness.py` and `webui/server.py` onto it.
 *Exit:* `uv run python test/run_tests.py --board tiliqua --only basic` produces a scored
 `report.md` from real hardware. From here the agent loop is closed again on Tiliqua.
 

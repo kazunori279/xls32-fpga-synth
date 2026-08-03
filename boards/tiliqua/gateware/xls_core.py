@@ -1,27 +1,32 @@
-# M23 — the XLS32 engine as a Tiliqua DSP core.
+# M24 — the XLS32 engine as a Tiliqua DSP core.
 #
 # The engine is the same `xls_engine` Verilog every board gets from core/codegen.sh; nothing
 # board-specific leaks into the DSLX. This file is the whole Tiliqua-side shell: a boot patch,
-# a clock-domain crossing, a sample-rate conversion, and the jack mapping.
+# two clock-domain crossings, a sample-rate conversion, and the jack mapping.
 #
-# Three things are worth knowing before reading it.
+# Four things are worth knowing before reading it.
 #
 # 1. The engine runs in the `audio` domain (12.288 MHz), not `sync` (60 MHz). M21/M22 measured
 #    its Fmax at STAGES=12 as ~27.6 MHz, so 60 MHz is out of reach; 12.288 MHz has 2.2x margin.
-#    That costs one CDC, because the eurorack-pmod's user-facing streams (`i_cal`/`o_cal`) are
-#    in `sync` -- I2SCalibrator's `stream_domain` defaults to "sync" and EurorackPmod does not
-#    expose it. So: engine in `audio`, AsyncFIFO, everything downstream in `sync`.
+#    That costs a CDC on each side, because the eurorack-pmod's user-facing streams (`i_cal` /
+#    `o_cal`) are in `sync` -- I2SCalibrator's `stream_domain` defaults to "sync" and
+#    EurorackPmod does not expose it -- and so is the MIDI UART. So: engine in `audio`, an
+#    AsyncFIFO at each boundary, everything else in `sync`.
 #
 # 2. Nothing here generates a 32 kHz tick. The engine's sample rate is whatever its consumer
 #    pulls at. `dsp.Resample` gates its input `ready` on the internal FIR, which stalls on
 #    output backpressure, so the codec's 48 kHz demand propagates backwards through 3/2 and
 #    lands on the engine as exactly 32 kHz on average -- phase-locked to the same mclk, with no
-#    divider to drift. Free-running, the engine would emit 12.288e6/224 = 54.9 kHz, so it is
+#    divider to drift. Free-running, the engine would emit 12.288e6/192 = 64 kHz, so it is
 #    always the one waiting; the FIFO sits full and the pull sets the rate.
 #
 # 3. The engine's audio word is offset binary (`scale_mix` returns `(c + 32768) as u16`), while
 #    ASQ is signed Q1.15. The conversion is an MSB inversion, and the 6 dB pad is one
 #    arithmetic right shift.
+#
+# 4. MIDI bytes arrive raw, not decoded. The engine has its own parser in DSLX, so the SDK's
+#    MidiDecodeSerial would be pure loss -- top.py feeds `i_midi_bytes` straight from
+#    midi.SerialRx. What it does have to strip first is System messages; see midi_filter.py.
 
 import os
 
@@ -38,15 +43,19 @@ from tiliqua.dsp import ASQ
 # increments in synth.x are computed for 32 kHz (Basys 3 divides 100 MHz by 3125 to match).
 ENGINE_FS = 32000
 
-# Boot patch, played into the engine's own MIDI parser at reset. M24 replaces this with the TRS
-# and USB inputs; until then it is the only way to make the bitstream audible, and it doubles as
-# the stimulus the pitch check compares against.
-BOOT_MIDI = [
-    0xB0,  74, 100,   # CC74 cutoff      -> 3900 (open; default is 3000)
-    0xB0,  71,  40,   # CC71 resonance   -> 3000 damping, i.e. milder than the 2200 default
-    0xB0,   7, 110,   # CC7  part volume
-    0x90,  69, 100,   # note on, A4 -- 440 Hz is unambiguous in an FFT
+# Boot patch, played into the engine's own MIDI parser at reset. Since M24 this is CCs only --
+# no note-on -- so the module comes up silent and sounds when you play it. The CCs are still
+# worth sending: they land every part somewhere more musical than the DSLX defaults, so a
+# keyboard plugged into a fresh boot makes a reasonable noise without touching a knob.
+#
+# Broadcast on all four channels, because the engine takes the channel nibble's low 2 bits as
+# the part (synth.x:337) and a CC on channel 1 alone would leave parts 2-4 at their defaults.
+BOOT_CC = [
+    (74, 100),   # cutoff     -> 3900 (open; default is 3000)
+    (71,  40),   # resonance  -> 3000 damping, i.e. milder than the 2200 default
+    ( 7, 110),   # part volume
 ]
+BOOT_MIDI = [b for ch in range(4) for cc, v in BOOT_CC for b in (0xB0 | ch, cc, v)]
 
 
 class XlsSynth(wiring.Component):
@@ -54,15 +63,19 @@ class XlsSynth(wiring.Component):
     """
     XLS32: a 32-voice subtractive synthesizer compiled from DSLX by Google XLS.
 
-    M23 is audio-only. A fixed boot patch plays one note; there is no MIDI input and no
-    effects yet. The engine is mono, so out0 and out1 carry the same signal.
+    Multitimbral over MIDI channels 1-4, played through `i_midi_bytes` -- a raw byte stream,
+    not decoded messages. No effects yet. The engine is mono, so out0 and out1 carry the same
+    signal.
+
+    `i_midi_bytes`, `i` and `o` are all in `sync`; the engine's own domain stays inside.
     """
 
     i: In(stream.Signature(data.ArrayLayout(ASQ, 4)))
     o: Out(stream.Signature(data.ArrayLayout(ASQ, 4)))
+    i_midi_bytes: In(stream.Signature(unsigned(8)))
 
     bitstream_help = BitstreamHelp(
-        brief="XLS32 synth (audio only, fixed note)",
+        brief="XLS32 synth: TRS MIDI in (ch 1-4), audio out",
         io_left=['', '', '', '', 'synth out', 'synth out', '', ''],
         io_right=['', '', '', '', '', ''],
     )
@@ -77,10 +90,12 @@ class XlsSynth(wiring.Component):
         self.engine_path = engine_path
         # Observation points for the Verilator harness. Created here rather than in elaborate()
         # because top_level_cli asks for the simulation ports before the design is elaborated.
-        # Three counters localise a stall immediately: no engine samples means the boot ROM or
-        # the proc is stuck, engine samples but no resampler output means the CDC or the FIR is
-        # stuck, resampler output but no codec writes means the pmod side is.
+        # The counters localise a stall in one run: no MIDI bytes means the UART or its filters
+        # ate them, no engine samples means the boot ROM or the proc is stuck, engine samples but
+        # no resampler output means the CDC or the FIR is stuck, resampler output but no codec
+        # writes means the pmod side is.
         self.dbg_rom   = Signal(8)
+        self.dbg_midi  = Signal(32)
         self.dbg_eng   = Signal(32)
         self.dbg_res   = Signal(32)
         self.dbg_out   = Signal(32)
@@ -95,17 +110,34 @@ class XlsSynth(wiring.Component):
         with open(self.engine_path) as f:
             platform.add_file("xls_engine.v", f.read())
 
-        # --- MIDI boot ROM (audio domain) ------------------------------------------------
-        rom     = Array([Const(b, unsigned(8)) for b in BOOT_MIDI])
-        rom_idx = Signal(range(len(BOOT_MIDI) + 1))
-        midi_b  = Signal(8)
-        midi_v  = Signal()
-        midi_r  = Signal()
+        # --- MIDI in: sync domain -> audio domain ------------------------------------------
+        # Byte-wide twin of the audio CDC below. The UART lives in `sync` because 60 MHz /
+        # 31250 = 1920 exactly -- zero baud error, where the audio domain would carry +0.055%.
+        # Depth 4 is generous: a MIDI byte takes 320 us, the engine drains one per cycle.
+        m.submodules.midi_cdc = midi_cdc = AsyncFIFO(
+            width=8, depth=4, w_domain="sync", r_domain="audio")
         m.d.comb += [
-            midi_b.eq(rom[rom_idx]),
-            midi_v.eq(rom_idx < len(BOOT_MIDI)),
+            midi_cdc.w_data.eq(self.i_midi_bytes.payload),
+            midi_cdc.w_en.eq(self.i_midi_bytes.valid),
+            self.i_midi_bytes.ready.eq(midi_cdc.w_rdy),
         ]
-        with m.If(midi_v & midi_r):
+
+        # --- MIDI boot ROM (audio domain), then the wire ------------------------------------
+        # The ROM has absolute priority until it is empty, which takes ~36 audio cycles -- 3 us,
+        # long finished before the first start bit of anything a player could send.
+        rom      = Array([Const(b, unsigned(8)) for b in BOOT_MIDI])
+        rom_idx  = Signal(range(len(BOOT_MIDI) + 1))
+        rom_busy = Signal()
+        midi_b   = Signal(8)
+        midi_v   = Signal()
+        midi_r   = Signal()
+        m.d.comb += [
+            rom_busy.eq(rom_idx < len(BOOT_MIDI)),
+            midi_b.eq(Mux(rom_busy, rom[rom_idx], midi_cdc.r_data)),
+            midi_v.eq(Mux(rom_busy, 1, midi_cdc.r_rdy)),
+            midi_cdc.r_en.eq(~rom_busy & midi_cdc.r_rdy & midi_r),
+        ]
+        with m.If(rom_busy & midi_r):
             m.d.audio += rom_idx.eq(rom_idx + 1)
 
         # --- the engine ------------------------------------------------------------------
@@ -174,6 +206,8 @@ class XlsSynth(wiring.Component):
 
         # --- observation ------------------------------------------------------------------
         m.d.comb += self.dbg_rom.eq(rom_idx)
+        with m.If(self.i_midi_bytes.valid & self.i_midi_bytes.ready):
+            m.d.sync += self.dbg_midi.eq(self.dbg_midi + 1)
         with m.If(audio_v & audio_r):
             m.d.audio += self.dbg_eng.eq(self.dbg_eng + 1)
         with m.If(resample.i.valid & resample.i.ready):
