@@ -107,9 +107,9 @@ flowchart LR
 | Cadence | Period | Clocks @100 MHz | What happens |
 |---|---|---:|---|
 | master clock | 10 ns | 1 | everything |
-| `ce` (engine) | 30 ns | 3 | one voice processed |
+| `ce` (engine) | 30 ns | 3 | one engine pipeline step |
 | `ce8` (effects) | 60 ns | 6 | one effects-FSM step |
-| engine II (per voice) | ~240 ns | 24 (≈ `pipeline_stages` / 2) | one voice retires |
+| engine II (per voice) | ~720 ns | 72 (= 24 `ce`) | one voice retires — set by the `apply_on` scan ([A1](#a1-the-engine-proc)) |
 | MIDI byte in | ~5 µs | ~500 | one 10-bit UART frame @ 2 Mbaud |
 | 32-voice scan | ~23 µs | **~2300** (768 engine cycles × 3) | a full pass of the voice ring |
 | effects pass | ~1.7 µs | 168 (28×6) | full stereo Freeverb (echo/chorus + combs + all-pass) |
@@ -183,7 +183,9 @@ simply joined them.
 **Future improvements — lifting the ceilings.** Both terms have to move; halving the UART frame on
 its own leaves the engine's 2,304 clocks as the floor and the ceiling stays ~43 kHz:
 - **Lower `--pipeline_stages`.** Cycles/sample scale with `STAGES` (M21 measured 128 cycles at
-  `STAGES=6` through 768 at 48), so this is the lever that actually moves the *compute* ceiling —
+  `STAGES=6` through 768 at 48) because the scheduler packs the same fixed-length `apply_on`
+  ripple ([A1](#a1-the-engine-proc)) into fewer stages, so this is the lever that actually moves
+  the *compute* ceiling —
   paid for in critical path, i.e. a slower `ce` or a lower clock.
 - **Raise the baud.** The Basys 3's FTDI **FT2232HQ** bridge tops out at **12 Mbaud**; the FPGA UART
   wants an integer `BAUD = 100 MHz / baud` (currently 50). The clean next step is **4 Mbaud**
@@ -287,7 +289,7 @@ last voice, so the shell paces the whole engine purely by *back-pressure* on `au
 bundles two distinct ideas; only one is *pipelining*:
 
 - **Time-multiplexing = resource sharing.** There is **one** physical voice datapath
-  (`process_voice`), reused for all 32 voices — one voice per engine cycle, selected by the
+  (`process_voice`), reused for all 32 voices — one voice per **proc tick**, selected by the
   rotating ring ([A2](#a2-voice-ring--allocation)). This is iteration over shared hardware, not
   pipelining.
 - **Pipelining = register stages.** XLS compiles the `engine` proc with
@@ -295,12 +297,52 @@ bundles two distinct ideas; only one is *pipelining*:
   register stages** through the datapath so several voices are in flight at once.
   `--worst_case_throughput=48` lets the recurrent `Eng` state feed back across the full pipeline,
   and that feedback — not the stage count — sets the **initiation interval**: measured at
-  `STAGES=48` it is **~24 engine cycles per voice** (≈ `STAGES / 2`), below the WCT cap but nowhere
+  `STAGES=48` it is **~24 engine cycles per voice** (≈ `STAGES / 2` — *why* is below), below the WCT cap but nowhere
   near 1. So all 32 voices take **~768 engine cycles ≈ 2,304 master clocks**, or **74 %** of the
   3125-clock sample budget ([end-to-end timing](#end-to-end-timing-midi-in--pipeline--audio-out)).
   The reusable lesson: a proc with recurrent state does *not* retire one item per cycle just
   because it is pipelined — measure the II
   (`boards/tiliqua/spike/results/cycles_per_sample.txt`), don't assume it.
+
+**Where the 24 cycles go — the `apply_on` scan.** XLS emits a `_full` valid bit per state element
+and stalls any stage that reads one before it has been written, so the II is
+`max(write stage − read stage)` over the elements, not the pipeline depth. Almost every recurrence
+in `build/spike/engine_s48w48.v` is short — the voice ring itself (`phase`/`subhi`/`ph2`) is read
+at stage 28 and written at 29, a loop of **1**. The one that binds is the `env_st` array
+(`____state_0_tuple_element_2`), read at stage 1 and not written until stage 24. Counting the
+pipeline registers per stage shows what fills the gap, and it is not the DSP:
+
+| Stages | What is there | Regs/stage |
+|---|---|---:|
+| 0–1 | MIDI byte in, `parse`, first read of the `env_st` array | 2–10 |
+| **2–20** | **`apply_on`'s free-voice search, unrolled 32×** | **~10** |
+| 21–23 | `voices1`/`parts1` resolve → `cur` → `adsr()` → `env_n`, `est_n` | 77–118 |
+| 24 | `env_st` written back — voice *N+1* may now enter stage 1 | 121 |
+| 25–33 | the per-voice DSP: DDS, unison, FM/ring, wavetable, sub, gain, SVF, mix | 55–148 |
+| 34–47 | sparse tail — SVF writeback at 36/39, then only the valid/token chain | 1–8 |
+
+Nineteen of the twenty-four stages hold ~10 registers each and do nothing but
+`cnt < un && vs[i].env_st == Env::OFF` ([A2](#a2-voice-ring--allocation)). `cnt` — how many of the
+unison stack's slots are already filled — is **loop-carried**, so slot *i+1* cannot be decided
+until slot *i* has been: `cnt__2 → cnt__4 → cnt__5 → cnt__7 → … → cnt__30`, a 32-deep ripple of one
+3-bit compare and one conditional increment. It runs on **every** tick, note-on or not; the
+`evk == 1` select is applied at the end. `apply_off` is *not* in there — its 32 iterations carry no
+accumulator, so XLS flattens them into parallel muxes.
+
+**This is not the timing critical path.** [`codegen.sh`](core/codegen.sh) schedules with
+`--delay_model=unit`, where every IR node costs 1 regardless of width — a 3-bit compare and a 25×18
+multiply are priced the same. Nineteen stages is therefore a *scheduling* outcome, not nineteen
+stages' worth of silicon delay; the real critical path is still the SVF/DSP side
+([E5](#e5-chip-floorplan-rough-resource-map)). It does explain both measured trends in
+`cycles_per_sample.txt` at once: with `WCT = STAGES` the scheduler is free to spread this
+fixed-length ripple over whatever depth it is given, so it lands on roughly half of the stages at
+every setting (II 7 at `STAGES=12`, 24 at 48) — and at fixed `STAGES=12` the II instead tracks the
+voice count (5/6/7 for 16/24/32 voices), because the ripple *is* the voice count.
+
+**The pipeline does not drain between voices.** Latency is 48 stages and the II is 24, so **two
+activations are always in flight**: while voice *N* is in stages 24–47 doing its DSP, voice *N+1*
+is already in stages 0–23 running its own `apply_on` scan. The constraint is a read-after-write on
+one array, not mutual exclusion over the pipeline.
 
 **What rides the 48-stage pipeline:** everything inside the proc — MIDI parse → voice
 alloc (`apply_on`/`off`/`cc`) → ring rotate → the per-voice DSP chain (DDS osc → waveform →
@@ -320,12 +362,12 @@ and [C1 clocking](#c1-clocking).
 
 ## A2 Voice ring & allocation
 
-**What it does.** 32 voices live in a ring that is **rotated by one each cycle**, so the voice
+**What it does.** 32 voices live in a ring that is **rotated by one each proc tick**, so the voice
 being processed is always at index 0. That turns a dynamic `voices[vidx]` access (a 32:1 mux
 over 189-bit voices — 6,048 input bits, the original ~21 ns timing wall) into a constant-index
 read/write. Note-on claims free voices; note-off releases by matching note **and** part.
 
-**How it's built.** The ring rotate ([`synth.x:291`](core/synth.x)):
+**How it's built.** The ring rotate ([`synth.x:313`](core/synth.x)):
 
 ```rust
 fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
@@ -336,8 +378,34 @@ fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
 }
 ```
 
+Note-on walks the ring for `OFF` slots and claims `un` of them (one per unison stack index), each
+with a symmetric detune slot and a decorrelated start phase ([`synth.x:132`](core/synth.x)):
+
+```rust
+fn apply_on(voices: Voice[32], note: u8, vel: u8, porta: u1, un: u3, lfsr: u16, part: u2) -> Voice[32] {
+    let res = for (i, acc): (u32, (Voice[32], u3)) in u32:0..u32:32 {
+        let (vs, cnt) = acc;
+        if cnt < un && vs[i].env_st == Env::OFF {   // cnt is LOOP-CARRIED -> a 32-deep ripple
+            let slot = ((cnt as s8) * s8:2 - ((un as s8) - s8:1)) as s4;
+            let seed = ((lfsr as u32) << u32:16) ^ ((cnt as u32) << u32:29);
+            (update(vs, i, Voice { phase: seed, env_st: Env::ATTACK, uni: slot, /* … */ ..vs[i] }),
+             cnt + u3:1)
+        } else { (vs, cnt) }
+    }((voices, u3:0));
+    let (vs, _) = res; vs
+}
+```
+
+**This loop, not the DSP, sets the engine's initiation interval.** `cnt` is carried from iteration
+to iteration, so slot *i+1* cannot be decided until slot *i* is. XLS unrolls it into a 32-deep
+chain of `env_st == OFF` compares and 3-bit conditional increments and the scheduler spreads it
+across stages 2–20 of the 48-stage pipeline; since the `env_st` array is read at stage 1 and not
+rewritten until stage 24, the next voice cannot be issued for ~24 cycles — the II
+([A1](#a1-the-engine-proc)). Nothing on the audio path is involved, and the scan runs on every
+proc tick whether or not a note-on arrived.
+
 Note-off releases *every* matching voice (so unison stacks and duplicate notes all stop)
-([`synth.x:143`](core/synth.x)):
+([`synth.x:146`](core/synth.x)):
 
 ```rust
 fn apply_off(voices: Voice[32], note: u8, part: u2) -> Voice[32] {
@@ -366,7 +434,7 @@ flowchart LR
 ```
 
 **Gotcha.** `inc` (the phase increment) is **not** stored per voice — it's recomputed from
-`note` each cycle ([B1](#b1-oscillator--dds)) — precisely to keep the ring narrow. Same reason
+`note` each proc tick ([B1](#b1-oscillator--dds)) — precisely to keep the ring narrow. Same reason
 `flo/fbnd` are `s19` and `cinc` is `inc>>6`.
 
 ## A3 Multitimbral parts
@@ -415,13 +483,13 @@ parameters arrive from **three sources**, assembled inline in `next()` right bef
    `uni`, `part`). This is state the *previous* pass over this voice wrote; `process_voice`
    returns `v2` and `rotate_in` writes it back ([A2](#a2-voice-ring--allocation)). The ring
    rotation **is** the parameter-supply mechanism — it presents a different voice to the fixed
-   logic each cycle.
+   logic each proc tick.
 2. **Per-part patch — a 4:1 mux.** `let p = parts1[cur.part]` selects the voice's timbre patch
    (all the CC-set knobs: `wave`, `cutoff`, `reso`, ADSR, cross-osc, …). Read-only during
    processing, shared by every voice of that part ([A3](#a3-multitimbral-parts)).
-3. **Per-cycle derived modulation — computed on the spot.** The shared `noise` (from the global
+3. **Per-tick derived modulation — computed on the spot.** The shared `noise` (from the global
    LFSR) and the part-LFO products `lfo_mod`, `vib`+`bend`→`pmod`, `tg` (tremolo), `pwthr` (PWM)
-   are recomputed each cycle from `p`'s LFO phase and passed as scalar args (details in
+   are recomputed each proc tick from `p`'s LFO phase and passed as scalar args (details in
    [B10](#b10-lfo), [B11](#b11-pitch-expression), [B3](#b3-pwm)).
 
 **How it's built** ([`synth.x:332`](core/synth.x)) — read voice, mux patch, derive mod, call:
@@ -449,7 +517,7 @@ in the same `next()`: note-on/off edit the ring (`apply_on`/`apply_off`), CC edi
 single voice.
 
 **Gotcha.** `inc` (phase increment) is **not** among the supplied parameters — it's recomputed
-from `cur.note` *inside* `process_voice` every cycle ([B1](#b1-oscillator--dds)), deliberately, to
+from `cur.note` *inside* `process_voice` every proc tick ([B1](#b1-oscillator--dds)), deliberately, to
 keep the `Voice` ring narrow (ring width is the F4PGA packing budget — [A2](#a2-voice-ring--allocation)).
 
 ---
