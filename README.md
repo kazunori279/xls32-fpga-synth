@@ -216,7 +216,11 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     Verilog shell, `basys3.xdc`, `build_vivado.tcl`), `scripts/` (`build.sh` local
     [Docker](https://www.docker.com/); `remote_build.sh` + `vmbuild*.sh` native x86 GCE build; `verify.sh` flash +
     UART check), `firmware/` (committed bitstream).
-  - **`boards/tiliqua/`** — declared, no gateware yet (M21+).
+  - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
+    [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
+    plus its Verilator harness), `sim/` (iverilog reference for the pitch check), `build.sh`,
+    `spike/` (the M21/M22 fit sweeps). As of M23 the bitstream is audio-only — a fixed boot patch
+    on outputs 0/1; MIDI in and the host loop are M24/M25.
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`

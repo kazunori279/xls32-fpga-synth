@@ -1068,6 +1068,88 @@ the tool is not told about, but it makes the report easier to read.
 So M22 costs the Basys 3 nothing and buys the ECP5 five tiles. That is the case for doing this kind
 of narrowing in the shared DSLX rather than forking the source per board.
 
+## Milestone 23 — hello Tiliqua: the first bitstream (done, simulation-verified)
+
+M21 proved the engine fits an `LFE5U-25F`; M22 made it fit comfortably. M23 is the first time
+anything actually runs there: `boards/tiliqua/gateware/` — an Amaranth shell around the same
+`engine.v` every board gets from `core/codegen.sh` — plays a fixed boot patch out eurorack-pmod
+channels 0/1. No effects, no MIDI input, no host loop. The point is to close the path from DSLX to
+a jack, and it does: a full nextpnr run passes timing on both clocks, and the simulated output
+carries the engine's waveform.
+
+**The engine cannot live in `sync`, and that means a CDC.** The plan said otherwise — it assumed
+the whole core could sit in the `audio` domain with the pmod, no crossing needed. Reading
+`tiliqua/periph/eurorack_pmod.py` says no: `I2SCalibrator.__init__` defaults
+`stream_domain="sync"` and `EurorackPmod` never exposes the argument, so the user-facing `i_cal`
+and `o_cal` streams are at 60 MHz. The engine's Fmax at `STAGES=12` is ~27.6 MHz, so 60 MHz is not
+available to it. The resolution puts the engine and its boot ROM in `audio` (12.288 MHz, 2.3×
+margin), a depth-8 `AsyncFIFO` between, and the resampler and jack mapping in `sync`. The upside
+is that `XlsSynth` ends up an ordinary sync-domain DSP core, so it drops into any Tiliqua top
+unchanged — including the SoC shell M27/M28 will need.
+
+**Nothing generates a 32 kHz tick, and nothing should.** The obvious design divides mclk down to
+32 kHz and pulls the engine from that. `dsp.Resample` makes it unnecessary: it gates its input
+`ready` on the internal FIR, and the FIR stalls on output backpressure, so chaining
+`engine → FIFO → Resample(n_up=3, m_down=2) → pmod` lets the codec's 48 kHz demand propagate
+backwards through 3/2 and land on the engine as exactly 32 kHz average — phase-locked to the same
+mclk, with no divider to drift against it. Free-running, the engine emits a sample every **192
+cycles** (measured on the generated Verilog at `STAGES=12`), i.e. 64 kHz, so it is always the one
+waiting: the FIFO sits full and the pull sets the rate.
+
+**The XLS engine needs a real reset, and the SDK's harness does not give it one.**
+`src/top/dsp/sim_dsp_core.cpp` raises and lowers reset across two `timeInc(1)` calls before the
+clock loop starts, so no clock edge ever sees it asserted. Amaranth registers do not care — they
+carry init values and come up correct regardless. The XLS proc does: its state, including the bit
+that says a state is live at all, is only established by a *synchronous* reset. With a zero-width
+pulse the engine sits dead forever and never asserts `_midi_in_rdy`. The first working build
+produced 1,954 samples of pure silence with no error anywhere. Four counters — boot ROM index,
+engine samples, resampler inputs, codec writes — localised it in one run by reading `0/12, 0, 0,
+0`: the failure was upstream of everything. Holding all three resets for the first 2 µs *inside*
+the loop fixes it. The counters stayed in; they cost nothing (nothing drives them in a hardware
+build, so yosys prunes them) and the next stall will be somewhere else.
+
+**Grading pitch when neither clock is real.** The exit criterion is that the audio path carries
+the engine faithfully, which is not the same question as whether the synth is in tune — mixing the
+two would leave neither answerable, especially with `pitch_a4` outstanding. So
+`boards/tiliqua/check_pitch.py` compares the Verilator capture of out0 against an iverilog run of
+the bare engine driven by the identical boot patch (`boards/tiliqua/sim/tb_boot.v`), and compares
+them in **cycles per sample, not hertz**. That matters because neither simulation runs at a
+physically exact clock: the SDK harness computes `1e9/12288000 = 81` ns and halves it to `40`, so
+its "12.288 MHz" mclk is really 12.5 MHz, +1.7%. Hertz would fold that error into the answer.
+Normalised frequency cannot: whatever the clock, 3/2 resampling must divide it by exactly 3/2, and
+a dropped FIFO word or a mis-fed codec would move the ratio. Measured **0.6674** against 0.6667,
+error **0.12%**, with the output peak at 2480 against the engine's 5515 — the −6 dB pad, minus a
+little resampler passband loss.
+
+**A side result worth more than the milestone.** The reference run peaks at **439.79 Hz** for a
+note-on at A4. The engine is in tune. That makes the long-standing `pitch_a4` failure on Basys 3 —
+which reads 208–220 Hz, an octave low — a host, transport or measurement problem rather than a
+DSLX one. Not yet chased down, but the engine is no longer a suspect.
+
+**Utilisation** (nextpnr-ecp5, `LFE5U-25F-6BG256C`, the whole design — engine, pmod, PLL, reboot):
+
+| | used | avail | |
+|---|---:|---:|---:|
+| MULT18X18D | 21 | 28 | 75% |
+| TRELLIS_COMB | 16,721 | 24,288 | 68% |
+| TRELLIS_FF | 9,843 | 24,288 | 40% |
+| DP16KD | 0 | 56 | 0% |
+
+Fmax **29.99 MHz** on `audio` against the 12.288 required, and **81.62 MHz** on `sync` against 60.
+The critical path is inside `core.engine`, as expected. The two `MULT18X18D` above M22's
+engine-only 19 are the resampler's 15-tap FIR — a cheap price for not having to retune the pitch
+tables to 48 kHz.
+
+Read those numbers from the **end** of `top.tim`, not the first match. nextpnr prints
+"Max frequency for clock" twice: once as a post-placement estimate and again after routing. On
+this design the two disagree in both directions — the estimate said 28.63 / 87.75 — so grepping
+the first occurrence quietly reports a number that was never achieved.
+
+**What is deliberately not done.** The written exit criterion also said "boots from a slot". It
+does not, and that is deferred to M28: flashing writes the module's nine-slot layout, and this
+port has never written it. `openFPGALoader -c dirtyJtag` loads SRAM and touches nothing
+persistent, which covers everything M23 needs to prove.
+
 ---
 
 # Friction logs & learnings

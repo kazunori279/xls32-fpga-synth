@@ -4,9 +4,9 @@ A plan to run the XLS32 engine on **[Tiliqua](https://apfaudio.github.io/tiliqua
 `TLQ-SCREEN`) alongside the existing Basys 3 target, and to restructure the repo so both boards are
 first-class.
 
-Status: **M20, M21 and M22 are done**; M23 onward is still plan. §1.1 records measurements taken on the
-real module and M21 records measurements taken on the real toolchain, so the constraints below are
-not estimates. Milestones continue the numbering in [DEVELOPMENT.md](../DEVELOPMENT.md)
+Status: **M20 through M23 are done**; M24 onward is still plan. §1.1 records measurements taken on
+the real module and M21–M23 record measurements taken on the real toolchain, so the constraints
+below are not estimates. Milestones continue the numbering in [DEVELOPMENT.md](../DEVELOPMENT.md)
 (M1 → M19 + Web UI), so this starts at **M20**.
 
 ---
@@ -453,21 +453,76 @@ unchanged**, Slice LUTs **10,483 → 10,405**, worst data-path delay **18.872 �
 
 ### Phase B — first sound
 
-**M23 · Hello Tiliqua — audio-only bitstream**
-Amaranth top: instantiate `engine.v`, clock it (dedicated PLL output or `sync`÷2 per M21), pace it
-from the `audio` domain, resample 32 kHz → 48 kHz (`tiliqua.dsp.resample`) into eurorack-pmod
-output channels 0/1. MIDI hardcoded to a note-on at reset. No effects.
-*Exit:* a scope/recording of output 0 shows the expected pitch; the build is a valid bitstream
-archive and boots from a slot.
+**M23 · Hello Tiliqua — audio-only bitstream** — **done** (2026-08-03)
+Amaranth top instantiating `engine.v`, a boot patch played into the engine's own MIDI parser at
+reset, 32 kHz → 48 kHz resampling into eurorack-pmod output channels 0/1. No effects, no MIDI
+input. Built by `boards/tiliqua/build.sh`; the gateware is `boards/tiliqua/gateware/`.
+*Exit:* met in simulation — see the pitch check below. The bitstream archive is well-formed
+(`top.bit` + manifest, `hw_rev: 5`, tag matching HEAD, `clk0_hz: 12288000`). **"Boots from a slot"
+is deferred to M28**: flashing writes the nine-slot flash layout, and this port has deliberately
+never written it. SRAM loading via `openFPGALoader -c dirtyJtag` covers everything M23 needs.
+
+*Three findings that changed the plan:*
+
+**The engine runs in `audio` (12.288 MHz), and that costs a CDC.** The plan assumed no CDC was
+needed. It is: the eurorack-pmod's user-facing streams are in `sync`, not `audio` —
+`I2SCalibrator.__init__` defaults `stream_domain="sync"` and `EurorackPmod` does not expose the
+argument. And `sync` is 60 MHz against the engine's ~27.6 MHz Fmax, so the engine cannot live
+there. The shape is therefore: engine + boot ROM in `audio`, a depth-8 `AsyncFIFO`, resampler and
+jack mapping in `sync`. This leaves `XlsSynth` an ordinary sync-domain DSP core that drops into
+any Tiliqua top unmodified.
+
+**Nothing generates a 32 kHz tick.** `dsp.Resample` gates its input `ready` on the internal FIR,
+which stalls on output backpressure, so the codec's 48 kHz demand propagates backwards through 3/2
+and lands on the engine as exactly 32 kHz average — phase-locked to the same mclk, with no divider
+to drift against it. The engine is always the one waiting: free-running it emits a sample every
+192 cycles (measured, not the 224 the `STAGES=12` spike recorded), i.e. 64 kHz.
+
+**The engine is in tune.** The iverilog reference run peaks at **439.79 Hz** for a note-on at A4.
+That makes the long-standing `pitch_a4` failure on Basys 3 (reads 208–220 Hz, an octave low) a
+host/transport/measurement problem, not a DSLX one. Still to be chased down, but no longer a
+suspect in the engine.
+
+*Verification.* `boards/tiliqua/check_pitch.py` compares the Verilator capture of out0 against an
+iverilog run of the bare engine driven by the same boot patch (`boards/tiliqua/sim/tb_boot.v`).
+The comparison is in cycles per sample, not hertz, because neither simulation runs at a physically
+exact clock — the SDK harness advances time in whole nanoseconds, which makes its 12.288 MHz mclk
+really 12.5 MHz. Resampling must divide normalised frequency by exactly 3/2, and it does:
+ratio **0.6674** against 0.6667, error **0.12%**. Peak level 2480 against the engine's 5515, i.e.
+the −6 dB pad. That measures the audio path — CDC, resampler, codec — and says nothing about
+tuning, which is the point.
+
+*Utilisation* (nextpnr-ecp5, `LFE5U-25F-6BG256C`, full design including pmod and PLL):
+
+| | used | avail | |
+|---|---:|---:|---:|
+| MULT18X18D | 21 | 28 | 75% |
+| TRELLIS_COMB | 16,721 | 24,288 | 68% |
+| TRELLIS_FF | 9,843 | 24,288 | 40% |
+| DP16KD | 0 | 56 | 0% |
+
+Post-routing Fmax **29.99 MHz** on `audio` against 12.288 required (2.4×) and **81.62 MHz** on
+`sync` against 60. The critical path is inside `core.engine`, as expected. Two `MULT18X18D` above
+the M22 engine-only figure of 19 — that is the resampler's FIR. (`top.tim` reports Fmax twice, a
+post-placement estimate and the post-routing result; take the second.)
 
 > **Design decision — keep the engine at 32 kHz and resample to 48 kHz.** It preserves the entire
 > preset bank, the demo songs, `presetgen/engine.py`'s calibration, and all 130+ test expectations.
 > A native-48 kHz retune (`BASE_INC`, ADSR rates, comb lengths) is a later, optional milestone.
 
 **M24 · MIDI in — TRS + USB**
-`midi_bridge.py`: `tiliqua.midi.decode_serial` (TRS-A jack, 31250 baud) and
-`tiliqua.midi.decode_usb` both feeding the engine's `u8 midi_in` ready/valid channel. Note that the
+Feed the engine's `u8 midi_in` ready/valid channel from the TRS-A jack and from USB. Note that the
 engine takes the **channel nibble's low 2 bits as the part**, so channels 1–4 work unchanged.
+
+*Checked against the SDK during M23, because both obvious routes are wrong.* `CoreTop` will
+auto-wire TRS MIDI for any core that declares an `i_midi` port, but what it wires is
+`MidiDecodeSerial`'s output — *decoded* `MidiMessage` structs. The XLS engine has its own MIDI
+parser in DSLX and wants the raw byte stream, so decoding and re-encoding would be pure loss.
+Take `midi.decode_serial.SerialRx` directly instead: its `o` is already
+`stream.Signature(unsigned(8))`, which is exactly the engine's input, and skip the decoder and the
+auto-wiring both. USB needs its own small piece of work for the same reason — `MidiDecodeUSB`
+consumes 4-byte USB-MIDI packets and emits `MidiMessage`, so the bytes have to be unpacked from
+the packet rather than taken from its output.
 *Exit:* play the TRS jack from a hardware keyboard/DAW and hear correct pitches on all 4 parts;
 this also closes M7's "built, HW-pending" DIN MIDI.
 
