@@ -108,15 +108,25 @@ add(id="noise", title="Noise source", desc="Waveform 4 is white noise — a broa
     expected="broadband spectrum", setup=_setup_noise, perform=hold([69], 1.6), check=_chk_noise, capture_s=1.9)
 
 # ---------------- sub / PWM / detune ----------------
+_SUB_NOTE = 69
 def _chk_sub(s):
-    f0, _ = A.strongest(s, 200, 900)
-    if f0 < 100: return mk(0, "no tone", "sub octave present")
-    sub = A.dft_mag(A._window(s), [f0 / 2])[0]; fund = A.dft_mag(A._window(s), [f0])[0] or 1
+    # Take the fundamental from the note we played, not from the spectrum. Peak-picking a band
+    # is what the neighbouring checks do, and it is wrong here: this test deliberately puts a
+    # loud tone one octave *down*, and 220 Hz sits inside any band wide enough to hold 440. When
+    # the sub works the peak-pick lands on the sub, the check then looks an octave below *that*,
+    # and the test fails because the feature is working. Measured on Tiliqua it reported
+    # "sub/fund = 0.12 at 110 Hz" -- the 110 gives it away -- twice, then flipped to a false pass
+    # at 120 Hz on the third run. A test that grades a working synth by coin toss is worse than
+    # no test, and this one blocked M25's three-identical-runs bar.
+    f0 = A.note_hz(_SUB_NOTE)
+    fund = A.dft_mag(A._window(s), [f0])[0]
+    if A.peak(s) < 800 or fund <= 0: return mk(0, "no tone", "sub octave present")
+    sub = A.dft_mag(A._window(s), [f0 / 2])[0]
     r = sub / fund
     return mk(score_scale(r, 0.25, 0.03), f"sub/fund = {r:.2f} at {f0/2:.0f} Hz", "energy one octave below")
 def _setup_sub(fd): open_bright(fd); w(fd, set_wave(W_SAW), set_sub(3))
 add(id="sub_osc", title="Sub-oscillator", desc="CC73 adds a square one octave below the played note.",
-    expected="energy one octave down", setup=_setup_sub, perform=hold([69], 1.6), check=_chk_sub, capture_s=1.9)
+    expected="energy one octave down", setup=_setup_sub, perform=hold([_SUB_NOTE], 1.6), check=_chk_sub, capture_s=1.9)
 
 def _chk_pwm(s):
     f0, _ = A.strongest(s, 200, 900)
