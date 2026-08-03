@@ -4,10 +4,13 @@ A plan to run the XLS32 engine on **[Tiliqua](https://apfaudio.github.io/tiliqua
 `TLQ-SCREEN`) alongside the existing Basys 3 target, and to restructure the repo so both boards are
 first-class.
 
-Status: **M20 through M23 are done**; M24 onward is still plan. §1.1 records measurements taken on
-the real module and M21–M23 record measurements taken on the real toolchain, so the constraints
-below are not estimates. Milestones continue the numbering in [DEVELOPMENT.md](../DEVELOPMENT.md)
-(M1 → M19 + Web UI), so this starts at **M20**.
+Status: **M20 through M25 are done** — the module makes sound, takes MIDI, and grades itself over
+USB, so from M26 on every milestone has a scored report to answer to. **M26 is next.** Two things
+carried forward rather than finished: M24's TRS jack works in simulation but has never had a cable
+in it, and M25's loop still needs one encoder press after a cold boot (§2.7). Everything in §1.1
+was measured on the real module and M21–M25 on the real toolchain, so the constraints below are not
+estimates — where a number has since been withdrawn, it says so. Milestones continue the numbering
+in [DEVELOPMENT.md](../DEVELOPMENT.md) (M1 → M19 + Web UI), so this starts at **M20**.
 
 ---
 
@@ -112,7 +115,8 @@ way, all of which constrain `host/transport/usbaudio.py`:
   figure has no explanation at all, since that slot was menu-booted and therefore correctly
   clocked. The full retraction, the re-measurement, a claim in the hand-off that turned out
   flatly wrong against vendor source ("the USB side runs off the ULPI's own 60 MHz recovered
-  clock" — the real tree is in §2.7), and a post-mortem on how the report came to be written
+  clock" — §2.6 has the half that refutes it, `sync` and `usb` being one 60 MHz net off the ECP5
+  PLL, and §2.7 the audio half), and a post-mortem on how the report came to be written
   are in [TILIQUA_USB_DROPOUTS.md](TILIQUA_USB_DROPOUTS.md). Reproduction probes are in
   `boards/tiliqua/probe/`.
 - **Let PortAudio choose the block size, and open the stream once.** The measurements that
@@ -349,6 +353,12 @@ prebuilt bootloader bitstream ever comes to hand, since the trick itself is soun
 Until one of these lands, the loop is autonomous within a session, autonomous across power cycles
 *provided* no vendor slot gets booted by hand, and needs one encoder click to recover when one has.
 Worth stating plainly, because that is a narrower claim than "M25 restored autonomous verification."
+
+**Open, and not yet decided with the module's owner.** Option 1 is the recommendation — it is the
+only one that makes the bitstream self-sufficient, it needs no flash write, and it would slot in
+alongside M26 rather than blocking it. Option 2 needs the owner's consent because it writes flash;
+this port has made no flash write at all so far, and every load has been SRAM-only. Nothing here is
+blocking M26, so the choice can wait for whenever the encoder ritual next becomes annoying.
 
 ---
 
@@ -744,7 +754,8 @@ Note the jack is **TRS Type A** (`gateware/docs/hardware_design.rst:38`, "MIDI-I
 standard) with optoisolation") — a Type B adapter will not work. That last step also closes M7's
 "built, HW-pending" DIN MIDI item, since the same DSLX parser is being fed.
 
-**M25 · Restore autonomous verification** *(blocking for everything after)*
+**M25 · Restore autonomous verification** — **done, hardware-verified** (2026-08-03)
+*(was blocking for everything after)*
 USB Audio Class 2 device on `usb2` (from `tiliqua/usb_audio/`) so the host records the synth's own
 output, and USB-MIDI in the other direction on the same cable. `boards/tiliqua/gateware/usb_iface.py`
 holds the gateware half, `host/transport/usbaudio.py` the host half, and `test/harness.py` now

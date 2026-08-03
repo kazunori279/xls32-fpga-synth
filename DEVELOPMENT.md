@@ -37,6 +37,12 @@ milestone, and the hard-won friction logs & learnings from the XLS / F4PGA / Bas
   - [M19 — cross-oscillator FM / ring-mod](#milestone-19--cross-oscillator-fm--ring-mod-built)
   - [Preset browser & AI-matched preset banks](#preset-browser--ai-matched-preset-banks-inverse-synthesis)
   - [M7 + M8 — hardware I/O (DIN MIDI + I2S DAC)](#milestone-7--8--hardware-io-din-midi-in--i2s-dac-out-built-hardware-pending)
+  - [M20 — one synth, two boards](#milestone-20--one-synth-two-boards-done-hardware-verified)
+  - [M21 — does it fit on an ECP5?](#milestone-21--does-it-fit-on-an-ecp5-decision-gate-passed)
+  - [M22 — narrowing the arithmetic to 18×18](#milestone-22--narrowing-the-arithmetic-to-1818-done)
+  - [M23 — hello Tiliqua: the first bitstream](#milestone-23--hello-tiliqua-the-first-bitstream-done-heard-on-hardware)
+  - [M24 — MIDI in over TRS](#milestone-24--midi-in-over-trs-done-in-simulation-hardware-pending)
+  - [M25 — the host loop: UAC2 audio up, USB-MIDI down](#milestone-25--the-host-loop-uac2-audio-up-usb-midi-down-done-hardware-verified)
 - [Friction logs & learnings](#friction-logs--learnings)
   - [Integrating Basys 3 + F4PGA + XLS](#integrating-basys-3--f4pga--xls-the-frictions)
   - [FPGA resource usage](#fpga-resource-usage-f4pga-vs-vivado)
@@ -81,6 +87,9 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **20 ✅** | **Two boards, one synth**: `core/` + `boards/` split, transport seam ([Tiliqua port plan](docs/TILIQUA_PORT.md)) | **A/B against the pre-move commit on the same board: 98.4 → 98.6, 152/175 bit-identical, same 3 pre-existing FAILs** |
 | **21 ✅** | **ECP5 feasibility spike** (decision gate): engine alone on `LFE5U-25F`, `STAGES` × voice-count sweep | **32 voices × 4 parts fit: 66% LUT / 38% FF / 0 BRAM / 86% DSP at `STAGES=12`. No fallback rung needed** |
 | **22 ✅** | **18×18 arithmetic**: reshape the DSP48-tuned multiplies in `synth.x` for the ECP5's narrower tile | **`MULT18X18D` 24 → 19 (86% → 68%); 3,000 audio samples bit-identical, and Basys 3 got *cheaper* — 78 fewer LUTs, 0.32 ns shorter path, same 26 DSP48** |
+| **23 ✅** | **Hello Tiliqua**: first ECP5 bitstream — engine + AK4619 codec, no SoC, hard-coded A4 | **heard on the module's line-out; `check_pitch.py` ratio 0.667446, 0.117% error** |
+| **24 ◐** | **MIDI in over TRS**: the jack feeds the engine's `u8 midi_in`, RT/SysEx/SysCommon filtered, byte CDC into `audio` | RTL built + both sim checks pass; **hardware pending** (no Type A TRS cable in it yet) |
+| **25 ✅** | **The host loop over one USB cable**: UAC2 audio up, USB-MIDI down, `harness.py` onto the `Transport` seam — the suite can see Tiliqua again | **three consecutive `--only basic` runs at 91.0 / 91.0 / 90.8 (A−), all 34 cases identical every run; clock 12.2874–12.2877 MHz; worst gap 0.001%** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1280,7 +1289,7 @@ played into the physical jack yet. When it is, note the jack is **TRS Type A** w
 (`gateware/docs/hardware_design.rst:38`) — a Type B adapter will not work. That step also closes
 M7's long-standing "built, HW-pending" DIN MIDI item, since it is the same DSLX parser being fed.
 
-## Milestone 25 — the host loop: UAC2 audio up, USB-MIDI down (built; blocked on `sync` timing)
+## Milestone 25 — the host loop: UAC2 audio up, USB-MIDI down (done, hardware-verified)
 
 Everything from M26 on is graded by the 175-case FFT suite, and on Tiliqua that suite was blind:
 `run_tests.py` drove a 2 Mbaud FTDI UART the board does not have. M25 closes the loop over the
@@ -1500,6 +1509,20 @@ it is not a finding.
 The correct order, recorded in that file's own post-mortem: re-measure on a supported configuration
 → run the in-house control → read the source for anything about to be asserted → *then* write to
 the vendor.
+
+### Open at the end of M25
+
+**M26 is next** and is not blocked by any of these. Everything below is carried, with the detail at
+the reference given.
+
+| | Where |
+|---|---|
+| `echo` · `reverb` · `reverb_cathedral` fail on Tiliqua — M23 never ported the effects FSM, so there is nothing to measure | M26's exit criteria, already red in the report |
+| `sync`/`usb` close at 48–50 MHz against a 60 MHz requirement. It enumerates, streams and takes MIDI anyway, but static timing fails, so there is no proof of margin over temperature or across dies | `TILIQUA_PORT.md` §2.6, risk 3b |
+| The loop needs one encoder click to recover after a vendor slot is booted by hand. Recommendation is to program the SI5351 from our own gateware; the flash-slot alternative needs the owner's consent, and no flash write has been made in this port | `TILIQUA_PORT.md` §2.7 |
+| M24's TRS MIDI jack passes in simulation but has never had a cable in it | M24 section; roadmap row 24 ◐ |
+| `pitch_a4` (reads an octave low) and `filter_sweep` fail on **Basys 3**, long-standing and unrelated to the port — the Tiliqua sim check proves the engine itself is in tune | M23 section |
+| `cy8cmbr3xxx/touch: n_working_sensors=Ok(0)` on the module, with `CRC OK`. Unrelated to anything built so far, but M28 will depend on touch | `TILIQUA_PORT.md` §1 |
 
 ---
 
