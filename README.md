@@ -82,7 +82,7 @@ browser **analog-style** front-end.
 
 | Spec | Value |
 |------|-------|
-| **Polyphony** | 32 voices, time-multiplexed (1 voice/engine cycle) |
+| **Polyphony** | 32 voices, time-multiplexed — a voice enters the pipeline every ~24 engine cycles (~768 per sample) |
 | **Multitimbral** | 4 parts — MIDI channels 1–4, each an independent patch |
 | **Synthesis** | subtractive: oscillators → per-voice resonant filter → VCA, with 2× ADSR + LFO |
 | **Oscillators** | 2 per voice (detuned dual) + sub-osc → up to 64 oscillators across the 32 voices; 5 waveforms (sine/saw/square/triangle/noise), PWM, cross-osc ring/FM/FM+ (8 ratios) |
@@ -574,7 +574,7 @@ filter, VCA, envelopes, LFO, unison, effects, clocking, I/O) — see
 
 The core is a **time-multiplexed pipelined voice engine** (an XLS `proc` in `core/synth.x`):
 32 voices live in a **rotating ring**, so the current voice is always at slot 0 (constant-index —
-no 32:1 mux). **One voice is processed per engine cycle; one 16-bit sample is emitted every 32.**
+no 32:1 mux). **A voice enters the pipeline every ~24 engine cycles, and 32 of them make one 16-bit sample — ~768 cycles.**
 Per voice the datapath is oscillator(s) → optional sub-osc → per-voice resonant [SVF](https://en.wikipedia.org/wiki/State_variable_filter) →
 [VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier) (envelope × velocity × [tremolo](https://en.wikipedia.org/wiki/Tremolo)), with 2× ADSR and a per-part LFO. MIDI in and audio
 out are ready/valid channels driven by a thin Verilog shell (`boards/basys3/rtl/top.v`).
