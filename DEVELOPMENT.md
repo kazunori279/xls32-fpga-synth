@@ -2358,6 +2358,28 @@ should be read with that band, including the 13-point two-board gap that started
 The real, stable result of these two fixes is **matched median 19.65 → 13.5 and separation
 1.59x → 2.1x**: a sixth of a second of alignment error was costing more than either waveform bug.
 
+### The two-board gap is closed, and the split says which fix did what
+
+Re-running the Tiliqua control separates the two classes of fix cleanly, because **the backlog trim
+is UART-only** — Tiliqua streams over USB audio and `record_stop()` never touches it. So everything
+Tiliqua gained came from the model edits alone, and everything Basys 3 gained on top of that came
+from the transport:
+
+| after every fix | rails | separation | matched median | identification |
+|---|---|---|---|---|
+| Tiliqua, ECP5, 48 kHz over USB audio | 0/128 | 2.00x | 14.84 | 97/128 (76%) |
+| Basys 3, Artix-7, 32 kHz over UART, run 1 | 0/128 | 2.10x | 13.53 | 86/128 (67%) |
+| Basys 3, run 2 | 0/128 | 2.13x | 13.64 | 97/128 (76%) |
+
+Tiliqua went 1.67x / 20.68 → **2.00x / 14.84** on model edits with no transport change at all.
+Basys 3 went 1.30x / 29.82 → **2.1x / 13.5** on the same edits plus the 157 ms trim.
+
+The two boards now sit within 1.3 of each other on matched median and 0.1 on separation, and the
+noisier board — the one that still drops a byte now and then, streaming raw over a 2 Mbaud UART with
+no flow control — is the marginally *better* match. One DSLX core, two vendors, two clock domains,
+two transports, and the remaining difference between them is smaller than the run-to-run noise of
+the identification metric. Whatever is left is in the model or in the presets, not in either board.
+
 ---
 
 # Friction logs & learnings
