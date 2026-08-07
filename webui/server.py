@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Local bridge between the browser P5 UI and the Basys 3 synth over USB-UART.
+"""Local bridge between the browser P5 UI and whichever board is selected.
 
-Owns the single serial port (nothing else can while this runs). One reader thread
-continuously drains the FTDI RX buffer (a dropped byte misaligns the 16-bit stream),
-locks byte-alignment, and fans signed-16 PCM frames out to every connected browser.
-The browser sends raw MIDI bytes up the same WebSocket; we write them straight to the
-board -> real-time MIDI input. Run:  uv run python webui/server.py  (then open :8765)
+Owns the board's link (nothing else can while this runs) and fans stereo PCM frames out
+to every connected browser. The browser sends raw MIDI bytes up the same WebSocket; we
+write them straight to the board -> real-time MIDI input.
+
+    uv run python webui/server.py                     # Basys 3, over the 2 Mbaud UART
+    XLS32_BOARD=tiliqua uv run python webui/server.py # Tiliqua, over USB Audio Class 2
+
+Board-agnostic since M27. Until then this file opened /dev/cu.usbserial-* itself, ran its
+own reader thread, and guessed the UART's byte alignment inline -- so the UI worked on
+exactly one board while the graded suite already ran on two. All of that now lives behind
+`Transport.stream_start` (host/transport/base.py); what is left here is the part that was
+never board-specific. The one wire format that does stay fixed is the browser's:
+interleaved L,R unsigned 16-bit LE centred 32768, converted in `_on_frames`.
 """
-import os, sys, asyncio, threading, time, array, json, contextlib
+import os, sys, asyncio, threading, time, json, contextlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "host"))       # import the project's host helpers
 sys.path.insert(0, str(HERE.parent / "presetgen"))  # import the demo generator (for /api/demo)
-import transport.uart as uart              # noqa: E402  (the board's audio/MIDI link)
+from synth import BOARD, open_transport         # noqa: E402  (the board's audio/MIDI link)
 import synthspec                                # noqa: E402
 import build_demos                              # noqa: E402  (make_random for the DEMO "replace")
 
@@ -35,57 +43,14 @@ try:
 except Exception:
     mido = None
 
-FRAME = 512          # STEREO frames per PCM chunk pushed to clients (~18 ms @ 28 kHz)
+FRAME = 512          # STEREO frames per PCM chunk pushed to clients (~16 ms @ 32 kHz)
 GLITCH = 18000       # sample-to-sample jump that signals a dropout/misalignment
-
-
-class Aligner:
-    """Align the continuous STEREO 16-bit stream to its 4-byte frame boundary (Llo Lhi Rlo Rhi)
-    and forward the RAW aligned bytes (the browser de-interleaves + decodes). The board stamps a
-    1-bit channel marker in each sample's LSB (L=0, R=1), so the correct frame offset is the one
-    whose de-interleaved samples show LSBs 0,1,0,1,... (L,R,L,R). This nails BOTH byte-alignment
-    (odd offsets scramble the pattern) AND L/R order (offset 2 would start on R) unambiguously.
-    Re-checked periodically so a mid-stream byte drop self-heals within ~0.1 s."""
-    def __init__(self):
-        self.buf = bytearray()
-        self.locked = False
-        self.since = 0
-
-    def _score(self, off):
-        # fraction of samples whose LSB marker mismatches the expected L,R,L,R (0,1,0,1) pattern
-        b = self.buf; end = min(off + 4000, len(b) - 1)
-        vals = [b[i] | (b[i + 1] << 8) for i in range(off, end, 2)]
-        if len(vals) < 4:
-            return 1e12
-        bad = sum(1 for k, v in enumerate(vals) if (v & 1) != (k & 1))
-        return bad / len(vals)
-
-    def feed(self, data: bytes) -> bytes:
-        self.buf += data
-        if not self.locked:
-            if len(self.buf) < 4096:
-                return b""
-            best = min(range(4), key=self._score)
-            if best:
-                del self.buf[:best]
-            self.locked = True
-        self.since += len(data)
-        if self.since >= 8192 and len(self.buf) >= 4100:   # periodic re-lock (heals a byte drop)
-            self.since = 0
-            best = min(range(4), key=self._score)
-            if best != 0 and self._score(best) < self._score(0) * 0.5:
-                del self.buf[:best]
-        n = len(self.buf) & ~3        # whole 4-byte stereo frames only
-        if n < 4:
-            return b""
-        out = bytes(self.buf[:n]); del self.buf[:n]
-        return out
 
 
 class Bridge:
     def __init__(self):
-        self.fd = None
-        self.dev = None
+        self.tp = None                            # host/transport Transport, or None if no board
+        self.sr = BOARD.sr                        # what the browser has to resample from
         self.wlock = threading.Lock()
         self.clients = set()                      # asyncio.Queue per websocket
         self.loop = None
@@ -99,13 +64,13 @@ class Bridge:
         self._abuf = bytearray()
         self._alock = threading.Lock()
         self._midi_ins = []
-        self._acap = 16384                        # ~128 ms cap (safety for bursty FTDI reads)
+        self._acap = 16384                        # ~128 ms cap (safety for bursty reads)
         self._aprime = 2560                       # ~20 ms cushion before playback -> low latency
         self._primed = False
         self.audio_dev = None                     # local output device index (None = system default)
         self._gain = 0.5                          # master OUTPUT gain for LOCAL play (final mix, 0..1); default half
-        # own 32 kHz -> device-rate linear resampler (PortAudio's internal SRC distorted the audio)
-        self._ratio = 1.0                         # 32000 / device_samplerate
+        # own board-rate -> device-rate linear resampler (PortAudio's internal SRC distorted the audio)
+        self._ratio = 1.0                         # board sr / device_samplerate
         self._rpos = 0.0                          # fractional read phase carried across callbacks
         self._ibuf = None                         # decoded float32 stereo input buffer (persists)
         self._caprate = 44100
@@ -117,44 +82,32 @@ class Bridge:
 
     def open(self):
         try:
-            self.dev, self.fd = uart.open_port(rw=True)
-            print(f"[bridge] serial open: {self.dev}")
-        except SystemExit as e:
+            self.tp = open_transport().open()
+            self.sr = self.tp.sr
+            print(f"[bridge] {BOARD.name} open over {BOARD.transport} at {self.sr} Hz")
+        except (SystemExit, Exception) as e:       # find_port() exits; PortAudio/mido raise
             print(f"[bridge] no board ({e}); UI will serve without audio/MIDI")
-            self.fd = None
+            self.tp = None
 
     def write_midi(self, data: bytes):
-        if self.fd is None:
+        if self.tp is None:
             return
         with self.wlock:
-            with contextlib.suppress(BlockingIOError, OSError):
-                os.write(self.fd, data)
+            with contextlib.suppress(Exception):
+                self.tp.send_midi(data)
 
-    def _reader(self):
-        aln = Aligner()
-        pend = bytearray()
-        fbytes = FRAME * 4        # stereo: 4 bytes/frame (Llo Lhi Rlo Rhi)
-        while True:
-            if self.fd is None:
-                time.sleep(0.2); continue
-            try:
-                data = os.read(self.fd, 65536)
-            except BlockingIOError:
-                time.sleep(0.0005); continue
-            except OSError:
-                time.sleep(0.2); continue
-            if not data:
-                time.sleep(0.0005); continue
-            try:                                   # never let a transient error kill the reader
-                pend += aln.feed(data)             # (a dead reader = frozen audio in BOTH modes)
-                while len(pend) >= fbytes:
-                    chunk = bytes(pend[:fbytes]); del pend[:fbytes]
-                    if self.local_mode:            # LOCAL: play on this machine's audio device
-                        self._feed_local(chunk)
-                    else:                          # WEB: stream to the browser over the WebSocket
-                        self._broadcast(chunk)
-            except Exception as e:
-                print(f"[bridge] reader hiccup (continuing): {e}"); time.sleep(0.01)
+    def _on_frames(self, frames):
+        """One chunk off the transport -> the browser's wire format, and nowhere else.
+
+        `frames` is (n, 2) signed; the browser has always read interleaved L,R unsigned
+        16-bit LE centred 32768, and keeping that is why app.js and /api/capture did not
+        have to change when this stopped being a UART.
+        """
+        chunk = (np.clip(frames, -32768, 32767) + 32768).astype("<u2").tobytes()
+        if self.local_mode:                        # LOCAL: play on this machine's audio device
+            self._feed_local(chunk)
+        else:                                      # WEB: stream to the browser over the WebSocket
+            self._broadcast(chunk)
 
     def _broadcast(self, frame: bytes):
         self.frames_sent += 1
@@ -173,7 +126,19 @@ class Bridge:
     def start(self, loop):
         self.loop = loop
         self.open()
-        threading.Thread(target=self._reader, daemon=True).start()
+        if self.tp is None:
+            return
+        if np is None:                             # both transports decode with numpy anyway
+            print("[bridge] numpy missing; MIDI will work, audio will not")
+            return
+        self.tp.stream_start(self._on_frames, chunk=FRAME)
+
+    def stop(self):
+        self.stop_demo()
+        if self.tp is not None:
+            with contextlib.suppress(Exception):
+                self.tp.close()
+            self.tp = None
 
     # ---- LOCAL PLAY: audio out + MIDI in on this machine ----
     def _feed_local(self, chunk: bytes):
@@ -186,20 +151,6 @@ class Bridge:
             if len(self._abuf) > self._maxfill:
                 self._maxfill = len(self._abuf)
 
-    def _sample_offset(self, buf):
-        # find the 2-byte sample phase (0..3) whose L/R markers read 0,1,0,1 (board stamps sample
-        # LSB: L=0, R=1). The stream is often 1 byte off; decoding at 0 straddles samples -> noise.
-        m = min(len(buf) - 1, 512)
-        if m < 8:
-            return 0
-        scores = []
-        for off in range(4):
-            vals = [(buf[off + 2 * i] | (buf[off + 2 * i + 1] << 8)) for i in range((m - off) // 2)]
-            bad = sum(1 for k, v in enumerate(vals) if (v & 1) != (k & 1))
-            scores.append(bad / max(1, len(vals)))
-        best = min(range(4), key=lambda o: scores[o])
-        return best if scores[best] < scores[0] * 0.5 else 0   # only shift if clearly better
-
     def _audio_cb(self, outdata, frames, t, status):
         ratio = self._ratio
         need_in = int(self._rpos + frames * ratio) + 2      # input frames needed this call
@@ -208,9 +159,6 @@ class Bridge:
                 if len(self._abuf) < self._aprime:
                     outdata[:] = 0; return
                 self._primed = True
-            off = self._sample_offset(self._abuf)  # self-heal byte-misalignment (else -> HF noise)
-            if off:
-                del self._abuf[:off]
             want = max(0, need_in - len(self._ibuf))
             avail = len(self._abuf) // 4
             take = min(want, avail)
@@ -252,21 +200,18 @@ class Bridge:
             with contextlib.suppress(Exception):
                 self._astream.stop(); self._astream.close()
             self._astream = None
-        with contextlib.suppress(Exception):        # drop buffered backlog -> start on the current stream
-            import termios
-            termios.tcflush(self.fd, termios.TCIFLUSH)
-        with self._alock:
+        with self._alock:                           # drop buffered backlog -> start on the current stream
             self._abuf = bytearray()
         self._primed = False
         self._under = self._over = self._maxfill = 0
-        # open at the DEVICE's native rate and resample 32kHz->native ourselves (clean linear,
+        # open at the DEVICE's native rate and resample board-rate->native ourselves (clean linear,
         # like the browser worklet) instead of relying on PortAudio's internal SRC (distorted).
         def _open():
             dev_rate = 44100
             with contextlib.suppress(Exception):
                 info = sd.query_devices(self.audio_dev if self.audio_dev is not None else sd.default.device[1])
                 dev_rate = int(round(info["default_samplerate"]))
-            self._ratio = 32000.0 / dev_rate
+            self._ratio = float(self.sr) / dev_rate
             self._caprate = dev_rate
             self._rpos = 0.0
             self._ibuf = np.zeros((0, 2), dtype=np.float32)
@@ -404,6 +349,7 @@ bridge = Bridge()
 async def lifespan(app):
     bridge.start(asyncio.get_running_loop())
     yield
+    bridge.stop()                 # the Tiliqua's UAC2 device wedges if it is not released cleanly
 
 
 app = FastAPI(lifespan=lifespan)
@@ -423,7 +369,11 @@ async def revalidate_assets(request, call_next):
 
 @app.get("/api/spec")
 async def api_spec():
-    return JSONResponse(synthspec.spec())
+    # `sr` rides along because the browser cannot guess it: the front-end hardcoded 32 kHz
+    # until M27, which is right for the Basys 3 and 2/3 of the truth on the Tiliqua. Take it
+    # from the open transport rather than from BOARD, so what the worklet is told is the rate
+    # frames are actually arriving at.
+    return JSONResponse({**synthspec.spec(), "sr": bridge.sr})
 
 
 @app.get("/api/demo")
@@ -516,7 +466,8 @@ async def api_capture(req: Request):
 
 @app.get("/api/status")
 async def api_status():
-    return {"connected": bridge.fd is not None, "device": bridge.dev,
+    return {"connected": bridge.tp is not None, "board": BOARD.name, "sr": bridge.sr,
+            "device": getattr(bridge.tp, "dev", None) or BOARD.transport,
             "clients": len(bridge.clients), "frames": bridge.frames_sent,
             "local": bridge.local_mode, "under": bridge._under, "over": bridge._over,
             "maxfill": bridge._maxfill, "acap": bridge._acap}
@@ -540,6 +491,11 @@ async def ws(socket: WebSocket):
     try:
         while True:                               # client -> server: MIDI bytes (or JSON)
             msg = await socket.receive()
+            # A closing client arrives as a `websocket.disconnect` *message*, not an exception;
+            # looping round to receive() again is what raises RuntimeError and logs an ASGI
+            # traceback on every tab close. Leave on the message instead.
+            if msg["type"] == "websocket.disconnect":
+                break
             if msg.get("bytes") is not None:
                 bridge.write_midi(msg["bytes"])
             elif msg.get("text") is not None:
@@ -553,7 +509,9 @@ async def ws(socket: WebSocket):
     finally:
         bridge.clients.discard(q)
         task.cancel()
-        with contextlib.suppress(Exception):
+        # CancelledError is a BaseException since 3.8, so `suppress(Exception)` does not catch
+        # the one thing `await task` is guaranteed to raise here.
+        with contextlib.suppress(asyncio.CancelledError):
             await task
 
 

@@ -5,7 +5,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "webui"))
 from synth import (note_on, note_off, cc, pitch_bend, set_wave, set_cutoff, set_reso, set_fmode, set_sub,  # noqa: E402
-                   set_pw, set_detune, set_unison, set_porta, set_fx, set_trem, set_room, set_reverb)
+                   set_pw, set_detune, set_unison, set_porta, set_fx, set_trem, set_room, set_reverb,
+                   set_echo_depth)
 from harness import TestCase, mk            # noqa: E402
 import harness as H
 import analysis as A                         # noqa: E402
@@ -67,14 +68,28 @@ add(id="combo_bass", title="Sub bass", desc="Square + full sub-osc + low cutoff 
     expected="strong low end, clean, decays", setup=_setup_bass, perform=lambda fd: (w(fd, note_on(33, 115)), time.sleep(1.0), w(fd, note_off(33)), time.sleep(0.6)),
     check=_chk_bass, capture_s=1.8)
 
+# Audibility + echo, and the echo carries the weight. This case used to spend 0.3 of its base on a
+# spectral-centroid "pluck drop", which never measured the wah: on note 45 (110 Hz) through a
+# resonant lowpass the centroid moves ~60 Hz and is done inside 30 ms, so nothing survives the
+# 220 ms grading windows. What the term actually scored was the *last window being silence*
+# (centroid 0), which is why it read ~1000 Hz dry and went NEGATIVE once the echo repeats filled
+# the tail -- and swung 80 -> -12 between two consecutive runs, i.e. no longer reproducible.
+# Brightness belongs to `basic/filter_env` and `basic/lfo_autowah`, which measure it on patches
+# where the centroid does move and both score 100. Integration's contract is "this combination
+# works cleanly", so what is left is: audible, echoing, glitch-free. The tail term at 0.4 is the
+# regression guard this case was missing -- if the echo ever goes dead again it reads ~7, not ~420,
+# and the case drops to 60 instead of quietly holding a passing-looking 80.
 def _chk_wah(s):
-    c = A.centroid_over_time(s, 10)
-    drop = (max(c[:4]) if len(c) >= 4 else 0) - (c[-1] if c else 0)
+    pk = A.peak(s)
     tail = A.tail_energy(s, 0.4)
-    base = 50 + sc(drop, 240, 40) * 0.3 + sc(tail, 150, 25) * 0.25
+    base = 40 + sc(pk, 6000, 500) * 0.2 + sc(tail, 150, 25) * 0.4
     score, g, clip = clean_score(s, base)
-    return mk(score, f"pluck drop {drop:.0f} Hz, echo tail {tail:.0f}", "filter pluck + echo repeats")
-def _setup_wah(fd): w(fd, set_wave(1), set_cutoff(38), set_reso(85), set_fmode(0), cc(79, 110), cc(24, 0), cc(25, 55), cc(26, 30), cc(20, 2), cc(23, 15), set_fx(2))
+    return mk(score, f"peak {pk:.0f}, echo tail {tail:.0f}, {g} glitches", "filter pluck + echo repeats")
+# set_echo_depth, not set_fx(2): the only thing this case sent to turn the echo on was CC83, which
+# the shell stopped reading when effects went depth-gated, so it had been plucking dry. 64 is the
+# shell's own default depth and matches the wet/2 the mode used to hardcode; dtime stays at the
+# default 63 (~256 ms), which is what the old fixed tap was.
+def _setup_wah(fd): w(fd, set_wave(1), set_cutoff(38), set_reso(85), set_fmode(0), cc(79, 110), cc(24, 0), cc(25, 55), cc(26, 30), cc(20, 2), cc(23, 15), set_echo_depth(64))
 add(id="combo_wah", title="Auto-wah pluck + echo", desc="High reso + deep filter-env + echo → a plucky, repeating wah.",
     expected="bright→dark pluck with echoes", setup=_setup_wah, perform=lambda fd: (w(fd, note_on(45, 110)), time.sleep(0.25), w(fd, note_off(45)), time.sleep(1.8)),
     check=_chk_wah, capture_s=2.2)
@@ -107,11 +122,12 @@ add(id="combo_poly_reverb", title="Poly chord through filter + reverb", desc="A 
 
 # ---- the 5 factory presets ----
 _CC_OF = {c["id"]: c["cc"] for c in synthspec.CONTROLS}
-# Presets outlive the controls they were saved with. Every stored patch still carries an
-# "fx" value from when CC83 selected an effect mode; the shell ignores CC83 now (effects are
-# depth-gated via CC93/94/95) and synthspec dropped the control, so sending it would be a
-# no-op even if we could. Anything else missing is a real drift between the preset bank and
-# the control list, and should be loud.
+# Presets outlive the controls they were saved with. "fx" is the one survivor: it held a CC83
+# effect-mode number, the shell ignores CC83 now (effects are depth-gated via CC93/94/95) and
+# synthspec dropped the control, so sending it would be a no-op even if we could. M27 rewrote it
+# out of the shipped banks and out of FACTORY, so nothing reaching this file carries it any more
+# -- but a patch saved to localStorage before then still does, and must load rather than raise.
+# Anything else missing is a real drift between the preset bank and the control list: be loud.
 _RETIRED = {"fx"}
 
 def _apply_preset(values):

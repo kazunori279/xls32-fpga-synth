@@ -221,11 +221,14 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     plus `midi_filter.py`, `fx.py` and their Verilator/Amaranth harnesses), `sim/` (iverilog
     reference for the pitch check), `build.sh`, `spike/` (the M21/M22 fit sweeps). The bitstream
     plays MIDI from the TRS jack (M24), runs the whole host loop over one USB cable — UAC2 audio
-    up, USB-MIDI down (M25) — and carries the full chorus / echo / Freeverb chain (M26).
+    up, USB-MIDI down (M25) — carries the full chorus / echo / Freeverb chain (M26), and drives
+    the browser UI, the preset banks and all 175 graded cases (M27).
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
-  (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3), `analyze.py`
+  (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
+  Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
+  suite, the web UI and the presetgen hardware tools), `analyze.py`
   (envelope/pitch checks), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
@@ -364,11 +367,16 @@ Then jump to [Run the web UI](#run-the-web-ui-browser-synth-panel) to play it.
 
 ### Run the web UI (browser synth panel)
 ```bash
-uv run python webui/server.py             # serves http://localhost:8765, owns the serial port
+uv run python webui/server.py                          # Basys 3 (default), over the serial port
+XLS32_BOARD=tiliqua uv run python webui/server.py      # Tiliqua, over USB audio + USB-MIDI
 ```
+Either way it serves http://localhost:8765 and owns the board's link. The panel is the same on both
+boards — it goes through the same `Transport` seam the graded suite uses, and asks the server what
+rate frames arrive at (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming.
+
 Open the URL, click **POWER** (starts audio + the [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)), and play with the on-screen
 keyboard, your computer keys, or a [Web-MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) controller. Hit **▶ DEMO** for the built-in
-songs (sequenced on the server for steady timing). The server holds the serial port, so
+songs (sequenced on the server for steady timing). The server holds the board's link, so
 stop it before running the `host/` tools above. See the
 [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) section for the architecture.
 
@@ -547,7 +555,7 @@ uv run python test/run_tests.py            # reflash + full suite + captioned vi
 uv run python test/run_tests.py --smoke    # fast subset;  --only basic|integration|stress ; --no-reflash --skip-video
 ```
 Drives the real board over USB and grades the captured audio for every feature (basic),
-typical combinations (integration), and boundary conditions (stress) — 130+ cases across the
+typical combinations (integration), and boundary conditions (stress) — 175 cases across the
 three groups, including the full effects chain: **echo/delay** (CC95 depth + CC82 time),
 **chorus** (CC94 depth), and the **8-comb Freeverb reverb** (CC93 wet + CC91 size), each
 verified for an audible tail that **decays without railing** (`stress_fx_tail`) — on **both**

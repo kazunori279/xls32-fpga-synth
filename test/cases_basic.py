@@ -348,8 +348,8 @@ def _perf_echo(fd):
     time.sleep(0.25)
     for n in (48, 55, 60): H.send(fd, note_off(n))
     time.sleep(1.7)
-def _setup_echo(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 10), set_fx(2), set_echo_depth(110), set_delay_time(50))
-add(id="echo", title="Effect — echo / delay", desc="CC83=echo/delay + CC95 depth + CC82 time repeats a pluck with decaying taps.",
+def _setup_echo(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 10), set_echo_depth(110), set_delay_time(50))
+add(id="echo", title="Effect — echo / delay", desc="CC95 depth + CC82 time repeats a pluck with decaying taps.",
     expected="decaying repeats", setup=_setup_echo, perform=_perf_echo, check=_chk_echo, capture_s=2.0)
 
 def _chk_reverb(s):

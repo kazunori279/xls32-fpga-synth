@@ -4,16 +4,23 @@
 // them with a fractional step that TRACKS THE MEASURED ARRIVAL RATE (via currentTime), plus
 // a tiny buffer-level trim. Consumption then matches arrival at any rate -> smooth, no
 // glitches. Trade-off: pitch tracks the board's real-time rate (slightly flat when it can't
-// keep up) — a board/UART-throughput limit no client resampler can undo.
+// keep up) — a board/UART-throughput limit no client resampler can undo. The Tiliqua's UAC2
+// link does deliver real time, so there the tracking simply converges on the nominal rate.
 // `sampleRate` and `currentTime` are globals in the AudioWorklet scope.
 const N = 1 << 16;                          // per-channel ring size (power of two) ~1.5 s
 class PCMPlayer extends AudioWorkletProcessor {
-  constructor() {
+  constructor(opts) {
     super();
+    // Nominal wire rate, from /api/spec via processorOptions (M27): 32 kHz on the Basys 3,
+    // 48 kHz on the Tiliqua. Only a SEED — the estimator below measures the real arrival rate
+    // and is what actually sets the step. It matters for the pre-roll target (a 48 kHz stream
+    // pre-rolled against 28 kHz starts on 117 ms, not 200) and for the first half-second,
+    // before `arr` has converged.
+    this.nom = (opts && opts.processorOptions && opts.processorOptions.sr) || 32000;
     this.ringL = new Float32Array(N);       // stereo: one ring per channel sharing ONE rpos, so
     this.ringR = new Float32Array(N);       // L/R stay phase-locked through the resampler
     this.wpos = 0; this.rpos = 0;           // absolute write / (fractional) read positions
-    this.target = Math.round(0.20 * 28000); // ~200 ms of buffered source (board ~28 kHz)
+    this.target = Math.round(0.20 * this.nom);   // ~200 ms of buffered source
     this.playing = false;
     this.arr = 0; this.lastT = 0; this.lastW = 0;   // arrival-rate estimator (samples/s)
     this.availAvg = 0;                              // smoothed buffer level (kills per-chunk jitter)
@@ -45,7 +52,7 @@ class PCMPlayer extends AudioWorkletProcessor {
       else { outL.fill(0); outR.fill(0); return true; }
     }
     this.availAvg = this.availAvg ? this.availAvg * 0.995 + avail * 0.005 : avail;
-    const base = (this.arr > 1000 ? this.arr : 28000) / sampleRate;   // match measured arrival
+    const base = (this.arr > 1000 ? this.arr : this.nom) / sampleRate;   // match measured arrival
     const err = Math.max(-1, Math.min(1, (this.availAvg - this.target) / this.target));
     const step = base * (1 + 0.004 * err);   // very gentle trim -> pitch variation imperceptible
     for (let i = 0; i < outL.length; i++) {

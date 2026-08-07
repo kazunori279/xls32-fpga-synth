@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M14 reverb showcase (CC83=4 reverb, Schroeder 4-comb + 2-all-pass, CC91 room size).
+"""M14 reverb showcase (CC93 reverb send, Schroeder combs + all-pass, CC91 room size).
 Part 1: a plucky phrase DRY. Part 2: the same phrase with CATHEDRAL reverb (each note
 rings into a long diffuse tail). Part 3: a single chord stab swept through the four room
 sizes (room -> hall -> large -> cathedral) so the tail audibly lengthens. Recorded via
@@ -10,7 +10,7 @@ import os, sys, time, struct, wave, termios, math
 import os as _o, sys as _s; _s.path.insert(0, _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))))  # put host/ on sys.path
 from transport.uart import open_port, samples_from_bytes, Recorder
 from synth import (to_signed, normalize, glitches, note_on, note_off, set_wave, set_cutoff, set_reso,
-                   set_fx, set_room, cc, SR)
+                   set_reverb, set_room, cc, SR)
 
 PHRASE = (57, 60, 64, 67, 64, 60, 62, 69)
 CHORD  = (45, 52, 57, 64)
@@ -25,13 +25,14 @@ def perform(fd):
     os.write(fd, cc(79, 100)); os.write(fd, cc(77, 0))         # snappy pluck envelope
     os.write(fd, set_room(3))                                   # cathedral for parts 1-2
     rec = Recorder(fd)
-    # Part 1: phrase dry
-    os.write(fd, set_fx(0))
+    # Part 1: phrase dry. The wet knob is CC93 -- this used to be CC83 mode 0/4, which the
+    # shell ignores now (each effect is gated on its own depth), so the demo played dry throughout.
+    os.write(fd, set_reverb(0))
     for n in PHRASE:
         os.write(fd, note_on(n, 105)); time.sleep(0.16); os.write(fd, note_off(n)); time.sleep(0.20)
     time.sleep(0.6)
     # Part 2: same phrase with cathedral reverb (notes ring out)
-    os.write(fd, set_fx(4))
+    os.write(fd, set_reverb(110))
     for n in PHRASE:
         os.write(fd, note_on(n, 105)); time.sleep(0.16); os.write(fd, note_off(n)); time.sleep(0.24)
     time.sleep(2.5)                                             # let the tail ring
@@ -42,7 +43,7 @@ def perform(fd):
         time.sleep(0.18)
         for n in CHORD: os.write(fd, note_off(n))
         time.sleep(2.2 if room < 3 else 4.0)                    # room short ... cathedral long
-    os.write(fd, set_fx(0))
+    os.write(fd, set_reverb(0))
     termios.tcdrain(fd)
     return rec.stop()
 
@@ -50,7 +51,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "demo_reverb.wav"
     # warm up: discard the first capture (startup DC artifact)
     dev, fd = open_port(rw=True)
-    os.write(fd, set_fx(4)); os.write(fd, set_room(3))
+    os.write(fd, set_reverb(110)); os.write(fd, set_room(3))
     os.write(fd, set_wave(1)); os.write(fd, set_cutoff(56))
     os.write(fd, note_on(57, 90)); time.sleep(0.3); os.write(fd, note_off(57)); time.sleep(1.0)
     os.close(fd)

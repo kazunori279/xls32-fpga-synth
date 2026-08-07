@@ -936,12 +936,33 @@ audio spans **4.0–512.0 ms at 0.00% error on all nine sweep points**. Cost: 23
 (97%), 37 DP16KD, 25 MULT18X18D, and `sync` Fmax down to 43.40 MHz — see §2.6 and the M26 entry in
 `DEVELOPMENT.md`.
 
-**M27 · Preset bank + web UI on Tiliqua**
+**M27 · Preset bank + web UI on Tiliqua** — ✅ **done**
 Point `webui/server.py` at the Tiliqua transport; recalibrate `presetgen/engine.py` for the ported
 signal path if M21/M26 changed anything audible; re-verify the preset banks with
 `presetgen/validate_hw.py`.
 *Exit:* full e2e suite (basic + integration + stress) on Tiliqua, and all 7 demo songs play from
 the browser.
+*Met.* **basic 99.4 (33 pass / 1 warn / 0 fail), integration 99.9 (134 / 0 / 0), stress 100.0
+(7 / 0 / 0)** — 175 cases, and `integration` for the first time ever on this board, run twice with
+identical verdicts *and* identical scores. `check_loop.py` reads 12.289 MHz, A4 −0.0 cents, 0.000%
+gaps. `validate_hw.py` played all three migrated banks: **0 of 274 presets diverge**. In the
+browser: AudioContext `running@48000`, keyboard round-trip, all three banks in the preset browser,
+and all seven `demos.json` songs through `/api/demo_play` at peak RMS 0.084–0.283 with 0 under /
+0 over across ~39k blocks.
+
+The web UI needed **no board-specific code at all** — the transport seam (M20, generalised in M25)
+simply reached its second consumer. What it did need was one more verb on that seam:
+`stream_start`/`stream_stop`, an open-ended *push* alongside the bracketed
+`record_start`/`record_stop` the graded suite uses, delivering two channels where grading only ever
+wanted one. Everything board-shaped in `Bridge` — `open_port`, the reader thread, the `Aligner`,
+`tcflush`, the hardcoded 32000 — deleted rather than branched. The one genuinely new fact the
+browser had to learn is the sample rate, which now rides along in `/api/spec`.
+
+What it did *not* need: any change to the wire format (`app.js:onPCM` untouched), any new flag
+(`$XLS32_BOARD` already existed), or any change to `demos.json` (the songs already carry live
+`chorusd`/`dtime`/`echod`/`reverb`/`room` keys). The preset banks did need one — 274 presets
+carried a dead CC83 `fx` mode, migrated to depth-gated `chorusd`/`echod`/`reverb`; see the M27
+entry in `DEVELOPMENT.md`. Re-fitting against the corrected model is deferred: the corpora are gone.
 
 **M28 · Eurorack-native I/O**
 Use what the Basys 3 never had: 4 CV inputs → V/oct pitch, filter cutoff, and two assignable
@@ -1022,7 +1043,7 @@ graded by hand or by simulation.
 | 6 | Video + full polyphony don't coexist | Medium | Two bitstreams instead of one | Use the 8 bootloader slots; decide with M21 numbers |
 | 7 | Tiliqua submodule / Amaranth version drift | Medium | Build breakage | Pin the submodule; build gateware in Tiliqua's own `pdm` env, keep `uv` for host tooling |
 | 8 | 32→48 kHz resampling artifacts | Low | Audible aliasing | `tiliqua.dsp.resample` (2:3 rational); verify by FFT in M23 |
-| 9 | Preset bank mismatches the ported path | Medium | Presets sound wrong | M27 — recalibrate `presetgen/engine.py`, re-run `validate_hw.py` |
+| 9 | ~~Preset bank mismatches the ported path~~ | **Confirmed, and worse than stated** | Presets sounded wrong on *both* boards | **Retired by M27**, but the mismatch was never Tiliqua-specific: `engine.py` ran at 28 kHz (a rate no board has) and modelled a 4-comb reverb selected by CC83 modes, against 8 combs and depth gating in the shipped shell. So all 274 presets carried a dead `fx` key and were fitted with a tail they were then played without — on the Basys 3 too. Generator corrected against `fx_model.py`, banks migrated, `validate_hw.py` clean on all three. Re-fitting the corpora is deferred (they are gone) |
 | 10 | SoC firmware is a project unto itself | **High** | Schedule | M30 is explicitly last and optional; the browser UI already covers the use case |
 
 ---

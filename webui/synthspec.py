@@ -18,8 +18,8 @@ Firmware CC map (see synth.x / top.v):
   87 cross-osc ratio (bits5:7)           0xE0 pitch bend (14-bit, live wheel)
 """
 
-# Bit-packed select helpers: firmware reads evv[4:7] (wave/fx) or evv[5:7] (2-bit).
-def _w(v):  return (v & 7) << 4    # 3-bit field @ bit4 (CC70 wave, CC83 fx)
+# Bit-packed select helpers: firmware reads evv[4:7] (3-bit) or evv[5:7] (2-bit).
+def _w(v):  return (v & 7) << 4    # 3-bit field @ bit4 (CC70 wave)
 def _s(v):  return (v & 3) << 5    # 2-bit field @ bit5 (mode/sub/detune/unison/...)
 
 WAVE_OPTS   = [("Sine", _w(0)), ("Saw", _w(1)), ("Square", _w(2)), ("Triangle", _w(3)), ("Noise", _w(4))]
@@ -113,21 +113,21 @@ def _clamp(v):  return max(0, min(127, int(v)))
 # per-category base character (overrides on DEFAULTS); the spread below varies each of the 16.
 _TMPL = {
     "Bass":    dict(wave=_w(1), sub=_s(2), cutoff=58, reso=34, aatt=2, adec=46, asus=80,
-                    arel=30, fdepth=40, fatt=0, fdec=42, fsus=30, frel=28, fx=_w(0)),
+                    arel=30, fdepth=40, fatt=0, fdec=42, fsus=30, frel=28),
     "Lead":    dict(wave=_w(1), detune=_s(1), cutoff=92, reso=40, aatt=4, adec=44, asus=104,
-                    arel=44, lforate=48, fx=_w(2)),
+                    arel=44, lforate=48),
     "Pad":     dict(wave=_w(1), unison=_s(2), detune=_s(2), cutoff=74, reso=24, aatt=96,
-                    adec=70, asus=118, arel=110, lforate=20, lfodep=16, fx=_w(1)),
+                    adec=70, asus=118, arel=110, lforate=20, lfodep=16),
     "Pluck":   dict(wave=_w(1), cutoff=48, reso=60, fdepth=100, fatt=0, fdec=40, fsus=24,
-                    frel=36, aatt=2, adec=40, asus=40, arel=34, fx=_w(2)),
+                    frel=36, aatt=2, adec=40, asus=40, arel=34),
     "Keys":    dict(wave=_w(3), detune=_s(1), cutoff=90, reso=22, aatt=4, adec=54, asus=96,
-                    arel=48, fx=_w(1)),
+                    arel=48),
     "Brass":   dict(wave=_w(1), unison=_s(1), cutoff=70, reso=30, fdepth=60, fatt=30, fdec=50,
-                    fsus=80, frel=40, aatt=18, adec=50, asus=100, arel=44, fx=_w(1)),
+                    fsus=80, frel=40, aatt=18, adec=50, asus=100, arel=44),
     "Strings": dict(wave=_w(1), unison=_s(3), detune=_s(2), cutoff=80, reso=20, aatt=90,
-                    adec=70, asus=120, arel=100, lforate=24, lfodep=14, fx=_w(1)),
+                    adec=70, asus=120, arel=100, lforate=24, lfodep=14),
     "FX":      dict(wave=_w(4), cutoff=70, reso=90, fdepth=90, fatt=10, fdec=50, fsus=40,
-                    frel=60, lforate=80, lfodep=80, fx=_w(1)),
+                    frel=60, lforate=80, lfodep=80),
 }
 
 _NAMES = {
@@ -161,16 +161,15 @@ _NAMES = {
 # The original 5 curated presets, spliced into their categories (name + exact overrides).
 _CURATED = {
     ("Bass", 0):  ("Sub Bass", dict(wave=_w(2), sub=_s(3), cutoff=52, reso=32, aatt=2, adec=48,
-                    asus=78, arel=28, fdepth=45, fatt=0, fdec=40, fsus=36, frel=28, fx=_w(0))),
+                    asus=78, arel=28, fdepth=45, fatt=0, fdec=40, fsus=36, frel=28)),
     ("Lead", 1):  ("Super Saw", dict(wave=_w(1), unison=_s(3), detune=_s(3), cutoff=100, reso=40,
-                    aatt=20, adec=55, asus=112, arel=60, fx=_w(1))),
+                    aatt=20, adec=55, asus=112, arel=60)),
     ("Lead", 2):  ("Echo Lead", dict(wave=_w(2), pw=40, cutoff=96, reso=34, detune=_s(1),
-                    aatt=4, adec=42, asus=106, arel=46, lforate=72, fx=_w(2))),
+                    aatt=4, adec=42, asus=106, arel=46, lforate=72)),
     ("Pad", 0):   ("Cathedral Pad", dict(wave=_w(1), cutoff=72, reso=24, aatt=104, adec=70,
-                    asus=120, arel=118, unison=_s(1), detune=_s(2), lforate=22, lfodep=18,
-                    fx=_w(1))),
+                    asus=120, arel=118, unison=_s(1), detune=_s(2), lforate=22, lfodep=18)),
     ("Pluck", 0): ("Auto-Wah Pluck", dict(wave=_w(1), cutoff=38, reso=96, fdepth=115, fatt=0,
-                    fdec=58, fsus=28, frel=42, aatt=2, adec=60, asus=92, arel=44, fx=_w(2))),
+                    fdec=58, fsus=28, frel=42, aatt=2, adec=60, asus=92, arel=44)),
 }
 
 def _factory():
@@ -189,16 +188,15 @@ def _factory():
             if c in ("Pad", "Strings"):
                 v["unison"] = _s(1 + (i % 3))
             elif c in ("Lead", "Keys"):
-                v["detune"] = _s(i % 4); v["fx"] = _w([0, 1, 2, 2][i % 4])
+                v["detune"] = _s(i % 4)
             elif c == "Bass":
-                v["sub"] = _s(1 + (i % 3)); v["fx"] = _w([0, 0, 1, 2][i % 4])
+                v["sub"] = _s(1 + (i % 3))
             elif c == "Pluck":
-                v["fdepth"] = _clamp(80 + (i - 8) * 5); v["fx"] = _w([0, 2, 1, 2][i % 4])
+                v["fdepth"] = _clamp(80 + (i - 8) * 5)
             elif c == "Brass":
                 v["fatt"] = _clamp(10 + (i % 4) * 10); v["unison"] = _s(i % 3)
             elif c == "FX":
                 v["wave"] = _w(4 if i % 2 else 2); v["lfodep"] = _clamp((i * 8) % 128)
-                v["fx"] = _w([2, 1, 3, 1][i % 4])
             out.append({"name": _NAMES[c][i], "category": c, "values": v})
     return out
 

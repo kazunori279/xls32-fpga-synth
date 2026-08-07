@@ -23,25 +23,29 @@ SINE = _w(0)
 
 # name, category, overrides (raw CC; unset -> synthspec DEFAULTS). Strong-FM voicing: FM index
 # now scales with depth*modsig, so bells want high xdepth + an inharmonic ratio (idx 3-6).
+# Effects are per-preset depths, not CC83 modes: these entries used to carry fx=_w(1|2|4) and were
+# translated by the M27 table (presetgen/migrate_fx.py) into the knob each mode used to select.
+# NOTE the bank on disk predates several of these rows -- see that script's report; regenerating
+# changes more than the effects (webui/presets_fm.json still has the older voicings).
 PRESETS = [
     # --- Pluck: bells & mallets (strong FM/ring make the inharmonic partials subtractive can't) ---
-    ("FM Glockenspiel", "Pluck", dict(wave=SINE, xmode=FMP, xdepth=95,  xratio=RA[6], cutoff=118, reso=8, aatt=0, adec=40, asus=6,  arel=44, fx=_w(2))),
-    ("Tubular Bells",   "Pluck", dict(wave=SINE, xmode=FMP, xdepth=82,  xratio=RA[3], cutoff=105, aatt=0, adec=80, asus=20, arel=120, fx=_w(4), room=_s(2))),
-    ("FM Vibraphone",   "Pluck", dict(wave=SINE, xmode=FM,  xdepth=64,  xratio=RA[2], aatt=0, adec=62, asus=45, arel=66, trem=_s(1), fx=_w(4))),
+    ("FM Glockenspiel", "Pluck", dict(wave=SINE, xmode=FMP, xdepth=95,  xratio=RA[6], cutoff=118, reso=8, aatt=0, adec=40, asus=6,  arel=44, echod=64)),
+    ("Tubular Bells",   "Pluck", dict(wave=SINE, xmode=FMP, xdepth=82,  xratio=RA[3], cutoff=105, aatt=0, adec=80, asus=20, arel=120, reverb=96, room=_s(2))),
+    ("FM Vibraphone",   "Pluck", dict(wave=SINE, xmode=FM,  xdepth=64,  xratio=RA[2], aatt=0, adec=62, asus=45, arel=66, trem=_s(1), reverb=96)),
     ("Music Box",       "Pluck", dict(wave=SINE, xmode=FMP, xdepth=72,  xratio=RA[5], cutoff=122, aatt=0, adec=34, asus=4, arel=28)),
-    ("Ring Bells",      "Pluck", dict(wave=SINE, xmode=RING, xdepth=100, xratio=RA[3], aatt=0, adec=45, asus=15, arel=44, fx=_w(4))),
+    ("Ring Bells",      "Pluck", dict(wave=SINE, xmode=RING, xdepth=100, xratio=RA[3], aatt=0, adec=45, asus=15, arel=44, reverb=96)),
     # --- Keys: FM electric pianos / clav ---
-    ("DX E-Piano",      "Keys",  dict(wave=SINE, xmode=FM,  xdepth=60, xratio=RA[0], aatt=2, adec=58, asus=68, arel=48, cutoff=105, fx=_w(1))),
+    ("DX E-Piano",      "Keys",  dict(wave=SINE, xmode=FM,  xdepth=60, xratio=RA[0], aatt=2, adec=58, asus=68, arel=48, cutoff=105, chorusd=64)),
     ("FM Clav",         "Keys",  dict(wave=SINE, xmode=FMP, xdepth=78, xratio=RA[2], aatt=0, adec=40, asus=28, arel=30, cutoff=98)),
-    ("Bell Keys",       "Keys",  dict(wave=SINE, xmode=FM,  xdepth=66, xratio=RA[3], aatt=2, adec=60, asus=58, arel=62, fx=_w(1))),
+    ("Bell Keys",       "Keys",  dict(wave=SINE, xmode=FM,  xdepth=66, xratio=RA[3], aatt=2, adec=60, asus=58, arel=62, chorusd=64)),
     # --- Brass: FM / ring horns ---
     ("FM Brass",        "Brass", dict(wave=SINE, xmode=FM,  xdepth=52, xratio=RA[0], cutoff=80, fdepth=55, fatt=22, aatt=14, adec=55, asus=105, arel=40, unison=_s(1))),
     ("Ring Horn",       "Brass", dict(wave=_w(2), xmode=RING, xdepth=72, xratio=RA[2], cutoff=85, aatt=8, asus=110, arel=40)),
     # --- FX: metallic / clangorous / robotic ---
-    ("Clangor",         "FX",    dict(wave=SINE, xmode=RING, xdepth=112, xratio=RA[6], asus=122, arel=90, fx=_w(4), room=_s(3))),
-    ("Metallic Drone",  "FX",    dict(wave=SINE, xmode=FMP,  xdepth=120, xratio=RA[6], asus=127, cutoff=95, fx=_w(4), room=_s(3))),
+    ("Clangor",         "FX",    dict(wave=SINE, xmode=RING, xdepth=112, xratio=RA[6], asus=122, arel=90, reverb=96, room=_s(3))),
+    ("Metallic Drone",  "FX",    dict(wave=SINE, xmode=FMP,  xdepth=120, xratio=RA[6], asus=127, cutoff=95, reverb=96, room=_s(3))),
     ("Robotic",         "FX",    dict(wave=SINE, xmode=RING, xdepth=84,  xratio=RA[7], lforate=60, lfodep=30, asus=120)),
-    ("FM Sweep",        "FX",    dict(wave=SINE, xmode=FMP,  xdepth=104, xratio=RA[2], fdepth=80, fatt=40, asus=110, fx=_w(4))),
+    ("FM Sweep",        "FX",    dict(wave=SINE, xmode=FMP,  xdepth=104, xratio=RA[2], fdepth=80, fatt=40, asus=110, reverb=96)),
     # --- Bass ---
     ("FM Bass",         "Bass",  dict(wave=SINE, xmode=FM,  xdepth=44, xratio=RA[0], cutoff=64, sub=_s(2), aatt=0, adec=52, asus=82, arel=30)),
     ("Ring Bass",       "Bass",  dict(wave=SINE, xmode=RING, xdepth=64, xratio=RA[2], cutoff=56, sub=_s(1), asus=85, arel=30)),

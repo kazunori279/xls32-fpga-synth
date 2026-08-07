@@ -478,6 +478,8 @@ never mapped to BRAM because XLS emits *async* reads; a sync-read RAM is the pat
 yosys/VPR actually maps.) Two taps per sample: a long fixed tap (**echo**, 250 ms + 0.5
 feedback) and a short LFO-swept tap (**chorus**, ~9–17 ms). **CC83** selects
 dry / chorus / echo / both (sniffed in the shell, which sees the MIDI stream).
+*Superseded:* CC83 was retired when each effect got its own depth knob — an effect is on iff its
+depth is nonzero (CC94 chorus / CC95 echo / CC93 reverb). M27 rewrote the last callers.
 
 Verified on board: echo decays cleanly (repeats halving every 250 ms, 0 glitches),
 chorus shows the classic moving comb notches, dry/silence clean.
@@ -501,6 +503,9 @@ MIDI CC map: 1 vibrato · 5 portamento · 70 wave · 71 reso · 72 filter-mode �
 room→cathedral size, in the shell's BRAM; the multiply-heavy feedback drops the clock to ÷4.
 
 *Analog-feature priority: reverb (impact High · ease ★ — the hardest: multiply-heavy comb feedback).*
+
+*Superseded twice over: the tank is 8 combs + 4 all-pass now, gated on the CC93 wet level rather
+than selected as a mode. What follows is the M14 shape.*
 
 A **Schroeder reverb** as effect mode 4 (CC83): **4 parallel feedback comb filters**
 (delays 810/878/940/1012 samples, [Freeverb](https://ccrma.stanford.edu/~jos/pasp/Freeverb.html) tuning) summed, then **2 series all-pass
@@ -957,6 +962,11 @@ bank and the control list, and still raises.
 is not. It is a property of the offline model — the `BASE_INC` phase increments are tuned to it and
 the calibration bank was fitted at it. Repointing it at the board's 32 kHz would have invalidated
 every stored preset while looking like a tidy-up.
+*And a correction to the correction (M27): the first half is right and the conclusion was wrong.*
+`SR` alone would indeed have broken pitch, because `BASE_INC` was stale to match — but *both* were
+stale, and the engine has ticked at 32 kHz on both boards all along. Leaving the pair alone bought
+correct pitch at the price of every per-sample quantity (ADSR, LFO, SVF corner) sitting 14% off the
+hardware the presets were fitted for. Changing them **together** is the fix; see the M27 entry.
 
 ## Milestone 21 — does it fit on an ECP5? (decision gate, passed)
 
@@ -1637,6 +1647,136 @@ autocorrelating the waveform rather than its envelope removes the periodicity en
 one of the nine points then lands at **0.00% error** across the full 4.0–512.0 ms. Worth keeping as
 a rule: when a periodicity measurement disagrees at exactly the scale of some *other* period in the
 signal, suspect the instrument first.
+
+## Milestone 27 — preset bank + web UI on Tiliqua (done, hardware-verified)
+
+Two things still only worked on the Basys 3 after M26, and neither was about the gateware. The web
+UI could not see the Tiliqua at all — `webui/server.py` predated the transport seam and opened
+`/dev/cu.usbserial-*` by hand, ran its own reader thread, byte-aligned the stream with a private
+`Aligner`, `tcflush`ed the fd and hardcoded 32000 Hz. And the four preset banks had been fitted
+against a model of a synth that never shipped.
+
+**The seam needed one more verb.** `Transport` only offered *bracketed* capture — `record_start()`
+… `record_stop()` — which is exactly right for the graded suite, which plays a stimulus of
+unpredictable length and takes whatever came back. A live monitor is the opposite shape: an
+open-ended push. So the ABC gained `stream_start(cb, chunk=512)` / `stream_stop()`, delivering
+`(n, 2)` int16-domain blocks. **Two channels, where `record_stop` returns one** — grading only ever
+needed channel 0, but since M26 the two genuinely differ, and the monitor is the consumer that has
+to hear that. On `usbaudio` it is a sink beside the existing `_recording` gate in the PortAudio
+callback (guarded: an exception in that thread kills the stream silently). On `uart` it is the
+reader thread and the `Aligner` lifted out of `server.py` and put next to `samples_from_bytes`,
+which already does the bracketed version of the same job.
+
+`Bridge` then stopped knowing what a file descriptor is: `open_transport().open()`,
+`tp.send_midi()`, `tp.stream_start(self._on_frames)`, `self._ratio = self.tp.sr / dev_rate`. The
+wire format to the browser (interleaved L,R unsigned 16-bit LE centred 32768) did not change, so
+`app.js:onPCM` and `/api/capture` are untouched. Board selection needed no new flag —
+`boards.get_board()` already honours `$XLS32_BOARD`.
+
+**The browser was told 32 kHz and believed it.** `app.js` had `const SR = 32000` and `worklet.js`
+fell back to 28000 in two places, so on a 48 kHz board the AudioContext was requested at the wrong
+rate and the worklet's pre-roll target (`0.20 * 28000`) was 117 ms instead of 200. `sr` now rides
+along in `/api/spec`, taken from the open transport rather than from `BOARD` — what the worklet is
+told is the rate frames actually arrive at. The worklet's rate *estimator* stays; that adaptivity
+is what makes the stream survive jitter, and only the seed constant moved.
+
+**The preset model was wrong in two independent ways.** `presetgen/engine.py` ran at `SR = 28000`,
+a rate neither board has ever had, and its `_fx()` modelled a 4-comb / 2-allpass reverb *selected
+by CC83 modes*. What ships is 8 combs, 4 all-pass, and depth gating — `top.v:210-211` reads
+`echo_on = (echodep != 0)`, `chorus_on = (chdep != 0)`, and CC83 is a no-op on both boards. So
+every preset carried a dead `fx` key, patches fitted *with* a reverb tail were played *without*
+one, and `test/cases_integration.py` had a `_RETIRED = {"fx"}` set whose only job was to swallow
+it. The engine is now 32 kHz with `_fx()` ported from `boards/tiliqua/gateware/fx_model.py` — the
+bit-exact model written in M26 — and cross-checked against it. One model serves both boards by
+construction: the Tiliqua's ×3/2-scaled constants at 48 kHz give the same RT60 and the same chorus
+rate.
+
+**Migrating the banks, not just the generator.** `presetgen/migrate_fx.py` rewrites `fx` into the
+live controls in all four banks using the old model's own mode semantics (`engine.py:254-258`):
+
+| old `fx` | `chorusd` | `echod` | `reverb` | presets |
+|---|---|---|---|---|
+| 0 (dry) | 0 | 0 | 0 | 96 |
+| 1 (chorus) | 64 | 0 | 0 | 81 |
+| 2 (echo) | 0 | 64 | 0 | 96 |
+| 3 (both) | 64 | 64 | 0 | 1 |
+| 4 (reverb) | 0 | 0 | 96 | 0 on disk — but `make_fm_bank.py`'s source table uses it |
+
+274 presets migrated: nsynth 128, soundfont 128, fm 18. 64 is the shell's own depth default and
+matches the `wet/2` the old mode hardcoded; 96 is a musical send deliberately below the 110–120 the
+graded `reverb` / `reverb_size` / `stress_fx_tail` cases use, so migrated presets do not start
+competing with the cases that measure the tank.
+
+The dry row writes **explicit zeros**, and that is the load-bearing detail. `chorusd`, `echod` and
+`reverb` are in `synthspec.GLOBAL_CTRL` — shared by all four parts — so a preset that merely *omits*
+them inherits whatever the last one set, and a chorus patch leaks into the next dry one. Verified on
+hardware afterwards: `Strings Aco 56 G4` loaded straight after a chorused preset reads a 0.000 tail.
+
+Along the way, three things that had been quietly broken since depth gating landed:
+`host/demos/demo_reverb.py` sent `set_fx(4)` and had therefore been producing **no reverb at all**;
+`demo_m13.py` swept CC83 modes that nothing reads; and `cases_basic.py`'s `echo` case still sent
+`set_fx(2)` on top of the depths that were actually doing the work. `_RETIRED` stays in
+`cases_integration.py` with its comment rewritten — nothing shipped carries `fx` any more, but a
+patch saved to localStorage before M27 still does and must load rather than raise.
+
+Not in scope, and worth saying plainly: **re-fitting**. The corpora are gone (`/tmp/nsynthv` is
+empty, no `presetgen/targets_soundfont`), so re-running CMA-ES against the corrected model means a
+multi-GB NSynth download, a fluidsynth/`.sf2` dependency and hours of compute. That is a milestone,
+not a stage. `presets_fm.json` is also stale against its own generator — `make_fm_bank.py` has
+`room` and five voicings the JSON does not — so the generator's effect table was corrected in place
+and the drift recorded in a comment rather than papered over by a regeneration that would change
+more than the migration.
+
+**`combo_wah` was a passing-looking test of nothing.** The only thing the case sent to turn its echo
+on was `set_fx(2)`, so it had been plucking dry and grading a dry pluck at a permanent WARN 80.
+Fixing the stimulus (`set_echo_depth(64)`) made the echo real — tail energy 6 → 417 — and
+immediately exposed the second half: the score swung 81 → 75 across two consecutive runs, failing
+the M25 identical-verdict bar. The culprit was the `centroid_over_time` "pluck drop" term. Measured
+offline from the case's own WAV at 20 ms resolution, on note 45 (110 Hz) through a resonant lowpass
+the centroid moves 712 → 650 Hz and is flat inside 100 ms; five candidate framings gave drops of
+123 / 117 / 49 / 107 / **1**. What the term had been scoring in the dry case was the last grading
+window being *silence* (centroid 0), read as a ~1000 Hz sweep. Once the echo repeats filled that
+tail the fiction collapsed and the term went negative. It is replaced by audibility + echo tail,
+tail weighted heaviest, so a dead echo now reads ~60 instead of a comfortable 80. Brightness is
+properly measured by `basic/filter_env` and `basic/lfo_autowah`, on patches where the centroid
+actually moves; both score 100. *A measurement that only produces a number because the signal ended
+is not measuring the signal.*
+
+**Hardware.** `check_loop.py` first: 12.289 MHz, note 69 at 439.99 Hz (−0.0 cents), 0.000% frame
+gaps. Then the full suite, `integration` for the first time ever on this board:
+
+| group | cases | score | verdicts | wall |
+|---|---|---|---|---|
+| basic | 34 | 99.4 (A+) | 33 pass / 1 warn / 0 fail | 121 s |
+| integration | 134 | 99.9 (A+) | 134 pass / 0 warn / 0 fail | 494 s |
+| stress | 7 | 100.0 (A+) | 7 pass / 0 warn / 0 fail | 25 s |
+
+`integration` ran twice after the `combo_wah` rebalance and returned **identical verdicts and
+identical scores** — that is the group the migration could have moved, so a one-off green would not
+have meant much. The single `basic` warn is `filter_sweep` at 81, its long-standing 78–85 straddle,
+unchanged since M25. `stress_fx_tail` late/mid 0.58, USB frame gaps 0.00%.
+
+`validate_hw.py` — the roadmap's named check for the banks, and board-agnostic since this milestone
+— played all three migrated banks on the Tiliqua: **0 of 274 presets diverge**, each measured from a
+verified-quiet start. Its `recover()` had the same CC83 bug as everything else; silencing the tank
+now means zeroing CC93/94/95 individually.
+
+Then the browser against the Tiliqua, which is the exit bar: AudioContext at `running@48000`,
+keyboard round-trip (RMS 0 → 0.048 → 0 on note-on/off), all three banks loading from the preset
+browser, and **all seven songs in `demos.json` playing through `/api/demo_play`** — peak RMS
+0.084–0.283, zero silent windows in a 6 s sample of each, 0 under / 0 over / maxfill 0 across ~39k
+blocks. The stereo claim behind the two-channel stream hook checks out too, measured on the
+websocket the browser itself reads: dry L/R correlation 1.000, chorus 0.587, reverb 0.992 with R
+louder than L (the `SPREAD` on R's comb lengths). Echo-only is 1.000 and that is correct, not a
+bug — both delay lines get the same mono dry and cross-feed symmetrically, so ping-pong cannot
+decorrelate a mono source by itself.
+
+Two pre-existing web-UI bugs surfaced while doing it, both in `/ws` teardown and both fixed: a
+closing client arrives as a `websocket.disconnect` *message*, not an exception, and looping round to
+`receive()` again is what raised `RuntimeError` and logged an ASGI traceback on every tab close;
+and `contextlib.suppress(Exception)` around `await task` cannot catch `CancelledError`, which has
+been a `BaseException` since 3.8 and is the one thing that `await` is guaranteed to raise there.
+Three open/close cycles now log three clean `connection closed` lines and nothing else.
 
 ---
 

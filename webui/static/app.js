@@ -2,8 +2,10 @@
 // (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
 // an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
 
-const VERSION = 'v75-keys';  // bump on each front-end change; shown in the header + cache-busts the worklet
-const SR = 32000;
+const VERSION = 'v76-sr';  // bump on each front-end change; shown in the header + cache-busts the worklet
+let SR = 32000;                   // frame rate on the wire; /api/spec overwrites it in boot()
+                                  // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
+                                  // 32 kHz on both; this is the interface rate the bridge pushes at.
 let spec = null, ws = null, ctx = null, node = null, analyser = null;
 let powered = false, framesRecv = 0, resampleRatio = 1, audioEl = null;
 let localPlay = false;            // LOCAL play: server plays audio + reads MIDI on the host (low latency)
@@ -502,7 +504,8 @@ async function startAudio() {
   };
   ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, resume));
   await ctx.audioWorklet.addModule('worklet.js?' + VERSION);   // cache-bust (Safari caches worklets)
-  node = new AudioWorkletNode(ctx, 'pcm-player', { outputChannelCount: [2] });
+  node = new AudioWorkletNode(ctx, 'pcm-player',
+                              { outputChannelCount: [2], processorOptions: { sr: SR } });
   analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
   // Unity gain node (kept as an easy volume tap). The board output already saturates ≤1.0
   // and per-note levels are conservative (~0.2 peak), so no attenuation is needed.
@@ -520,7 +523,7 @@ async function startAudio() {
     audioEl.loop = true; audioEl.setAttribute('playsinline', '');
     await audioEl.play().catch(() => {});
   }
-  resampleRatio = SR / ctx.sampleRate;              // ~1 if the browser honored 32 kHz
+  resampleRatio = SR / ctx.sampleRate;              // ~1 if the browser honored the board's rate
   window.__stats.ctx = ctx.state + '@' + ctx.sampleRate;
   const buf = new Float32Array(analyser.fftSize);
   setInterval(() => {
@@ -750,6 +753,7 @@ async function boot() {
   document.getElementById('ver').textContent = VERSION;
   fetch('/api/demo_stop', { method: 'POST' }).catch(() => {});   // clear any demo left looping on the server
   spec = await (await fetch('/api/spec')).json();
+  if (spec.sr) SR = spec.sr;         // before startAudio(), which is gated behind the POWER click
   demos = await fetch('/demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));  // single source of truth (tones saved back into it)
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');

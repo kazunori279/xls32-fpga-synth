@@ -136,6 +136,55 @@ def best_align(raw):
     return a if glitches(a) <= glitches(b) else b
 
 
+class Aligner:
+    """Align the continuous STEREO 16-bit stream to its 4-byte frame boundary (Llo Lhi Rlo Rhi)
+    and forward the RAW aligned bytes. The board stamps a 1-bit channel marker in each sample's
+    LSB (L=0, R=1), so the correct frame offset is the one whose de-interleaved samples show
+    LSBs 0,1,0,1,... (L,R,L,R). This nails BOTH byte-alignment (odd offsets scramble the pattern)
+    AND L/R order (offset 2 would start on R) unambiguously. Re-checked periodically so a
+    mid-stream byte drop self-heals within ~0.1 s.
+
+    The *continuous* counterpart to best_align, which does the same job for a bracketed capture
+    it can see all of at once. Lived in webui/server.py until M27; guessing frame phase is a
+    property of a framing-free UART, not of the web UI, and moving it here is what let the UI
+    stop naming a file descriptor.
+    """
+    def __init__(self):
+        self.buf = bytearray()
+        self.locked = False
+        self.since = 0
+
+    def _score(self, off):
+        # fraction of samples whose LSB marker mismatches the expected L,R,L,R (0,1,0,1) pattern
+        b = self.buf; end = min(off + 4000, len(b) - 1)
+        vals = [b[i] | (b[i + 1] << 8) for i in range(off, end, 2)]
+        if len(vals) < 4:
+            return 1e12
+        bad = sum(1 for k, v in enumerate(vals) if (v & 1) != (k & 1))
+        return bad / len(vals)
+
+    def feed(self, data: bytes) -> bytes:
+        self.buf += data
+        if not self.locked:
+            if len(self.buf) < 4096:
+                return b""
+            best = min(range(4), key=self._score)
+            if best:
+                del self.buf[:best]
+            self.locked = True
+        self.since += len(data)
+        if self.since >= 8192 and len(self.buf) >= 4100:   # periodic re-lock (heals a byte drop)
+            self.since = 0
+            best = min(range(4), key=self._score)
+            if best != 0 and self._score(best) < self._score(0) * 0.5:
+                del self.buf[:best]
+        n = len(self.buf) & ~3        # whole 4-byte stereo frames only
+        if n < 4:
+            return b""
+        out = bytes(self.buf[:n]); del self.buf[:n]
+        return out
+
+
 class UartTransport(Transport):
     """Transport view of the helpers above, for code written against the ABC."""
 
@@ -146,6 +195,8 @@ class UartTransport(Transport):
         self.dev = None
         self.fd = None
         self._rec = None
+        self._stream_t = None
+        self._stream_run = False
 
     def open(self):
         if self.fd is None:
@@ -153,6 +204,7 @@ class UartTransport(Transport):
         return self
 
     def close(self):
+        self.stream_stop()
         if self._rec is not None:
             self._rec.stop(); self._rec = None
         if self.fd is not None:
@@ -182,3 +234,47 @@ class UartTransport(Transport):
             time.sleep(0.002)
         buf = bytes(self._rec.buf); self._rec.buf.clear()
         return to_signed(samples_from_bytes(buf, stereo=self._board.stereo))[:n]
+
+    # --- continuous monitoring (see Transport.stream_start) ---
+    def stream_start(self, cb, chunk=512):
+        import threading
+        import numpy as np
+        self.stream_stop()
+        self.open()
+        termios.tcflush(self.fd, termios.TCIFLUSH)
+        self._stream_run = True
+        nbytes = chunk * 4                    # stereo, 4 bytes/frame
+
+        def loop():
+            aln = Aligner()
+            pend = bytearray()
+            while self._stream_run:
+                fd = self.fd
+                if fd is None:
+                    time.sleep(0.2); continue
+                try:
+                    data = os.read(fd, 65536)
+                except BlockingIOError:
+                    time.sleep(0.0005); continue
+                except OSError:
+                    time.sleep(0.2); continue
+                if not data:
+                    time.sleep(0.0005); continue
+                try:                          # never let a transient error kill the thread:
+                    pend += aln.feed(data)    # a dead reader is frozen audio, not an error message
+                    while len(pend) >= nbytes:
+                        raw = bytes(pend[:nbytes]); del pend[:nbytes]
+                        cb(np.frombuffer(raw, dtype="<u2").astype(np.int32).reshape(-1, 2) - 32768)
+                except Exception as e:
+                    print(f"[uart] stream hiccup (continuing): {e}"); time.sleep(0.01)
+
+        self._stream_t = threading.Thread(target=loop, daemon=True)
+        self._stream_t.start()
+        return self
+
+    def stream_stop(self):
+        if self._stream_t is None:
+            return
+        self._stream_run = False
+        self._stream_t.join(timeout=1.0)
+        self._stream_t = None

@@ -5,12 +5,17 @@ webui/synthspec.py. CMA-ES optimizes the vector; selects are rounded to their ne
 """
 import numpy as np
 
-def _w(v): return (v & 7) << 4       # 3-bit field @ bit4 (wave, fx)
+def _w(v): return (v & 7) << 4       # 3-bit field @ bit4 (wave)
 def _s(v): return (v & 3) << 5       # 2-bit field @ bit5 (mode/sub/detune/unison/porta/trem/room)
 
 KNOBS = ["cutoff", "reso", "pw", "fdepth", "aatt", "adec", "asus", "arel",
          "fatt", "fdec", "fsus", "frel", "lforate", "lfodep"]
 
+# The effects depths (CC93 reverb / CC94 chorusd / CC95 echod) are deliberately NOT here.
+# They are live controls and the model renders them, but putting them in the search space
+# without re-running the fits would only add three dimensions no bank was fitted over. Every
+# shipped preset is dry, so the search behaves exactly as it did. Re-fitting is its own
+# milestone -- see DEVELOPMENT.md, M27.
 SELECTS = {                          # id -> list of raw option values (index order)
     "wave":   [_w(i) for i in range(5)],
     "fmode":  [_s(i) for i in range(4)],
@@ -19,7 +24,6 @@ SELECTS = {                          # id -> list of raw option values (index or
     "unison": [_s(i) for i in range(4)],
     "porta":  [_s(i) for i in range(4)],
     "trem":   [_s(i) for i in range(4)],
-    "fx":     [_w(i) for i in range(5)],
     "room":   [_s(i) for i in range(4)],
 }
 SEL_IDS = list(SELECTS.keys())
@@ -48,20 +52,24 @@ def vec_from_preset(preset):
         v[len(KNOBS) + j] = (idx + 0.5) / len(opts)
     return v
 
-# per-category starting point (raw CC) to seed the search near a musical region.
+# Per-category starting point (raw CC) to seed the search near a musical region. Pad, Pluck,
+# Strings and FX used to seed a CC83 fx mode too; that control is dead, and its live
+# replacements are outside the search space (see SELECTS), so those entries are gone rather
+# than translated -- a seed for a dimension the vector does not carry is silently dropped.
+# `room` stays: it is live (CC91), and it is what a future reverb fit would size the tank with.
 _SEED = {
     "Bass":    dict(wave=_w(1), sub=_s(2), cutoff=55, reso=30, aatt=2, adec=45, asus=85, arel=30),
     "Lead":    dict(wave=_w(1), detune=_s(1), cutoff=95, reso=40, aatt=4, adec=44, asus=105, arel=44),
     "Pad":     dict(wave=_w(1), unison=_s(2), detune=_s(2), cutoff=75, reso=22, aatt=96, adec=70,
-                    asus=118, arel=110, fx=_w(4), room=_s(2)),
+                    asus=118, arel=110, room=_s(2)),
     "Pluck":   dict(wave=_w(1), cutoff=50, reso=55, fdepth=100, fatt=0, fdec=40, fsus=24, frel=36,
-                    aatt=2, adec=40, asus=40, arel=34, fx=_w(2)),
+                    aatt=2, adec=40, asus=40, arel=34),
     "Keys":    dict(wave=_w(3), detune=_s(1), cutoff=90, reso=22, aatt=4, adec=54, asus=96, arel=48),
     "Brass":   dict(wave=_w(1), unison=_s(1), cutoff=70, fdepth=60, fatt=30, fdec=50, fsus=80,
                     aatt=18, adec=50, asus=100, arel=44),
     "Strings": dict(wave=_w(1), unison=_s(3), detune=_s(2), cutoff=80, reso=20, aatt=90, adec=70,
-                    asus=120, arel=100, fx=_w(4), room=_s(3)),
-    "FX":      dict(wave=_w(4), cutoff=70, reso=90, fdepth=90, lforate=80, lfodep=80, fx=_w(4)),
+                    asus=120, arel=100, room=_s(3)),
+    "FX":      dict(wave=_w(4), cutoff=70, reso=90, fdepth=90, lforate=80, lfodep=80),
 }
 
 def seed_vec(category):

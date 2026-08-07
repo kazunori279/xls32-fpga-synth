@@ -1,12 +1,20 @@
-"""Sample-accurate software model of the XLS FPGA synth (rtl/synth.x + rtl/top.v effects).
+"""Sample-accurate software model of the XLS FPGA synth (core/synth.x + the shared effects).
 
-Renders (preset CC dict, note, gate) -> mono float audio at 28 kHz, reproducing the engine's
+Renders (preset CC dict, note, gate) -> mono float audio at 32 kHz, reproducing the engine's
 exact arithmetic (naive aliasing oscillators, Chamberlin SVF, dual ADSR, unison, LFO, VCA,
 Freeverb-style effects) so an offline parameter search matches what the board actually does.
 numba JITs the recursive per-sample kernels so a CMA-ES search is fast enough.
 
 Constants/formulas verified against synth.x (SINE/BASE_INC/TIME_INC, svf, adsr, process_voice,
-scale_mix) and top.v (chorus/echo/reverb). CC decode mirrors the firmware's bit-packing.
+scale_mix) and the effects RTL. CC decode mirrors the firmware's bit-packing.
+
+32 kHz on both boards. That is the *engine* rate, not the interface rate: the Basys 3 divides
+100 MHz by 3125 to stream at 32 kHz, the Tiliqua runs its UAC2 link at 48 kHz and scales the
+effects constants by 3/2 to compensate (boards/tiliqua/gateware/fx.py), but the phase increments
+in synth.x are 32 kHz on both. Until M27 this file said 28 kHz and carried a matching BASE_INC —
+left over from the ÷4/soft-multiplier era that synth.x:8-11 describes. Because the rate and the
+table were consistently stale, rendered *pitch* was right and everything measured per sample was
+not: envelopes, LFO and the SVF corner all sat 14% away from the hardware they were fitted for.
 
 The board is 4-part multitimbral (one patch per MIDI channel 0-3); this model renders ONE part
 (the per-voice DSP is identical across parts), which is exactly what the per-preset CMA-ES search
@@ -15,14 +23,15 @@ needs. Any multi-part integration render belongs in test/.
 import numpy as np
 from numba import njit
 
-SR = 28000
+SR = 32000
 MASK = 0xFFFFFFFF
 
 # 256-entry sine LUT, s16 range ±2047 (synth.x line 1 = round(2047*sin(2πi/256))).
 SINE = np.round(2047 * np.sin(2 * np.pi * np.arange(256) / 256)).astype(np.int64)
-# phase increment for the lowest octave at 28 kHz; note_inc(n) = BASE_INC[n%12] << (n//12).
-BASE_INC = np.array([1254100, 1328672, 1407679, 1491384, 1580066, 1674022,
-                     1773565, 1879026, 1990759, 2109136, 2234551, 2367425], dtype=np.int64)
+# Phase increment for the lowest octave; note_inc(n) = BASE_INC[n%12] << (n//12).
+# Verbatim from synth.x:12 — do not recompute it here, or the two drift again.
+BASE_INC = np.array([1097338, 1162588, 1231719, 1304961, 1382558, 1464769,
+                     1551869, 1644148, 1741914, 1845494, 1955232, 2071497], dtype=np.int64)
 TIME_INC = [640, 200, 90, 45, 20, 9, 4, 1]           # ADSR A/D/R increment LUT (index = cc>>4)
 
 
@@ -32,9 +41,13 @@ def note_inc(note):
 
 
 # synthspec control defaults (raw CC values) so a partial preset dict still renders.
+# The effects five (reverb/chorusd/echod/dtime/room) default to the shell's own reset values,
+# so a preset that names none of them renders dry — which is what the banks, none of which carry
+# an effects key, actually sound like on the board.
 _DEFAULTS = dict(wave=16, pw=64, detune=0, sub=0, cutoff=90, reso=30, fmode=0,
                  fatt=8, fdec=40, fsus=100, frel=40, fdepth=0, aatt=8, adec=40, asus=100,
-                 arel=40, lforate=40, lfodep=0, trem=0, unison=0, porta=0, fx=0, room=96,
+                 arel=40, lforate=40, lfodep=0, trem=0, unison=0, porta=0,
+                 reverb=0, chorusd=0, echod=0, dtime=63, room=64,
                  xmode=0, xdepth=0, xratio=0)
 
 
@@ -59,7 +72,10 @@ def decode(preset):
         xmode=(p['xmode'] >> 5) & 3, xdepth=p['xdepth'], xratio=(p['xratio'] >> 4) & 7,   # 3-bit ratio
         a_att=rate(p['aatt']), a_dec=rate(p['adec']), a_sus=p['asus'] << 9, a_rel=rate(p['arel']),
         f_att=rate(p['fatt']), f_dec=rate(p['fdec']), f_sus=p['fsus'] << 9, f_rel=rate(p['frel']),
-        fx=(p['fx'] >> 4) & 7, room=(p['room'] >> 5) & 3,
+        # Effects are depth-gated, not mode-selected: each is on iff its own depth is nonzero
+        # (top.v:210-211). CC83 "fx" used to pick one of five modes and is dead on both boards.
+        revwet=p['reverb'], chdep=p['chorusd'], echodep=p['echod'], dtime=p['dtime'],
+        rsize=(p['room'] >> 5) & 3,
     )
 
 
@@ -235,11 +251,34 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
     return out
 
 
-# ---- effects (mono; top.v constants; ping-pong echo collapses to plain feedback in mono) ----
-CL = np.array([810, 878, 940, 1012], dtype=np.int64)   # comb delays
-AL = np.array([348, 116], dtype=np.int64)              # all-pass delays
-EDLY = 8000
-RVG = {0: 22000, 1: 26000, 2: 29000, 3: 31200}
+# ---- effects -------------------------------------------------------------------------------
+# A third transcription of the same block: top.v:159-400 (Basys 3, 32 kHz) and
+# boards/tiliqua/gateware/fx_model.py (Tiliqua, the same constants x3/2 for 48 kHz) are the other
+# two. The constants below are the 32 kHz originals, which is this model's rate, so the Tiliqua's
+# scaling cancels out — same RT60, same chorus rate, same echo time, by construction.
+#
+# Rewritten in M27. What was here modelled a synth that shipped years ago: four combs where the
+# hardware has eight, two all-pass where it has four, and a CC83 mode selector that both boards
+# now ignore. Every preset in every bank was fitted against it.
+#
+# Integer-exact, following fx_model.py truncation for truncation, rather than the float
+# approximation it replaces: the input is quantised to 16 bits at the boundary and the arithmetic
+# from there is the gateware's. Stereo, because the ping-pong echo and the anti-phase chorus are
+# only meaningful across two channels -- render() returns channel 0, which is the channel the
+# graded suite and validate_hw.py capture.
+CL = np.array([810, 878, 940, 1012, 1066, 1122, 1176, 1230], dtype=np.int64)   # 8 comb delays
+AL = np.array([403, 320, 247, 163], dtype=np.int64)                            # 4 all-pass delays
+SPREAD = 23                                        # R delay lengths = L + SPREAD (stereo image)
+DELAYS = np.concatenate((CL, AL))
+NCOMB, NREG = len(CL), len(DELAYS)
+_LEN = DELAYS + SPREAD                             # each region is as long as its R-channel delay
+REGION = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(_LEN)[:-1]))
+TANK_WORDS = int(_LEN.sum())
+
+CH_BASE, CH_SWEEP, CH_WORDS = 2400, 2048, 1024     # Q3 chorus tap: 300.0 .. 556.0 samples
+LFO_PERIOD = CH_SWEEP * 16                         # 32768 samples -> 0.977 Hz at 32 kHz
+ECHO_STEP, ECHO_MIN, ECHO_MAX = 128, 128, 32768    # edly = dtime*128 + 128 -> 4 .. 512 ms
+RVG = np.array([22000, 26000, 29000, 31200], dtype=np.int64)   # room/hall/large/cathedral
 
 
 @njit(cache=True)
@@ -248,70 +287,113 @@ def _sat(x):
 
 
 @njit(cache=True)
-def _fx(dry, fx, rvg):
+def _sat16(x):
+    return -32768 if x < -32768 else (32767 if x > 32767 else x)
+
+
+@njit(cache=True)
+def _wrap16(x):
+    """Assignment into a 16-bit signed target: truncate, do not clamp."""
+    x = x & 0xFFFF
+    return x - 0x10000 if x & 0x8000 else x
+
+
+@njit(cache=True)
+def _fx(dry, revwet, chdep, echodep, dtime, rvg, delays, region, tank_words):
+    """Stereo effects chain -> channel 0. Mirrors fx_model.FxModel.step, one sample at a time."""
     n = dry.shape[0]
     out = np.empty(n, dtype=np.float64)
-    if fx == 0:
-        return dry.copy()
-    echo_on = (fx == 2) or (fx == 3)
-    chorus_on = (fx == 1) or (fx == 3)
-    if fx != 4:                                        # chorus / echo / both
-        buf = np.zeros(16384)
-        wp = 0
-        clfo = 0
-        for t in range(n):
-            d = dry[t] * 32768.0                        # back to ±32k scale
-            tri = (2047 - ((clfo >> 3) & 2047)) if (clfo >> 14) & 1 else ((clfo >> 3) & 2047)
-            tapq = 2400 + tri; ti = tapq >> 3; fr2 = (tapq >> 1) & 3    # tap + quarter-sample fraction
-            echod = buf[(wp - EDLY) % 16384]
-            s0 = buf[(wp - ti) % 16384]; s1 = buf[(wp - ti - 1) % 16384]
-            chor = s0 + (s1 - s0) * fr2 / 4.0                           # LINEAR INTERP: no tap-jump zipper
-            wet = (echod / 2.0 if echo_on else 0.0) + (chor / 2.0 if chorus_on else 0.0)
-            buf[wp] = _sat(d + (echod / 2.0 if echo_on else 0.0))
-            wp = (wp + 1) % 16384
-            clfo += 1
-            out[t] = _sat(d + wet) / 32768.0
-        return out
-    # reverb: 4 combs + 2 all-pass (Freeverb)
-    c0 = np.zeros(CL[0]); c1 = np.zeros(CL[1]); c2 = np.zeros(CL[2]); c3 = np.zeros(CL[3])
-    dlp = np.zeros(4)
-    a0 = np.zeros(AL[0]); a1 = np.zeros(AL[1])
-    cp = np.zeros(4, dtype=np.int64); ap0 = 0; ap1 = 0
+    echo_on = echodep != 0
+    chorus_on = chdep != 0
+    edly = (dtime * ECHO_STEP + ECHO_MIN) % ECHO_MAX
+    wetgn = revwet << 8
+    chdep_q15 = chdep << 8
+    echdep_q15 = echodep << 8
+
+    echo = np.zeros((2, ECHO_MAX), dtype=np.int64)
+    tank = np.zeros((2, tank_words), dtype=np.int64)
+    chor = np.zeros((2, CH_WORDS), dtype=np.int64)
+    cp = np.zeros((2, NREG), dtype=np.int64)           # per-region rotating pointers
+    dlp = np.zeros((2, NCOMB), dtype=np.int64)         # comb damping state
+    ctap = np.zeros(2, dtype=np.int64)
+    echod = np.zeros(2, dtype=np.int64)
+    chint = np.zeros(2, dtype=np.int64)
+    ecw = np.zeros(2, dtype=np.int64)
+    revw = np.zeros(2, dtype=np.int64)
+    wp = 0
+    cwaddr = 0
+    lfo = 0
+
     for t in range(n):
-        d = dry[t] * 32768.0
-        rin = d / 8.0
-        acc = 0.0
-        for i in range(4):
-            if i == 0:
-                drd = c0[cp[0]]
-            elif i == 1:
-                drd = c1[cp[1]]
-            elif i == 2:
-                drd = c2[cp[2]]
+        raws = _sat16(int(dry[t] * 32768.0))           # back to the engine's 16-bit domain
+
+        # --- chorus LFO (advanced on sample intake, as the FSM does in IDLE) ---
+        lfo = 0 if lfo == LFO_PERIOD - 1 else lfo + 1
+        fold = lfo if lfo < LFO_PERIOD // 2 else LFO_PERIOD - 1 - lfo
+        ctap[0] = CH_BASE + (fold >> 3)
+        ctap[1] = CH_BASE + CH_SWEEP - 1 - (fold >> 3)     # anti-phase, for width
+
+        for c in range(2):
+            echod[c] = echo[c, (wp - edly) % ECHO_MAX]
+            # chorus tap, interpolated at quarter-sample resolution
+            cti = ctap[c] >> 3
+            cfr = (ctap[c] & 7) >> 1
+            s0 = chor[c, (cwaddr - cti) % CH_WORDS]
+            s1 = chor[c, (cwaddr - cti - 1) % CH_WORDS]
+            d = s1 - s0
+            if cfr == 0:
+                cble = 0
+            elif cfr == 1:
+                cble = d >> 2
+            elif cfr == 2:
+                cble = d >> 1
             else:
-                drd = c3[cp[3]]
-            nlp = dlp[i] + (drd - dlp[i]) / 2.0
-            dlp[i] = nlp
-            cbn = _sat(rin + (rvg * nlp) / 32768.0)
-            if i == 0:
-                c0[cp[0]] = cbn
-            elif i == 1:
-                c1[cp[1]] = cbn
-            elif i == 2:
-                c2[cp[2]] = cbn
-            else:
-                c3[cp[3]] = cbn
-            acc += cbn
-        csr = acc / 4.0
-        av0 = a0[ap0]; y0 = av0 - csr / 2.0
-        a0[ap0] = _sat(csr + av0 / 2.0)
-        av1 = a1[ap1]
-        a1[ap1] = _sat(y0 + av1 / 2.0)
-        wet = (av1 - y0 / 2.0) / 2.0
-        out[t] = _sat(d + wet) / 32768.0
-        for i in range(4):
-            cp[i] = (cp[i] + 1) % CL[i]
-        ap0 = (ap0 + 1) % AL[0]; ap1 = (ap1 + 1) % AL[1]
+                cble = (d >> 1) + (d >> 2)
+            chint[c] = _wrap16(s0 + cble)
+
+        # --- ping-pong history write: L stores dry + half of what R just read ---
+        for c in range(2):
+            wr = _sat16(raws + ((echod[1 - c] >> 1) if echo_on else 0))
+            echo[c, wp] = wr
+            chor[c, cwaddr] = wr
+        wp = (wp + 1) % ECHO_MAX
+        cwaddr = (cwaddr + 1) % CH_WORDS
+
+        for c in range(2):
+            ew = _wrap16((echdep_q15 * echod[c]) >> 15) if echo_on else 0
+            cw = _wrap16((chdep_q15 * chint[c]) >> 15) if chorus_on else 0
+            ecw[c] = _sat16(raws + ew + cw)
+
+        # --- Freeverb tank: 8 combs then 4 all-pass, L then R ---
+        # Runs unconditionally, as the gateware does: with revwet == 0 the wet multiply zeroes it
+        # out anyway, and running it keeps the tank primed for when the knob comes up.
+        rin = _wrap16((ecw[0] + ecw[1]) >> 6)
+        for c in range(2):
+            acc = 0
+            for i in range(NCOMB):
+                a = region[i] + cp[c, i]
+                drd = tank[c, a]
+                nlp = _wrap16(dlp[c, i] + ((drd - dlp[c, i] + 1) >> 1))
+                dlp[c, i] = nlp
+                cbn = _sat16(rin + _wrap16((rvg * nlp + 16384) >> 15))
+                tank[c, a] = cbn
+                acc += cbn
+            csr = _sat16(acc >> 2)
+            apy = 0
+            for j in range(NCOMB, NREG):
+                a = region[j] + cp[c, j]
+                drd = tank[c, a]
+                apin = csr if j == NCOMB else apy
+                tank[c, a] = _sat16(apin + (drd >> 1))
+                apy = _sat16(drd - (apin >> 1))
+            revw[c] = apy
+
+        for c in range(2):
+            for i in range(NREG):
+                ln = delays[i] + (SPREAD if c else 0)
+                cp[c, i] = 0 if cp[c, i] == ln - 1 else cp[c, i] + 1
+
+        out[t] = _sat16(ecw[0] + _wrap16((wetgn * revw[0]) >> 15)) / 32768.0
     return out
 
 
@@ -338,8 +420,11 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True):
                 d['xmode'], d['xdepth'], d['xratio'],
                 d['a_att'], d['a_dec'], d['a_sus'], d['a_rel'],
                 d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE)
-    if fx and d['fx'] != 0:
-        dry = _fx(dry, d['fx'], RVG[d['room']])
+    # Skipping a fully-dry chain is not just an optimisation: the tank is 12 regions x 2 channels
+    # per sample, and every bank preset is dry, so this is the common path.
+    if fx and (d['revwet'] or d['chdep'] or d['echodep']):
+        dry = _fx(dry, d['revwet'], d['chdep'], d['echodep'], d['dtime'],
+                  int(RVG[d['rsize']]), DELAYS, REGION, TANK_WORDS)
     return dry.astype(np.float32)
 
 
@@ -364,18 +449,18 @@ if __name__ == "__main__":
     print("SR", SR, "SINE peak", int(SINE.max()), "note_inc(69)=", note_inc(69),
           " -> Hz", round(note_inc(69)/2**32*SR, 1))
     for name, wv in [("sine", 0), ("saw", 1), ("square", 2), ("tri", 3)]:
-        a = render({'wave': _w(wv), 'cutoff': 127, 'reso': 0, 'fx': 0, 'asus': 127, 'aatt': 0}, note=69)
+        a = render({'wave': _w(wv), 'cutoff': 127, 'reso': 0, 'asus': 127, 'aatt': 0}, note=69)
         print(f"  {name:6} A4 peaks: {peaks(a)}   rms={np.sqrt(np.mean(a**2)):.3f}")
     # cutoff sweep on saw: brightness should drop as cutoff drops
     for cc in (127, 60, 20):
-        a = render({'wave': _w(1), 'cutoff': cc, 'reso': 0, 'fx': 0, 'asus': 127, 'aatt': 0}, note=57)
+        a = render({'wave': _w(1), 'cutoff': cc, 'reso': 0, 'asus': 127, 'aatt': 0}, note=57)
         W = a[int(0.2*SR):int(0.2*SR)+8192]
         mag = np.abs(fft.rfft(W*np.hanning(len(W)))); fr = fft.rfftfreq(len(W), 1/SR)
         cen = (fr*mag).sum()/mag.sum()
         print(f"  saw cutoff CC={cc:3}: spectral centroid={cen:6.0f} Hz")
     # ADSR attack time: CC20 -> time to 50%
     for cc in (0, 64, 120):
-        a = render({'wave': _w(1), 'cutoff': 100, 'aatt': cc, 'asus': 127, 'fx': 0}, note=60, gate_s=2.5, tail_s=0.1)
+        a = render({'wave': _w(1), 'cutoff': 100, 'aatt': cc, 'asus': 127}, note=60, gate_s=2.5, tail_s=0.1)
         env = np.abs(a); pk = env.max()
         t50 = np.argmax(env > 0.5*pk)/SR*1000 if pk > 0 else -1
         print(f"  amp attack CC20={cc:3}: ~{t50:.0f} ms to 50%")

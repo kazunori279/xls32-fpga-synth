@@ -3,13 +3,14 @@
 Samples presets across categories from webui/presets_*.json, renders each on the sim and the
 board, and reports the spectrogram loss split by feature usage (dry vs FX vs unison) — the real
 "does the offline search transfer to hardware?" number. Stop webui/server.py first.
+
+Board-agnostic since M27 (`open_transport()`), and the feature split now keys off the effect
+depths rather than the retired CC83 mode.
 """
 import os, sys, json, glob
 import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host")))
-import transport.uart as uart
-import synth as u
-import time
+from synth import BOARD, open_transport
 import engine, loss
 from calibrate import board_capture, NOTE, GATE, TAIL
 from validate_hw import recover as drain     # verified-quiet recovery (polls until the board is
@@ -41,7 +42,9 @@ def sample(presets, per_cat):
 
 
 def feat(vals):
-    fx = (vals.get("fx", 0) >> 4) & 7
+    # Effects are on iff a depth is nonzero (top.v:210-211), so that — not a mode number — is what
+    # puts a preset in the "fx" bucket. Pre-M27 banks said `fx`; nothing ships with that key now.
+    fx = vals.get("reverb", 0) or vals.get("chorusd", 0) or vals.get("echod", 0)
     uni = (vals.get("unison", 0) >> 5) & 3
     if fx:  return "fx"
     if uni: return "unison"
@@ -52,22 +55,22 @@ def main():
     src = os.environ.get("SRC", "soundfont")
     banks = load_bank()
     presets = sample(banks[src], PER_CAT)
-    dev, fd = uart.open_port(rw=True)
-    print(f"board: {dev}   source: {src}   sampled: {len(presets)}")
+    tp = open_transport().open()
+    print(f"board: {BOARD.name} over {BOARD.transport} at {tp.sr} Hz   source: {src}   sampled: {len(presets)}")
     engine.render(presets[0]["values"], gate_s=GATE, tail_s=TAIL)   # warm JIT
     rows = []
     for p in presets:
         vals = p["values"]
         sim = engine.render(vals, note=NOTE, gate_s=GATE, tail_s=TAIL)
-        drain(fd)                       # clear the previous preset's FX tail first
-        brd = board_capture(fd, vals)
+        drain(tp)                       # clear the previous preset's FX tail first
+        brd = board_capture(tp, vals)
         if len(brd) < 4000:
-            brd = board_capture(fd, vals)
-        d = loss.loss(sim, brd, a_sr=engine.SR, b_sr=u.SR)
+            brd = board_capture(tp, vals)
+        d = loss.loss(sim, brd, a_sr=engine.SR, b_sr=tp.sr)
         f = feat(vals)
         rows.append((d, f, p["name"], np.sqrt(np.mean(sim**2)), np.sqrt(np.mean(brd**2))))
         print(f"  [{f:6}] {p['name'][:22]:22} loss {d:6.2f}  (sim {rows[-1][3]:.3f} / brd {rows[-1][4]:.3f})", flush=True)
-    os.close(fd)
+    tp.close()
     print("\n--- sim<->board gap by feature ---")
     for f in ("dry", "unison", "fx"):
         g = [r[0] for r in rows if r[1] == f]

@@ -28,7 +28,9 @@
         "xmode": 96,
         "xdepth": 95,
         "xratio": 96,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -59,7 +61,9 @@
         "xmode": 96,
         "xdepth": 82,
         "xratio": 48,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -90,7 +94,9 @@
         "xmode": 64,
         "xdepth": 64,
         "xratio": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -121,7 +127,9 @@
         "xmode": 96,
         "xdepth": 72,
         "xratio": 80,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -152,7 +160,9 @@
         "xmode": 32,
         "xdepth": 100,
         "xratio": 48,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -183,7 +193,9 @@
         "xmode": 64,
         "xdepth": 60,
         "xratio": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -214,7 +226,9 @@
         "xmode": 96,
         "xdepth": 78,
         "xratio": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -245,7 +259,9 @@
         "xmode": 64,
         "xdepth": 66,
         "xratio": 48,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -276,7 +292,9 @@
         "xmode": 64,
         "xdepth": 52,
         "xratio": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -307,7 +325,9 @@
         "xmode": 32,
         "xdepth": 72,
         "xratio": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -338,7 +358,9 @@
         "xmode": 32,
         "xdepth": 112,
         "xratio": 96,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -369,7 +391,9 @@
         "xmode": 96,
         "xdepth": 120,
         "xratio": 96,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -400,7 +424,9 @@
         "xmode": 32,
         "xdepth": 84,
         "xratio": 112,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -431,7 +457,9 @@
         "xmode": 96,
         "xdepth": 104,
         "xratio": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -462,7 +490,9 @@
         "xmode": 64,
         "xdepth": 44,
         "xratio": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -493,7 +523,9 @@
         "xmode": 32,
         "xdepth": 64,
         "xratio": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -524,7 +556,9 @@
         "xmode": 64,
         "xdepth": 70,
         "xratio": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -555,7 +589,9 @@
         "xmode": 32,
         "xdepth": 80,
         "xratio": 48,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     }
   ]

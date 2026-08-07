@@ -25,7 +25,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -53,7 +55,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -81,7 +85,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -109,7 +115,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -137,7 +145,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -165,7 +175,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -193,7 +205,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -221,7 +235,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -249,7 +265,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -277,7 +295,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -305,7 +325,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -333,7 +355,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -361,7 +385,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -389,7 +415,9 @@
         "unison": 32,
         "porta": 32,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -417,7 +445,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -445,7 +475,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -473,7 +505,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -501,7 +535,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -529,7 +565,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -557,7 +595,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -585,7 +625,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -613,7 +655,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -641,7 +685,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -669,7 +715,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -697,7 +745,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -725,7 +775,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -753,7 +805,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -781,7 +835,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -809,7 +865,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -837,7 +895,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -865,7 +925,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -893,7 +955,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -921,7 +985,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -949,7 +1015,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -977,7 +1045,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1005,7 +1075,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1033,7 +1105,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1061,7 +1135,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1089,7 +1165,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1117,7 +1195,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1145,7 +1225,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1173,7 +1255,9 @@
         "unison": 96,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1201,7 +1285,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1229,7 +1315,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1257,7 +1345,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1285,7 +1375,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1313,7 +1405,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1341,7 +1435,9 @@
         "unison": 32,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1369,7 +1465,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1397,7 +1495,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1425,7 +1525,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1453,7 +1555,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1481,7 +1585,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1509,7 +1615,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1537,7 +1645,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1565,7 +1675,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1593,7 +1705,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1621,7 +1735,9 @@
         "unison": 96,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1649,7 +1765,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1677,7 +1795,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1705,7 +1825,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1733,7 +1855,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1761,7 +1885,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1789,7 +1915,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1817,7 +1945,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1845,7 +1975,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 96,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1873,7 +2005,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1901,7 +2035,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -1929,7 +2065,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1957,7 +2095,9 @@
         "unison": 32,
         "porta": 32,
         "trem": 64,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -1985,7 +2125,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2013,7 +2155,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2041,7 +2185,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2069,7 +2215,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2097,7 +2245,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2125,7 +2275,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2153,7 +2305,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2181,7 +2335,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2209,7 +2365,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2237,7 +2395,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2265,7 +2425,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2293,7 +2455,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2321,7 +2485,9 @@
         "unison": 64,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2349,7 +2515,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2377,7 +2545,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2405,7 +2575,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2433,7 +2605,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2461,7 +2635,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2489,7 +2665,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2517,7 +2695,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2545,7 +2725,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 0,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2573,7 +2755,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2601,7 +2785,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2629,7 +2815,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2657,7 +2845,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2685,7 +2875,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2713,7 +2905,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 96,
-        "fx": 0
+        "chorusd": 0,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2741,7 +2935,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 96,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2769,7 +2965,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2797,7 +2995,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 96,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2825,7 +3025,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2853,7 +3055,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2881,7 +3085,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -2909,7 +3115,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 32,
-        "fx": 48
+        "chorusd": 64,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2937,7 +3145,9 @@
         "unison": 64,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2965,7 +3175,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -2993,7 +3205,9 @@
         "unison": 64,
         "porta": 32,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3021,7 +3235,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3049,7 +3265,9 @@
         "unison": 64,
         "porta": 64,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3077,7 +3295,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3105,7 +3325,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3133,7 +3355,9 @@
         "unison": 64,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3161,7 +3385,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3189,7 +3415,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3217,7 +3445,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3245,7 +3475,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 64,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3273,7 +3505,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3301,7 +3535,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3329,7 +3565,9 @@
         "unison": 64,
         "porta": 32,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3357,7 +3595,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3385,7 +3625,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 32,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3413,7 +3655,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3441,7 +3685,9 @@
         "unison": 0,
         "porta": 32,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3469,7 +3715,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3497,7 +3745,9 @@
         "unison": 0,
         "porta": 0,
         "trem": 0,
-        "fx": 32
+        "chorusd": 0,
+        "echod": 64,
+        "reverb": 0
       }
     },
     {
@@ -3525,7 +3775,9 @@
         "unison": 96,
         "porta": 32,
         "trem": 96,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3553,7 +3805,9 @@
         "unison": 64,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     },
     {
@@ -3581,7 +3835,9 @@
         "unison": 32,
         "porta": 0,
         "trem": 64,
-        "fx": 16
+        "chorusd": 64,
+        "echod": 0,
+        "reverb": 0
       }
     }
   ],

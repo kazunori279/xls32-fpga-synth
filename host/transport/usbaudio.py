@@ -158,6 +158,9 @@ class UsbAudioTransport(Transport):
         self._blocks = None
         self._stamps = None
         self._recording = False
+        self._sink_q = None                  # continuous monitor; see stream_start
+        self._sink_t = None
+        self._sink_done = None
         #: Fraction of frames dropped in the most recent record_stop, or None.
         self.gap_rate = None
         #: Longest uninterrupted run in the most recent capture, in frames.
@@ -193,6 +196,12 @@ class UsbAudioTransport(Transport):
             if self._recording:
                 self._stamps.append(time.monotonic())
                 self._blocks.append(indata.copy())
+            q = self._sink_q                 # continuous monitor, independent of record_*
+            if q is not None:                # hand off raw; the worker does the arithmetic
+                try:
+                    q.put_nowait(indata.copy())
+                except Exception:
+                    pass                     # sink fell behind: drop, never stall the callback
 
         self._stream = sd.InputStream(
             device=dev,
@@ -206,6 +215,7 @@ class UsbAudioTransport(Transport):
         return self
 
     def close(self):
+        self.stream_stop()
         if self._stream is not None:
             self._stream.stop()
             self._stream.close()
@@ -282,6 +292,64 @@ class UsbAudioTransport(Transport):
         self.record_start()
         time.sleep(n / self.sr)
         return self.record_stop()[:n]
+
+    # ---- continuous monitoring (see Transport.stream_start) ----
+    def stream_start(self, cb, chunk=512):
+        """The InputStream is already running, so this only attaches a sink to it.
+
+        The arithmetic runs on a worker rather than in the PortAudio callback, which the
+        note above `cb` in `open()` asks to stay trivial: `blocksize=0` means block sizes
+        vary, so fixed-size chunking has to buffer, and buffering in the audio callback is
+        how dropouts start. The queue is bounded and drops on full for the same reason --
+        a slow consumer must cost frames, not the stream.
+        """
+        import queue
+        import threading
+        import numpy as np
+
+        self.stream_stop()
+        self.open()
+        q = queue.Queue(maxsize=64)
+        done = threading.Event()
+
+        def worker():
+            pend = []
+            have = 0
+            while not done.is_set():
+                try:
+                    block = q.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                try:
+                    # ch 0/1 only: 2/3 carry the clock counter, not audio. >> 16 recovers
+                    # the engine's 16-bit sample from the 24-bit-left-justified int32 and
+                    # * 2 undoes the 6 dB Eurorack pad -- the same scaling record_stop uses.
+                    pend.append(((block[:, :2].astype(np.int64) >> 16) * 2).astype(np.int32))
+                    have += len(pend[-1])
+                    while have >= chunk:
+                        buf = np.concatenate(pend) if len(pend) > 1 else pend[0]
+                        cb(buf[:chunk])
+                        rest = buf[chunk:]
+                        pend = [rest] if len(rest) else []
+                        have = len(rest)
+                except Exception as e:
+                    print(f"[usbaudio] stream hiccup (continuing): {e}")
+                    pend, have = [], 0
+
+        self._sink_t = threading.Thread(target=worker, daemon=True)
+        self._sink_done = done
+        self._sink_t.start()
+        self._sink_q = q                     # last: the callback starts pushing the moment this lands
+        return self
+
+    def stream_stop(self):
+        t = self._sink_t
+        self._sink_q = self._sink_t = None   # first: stop the callback pushing
+        if self._sink_done is not None:
+            self._sink_done.set()
+            self._sink_done = None
+        if t is not None:
+            t.join(timeout=1.0)
 
     # ---- clock ----
     def _measure_clock(self, frames, alive, blocks, stamps):
