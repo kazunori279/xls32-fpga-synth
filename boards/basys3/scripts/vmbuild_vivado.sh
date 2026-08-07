@@ -22,8 +22,14 @@ echo "== build wall: ${SECONDS}s =="
 cp $W/top.bit ~/build/top.bit
 cp $W/util.rpt ~/build/util.rpt 2>/dev/null || true          # full utilization report (pulled back)
 cp $W/timing.rpt ~/build/timing.rpt 2>/dev/null || true      # full timing summary (pulled back)
+cp $W/timing_endpoints.rpt ~/build/timing_endpoints.rpt 2>/dev/null || true   # every failing endpoint
 echo "== utilisation (DSP/BRAM/slice) ==" | tee ~/build/timing.txt
 grep -iE "DSP48|Block RAM|RAMB|Slice LUTs|Slice Registers|CLB LUTs|CARRY" $W/util.rpt 2>/dev/null | head -30 | tee -a ~/build/timing.txt
 echo "== timing (critical path) ==" | tee -a ~/build/timing.txt
 grep -iE "WNS|TNS|Data Path Delay|Slack|requirement" $W/timing.rpt 2>/dev/null | head -20 | tee -a ~/build/timing.txt
+# The worst five paths above cannot tell you whether the residual TNS is only the /3 and /6 paths
+# that genuinely have the clocks. This does: one line per failing endpoint, most-violated first.
+echo "== failing setup endpoints (grouped) ==" | tee -a ~/build/timing.txt
+head -1 $W/timing_endpoints.rpt 2>/dev/null | tee -a ~/build/timing.txt
+tail -n +2 $W/timing_endpoints.rpt 2>/dev/null | sort -rn | head -40 | tee -a ~/build/timing.txt
 echo VMBUILD_DONE

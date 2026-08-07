@@ -32,5 +32,6 @@ gcloud compute scp --zone="$Z" --project="$P" "$VM":~/build/timing.txt ./build/t
 # Vivado backend also emits full reports — pull them back if present (best-effort).
 gcloud compute scp --zone="$Z" --project="$P" "$VM":~/build/util.rpt ./build/util.rpt >/dev/null 2>&1 || true
 gcloud compute scp --zone="$Z" --project="$P" "$VM":~/build/timing.rpt ./build/timing.rpt >/dev/null 2>&1 || true
+gcloud compute scp --zone="$Z" --project="$P" "$VM":~/build/timing_endpoints.rpt ./build/timing_endpoints.rpt >/dev/null 2>&1 || true
 echo "=== timing ==="; cat build/timing.txt 2>/dev/null || true
 echo "=== build/top.bit ready — flash with: openFPGALoader -b basys3 build/top.bit ==="

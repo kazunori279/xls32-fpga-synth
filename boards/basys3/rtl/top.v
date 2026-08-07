@@ -74,8 +74,10 @@ module top (
     reg [7:0] rxbyte = 0; reg rxhave = 1'b0;
     reg mra = 1'b0; reg [12:0] mrd = 0; reg [3:0] mrb = 0; reg [7:0] mrsh = 0;   // DIN MIDI RX FSM
     reg [7:0] dinbyte = 0; reg dinhave = 1'b0;
-    // effect-control CC sniffer (parallel to forwarding): CC83 -> fxmode (0..3)
-    reg [7:0] ectrl = 0; reg [1:0] ecnt = 0; reg [2:0] fxmode = 3'd0;   // 0dry 1chorus 2echo 3both
+    // effect-control CC sniffer (parallel to forwarding): CC 82/90/91/93/94/95 -> the regs below.
+    // CC83 used to select a combined effects mode here; each effect has had its own depth since
+    // M26 (`echo_on`/`chorus_on`, below) and the register it drove is gone.
+    reg [7:0] ectrl = 0; reg [1:0] ecnt = 0;
     reg [1:0] rsize = 2'd3;                                             // reverb room size (CC91), default cathedral
     reg [6:0] revwet = 7'd0;                                            // reverb send/wet level (CC93), default off
     reg [6:0] chdep  = 7'd64;                                           // chorus depth/wet (CC94), default 0.5
@@ -85,7 +87,7 @@ module top (
     always @(posedge clk100) begin
         if (rst) begin rxa <= 0; rxhave <= 0; mra <= 0; dinhave <= 0; mvld <= 0; end
         else begin
-            // --- (a) FT2232 UART RX @2 Mbaud (also sniffs CC83/91 for the shell effects) ---
+            // --- (a) FT2232 UART RX @2 Mbaud (also sniffs the shell's own effect CCs) ---
             if (!rxa) begin
                 if (rx == 1'b0) begin rxa <= 1; rxd <= BAUD + BAUD/2 - 1; rxb <= 0; end
             end else if (rxd == 0) begin
@@ -95,7 +97,6 @@ module top (
                     if (rxsh >= 8'h80) ecnt <= ((rxsh & 8'hF0) == 8'hB0) ? 2'd1 : 2'd0;  // status
                     else if (ecnt == 2'd1) begin ectrl <= rxsh; ecnt <= 2'd2; end          // controller
                     else if (ecnt == 2'd2) begin
-                        if (ectrl == 8'd83) fxmode <= rxsh[6:4];                            // CC83 -> mode 0..3
                         if (ectrl == 8'd91) rsize  <= rxsh[6:5];                            // CC91 -> room size 0..3
                         if (ectrl == 8'd93) revwet <= rxsh[6:0];                            // CC93 -> reverb wet 0..127
                         if (ectrl == 8'd94) chdep  <= rxsh[6:0];                            // CC94 -> chorus depth 0..127
@@ -162,7 +163,8 @@ module top (
     // centered (identical L/R); only the WET is decorrelated: reverb uses the Freeverb stereo
     // spread (R delay lengths = L + SPREAD), echo ping-pongs L<->R, and the chorus L/R LFO
     // taps run in anti-phase. One arithmetic datapath (a single multiply) is time-shared
-    // L then R by the FSM. Modes (CC83): 0 dry, 1 chorus, 2 echo, 3 both, 4 reverb.
+    // L then R by the FSM. Each effect is on iff its own depth CC is nonzero (94 chorus,
+    // 95 echo, 93 reverb) -- there is no combined mode selector.
     // echo/delay TIME is now a knob (CC82 -> dtime): edly = dtime*128 samples, ~4..508 ms @ 32 kHz
     // (dtime=63 default ~252 ms). The dmem history buffer (16K) holds the longest tap.
     wire [13:0] edly = {dtime, 7'd0} | 14'd128;     // dtime<<7, floored ~4 ms so the tap never == waddr
@@ -208,7 +210,7 @@ module top (
     wire [13:0] ctiL = ctapQL[13:3];  wire [2:0] cfrL = ctapQL[2:0];       // integer tap / fraction 0..7
     wire [13:0] ctiR = ctapQR[13:3];  wire [2:0] cfrR = ctapQR[2:0];
     wire echo_on   = (echodep != 7'd0);   // depth-gated: each effect is on iff its depth knob > 0
-    wire chorus_on = (chdep   != 7'd0);   // (no separate mode selector; CC83/fxmode now unused)
+    wire chorus_on = (chdep   != 7'd0);   // (no separate mode selector; CC83 is ignored)
 
     function signed [15:0] sat18(input signed [17:0] x);
         sat18 = (x >  18'sd32767) ?  16'sd32767 :
