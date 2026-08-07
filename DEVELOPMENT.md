@@ -2380,9 +2380,60 @@ no flow control — is the marginally *better* match. One DSLX core, two vendors
 two transports, and the remaining difference between them is smaller than the run-to-run noise of
 the identification metric. Whatever is left is in the model or in the presets, not in either board.
 
----
+### The `edly` fix was half a fix: the two boards genuinely disagree
 
-# Friction logs & learnings
+Correcting `engine.py`'s echo tap to the Basys 3's `| 128` broke it for the Tiliqua, which really
+does add. The two shells compute the same quantity differently and both are defensible:
+
+```
+boards/basys3/rtl/top.v:170        edly = {dtime, 7'd0} | 14'd128        an OR
+boards/tiliqua/gateware/fx.py:287  edly = dtime*ECHO_STEP + ECHO_MIN     an addition
+```
+
+Bit 7 of `dtime << 7` *is* `dtime`'s bit 0, so on the Basys 3 the 128-sample floor only lands on
+**even** `dtime`; for odd `dtime` the OR does nothing. Every odd `dtime` therefore runs 4 ms shorter
+on the Basys 3 than on the Tiliqua. The floor exists so the read tap never meets the write pointer,
+and both achieve that — they simply drifted, and `fx.py`'s own comment *quotes the `| 128` line it
+is porting*, which is how a port that reads correct stayed different for a year. The Basys 3 also
+truncates to its 14-bit dmem address; Tiliqua's line is 32768 deep and does not.
+
+So `engine.py` now has exactly one board-conditional function, `echo_delay(dtime, board)`, defaulting
+to `$XLS32_BOARD` like everything else. It is worth being explicit that this is the *only* one: every
+other Tiliqua difference is rate scaling that preserves the time, `_S(n) = (n*3+1)//2`. On hardware
+`dtime`'s worst loss fell to 6.74, in the Tiliqua's noise.
+
+The general lesson is the one the port keeps re-teaching: **a comment quoting the line it ports is
+not evidence the port matches it.** Only a sweep is.
+
+### The percussive-gap hypothesis, and its refutation
+
+The Basys 3's six worst-predicted presets are Xylophone, Glockenspiel, Celesta, Kalimba, Pizzicato
+and Marimba, and one-at-a-time sweeps exonerate every CC they use — `fdepth` scores 1.81 and `fdec`
+1.91, among the best-matched parameters in the run. What the six share is not any one CC but a
+*combination*:
+
+|  | asus | fdepth | fdec | reso | |  | asus | fdepth | fdec | reso |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Xylophone | 8 | 127 | 73 | 117 | | E-Piano 1 | 88 | 2 | 123 | 17 |
+| Glockenspiel | 2 | 126 | 26 | 85 | | Clavinet | 2 | 60 | 90 | 68 |
+| Pizzicato | 2 | 127 | 19 | 105 | | Harpsichord | 15 | 10 | 109 | 52 |
+
+The amp envelope decays to nothing while the filter envelope slams shut from a wide sweep, often
+through a high resonance; the well-predicted counterexamples each break exactly one leg. Nothing in
+a one-at-a-time sweep puts those together, so `param_diff.py` grew a `COMBOS` block that moves one
+key of a patch *already* percussive (`PERC`: asus 0, adec 80, cutoff 20, fdepth 127, fdec 25, fsus 0).
+
+It is wrong. On hardware:
+
+```
+adec@perc      2.39        reso@perc      0.68
+fdepth@perc    0.98        fdec@perc      0.87
+```
+
+Zero flagged rows, and three of the four score **below 1.0** — better than any single-parameter
+sweep in the census. The model tracks percussive patches to the sample under a controlled stimulus.
+Whatever mispredicts those six presets, it is not the interaction, and the combos stay in the file
+as the control that says so.
 
 The hard-won, reusable lessons — read these before extending the synth or porting the
 toolchain. The first subsection is the load-bearing one (it caps what you can build); the

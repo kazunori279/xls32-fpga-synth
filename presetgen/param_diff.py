@@ -86,6 +86,36 @@ SWEEPS = {
 # rather than swept and silently passed.
 SKIP = {"porta": "needs a two-note stimulus; one note-on cannot show a glide"}
 
+# --- interactions -------------------------------------------------------------------------------
+# One parameter at a time passes and the census still misses a whole class of preset. Every sweep
+# above moves ONE key of a patch that is otherwise flat and wide open, and `fdepth` (1.81) and
+# `fdec` (1.91) are two of the best-matched parameters in the run -- yet the Basys 3's worst
+# predictions are Xylophone, Glockenspiel, Celesta, Kalimba, Pizzicato and Marimba, and what those
+# six share is not any one CC:
+#
+#            asus  fdepth  fdec  reso          vs   asus  fdepth  fdec  reso
+#   Xylophone   8     127    73   117    E-Piano 1    88       2   123    17
+#   Glocken.    2     126    26     85    Clavinet     2      60    90    68
+#   Pizzicato   2     127    19    105  Harpsichord    15      10   109    52
+#
+# It is the combination: the amp envelope decays to nothing while the filter envelope slams shut
+# from a wide sweep, often through a high resonance. Nothing in a one-at-a-time sweep puts those
+# together, so these entries move one key of a patch that is already percussive. Keys are
+# `cc@label`; the part before the @ is the CC actually swept.
+PERC = {"asus": 0, "adec": 80, "cutoff": 20, "fdepth": 127, "fdec": 25, "fsus": 0}
+COMBOS = {
+    "adec@perc":   ([30, 60, 90, 120], PERC),                       # amp decay under a shut filter
+    "fdec@perc":   ([10, 25, 50, 90], PERC),                        # filter decay under a dead amp
+    "reso@perc":   ([0, 42, 85, 120], PERC),                        # the swept resonant peak
+    "fdepth@perc": ([54, 85, 109, 127], {**PERC, "reso": 110}),     # how far it sweeps, at high Q
+}
+ALL = {**SWEEPS, **COMBOS}
+
+
+def _cc(key):
+    """`reso@perc` -> `reso`. Combo keys name the CC they sweep before the @."""
+    return key.split("@")[0]
+
 
 def grab(tp, vals, gate=GATE, tail=TAIL):
     recover(tp)
@@ -194,23 +224,24 @@ def row(a, b):
 
 
 def main():
-    want = sys.argv[1:] or [c for c, _ in CC_MAP]
+    want = sys.argv[1:] or [c for c, _ in CC_MAP] + list(COMBOS)
     tp = open_transport().open()
     print(f"board: {BOARD.name} over {BOARD.transport} at {tp.sr} Hz   analysis {SR} Hz   "
           f"note {NOTE} ({F0} Hz)   gate {GATE}s tail {TAIL}s\n")
     engine.render(BASE, note=NOTE, gate_s=GATE, tail_s=TAIL)          # warm the JIT
     summary, worstpair = [], []
-    for cid in want:
-        if cid in SKIP:
-            print(f"## {cid}: SKIPPED -- {SKIP[cid]}\n")
-            summary.append((float("nan"), cid, "skipped"))
+    for key in want:
+        if key in SKIP:
+            print(f"## {key}: SKIPPED -- {SKIP[key]}\n")
+            summary.append((float("nan"), key, "skipped"))
             continue
-        if cid not in SWEEPS:
+        if key not in ALL:
             continue
-        values, over = SWEEPS[cid]
+        cid = _cc(key)
+        values, over = ALL[key]
         base = dict(BASE); base.update(over)
         note = f"   base: {' '.join(f'{k}={v}' for k, v in over.items())}" if over else ""
-        print(f"## {cid} (CC{dict(CC_MAP)[cid]}){note}")
+        print(f"## {key} (CC{dict(CC_MAP)[cid]}){note}")
         print(f"{'val':>5s} {'loss':>6s} {'cent':>5s} {'H2-6':>5s} "
               f"{'t50 m/b ms':>13s} {'tail m/b ms':>13s} {'amod m/b':>15s} {'cmod m/b':>15s}"
               f" {'self':>6s}")
@@ -248,18 +279,18 @@ def main():
                   f"{r['mda']:7.3f} /{r['mdb']:7.3f} {r['cma']:7.3f} /{r['cmb']:7.3f}"
                   f" {self_loss:6.2f}{flag}", flush=True)
             if not np.isnan(self_loss):
-                worstpair.append((r["loss"], self_loss, cid, v))
-        summary.append((worst, cid, ""))
+                worstpair.append((r["loss"], self_loss, key, v))
+        summary.append((worst, key, ""))
         print()
     tp.close()
     print("=== worst loss per parameter (a well-matched parameter sits at 2-3) ===")
     for w, cid, tag in sorted(summary, key=lambda s: (np.isnan(s[0]), -s[0])):
-        print(f"  {cid:9s} {tag if tag else f'{w:6.2f}'}")
+        print(f"  {cid:12s} {tag if tag else f'{w:6.2f}'}")
     if worstpair:
         print(f"\n=== flagged rows (loss > {FLAG}), model error vs board nondeterminism ===")
-        print(f"{'param':>9s} {'val':>5s} {'loss':>6s} {'self':>6s}  verdict")
+        print(f"{'param':>12s} {'val':>5s} {'loss':>6s} {'self':>6s}  verdict")
         for ls, sf, cid, v in sorted(worstpair, reverse=True):
-            print(f"{cid:>9s} {v:5d} {ls:6.2f} {sf:6.2f}  "
+            print(f"{cid:>12s} {v:5d} {ls:6.2f} {sf:6.2f}  "
                   f"{'nondeterministic (board disagrees with itself)' if sf > 0.6 * ls else 'MODEL'}")
 
 

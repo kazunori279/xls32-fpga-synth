@@ -20,8 +20,17 @@ The board is 4-part multitimbral (one patch per MIDI channel 0-3); this model re
 (the per-voice DSP is identical across parts), which is exactly what the per-preset CMA-ES search
 needs. Any multi-part integration render belongs in test/.
 """
+import os
+import sys
+
 import numpy as np
 from numba import njit
+
+# One constant in the effects chain differs between the two boards (see echo_delay), so this needs
+# the same board selector everything else uses. presetgen/ is often on sys.path without the repo
+# root, e.g. `uv run python presetgen/engine.py`, so make the root reachable before importing.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from boards import get_board                                                   # noqa: E402
 
 SR = 32000
 MASK = 0xFFFFFFFF
@@ -294,8 +303,30 @@ TANK_WORDS = int(_LEN.sum())
 
 CH_BASE, CH_SWEEP, CH_WORDS = 2400, 2048, 1024     # Q3 chorus tap: 300.0 .. 556.0 samples
 LFO_PERIOD = CH_SWEEP * 16                         # 32768 samples -> 0.977 Hz at 32 kHz
-ECHO_MAX = 16384                                   # dmemL/dmemR depth in boards/basys3/rtl/top.v
+ECHO_MAX = 32768                                   # model ring; covers the longest tap either board
+                                                   # can ask for (Tiliqua's, 16384 at 32 kHz)
 RVG = np.array([22000, 26000, 29000, 31200], dtype=np.int64)   # room/hall/large/cathedral
+
+
+def echo_delay(dtime, board=None):
+    """Echo tap distance in 32 kHz samples. THE TWO BOARDS DISAGREE HERE, so this has to know
+    which one it is modelling -- the only place in this file that does.
+
+        boards/basys3/rtl/top.v:170        edly = {dtime, 7'd0} | 14'd128        -- an OR
+        boards/tiliqua/gateware/fx.py:287  edly = dtime*ECHO_STEP + ECHO_MIN     -- an addition
+
+    Bit 7 of `dtime << 7` is dtime's bit 0, so the Basys 3's floor only lands on EVEN dtime; for
+    odd dtime the OR does nothing. Tiliqua adds unconditionally (x3/2 at 48 kHz, so 192 per count
+    and a 192-sample floor -- the same times at its own rate). Every odd `dtime` therefore runs
+    128 samples, 4 ms, shorter on the Basys 3 than on the Tiliqua.
+
+    Neither board is wrong: the floor exists so the read tap is never equal to the write pointer,
+    and both achieve that. They simply drifted, and fx.py's own comment quotes the `| 128` line it
+    is porting, which is how a port that reads correct stayed different for a year. The Basys 3
+    also truncates to the 14 bits of its dmem address; Tiliqua's line is 32768 deep and does not.
+    """
+    board = board or get_board().name
+    return ((dtime << 7) | 128) & 0x3FFF if board == "basys3" else dtime * 128 + 128
 
 
 @njit(cache=True)
@@ -316,17 +347,16 @@ def _wrap16(x):
 
 
 @njit(cache=True)
-def _fx(dry, revwet, chdep, echodep, dtime, rvg, delays, region, tank_words):
-    """Stereo effects chain -> channel 0. Mirrors fx_model.FxModel.step, one sample at a time."""
+def _fx(dry, revwet, chdep, echodep, edly, rvg, delays, region, tank_words):
+    """Stereo effects chain -> channel 0. Mirrors fx_model.FxModel.step, one sample at a time.
+
+    `edly` arrives already resolved -- see echo_delay(), which is board-dependent and so cannot
+    live inside an njit kernel that has no idea which board it is for.
+    """
     n = dry.shape[0]
     out = np.empty(n, dtype=np.float64)
     echo_on = echodep != 0
     chorus_on = chdep != 0
-    # boards/basys3/rtl/top.v:170 is `edly = {dtime, 7'd0} | 14'd128`, 14 bits wide -- an OR, not
-    # the addition this used to be. Bit 7 of `dtime<<7` is dtime's bit 0, so the floor only lands
-    # on EVEN dtime; for odd dtime the OR does nothing and the delay is 128 samples (4 ms) shorter
-    # than the model made it. That is why the sweep flagged dtime 85 and 127 and passed 0 and 42.
-    edly = ((dtime << 7) | 128) & 0x3FFF
     wetgn = revwet << 8
     chdep_q15 = chdep << 8
     echdep_q15 = echodep << 8
@@ -418,8 +448,12 @@ def _fx(dry, revwet, chdep, echodep, dtime, rvg, delays, region, tank_words):
     return out
 
 
-def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True):
-    """Render a preset (raw-CC dict) to mono float audio at SR. Returns np.float32 in [-1,1]."""
+def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None):
+    """Render a preset (raw-CC dict) to mono float audio at SR. Returns np.float32 in [-1,1].
+
+    `board` defaults to $XLS32_BOARD and only reaches echo_delay() -- the one constant the two
+    boards do not share. Everything else is rate-scaled on Tiliqua to keep the same times.
+    """
     d = decode(preset)
     n = int((gate_s + tail_s) * SR)
     gate = int(gate_s * SR)
@@ -444,7 +478,7 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True):
     # Skipping a fully-dry chain is not just an optimisation: the tank is 12 regions x 2 channels
     # per sample, and every bank preset is dry, so this is the common path.
     if fx and (d['revwet'] or d['chdep'] or d['echodep']):
-        dry = _fx(dry, d['revwet'], d['chdep'], d['echodep'], d['dtime'],
+        dry = _fx(dry, d['revwet'], d['chdep'], d['echodep'], echo_delay(d['dtime'], board),
                   int(RVG[d['rsize']]), DELAYS, REGION, TANK_WORDS)
     return dry.astype(np.float32)
 
