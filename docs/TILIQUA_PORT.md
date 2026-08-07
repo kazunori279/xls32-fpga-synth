@@ -423,11 +423,15 @@ boards/
   tiliqua/
     board.py                   # descriptor: transport="usbaudio", sr=48000, unsupported="…M21"
     gateware/                  # (M21)
-      top.py                   # Amaranth top — audio-only variant
-      xls_engine.py            # Instance() wrapper around core/engine.v + CE/CDC
-      effects.py               # (M26) PSRAM-backed chorus / echo / reverb
-      midi_bridge.py           # (M24) TRS + USB-MIDI → engine's u8 midi_in channel
-      video/                   # (M28+) framebuffer, scope, menu overlay
+      top.py                   # Amaranth top — XLS32_VARIANT selects fx (M26) or cv (M28)
+      xls_core.py              # Instance() wrapper around core/engine.v + CE/CDC
+      fx.py                    # (M26) PSRAM-backed chorus / echo / reverb
+      midi_filter.py           # (M24) TRS + USB-MIDI → engine's u8 midi_in channel
+      midi_arb.py              # (M28) round-robin, message-atomic; 3 sources into one stream
+      cvin.py                  # (M28) CV/gate in → MIDI ch 4, and the out2 self-test ramp
+      cv_proto.py              # (M28) the 3 constants check_cv.py shares with it, importing nothing
+      led.py                   # (M28) viz_out → the 8-LED comet
+      video/                   # (M29+) framebuffer, scope, menu overlay
     fw/                        # (M29) Rust firmware for the SoC menu
     scripts/ build.sh          # (M21)   flash.sh (M31)
     firmware/                  # (M31) released .tar.gz bitstream archives
@@ -971,11 +975,56 @@ What it did *not* need: any change to the wire format (`app.js:onPCM` untouched)
 carried a dead CC83 `fx` mode, migrated to depth-gated `chorusd`/`echod`/`reverb`; see the M27
 entry in `DEVELOPMENT.md`. Re-fitting against the corrected model is deferred: the corpora are gone.
 
-**M28 · Eurorack-native I/O**
+**M28 · Eurorack-native I/O** — ✅ **done** (1.98 cents of residual over 5 octaves)
 Use what the Basys 3 never had: 4 CV inputs → V/oct pitch, filter cutoff, and two assignable
 destinations; gate/trigger in; per-jack LEDs driven from the existing `viz_out` envelope tap (the
 LED comet, re-homed); touch sensing on unused jacks.
 *Exit:* a 1 V/oct sweep on CV in tracks within a few cents across 5 octaves, graded by FFT.
+
+**Scope taken: CV + gate + LEDs. Touch excluded** — it is one of four sub-features and the caveat at
+§1.1 is conditional (*"before M28 **depends on** touch"*), not a precondition. **Calibration is also
+not a precondition**, which §1.1 read as if it were: the −86…−116 mV offset is a *constant
+transposition* and falls out of a slope fit's intercept. Only gain error affects 1 V/oct, and the
+per-revision gain defaults are already compiled in (`periph/eurorack_pmod.py:302`). No EEPROM
+reader, no SoC.
+
+**It did not fit, and §2.3's fallback is now real.** `CvIn` (537 cells) plus a message-atomic MIDI
+arbiter (102) against M26's 488 spare took the die to **24,848 / 24,288 = 102%** and nextpnr refused
+to place it. A per-block census — `core` 17,675 (70.5%), `usbif` 2,440, `fx` 2,398, `pmod0` 1,000 —
+rules out shrinking: the engine has no soft area, and dropping `usbif` would destroy the USB tee the
+exit criterion is graded over. So the design splits along `fx`, into the two bitstream slots the
+M29 area warning below already anticipated:
+
+| variant | build | contents | TRELLIS_COMB | `sync` Fmax |
+|---|---|---|---:|---:|
+| `fx` (default) | `bash boards/tiliqua/build.sh` | effects + USB, no jacks — M26/M27 plus the arbiter | 23,785 (97%) | 41.24 MHz |
+| `cv` | `XLS32_VARIANT=cv bash …` | CV/gate in, LED comet, effects bypassed | 21,974 (90%) | 47.92 MHz |
+
+The `cv` variant is the best `sync` closure on this board since M25, and that took a fix worth
+recording: the first comet build read 40.96 MHz with the critical path *inside this repo* for the
+first time — two MULT18X18D chained combinationally in `CvIn`'s pitch maths. One register between
+them, one cycle of latency out of 1.33 ms, and the path is back in `usbif.usb.timer.counter` where
+§2.6 says it lives.
+
+*Met.* `boards/tiliqua/check_cv.py` against the `cv` bitstream with **one patch cable, out2 → in0**
+— out2 carries a CC102-driven DC ramp, so the board sweeps and grades itself with no signal
+generator and no second module. 21 points, 61.44 Hz at 0 V to 1904.15 Hz at 5 V:
+
+```
+  slope    1188.7 cents/V  (-11.3 against 1200, -0.94%)
+  offset   -107.2 cents at 0 V  (= -0.089 V of uncalibrated DC, not graded)
+  residual worst 1.98 cents over 5.00 V
+```
+
+The **residual** is what the exit criterion asks for and 1.98 cents is well inside "a few". The
+0.94% of slope is the two uncalibrated converters and not the arithmetic — `test_cvin.py` bounds
+`CvIn`'s maths to 0.08% over the same range — and a loopback cannot attribute it to the DAC or the
+ADC separately, because the volts axis *is* the DAC's output. Note also what the straightness says:
+zero curvature across five octaves, so neither converter is non-linear here, only scaled. Fixing the
+scale means reading the calibration EEPROM, which costs the SoC this milestone spent its area budget
+avoiding. A re-run of `presetgen/validate_hw.py` on the `fx` bitstream puts the audio path exactly
+where M27 left it (0/128 rails, separation 2.00x → 1.96x, matched median 14.84 → 14.94, 97/128 both
+times). See the M28 entry in `DEVELOPMENT.md`.
 
 ### Phase D — the screen
 
@@ -1039,13 +1088,13 @@ graded by hand or by simulation.
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
 | 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | — | — | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` is now the binding resource |
-| 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **High** | Reduced spec | Fallback ladder (§2.3); split into two bitstream slots |
+| 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **Hit in M28** | Reduced spec | Fallback ladder (§2.3); split into two bitstream slots. *Taken in M28*: M26's effects build left 488 spare cells and the CV jacks wanted 639, so nextpnr refused to place at 24,848 / 24,288 (102%). A per-block census (`core` 70.5% on its own) ruled out shrinking, so the design split along `fx` into an `fx` slot (97%) and a `cv` slot (90%). See the M28 roadmap entry |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Medium | Lower sample rate or fewer voices | More `--pipeline_stages`; dedicated engine PLL output; 24/16 voices |
 | 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired** | Out-of-spec bitstream in the loop | Not the engine's own path and not fixable in the tool flow — 86% occupancy scatters luna (§2.6). Loaded anyway and it enumerates, takes MIDI and streams at 48–50 MHz, so the −6 model is as pessimistic as hoped; but static timing still fails, so this is not proof of margin over temperature or across dies. Cutting voices remains the fallback. A dedicated engine PLL output does *not* help: `pll.py` drives `sync` and `usb` from one signal, and congestion is not a clock-rate problem |
 | 3c | Stale SI5351 `clk0` silently detunes everything | **Hit in M25** | Every rate wrong by one ratio; presents only as a pitch error | Only the bootloader programs `clk0`; an SRAM load inherits the last-booted slot's rate, and neither a JTAG refresh nor a power cycle clears it — a cold boot autoboots that same slot five seconds later (§2.7). The ratio-only sim checks cannot see it. *Mitigated in M25*: the tee carries a 31-bit `audio`-cycle counter, and both `check_loop.py` and `run_tests.py` measure the clock and refuse to grade before reporting anything else |
 | 4 | 115200 CDC can't carry audio | **Certain** | Loop is blind until M25 | *Retired as a design risk* — UAC2 over `usb2` records 4×24-bit on real hardware (§1.1). M25 is integration work |
 | 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce** | Would have been noisy FFT grading | Re-measured 2026-08-03: our bitstream 99.84% / 0.000%, vendor XBEAM 100.27% / 0 zeros over eleven runs, M25 suite worst case 0.001% over six 34-case runs. What the original captures measured is unknown; the misclock is a lead that does not fit the numbers (§1.1, `TILIQUA_USB_DROPOUTS.md`). The M25 machinery stays: stream opened once, `blocksize=0`, channel 2 kept non-zero by the tee, holes interpolated in place — now mostly as the *measurement* that publishes `gap_rate` in every report |
-| 4c | Non-SoC bitstreams get no ADC/DAC calibration (−86…−116 mV offsets) | **Confirmed** | ~1.2% DC error pollutes M23 grading | *Sidestepped in M25*: the graded signal is teed off `core.o` digitally and never reaches a converter, so there is nothing to calibrate. Still applies to anything graded at the jacks (M28 CV) |
+| 4c | Non-SoC bitstreams get no ADC/DAC calibration (−86…−116 mV offsets) | **Confirmed** | ~1.2% DC error pollutes M23 grading | *Sidestepped in M25*: the graded signal is teed off `core.o` digitally and never reaches a converter, so there is nothing to calibrate. Still applies to anything graded at the jacks (M28 CV) — *and turned out not to bite there either*: a DC offset is a constant transposition and cancels out of the slope fit `check_cv.py` grades on, so only gain error matters and the per-revision gain defaults already cover it |
 | 5 | Effects don't fit on-chip | **Certain** | Rewrite, not port | M26 against `tiliqua.dsp.delay_line` (PSRAM) |
 | 6 | Video + full polyphony don't coexist | Medium | Two bitstreams instead of one | Use the 8 bootloader slots; decide with M21 numbers |
 | 7 | Tiliqua submodule / Amaranth version drift | Medium | Build breakage | Pin the submodule; build gateware in Tiliqua's own `pdm` env, keep `uv` for host tooling |

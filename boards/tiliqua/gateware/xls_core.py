@@ -45,12 +45,15 @@ import os
 
 from amaranth import *
 from amaranth.lib import data, stream, wiring
+from amaranth.lib.cdc import FFSynchronizer
 from amaranth.lib.fifo import AsyncFIFO
 from amaranth.lib.wiring import In, Out
 
 from tiliqua import dsp
 from tiliqua.build.types import BitstreamHelp
 from tiliqua.dsp import ASQ
+
+from led import LedComet
 
 # Engine sample rate. Set by the DSLX pitch tables, not by anything on this side: the phase
 # increments in synth.x are computed for 32 kHz (Basys 3 divides 100 MHz by 3125 to match).
@@ -87,6 +90,7 @@ class XlsSynth(wiring.Component):
     i: In(stream.Signature(data.ArrayLayout(ASQ, 4)))
     o: Out(stream.Signature(data.ArrayLayout(ASQ, 4)))
     i_midi_bytes: In(stream.Signature(unsigned(8)))
+    o_led: Out(data.ArrayLayout(signed(8), 8))      # M28 LED comet; only driven when led=True
 
     bitstream_help = BitstreamHelp(
         brief="XLS32 synth: MIDI in (ch 1-4) over TRS or USB, audio out",
@@ -94,7 +98,11 @@ class XlsSynth(wiring.Component):
         io_right=['', 'USB MIDI + audio', '', '', '', ''],
     )
 
-    def __init__(self, engine_path=None):
+    def __init__(self, engine_path=None, led=False):
+        # `led` builds the M28 comet off `viz_out`. Off by default because the fx bitstream is at
+        # 97% and has nowhere to put it, and because in that variant the pmod's automatic LED mode
+        # is already showing something true -- the four jack levels. See elaborate().
+        self.led = led
         # Default to what boards/tiliqua/build.sh stages; XLS_ENGINE_V overrides for one-offs.
         if engine_path is None:
             repo = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -218,6 +226,19 @@ class XlsSynth(wiring.Component):
             # Inputs are unused, but the pmod's ADC FIFO must not be allowed to back up.
             self.i.ready.eq(1),
         ]
+
+        # --- M28: the LED comet ---------------------------------------------------------------
+        # `viz_out` has been emitted and dropped since M24 (the `viz_out_rdy` tie above); this is
+        # what finally reads it. The comet itself is `LedComet` below, in the engine's own domain
+        # because that is where the tuples are. Only the eight brightnesses cross to `sync`, on two
+        # flops per bit and nothing more: a torn update can only mix two brightnesses that were
+        # each valid, on an output whose whole job is to look roughly right to an eye. An AsyncFIFO
+        # here would be 64 bits of ceremony for that.
+        if self.led:
+            m.submodules.comet = comet = DomainRenamer("audio")(LedComet())
+            m.d.comb += [comet.i_viz.eq(viz_o), comet.i_strobe.eq(viz_v)]
+            m.submodules.led_cdc = FFSynchronizer(
+                comet.o_led.as_value(), self.o_led.as_value(), o_domain="sync")
 
         # --- observation ------------------------------------------------------------------
         m.d.comb += self.dbg_rom.eq(rom_idx)

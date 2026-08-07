@@ -5,6 +5,10 @@
 #   SIM=1 bash boards/tiliqua/build.sh        # verilate + run, leaves build/tiliqua/out0.txt
 #   SKIP_BUILD=1 bash boards/tiliqua/build.sh # elaborate only (fast wiring check)
 #
+# M28: XLS32_VARIANT=cv builds the Eurorack bitstream instead -- CV/gate in, effects bypassed.
+# The two do not fit on one die (see the block comment in gateware/top.py) and go in separate
+# bootloader slots. They get separate NAMEs so they also get separate build directories.
+#
 # In SIM mode, XLS_SIM_MS, XLS_SIM_OUT and XLS_SIM_MIDI reach the harness; see sim_xls_core.cpp.
 #
 # Three toolchains, three different ideas of what a path is:
@@ -26,7 +30,13 @@ SRCX="${SRCX:-core/synth.x}"
 CACHE="${CACHE:-/tmp/xls-synth-work}"          # docker-side, outside the repo
 XLS_TAG="${XLS_TAG:-v0.0.0-10214-gcf49d0e31}"
 IMG="${IMG:-xls-ubuntu:24.04}"
-NAME="${NAME:-XLS32}"
+VARIANT="${XLS32_VARIANT:-fx}"
+export XLS32_VARIANT="$VARIANT"
+case "$VARIANT" in
+  fx) NAME="${NAME:-XLS32}";;
+  cv) NAME="${NAME:-XLS32CV}";;
+  *)  echo "XLS32_VARIANT must be fx or cv, not '$VARIANT'" >&2; exit 1;;
+esac
 TILIQUA_SDK="${TILIQUA_SDK:-$HOME/Documents/GitHub/tiliqua/gateware}"
 WORK="$REPO/build/tiliqua"
 

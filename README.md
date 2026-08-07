@@ -218,11 +218,15 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     UART check), `firmware/` (committed bitstream).
   - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
     [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
-    plus `midi_filter.py`, `fx.py` and their Verilator/Amaranth harnesses), `sim/` (iverilog
-    reference for the pitch check), `build.sh`, `spike/` (the M21/M22 fit sweeps). The bitstream
+    plus `midi_filter.py`, `midi_arb.py`, `fx.py`, `cvin.py`, `cv_proto.py`, `led.py` and their
+    Verilator/Amaranth harnesses), `sim/` (iverilog reference for the pitch check), `build.sh`,
+    `check_cv.py` (the M28 1 V/oct check), `spike/` (the M21/M22 fit sweeps). The bitstream
     plays MIDI from the TRS jack (M24), runs the whole host loop over one USB cable — UAC2 audio
     up, USB-MIDI down (M25) — carries the full chorus / echo / Freeverb chain (M26), and drives
-    the browser UI, the preset banks and all 175 graded cases (M27).
+    the browser UI, the preset banks and all 175 graded cases (M27). M28 adds the Eurorack jacks,
+    which do not fit alongside the effects: `XLS32_VARIANT=cv` builds a second bitstream with
+    CV/gate in and the LED comet in place of the reverb tank, and it tracks 1 V/oct to within
+    **1.98 cents over five octaves** — graded by the board against itself, with one patch cable.
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`

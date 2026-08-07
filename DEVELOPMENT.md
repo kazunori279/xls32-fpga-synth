@@ -1533,7 +1533,7 @@ the reference given.
 | The loop needs one encoder click to recover after a vendor slot is booted by hand. Recommendation is to program the SI5351 from our own gateware; the flash-slot alternative needs the owner's consent, and no flash write has been made in this port | `TILIQUA_PORT.md` §2.7 |
 | M24's TRS MIDI jack passes in simulation but has never had a cable in it | M24 section; roadmap row 24 ◐ |
 | `pitch_a4` (reads an octave low) and `filter_sweep` fail on **Basys 3**, long-standing and unrelated to the port — the Tiliqua sim check proves the engine itself is in tune | M23 section |
-| `cy8cmbr3xxx/touch: n_working_sensors=Ok(0)` on the module, with `CRC OK`. Unrelated to anything built so far, but M28 will depend on touch | `TILIQUA_PORT.md` §1 |
+| `cy8cmbr3xxx/touch: n_working_sensors=Ok(0)` on the module, with `CRC OK`. Unrelated to anything built so far, and ~~M28 will depend on touch~~ — M28 shipped without it; touch was one of four sub-features and the exit criterion was CV | `TILIQUA_PORT.md` §1 |
 
 ## Milestone 26 — chorus, ping-pong echo and 8-comb Freeverb on Tiliqua (done)
 
@@ -2481,6 +2481,213 @@ the symmetric `pw 64` scores 6.48. A narrow pulse, on this board only, not the r
 peak-to-RMS through a fixed-point output path is the obvious next suspect — a clamp would hit narrow
 pulses and nothing else, and would survive a low-pass emulation exactly as this did — but that is a
 hypothesis, not a result. Left open.
+
+## Milestone 28 — the Eurorack jacks: CV in, gate in, the LED comet
+
+The four input jacks have been arriving since M25 and going straight in the bin — `top.py` wires
+`pmod0.o_cal` to `core.i` and `xls_core.py:219` ties `self.i.ready` high, so the engine consumes
+every sample and ignores it. Same for `viz_out`, the LED envelope tap, dropped at
+`xls_core.py:177`. M28 reads both. New: `gateware/cvin.py`, `midi_arb.py`, `led.py`, their three
+test files, and `boards/tiliqua/check_cv.py`.
+
+Two things the roadmap implied would block this did not.
+
+**Touch does not.** The exit criterion is a CV sweep, and the port's own caveat is conditional —
+*"worth resolving with SELFTEST before M28 **depends on** touch"* (`TILIQUA_PORT.md:66`). Touch is
+one of four sub-features and it is out of scope. **Calibration does not either.** The −86…−116 mV
+uncalibrated converter offset is ~120 cents at 4000 counts/V, which sounds fatal until you notice
+it is a *constant transposition*: it moves every point of a sweep by the same number of cents and
+falls out of a slope fit's intercept. Only **gain** error affects 1 V/oct tracking, and the
+per-revision gain defaults are compiled into the gateware already
+(`periph/eurorack_pmod.py:302`). So no EEPROM reader and no SoC — which mattered enormously, for
+reasons the area section below makes plain.
+
+### CV becomes MIDI, because the alternative costs two boards
+
+`CvIn` emits MIDI on channel 4 rather than reaching into the engine. The DSLX core is shared with
+the Basys 3, so a new input port on it costs a 48-stage XLS run *plus* a Vivado build on a board
+this milestone does not otherwise involve. MIDI is a port the engine already has, on a channel
+nothing else uses — the part index is the channel's low 2 bits (`synth.x:337`), so CV drives part 4
+while a keyboard on channel 1 still plays part 1.
+
+The two consequences are both real and both accepted. Crossing a semitone retriggers the envelope,
+which is what every CV-to-MIDI converter does and is audible; a true glide needs the core to take a
+pitch input. And the bend covers only the residual — `synth.x:347` shifts the 14-bit bend right by 4
+and `:364` clamps to ±2047, so the usable range is ±512, about ±2.1 semitones against the ±0.5 a
+rounded note number leaves over. Comfortable.
+
+**The multiply width is not a detail.** `semi_q8 = (cv * 50332) >> 16` converts counts to Q8
+semitones. Written the obvious 16-bit way, `cv * 197 >> 16` is 0.003006 against a true 0.003 — 0.2%,
+which is **12 cents at the top of a five-octave sweep**. That is the entire error budget, spent on
+a constant, and it would have failed the exit criterion on arithmetic alone before any hardware was
+involved. At 24 bits the error is 0.004 cents. `test_cvin.py` reconstructs the pitch the engine
+would actually sound, using the core's own formula from `synth.x:202`, and holds the whole chain to
+**0.99 cents over 60 semitones**.
+
+**The box average pre-pays its rounding.** The ADC noise floor is ≈ −70 dBFS ≈ 10 counts ≈ 3 cents,
+so the four channels are averaged over 64 frames. Seeding each accumulator at half a divisor instead
+of zero makes `(HALF + sum) >> 6` round-to-nearest for free; adding the term at the divide would be
+four more 23-bit adders, and adders were 270 of `CvIn`'s original 537 logic cells. Measured:
+**537 → 451**, with the tracking error unchanged.
+
+### The arbiter: the old mux was already wrong
+
+`top.py` used to pick USB over TRS with a two-way mux and admit in a comment that playing both at
+once "interleaves bytes mid-message and is not supported". That is not a limitation, it is a
+corruption: `synth.x:114` latches **any** byte ≥ 0x80 as running status into exactly one register,
+so two sources interleaving silently rewrite each other's messages. CV would have been a third.
+`MidiArbiter` is round-robin, holds the grant until a message completes, and expands each source's
+running status so what reaches the engine is always self-describing. It costs **102 cells** to stop
+being true, and it goes in both bitstreams.
+
+### It did not fit, and the census said so
+
+M26 closed at 23,800 of 24,288 TRELLIS_COMB — 488 cells of headroom on the whole die. `CvIn` plus
+the arbiter is 639. The first full build after those two steps landed at **24,848 (102%)** and
+nextpnr refused to place it: `Unable to find legal placement for all cells`.
+
+A per-block census of `top.json` is what turned that into a decision rather than a guess:
+
+| block | cells | |
+|---|---:|---|
+| `core` | 17,675 | 70.5% of the die on its own |
+| `usbif` | 2,440 | LUNA UAC2 + USB-MIDI |
+| `fx` | 2,398 | chorus / echo / Freeverb |
+| `pmod0` | 1,000 | codec, I²C, calibration |
+| `cvin` | 537 | |
+| `arb` | 102 | |
+
+It rules out shrinking our way out. Even deleting all of M28 only just clears the overrun. The
+engine has no soft area — XLS unrolls the voice loop into a flat register file, which is why 3 of 56
+DP16KD are used while 11,225 flip-flops are not. And dropping `usbif` would free plenty and is
+exactly wrong, because the exit criterion is *graded by FFT over the USB tee*.
+
+So the split is along `fx`, and it is the fallback the port already named (§M29 area warning, and
+the risk table's row 2):
+
+- **`fx`** (default) — effects + USB, no jacks. What M26/M27 shipped, plus the arbiter.
+- **`cv`** (`XLS32_VARIANT=cv`) — CV/gate in, LED comet, effects bypassed. M28's instrument.
+
+Dropping the effects for the CV bitstream costs nothing the measurement wants: an FFT of a 1 V/oct
+sweep grades a dry oscillator, and reverb on the graded signal would be noise in the literal sense.
+The bootloader holds eight user slots and this spends a second one, which is what they are for.
+
+### The comet is a rotation, not a lookup
+
+`boards/basys3/rtl/top.v:127-147` drives 16 LEDs from `viz_out`: the head advances when a voice is
+freshly struck, and each LED keeps tracking the live envelope of the voice that lit it, so the trail
+fades as notes release. Porting it to the pmod's eight LEDs drops two things — the pmod takes a
+signed i8 and does its own PWM, so `top.v:419-424`'s comparator chain is unnecessary, and 8 LEDs
+makes the cursor 3 bits.
+
+The interesting part is `bind`, the voice → LED map. On the Basys 3 it is a 32-entry file indexed by
+a scan counter, which in ECP5 terms is a 32:1 mux plus a 32-way write decode — the structure M26
+spent a day removing from the reverb tank. But that index only ever walks 0,1,…,31,0:
+`send(tok, viz_out, …)` at `synth.x:404` is *unconditional* and `vidx` is the same ring counter that
+raises `last`. So it is a rotation, and a rotation is the flip-flops' own enable and their
+neighbour's Q. The whole comet costs **98 TRELLIS_COMB and 245 FF**.
+
+One thing the port fixes rather than copies. The Basys 3 initialises all 32 slots to LED 0; on 16
+LEDs that is nearly harmless, but here 24 of 32 voices are still pointing at LED 0 once the head has
+been round once, and each writes its silent envelope there every scan — LED 0 would be held dark
+forever, and an eighth of the comet with it. A ninth code point (`UNBOUND`) and one comparison buys
+it back. `test_led.py::test_unstruck_voices_write_nowhere` is that bug, kept.
+
+### The board grades itself, with one patch cable
+
+out2 and out3 have carried silence since M26. So `CvTestRamp` puts a host-settable DC level on out2,
+**patch out2 → in0**, and `check_cv.py` can step a five-octave sweep and FFT the result over the USB
+tee with no signal generator, no voltmeter and no second module — and re-run it any time, which
+makes it a regression rather than a bring-up measurement. The level arrives over CC102 (undefined in
+the spec, unused by `synth.x`) because there is no SoC in this bitstream and no CSR bus to hang a
+register off; the sniffer observes the filtered byte stream with `ready` tied high, so it cannot
+stall the engine's MIDI. Gate-jack detection is what makes one cable enough: with in1 unpatched the
+gate is held on, so the note drones while the host steps the ramp.
+
+### Timing: for one build, the failing path was ours
+
+| | M26 | M28 `fx` | M28 `cv` |
+|---|---:|---:|---:|
+| TRELLIS_COMB | 23,800 (97%) | 23,785 (97%) | **21,974 (90%)** |
+| TRELLIS_FF | 13,007 | 13,029 (53%) | 12,147 (50%) |
+| DP16KD | 37 | 37 (66%) | 3 (5%) |
+| MULT18X18D | 25 | 25 (89%) | 23 (82%) |
+| `sync` Fmax | 43.40 MHz | 41.24 MHz | **47.92 MHz** |
+
+The `fx` variant is **15 cells smaller than M26** while gaining a three-way message-atomic arbiter,
+because the two-way mux it replaced was not free either.
+
+The `cv` number took a fix. The first comet build read 40.96 MHz, and for the first time since M25
+the `sync` critical path did not belong to LUNA: it was `cvin.smooth0 → prod.MULT18X18D →
+bprod.MULT18X18D`, two inferred multipliers chained combinationally inside `CvIn`'s pitch maths.
+Registering between them costs one cycle of latency out of the 1.33 ms between averaging ticks, and
+`smooth` is stable across all of it. **40.96 → 47.92 MHz**, tracking error unchanged at 0.99 cents,
+and the critical path back inside `usbif.usb.timer.counter` where §2.6 has always said it lives —
+better than every Tiliqua build since M25.
+
+### The measurement: 1.98 cents of residual, and a slope error that is not the gateware's
+
+One cable, 21 points, five octaves:
+
+```
+  slope    1188.7 cents/V  (-11.3 against 1200, -0.94%)
+  offset   -107.2 cents at 0 V  (= -0.089 V of uncalibrated DC, not graded)
+  residual worst 1.98 cents over 5.00 V
+
+PASS: 1 V/oct tracks within 1.98 cents across 5.00 octaves.
+```
+
+61.44 Hz at 0 V to 1904.15 Hz at 5 V. **The residual is the number that grades this repo's work**,
+and 1.98 cents against an 8-cent budget is comfortable — it is also the only column with anything
+left to explain, since 15 of the 21 residuals are inside ±0.6 cents and the two worst are the two
+lowest points, 61 Hz and 72 Hz, where 2 cents is 0.07 Hz and the FFT has the fewest cycles to work
+with. Nothing bends: the line is straight everywhere, so neither converter is contributing
+curvature, and the −0.089 V of DC falls out into the intercept exactly as §1.1 predicted it would.
+
+The **slope is off by 0.94%, and a loopback cannot say whose fault that is.** The volts axis is what
+the host *asked* the DAC for, so a DAC gain error and an ADC gain error enter the fit identically
+and no amount of re-measuring separates them without a reference the module does not have. What can
+be said is that it is not the arithmetic: `test_cvin.py` holds `CvIn`'s maths to 0.99 cents over the
+same 60 semitones, which is 0.08%, an order of magnitude below what was measured. The rest is the
+two uncalibrated converters. `platform.py:561` sets this revision's defaults to `-1.248` in and
+`0.90` out, "based on averaging some R3.3 units… accurate to +/- 100 mV or so" — an *offset* claim,
+with no gain claim attached, from constants that are by construction one unit's distance from an
+average of several. 0.94% of combined gain deviation is what that sentence sounds like when
+measured. Reading the EEPROM would fix it and costs an SoC, which is the thing this milestone spent
+its whole area budget avoiding.
+
+So the honest reading: **the slope is a calibration number and the residual is an engineering one**,
+and only the second is inside M28's scope. If absolute tracking ever matters — a second module
+sequencing this one — that is an EEPROM reader, and it belongs to whichever milestone brings the SoC
+back.
+
+Also, a small one worth writing down because it cost a run. `check_cv.py` imported three constants
+from `cvin.py` and therefore imported `amaranth`, which is not in this repo's `uv` environment at
+all: amaranth lives in the Tiliqua SDK venv that `build.sh:44` reaches for, and the host scripts run
+under `uv run` from the repo root. **A host script cannot import a gateware module.** The three
+constants that are genuinely a host/gateware wire protocol now live in `cv_proto.py`, which imports
+nothing — and keeping them shared rather than duplicated matters more than the import does, because
+if `RAMP_STEP` moved on one side only, the sweep would measure the wrong volts and still report a
+clean fit: the error would be in the axis, not in the data.
+
+### Where it stands
+
+Ten unit tests pass across `test_cvin.py` (pitch / jacks / ramp), `test_midi_arb.py` (interleave /
+fairness / system messages) and `test_led.py` (head / binding / drift / unbound). Both bitstreams
+place. `check_pitch.py` and `check_midi.py` — the M23/M24 guards, and the arbiter rewrite sits
+directly in their path — still pass unchanged.
+
+**The exit criterion is met on hardware**, and the audio path is where M27 left it. The preset
+census re-run on the `fx` bitstream, which is the variant carrying the arbiter rewrite:
+
+| Tiliqua, 128 presets | rails | separation | matched median | identification |
+|---|---|---|---|---|
+| M27 baseline | 0/128 | 2.00x | 14.84 | 97/128 (76%) |
+| M28 `fx` | 0/128 | 1.96x | 14.94 | 97/128 (76%) |
+
+0.04 on separation and 0.10 on the matched median, against a metric this document has already
+measured a ±6-preset run-to-run band on. Replacing the MIDI mux with a three-way arbiter did not
+move the sound.
 
 ---
 
