@@ -218,9 +218,10 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     UART check), `firmware/` (committed bitstream).
   - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
     [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
-    plus `midi_filter.py` and its Verilator harness), `sim/` (iverilog reference for the pitch
-    check), `build.sh`, `spike/` (the M21/M22 fit sweeps). As of M24 the bitstream plays MIDI
-    from the TRS jack out channels 0/1; the host loop (USB audio + USB-MIDI) is M25.
+    plus `midi_filter.py`, `fx.py` and their Verilator/Amaranth harnesses), `sim/` (iverilog
+    reference for the pitch check), `build.sh`, `spike/` (the M21/M22 fit sweeps). The bitstream
+    plays MIDI from the TRS jack (M24), runs the whole host loop over one USB cable — UAC2 audio
+    up, USB-MIDI down (M25) — and carries the full chorus / echo / Freeverb chain (M26).
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
@@ -549,7 +550,9 @@ Drives the real board over USB and grades the captured audio for every feature (
 typical combinations (integration), and boundary conditions (stress) — 130+ cases across the
 three groups, including the full effects chain: **echo/delay** (CC95 depth + CC82 time),
 **chorus** (CC94 depth), and the **8-comb Freeverb reverb** (CC93 wet + CC91 size), each
-verified for an audible tail that **decays without railing** (`stress_fx_tail`). Outputs to
+verified for an audible tail that **decays without railing** (`stress_fx_tail`) — on **both**
+boards, the Tiliqua's effects being a port of the Basys 3 FSM (M26) that scores 100.0 on the same
+four cases. Outputs to
 `test/out/`: `report.md`/`report.json` (0–100 per test + overall grade), `report.mp4` (one
 video, each test preceded by a caption card + its spectrogram), and per-test `.wav`s. See
 `test/README.md` for details.

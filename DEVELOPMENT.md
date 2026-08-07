@@ -90,6 +90,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **23 ✅** | **Hello Tiliqua**: first ECP5 bitstream — engine + AK4619 codec, no SoC, hard-coded A4 | **heard on the module's line-out; `check_pitch.py` ratio 0.667446, 0.117% error** |
 | **24 ◐** | **MIDI in over TRS**: the jack feeds the engine's `u8 midi_in`, RT/SysEx/SysCommon filtered, byte CDC into `audio` | RTL built + both sim checks pass; **hardware pending** (no Type A TRS cable in it yet) |
 | **25 ✅** | **The host loop over one USB cable**: UAC2 audio up, USB-MIDI down, `harness.py` onto the `Transport` seam — the suite can see Tiliqua again | **three consecutive `--only basic` runs at 91.0 / 91.0 / 90.8 (A−), all 34 cases identical every run; clock 12.2874–12.2877 MHz; worst gap 0.001%** |
+| **26 ✅** | **Effects on Tiliqua**: chorus, ping-pong echo and 8-comb Freeverb ported from the Basys 3 FSM into `fx.py` — echo on HyperRAM via `dsp.DelayLine`, tank on-chip | **`echo` / `reverb` / `reverb_cathedral` / `stress_fx_tail` all 100.0; basic 99.1 / 99.6 / 99.4 and stress 100.0 ×3, verdicts identical every run; CC82 spans 4.0–512.0 ms at 0.00% error** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1523,6 +1524,119 @@ the reference given.
 | M24's TRS MIDI jack passes in simulation but has never had a cable in it | M24 section; roadmap row 24 ◐ |
 | `pitch_a4` (reads an octave low) and `filter_sweep` fail on **Basys 3**, long-standing and unrelated to the port — the Tiliqua sim check proves the engine itself is in tune | M23 section |
 | `cy8cmbr3xxx/touch: n_working_sensors=Ok(0)` on the module, with `CRC OK`. Unrelated to anything built so far, but M28 will depend on touch | `TILIQUA_PORT.md` §1 |
+
+## Milestone 26 — chorus, ping-pong echo and 8-comb Freeverb on Tiliqua (done)
+
+M25 left `echo`, `reverb`, `reverb_cathedral` and `stress_fx_tail` failing correctly: there were no
+effects on the board to measure. On Basys 3 the effects are not in the XLS engine at all —
+`core/synth.x` contains no effects code — they are a 29-state FSM in `boards/basys3/rtl/top.v:159-400`
+around four block RAMs. So M26 is a port of the *shell*. New:
+`boards/tiliqua/gateware/fx.py`, `fx_model.py`, `test_fx.py`.
+
+**`dsp.DelayLine` fits the echo and does not fit Freeverb.** The plan of record
+(`TILIQUA_PORT.md` §2.2, Phase C) was to rebuild all three effects against the SDK's delay-line
+library. `DelayLine` is single-writer / multi-reader over one circular buffer; each Freeverb comb
+has its **own** write pointer and writes its own feedback back, so expressing the tank that way
+needs 12 instances per channel — 24 in total, each with a `wishbone.Arbiter` and, if PSRAM-backed,
+a `WishboneL2Cache`. At 86% occupancy that is not a candidate. The SDK draws the same line itself:
+`sram_max_delay = 1024` in `tiliqua/gateware/src/top/dsp/top.py:822` routes short taps to SRAM and
+only long ones to PSRAM, and every Freeverb tap is short (≤1,845 samples at 48 kHz) while the echo
+is long. So the echo goes to PSRAM through `DelayLine` and the tank stays on-chip as one
+`memory.Memory` per channel with region offsets, exactly as the Verilog does it.
+
+**Sizing each region to its own delay is what makes the tank fit.** The Verilog spaces its regions
+uniformly (1300 / 600); giving each region only `DELAYS[i] + SPREAD` words takes the tank from 19
+DP16KD per channel to **15**, which is the difference between the echo getting PSRAM as a choice
+and needing it as a rescue.
+
+**Stage 0 measured the PSRAM stack before anything depended on it.** One throwaway build adding
+only `psram.Peripheral` + one PSRAM-backed `DelayLine`. It cost ~527 TRELLIS_COMB and *improved*
+`sync` Fmax, so the gate passed and the echo got the full 4–512 ms range. `DQSBUFM 1` / `DDRDLL 1`
+confirmed the PHY was genuinely instantiated rather than optimised away.
+
+| cell | M25 baseline | Stage 0 probe | M26 first attempt | M26 shipped |
+|---|---|---|---|---|
+| TRELLIS_COMB | 21,103 (86%) | 21,630 (89%) | **25,319 (104%)** | **23,800 (97%)** |
+| TRELLIS_FF | 11,225 | 11,788 | 13,007 | 13,007 (53%) |
+| DP16KD | 3 | 4 | 37 | 37 (66%) |
+| MULT18X18D | 21 | 21 | 25 | 25 (89%) |
+| DQSBUFM | 0 | 1 | 1 | 1 (12%) |
+| `sync` Fmax | 48.2–49.5 MHz | 51.36 MHz | *(never placed)* | 43.40 MHz |
+
+**The first attempt did not fit** — `Unable to find legal placement for all cells` at 104%. Two
+changes, both semantics-preserving and both verified bit-exact against the model before rebuilding,
+took 1,519 TRELLIS_COMB back out:
+
+- **Advance one region pointer per region, not 24 per sample.** `top.v:390-397` advances all 24
+  comb and all-pass pointers together at the end of the sample, which is 24 parallel 11-bit
+  compare-and-increments. The FSM already visits every region exactly once per sample, so one
+  shared compare-and-increment retired as each region finishes is the same computation.
+- **Make the pointer and damping files rings, not arrays.** Indexing 24 pointers by
+  `ridx`/`chan` is a 24:1 mux over 11 bits plus a 24-way write decode, and the 16 damping
+  registers cost another 16:1 over 16 bits — together the largest combinational structure in the
+  design. But the FSM walks the regions in fixed order, so the value it wants is always the head of
+  a ring: rotate by one as each region retires and after a full pass every entry is back where it
+  started, updated. A rotate is the flip-flops' own clock enable and their neighbour's Q — no mux,
+  no decode, no LUT. Standalone `synth_ecp5` on `StereoFx` alone read 5,325 → 4,813 → **3,641**
+  gates across the two changes.
+
+**Fmax got worse and the effects are not on the path.** `sync` closes at 43.40 MHz against 60 MHz,
+down from M25's 48–50. The critical path is entirely inside the LUNA USB control endpoint
+(`usbif.usb.timer.counter` → `USBControlEndpoint.StandardRequestHandler`) — `fx` appears nowhere on
+it. This is the §2.6 risk getting worse through routing congestion at 97%, not new logic. Worth
+naming plainly: the margin that was already absent is now more absent, and the only reason it works
+is that a failed USB control transfer is retried.
+
+**The port keeps the Basys 3's defaults, which means chorus and echo are on.** `top.v:78-83` boots
+at `rsize=3, revwet=0, chdep=64, echodep=64, dtime=63` — only the reverb is off. The plan assumed a
+bit-identical dry path at reset; that was wrong, and fidelity to the Verilog won, because the
+Basys 3 graded all 30 basic cases with chorus and echo active. `filter_sweep`'s 78–85 straddle was
+the predicted casualty and it did not materialise — see the grading below, where it warns at 84.3,
+inside its usual band.
+
+**A unit-sim harness, because there wasn't one.** The Basys 3 effects were only ever verified on
+hardware. `fx_model.py` is a second, independent transcription of the same Verilog — every
+truncation, saturation and shift — and `test_fx.py` drives `StereoFx` through its real stream
+handshakes and compares every sample. Two silent holes in the first version are worth recording:
+the reverb runs were 1,200 samples but the shortest comb is 1,215, so every tank read returned zero
+and the damping register, the feedback multiply, `rvg` and the comb saturation were entirely
+untested no matter how good the output looked; and the CC-sniffer check could not observe `rsize`
+for the same reason. Fixed by running 4,000 samples (asserted longer than two wraps of the longest
+region) and by reading the sniffer's registers directly. It also counts cycles per sample: worst
+case is **87 of the 1,250** available at 60 MHz / 48 kHz, which is the headroom that let the tank
+be split into three cycles per region to break the mem→damp→multiply→saturate path.
+
+Verified cheapest-first, and the order paid off — the area failure was caught last, after
+everything upstream of it was already proven: unit sim bit-exact in 79 s → `SKIP_BUILD=1`
+elaboration → `SIM=1` Verilator with `check_pitch.py` (ratio 0.667346 vs 0.666667, 0.102% error)
+and `check_midi.py` (all four channels, ≤0.114%) → full build. Both sim regressions were re-run
+after the area work and returned identical numbers.
+
+**On hardware, all four target cases score 100.0.** `check_loop.py` first, before any effect was
+enabled, because the USB tee had moved downstream of `fx` and `check_loop.py` reads the audio clock
+and A4 pitch off that stream: 12.291 MHz, A4 +0.1 cents, 0.000% gaps — the dry path at the CC
+defaults is intact. Then three consecutive runs of each group, the M25 bar being an *identical*
+verdict every time:
+
+| group | run 1 | run 2 | run 3 | verdicts |
+|---|---|---|---|---|
+| basic (34) | 99.1 | 99.6 | 99.4 | byte-identical: 33 pass / 1 warn / 0 fail |
+| stress (7) | 100.0 | 100.0 | 100.0 | byte-identical: 7 pass / 0 warn / 0 fail |
+
+`echo` (tail RMS 2718), `reverb` (267), `reverb_cathedral` (442) and `stress_fx_tail` (late/mid
+0.68) all at 100.0. The single warn is `filter_sweep` at 84.3 — its long-standing 78–85 straddle,
+unchanged by the effects. 43.40 MHz against 60 MHz required did not cost anything measurable.
+
+**The CC82 sweep needed a better instrument before it agreed.** The range is
+`edly = (dtime + 1) × 192` samples at 48 kHz, so 4.0 ms to 512.0 ms; measured from captured audio it
+came back exact at CC82 ≥ 32 and roughly *half* the prediction at 4, 8 and 16, with CC82 = 0 reading
+7.6 ms against 4.0. That was the measurement, not the gateware: the probe plucked note 48, and 130.8
+Hz is a 7.65 ms period, so the envelope autocorrelation was locking onto the note's own pitch and its
+multiples — 7.6, 7.7, 8.0, then 15.3 ≈ 2× and 30.3 ≈ 4×. Driving white noise instead and
+autocorrelating the waveform rather than its envelope removes the periodicity entirely, and every
+one of the nine points then lands at **0.00% error** across the full 4.0–512.0 ms. Worth keeping as
+a rule: when a periodicity measurement disagrees at exactly the scale of some *other* period in the
+signal, suspect the instrument first.
 
 ---
 

@@ -172,6 +172,21 @@ The answer is the HyperRAM: Tiliqua ships `tiliqua/periph/psram.py`, `tiliqua/ds
 `tiliqua/dsp/delay_effect.py` — PSRAM-backed delay lines are the idiomatic Tiliqua way to do exactly
 this. The effects get **rewritten against that library**, not ported line-by-line.
 
+> **M26 split that prediction in half.** The diagnosis held: the buffers do not fit, and the echo
+> line did go to PSRAM through `dsp.DelayLine`. The prescription did not. `DelayLine` is
+> single-writer / multi-reader over one circular buffer, and each Freeverb comb has its *own*
+> write pointer and writes its own feedback back into it — so the reverb tank cannot be expressed
+> as taps on a shared line at all. It needs 12 instances per channel, 24 in total, each with its
+> own arbiter and L2 cache, on a die already at 86%.
+>
+> What actually fits is the Basys 3's own answer: one BRAM per channel with region offsets. The
+> saving that makes it fit is not PSRAM but arithmetic — sizing each region to its own delay
+> instead of the Verilog's uniform 1300/600 spacing takes the tank from 19 tiles per channel to
+> 15. The SDK agrees, incidentally: `src/top/dsp/top.py:822` keeps a `sram_max_delay = 1024`
+> heuristic that routes short taps to SRAM and only long ones to PSRAM, and every Freeverb tap
+> here is short. So the effects were **ported line-by-line after all**, with `dsp.DelayLine` used
+> for the one delay that genuinely wanted a megabyte. See the M26 entry below.
+
 ### 2.3 Clocking — the cost of a sample is `--pipeline_stages`, not 32
 
 > **This section was wrong until M21 measured it.** It read "one voice per engine-cycle, 32 cycles
@@ -316,6 +331,14 @@ exactly how it behaves. This is a **risk being carried, not a risk retired**: st
 the part is out of spec, so it is not proof of margin at temperature, over voltage, or on another
 die. Cutting voices stays available if the loop ever proves flaky. The number to watch is the
 frame gap rate, which every report prints.
+
+**M26 made it worse and it still runs.** Adding the effects took occupancy to 97% and `sync` Fmax
+down to **43.40 MHz** — a 28% shortfall, not 6–15%. The critical path is still nowhere near the
+new logic: it runs `usbif.usb.timer.counter` → `USBControlEndpoint.StandardRequestHandler`, i.e.
+the same enumeration-only cone, now slower through routing congestion rather than through added
+depth. Three consecutive runs of basic and of stress returned byte-identical verdicts and 0.000%
+gaps, so the empirical answer has not changed; the margin, which was already absent, is more
+absent.
 
 ### 2.7 The sixth constraint, found in M25: the loop needs a human finger
 
@@ -882,7 +905,8 @@ cases returning an identical verdict every time** and the audio clock logged at 
 
 The three failures are `echo`, `reverb` and `reverb_cathedral`, and they are correct: M23 did not
 port the effects FSM (`xls_core.py`), so this bitstream has no effects to measure. They are the
-M26 exit criteria, sitting there as a red line until M26 turns them green. `filter_sweep` warns at
+M26 exit criteria, sitting there as a red line until M26 turns them green — which it did, all three
+at 100.0. `filter_sweep` warns at
 78–85 across runs, straddling its own threshold; that is honest analogue variance, not a flip.
 
 Getting there cost one encoder press (§2.7) and one test bug — see the M25 entry in
@@ -890,12 +914,27 @@ Getting there cost one encoder press (§2.7) and one test bug — see the M25 en
 
 ### Phase C — feature parity
 
-**M26 · Effects on HyperRAM**
-Rebuild chorus / ping-pong echo / 8-comb Freeverb against `tiliqua.dsp.delay_line` +
-`tiliqua.periph.psram` instead of the four on-chip buffers. Keep the CC map identical (CC82/91/93/94/95)
-and keep depth-gating.
+**M26 · Effects on HyperRAM** — ✅ **done**
+Port chorus / ping-pong echo / 8-comb Freeverb from `boards/basys3/rtl/top.v:159-400` into
+`boards/tiliqua/gateware/fx.py` as a `sync`-domain `StereoFx`, sitting between `core.o` and
+`pmod0.i_cal` — the same place they occupy on the Basys 3, outside the engine. Keep the CC map
+identical (CC82/91/93/94/95) and keep depth-gating.
+
+The split is **not** the one §2.2 predicted, and the reason is in the block quote there: only the
+echo goes to `tiliqua.dsp.DelayLine` + `tiliqua.periph.psram`. Freeverb's twelve regions per
+channel stay on-chip as one `memory.Memory` with region offsets, because `DelayLine` is
+single-writer/multi-reader and each comb writes its own feedback — the SDK draws the same line
+itself with `sram_max_delay = 1024`.
+
 *Exit:* the `stress_fx_tail` family passes on Tiliqua — audible tail that decays without railing —
-and delay time still spans ~4–508 ms.
+and delay time still spans ~4–512 ms.
+*Met.* `echo`, `reverb`, `reverb_cathedral` and `stress_fx_tail` all score **100.0**; basic runs
+99.1 / 99.6 / 99.4 and stress 100.0 ×3, each group returning an identical verdict across three
+consecutive runs (33 pass / 1 warn / 0 fail, and 7 / 0 / 0). `check_loop.py` still reads 12.291 MHz,
+A4 +0.1 cents, 0.000% gaps with the USB tee now downstream of `fx`. CC82 measured from captured
+audio spans **4.0–512.0 ms at 0.00% error on all nine sweep points**. Cost: 23,800 TRELLIS_COMB
+(97%), 37 DP16KD, 25 MULT18X18D, and `sync` Fmax down to 43.40 MHz — see §2.6 and the M26 entry in
+`DEVELOPMENT.md`.
 
 **M27 · Preset bank + web UI on Tiliqua**
 Point `webui/server.py` at the Tiliqua transport; recalibrate `presetgen/engine.py` for the ported

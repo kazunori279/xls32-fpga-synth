@@ -26,10 +26,11 @@ from amaranth.lib.fifo import AsyncFIFO, SyncFIFO
 from tiliqua import midi
 from tiliqua.build import sim
 from tiliqua.build.cli import top_level_cli
-from tiliqua.periph import eurorack_pmod
+from tiliqua.periph import eurorack_pmod, psram
 from tiliqua.platform import RebootProvider
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fx import StereoFx
 from midi_filter import SysCommonFilter
 from usb_iface import XlsUsbInterface
 from xls_core import XlsSynth
@@ -70,8 +71,25 @@ class CoreTop(Elaboratable):
             m.submodules.car = sim.FakeTiliquaDomainGenerator()
 
         m.submodules.core = self.core
+
+        # --- M26 effects ------------------------------------------------------------------
+        # Chorus, ping-pong echo and Freeverb sit between the engine and the jacks, which is the
+        # same place they occupy on Basys 3 -- the XLS engine has no effects code in it, on
+        # either board. This is also what finally makes out0/out1 a stereo pair; the engine is
+        # mono and until now both jacks carried the same signal.
+        #
+        # The echo line is PSRAM-backed on hardware and SRAM-backed in simulation. Not a
+        # fidelity compromise -- test_fx.py checks the SRAM build sample-for-sample against an
+        # independent model of the Basys 3 FSM -- but sim_xls_core.cpp has no HyperRAM model,
+        # and writing one to exercise a delay line whose arithmetic is already proven would be
+        # testing the SDK's cache rather than anything in this repo.
+        m.submodules.fx = fx = StereoFx(psram=sim.is_hw(platform))
         wiring.connect(m, pmod0.o_cal, self.core.i)
-        wiring.connect(m, self.core.o, pmod0.i_cal)
+        wiring.connect(m, self.core.o, fx.i)
+        wiring.connect(m, fx.o, pmod0.i_cal)
+        if sim.is_hw(platform):
+            m.submodules.psram_periph = psram_periph = psram.Peripheral(size=16*1024*1024)
+            wiring.connect(m, fx.bus, psram_periph.bus)
 
         # --- TRS MIDI in ------------------------------------------------------------------
         # The jack is optoisolated and idles high, so the synchroniser resets to 1: a reset that
@@ -90,6 +108,16 @@ class CoreTop(Elaboratable):
         wiring.connect(m, rt_filter.o, sysex_filter.i)
         wiring.connect(m, sysex_filter.o, common_filter.i)
         wiring.connect(m, common_filter.o, self.core.i_midi_bytes)
+
+        # The effects sniff the same bytes the engine parses, for CC82/91/93/94/95. This is a
+        # pure observation, not a second consumer: `FxControl.i.ready` is tied high, so the
+        # sniffer can never stall the MIDI path -- which rules out the failure the SDK's usual
+        # answer (a SyncFIFO that drops on full) exists to prevent, and costs nothing to do.
+        # A byte is taken on the cycle the engine accepts it, so the two see the same stream.
+        m.d.comb += [
+            fx.i_midi_bytes.payload.eq(common_filter.o.payload),
+            fx.i_midi_bytes.valid.eq(common_filter.o.valid & common_filter.o.ready),
+        ]
 
         if not sim.is_hw(platform):
             wiring.connect(m, serialrx.o, rt_filter.i)
@@ -124,9 +152,13 @@ class CoreTop(Elaboratable):
 
         # Audio up, tapped digitally rather than looped back through a patch cable. Without an
         # SoC the codec's calibration constants are never loaded, which puts 80-120 mV of DC on
-        # every converter (~1.2% of full scale) -- enough to skew FFT grading. Teeing `core.o`
+        # every converter (~1.2% of full scale) -- enough to skew FFT grading. Teeing `fx.o`
         # means the graded signal never touches the DAC or the ADC. The jack still plays in
         # parallel, unchanged.
+        #
+        # The tap moved from `core.o` to `fx.o` in M26, and had to: `echo`, `reverb`,
+        # `reverb_cathedral` and `stress_fx_tail` all grade the effects, and all four are
+        # ungradable while the capture point sits upstream of them.
         #
         # The tee must never backpressure `pmod0.i_cal`: a host that is not recording would
         # otherwise stall the codec. So it takes a copy only when the FIFO has room and silently
@@ -175,11 +207,11 @@ class CoreTop(Elaboratable):
 
         m.submodules.usb_tee = usb_tee = SyncFIFO(width=64, depth=16)
         m.d.comb += [
-            usb_tee.w_data.eq(Cat(self.core.o.payload[0].as_value(),
-                                  self.core.o.payload[1].as_value(),
+            usb_tee.w_data.eq(Cat(fx.o.payload[0].as_value(),
+                                  fx.o.payload[1].as_value(),
                                   ctr_s[0:15], C(1, 1),         # ch2: low bits + alive marker
                                   ctr_s[15:31])),               # ch3: high bits
-            usb_tee.w_en.eq(self.core.o.valid & self.core.o.ready),
+            usb_tee.w_en.eq(fx.o.valid & fx.o.ready),
         ]
 
         # Channel 2 is never zero, and that is what makes the host's gap detector exact.
@@ -192,7 +224,7 @@ class CoreTop(Elaboratable):
         # tee it is not, because digital silence *is* exactly zero and a note's release tail
         # would read as one long dropout. One channel that is never zero settles it: all-zero
         # means dropped, full stop. It costs nothing on the jacks -- `usbif.i` feeds the USB IN
-        # stream only, and out2 still comes from `core.o` like every other output.
+        # stream only, and out2 still comes from `fx.o` like every other output.
         m.d.comb += [
             usbif.i.payload[0].as_value().eq(usb_tee.r_data[0:16]),
             usbif.i.payload[1].as_value().eq(usb_tee.r_data[16:32]),

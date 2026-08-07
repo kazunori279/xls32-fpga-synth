@@ -77,8 +77,9 @@ class XlsSynth(wiring.Component):
     XLS32: a 32-voice subtractive synthesizer compiled from DSLX by Google XLS.
 
     Multitimbral over MIDI channels 1-4, played through `i_midi_bytes` -- a raw byte stream,
-    not decoded messages. No effects yet. The engine is mono, so out0 and out1 carry the same
-    signal.
+    not decoded messages. The engine is mono, so out0 and out1 carry the same signal; the
+    chorus, echo and reverb that make them a stereo pair live downstream in `fx.StereoFx`,
+    outside this component, exactly as they do on the Basys 3.
 
     `i_midi_bytes`, `i` and `o` are all in `sync`; the engine's own domain stays inside.
     """
@@ -207,7 +208,8 @@ class XlsSynth(wiring.Component):
 
         # --- jacks --------------------------------------------------------------------------
         # The engine is mono (one `_audio_out`); the Basys 3 stereo pair comes from its effects
-        # FSM, which M23 does not port. out0 and out1 get the same signal; out2/out3 stay at 0.
+        # FSM, which M26 ports into `fx.StereoFx` downstream of here. Both channels get the same
+        # signal at this point and the effects split them; out2/out3 stay at 0.
         m.d.comb += [
             self.o.payload[0].as_value().eq(resample.o.payload.as_value()),
             self.o.payload[1].as_value().eq(resample.o.payload.as_value()),

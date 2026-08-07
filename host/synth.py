@@ -56,7 +56,7 @@ def set_room(r):          return cc(91, (r & 3) << 5)              # CC91 reverb
 def set_reverb(w):        return cc(93, w & 0x7f)                  # CC93 reverb wet/send 0..127 (serial send after fx)
 def set_chorus_depth(d):  return cc(94, d & 0x7f)                  # CC94 chorus depth/wet 0..127 (default 64)
 def set_echo_depth(d):    return cc(95, d & 0x7f)                  # CC95 delay(echo) depth/wet 0..127 (default 64)
-def set_delay_time(t):    return cc(82, t & 0x7f)                  # CC82 delay time 0..127 (~4..508 ms; default 63)
+def set_delay_time(t):    return cc(82, t & 0x7f)                  # CC82 delay time 0..127 (4..508 ms Basys 3, 4..512 ms Tiliqua; default 63)
 def set_dbg(m):           return cc(90, m & 0x7f)                  # CC90 DEBUG probe: 0 normal, 1 echo tap|input, 2 wptr|rptr
 def set_xmode(m):         return cc(85, (m & 3) << 5)              # CC85 cross-osc 0=off 1=ring 2=FM 3=FM+
 def set_xdepth(v):        return cc(86, v)                         # CC86 cross-osc depth (0..127)
