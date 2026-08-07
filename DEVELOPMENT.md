@@ -2435,6 +2435,57 @@ sweep in the census. The model tracks percussive patches to the sample under a c
 Whatever mispredicts those six presets, it is not the interaction, and the combos stay in the file
 as the control that says so.
 
+### Sweeping the Tiliqua: one real divergence, and a control that is too weak for this board
+
+`fx.py` is an independent reimplementation and had never been swept parameter by parameter, so the
+same 26-CC run went at the Tiliqua. Its headline verdicts looked dramatic — `pw` flagged MODEL at 3
+of its 4 values (17.41 / 10.93 / 11.90), `sub` at 2 of 4 (11.91 / 11.27) — against Basys 3 scores of
+2.24 and 4.34 for the same parameters. `dtime`'s worst fell to 6.74, confirming `echo_delay()` on
+hardware.
+
+Two things were wrong with reading it that way.
+
+**The noise floor is not the Basys 3's.** No row scored below 5, and the flagged table's tail holds
+`arel 0` (8.08), `trem 0` (7.72), `lforate 0` (8.77) and `reverb 0` (6.19) — all of which are the
+*base patch itself*, a plain tone with the swept CC at zero. A model wrong about the defaults is
+wrong about everything, which pointed at a static spectral tilt, and
+`boards/tiliqua/gateware/xls_core.py:201` has a candidate the Basys 3 does not:
+`dsp.Resample(32000, n_up=3, m_down=2)` designs a **15-tap FIR at 96 kHz with a 12.8 kHz cutoff** —
+−1.6 dB at 8 kHz, −6.1 at 12.8, −11.7 at 16. `engine.py` has no such stage, and the two parameters
+that failed are the two brightest waveforms in the sweep. It fits.
+
+It is also wrong. Emulating that exact filter in float — zero-stuff ×3, the same `firwin`, decimate
+by 2 — and re-scoring against three fresh takes moves nothing:
+
+| | raw | +resampler | self |
+|---|---|---|---|
+| base, wave 16 | 2.83 | 2.66 | 7.46 |
+| pw 8, wave 32 | 14.21 | **14.40** | 6.23 |
+| pw 64, wave 32 | 6.48 | 6.36 | 2.98 |
+| sub 127 | 4.31 | 4.12 | 11.32 |
+| sub 85 | 4.25 | 4.14 | 7.93 |
+
+The rolloff sits above where the loss metric has weight. Hypothesis dead, for one probe and no build.
+
+**The same table kills most of the sweep's verdicts too.** That probe scores the *best* of three
+board takes; `param_diff` scores a single one. On that basis the base patch is **2.83** — the Basys
+3's floor exactly, not an elevated one — and `sub 127` is 4.31 against a self of 11.32, i.e. the
+sweep's 11.27 was one bad take. The Tiliqua's take-to-take spread is large enough to swamp a
+single-take loss, so `FLAG`-then-control is the wrong shape for this board: the control fires *after*
+the number that decided whether to control it. On the Basys 3 that is affordable. On the Tiliqua it
+manufactures MODEL verdicts, and the honest reading of that sweep is that only one row means
+anything.
+
+That row is solid: **`pw 8` scores 14.21 at the best of three takes against a self of 6.23**, while
+the symmetric `pw 64` scores 6.48. A narrow pulse, on this board only, not the resampler. High
+peak-to-RMS through a fixed-point output path is the obvious next suspect — a clamp would hit narrow
+pulses and nothing else, and would survive a low-pass emulation exactly as this did — but that is a
+hypothesis, not a result. Left open.
+
+---
+
+# Friction logs & learnings
+
 The hard-won, reusable lessons — read these before extending the synth or porting the
 toolchain. The first subsection is the load-bearing one (it caps what you can build); the
 rest are per-topic.
