@@ -2272,6 +2272,92 @@ The generalizable part: **the model and the RTL had drifted at a line the RTL's 
 documented as fixed.** Anywhere `engine.py` writes out a computation `synth.x` also writes out,
 that is a divergence waiting to happen, and the agreement census is the only thing that sees it.
 
+### Sweeping all 26 CCs: `presetgen/param_diff.py`, and a control that lied
+
+Two real bugs came out of hand-sweeping three parameters. That is a bad ratio to leave alone, so
+the throwaway probe became a committed tool. `presetgen/param_diff.py` drives one deliberately
+plain patch — a single saw voice, filter wide open, envelope flat and instant, every effect off —
+and sweeps one CC at a time over four values, scoring `engine.render()` against the board on the
+census loss plus six diagnostics that say *what* differs rather than *how much*: the harmonic
+ladder, the spectral centroid ratio, time-to-50% and tail length on both sides, and amplitude and
+centroid modulation depth. Run it whole (`uv run python presetgen/param_diff.py`) or per parameter
+(`... param_diff.py cutoff reso`). `porta` is skipped and says why: one note-on cannot show a glide.
+
+A well-matched parameter sits at loss 2–3, and fourteen of them do. The sweep found two more bugs.
+
+**The capture backlog: every recording in the project began with 157 ms of the previous one.**
+`Recorder`'s constructor calls `tcflush(fd, TCIFLUSH)`, which empties the kernel input queue and
+*not* the FTDI chip or the USB pipeline — and the board never stops streaming, so between captures
+those fill with whatever was last playing. Measured at ~20 kB, a steady 157 ms, landing at the
+**front** of every take: a 1.3 s capture of a note was really 157 ms of stale audio plus the first
+1.14 s of the note, shifted against `engine.render()` by a sixth of a second. `record_stop()` now
+trims it, and the excess is measured rather than guessed — the link runs at a fixed
+`sr × bytes-per-frame`, so anything beyond what the elapsed wall clock can account for was already
+buffered when recording began. Before: 1.80 s of wall clock returned 1.960 s of audio and 0.80 s
+returned 0.960 s, the same 157 ms both times, with onset at 157 ms. After: 1.810 s / 0.806 s, onset
+2.5–3.3 ms. This affected the census and `calibrate.py` too, not just the sweep.
+
+**`edly` is an OR, and the model made it an addition.** `boards/basys3/rtl/top.v:170`:
+
+```verilog
+wire [13:0] edly = {dtime, 7'd0} | 14'd128;     // dtime<<7, floored ~4 ms
+```
+
+Bit 7 of `dtime << 7` *is* `dtime`'s bit 0, so the floor only ever lands on **even** `dtime`; for
+odd `dtime` the OR does nothing. `engine.py` had `dtime * 128 + 128`, unconditionally — a delay
+line 128 samples long on every odd setting, and 14 bits wide on the board against the model's
+`% 32768`. The sweep's own pass/fail pattern is the proof: `dtime` 85 and 127 flagged, 0 and 42 did
+not. Fixed to `((dtime << 7) | 128) & 0x3FFF`, and 11.34/9.11 dropped to 4.64/3.88.
+
+**The control that lied.** A high loss is only a model bug if the board is repeatable, so flagged
+rows re-capture and score the board against itself. The first run took **one** repeat, and on that
+basis called `unison 42` and `detune 127` model bugs (loss 19.96 against self 3.60). They are not.
+The patch under test has a flat sustain, so its amplitude envelope *is* the beat, and printing it
+directly settles the question in one screen:
+
+```
+unison=42    model |==========--=----------------=-==========##################=|
+             board |=========---------------------===========##################=|
+             brd2  |--------------============##################===========-=---|
+```
+
+Same rate, same depth, different start. The quantity that wanders is the **phase of a ~1 Hz beat**,
+and two takes land close often enough to look repeatable — a single repeat is not a control for it.
+`REPEATS` is now 3, and `self` is the worst of the six pairs. That reclassified `unison` and
+`detune` at every value, and left five rows out of the twenty-five flagged.
+
+What survives is worth stating precisely, because most of the sweep's alarms are **not** fixable:
+
+- **Board nondeterminism, irreducible.** Voice start phases come from the noise LFSR
+  (`core/synth.x:140`), which free-runs from power-up, while `engine.render()` always seeds
+  `0xACE1`. Anything that beats or stacks — `unison`, `detune`, `chorusd`, `trem`, `room`, the
+  `wave: 64` noise setting — begins at an arbitrary point every note-on. The board disagrees with
+  *itself* by as much as it disagrees with the model.
+- **Stale LFO phase, a probe artifact.** The per-part LFO is not reset at note-on, so `lforate`
+  rows inherit wherever the previous row's LFO stopped. `lforate 0` diverges at loss 6.06 with a
+  self of 2.14 — perfectly repeatable, and perfectly meaningless.
+- **One unexplained residual.** `echod` 85/127 sit at 5.75/6.40 against a self of ~3.25. The tail
+  column says the model rings past the window while the board decays at ~707 ms, i.e. the echo
+  feedback differs — but `sat18`/`_sat16`, the Q15 wet multiply, its truncating `>>> 15`, and the
+  ping-pong write-back `raws + (echod[1-c] >> 1)` all read identically. Under 2× the noise floor
+  and no candidate; left open rather than explained away.
+
+The census, run twice because of what the last column shows:
+
+| Basys 3, 32 kHz | rails | separation | matched median | identification |
+|---|---|---|---|---|
+| after the two waveform fixes | 0/128 | 1.59x | 19.65 | 92/128 (72%) |
+| **+ backlog trim + `edly`**, run 1 | 0/128 | **2.10x** | **13.53** | 86/128 (67%) |
+| **+ backlog trim + `edly`**, run 2 | 0/128 | **2.13x** | **13.64** | 97/128 (76%) |
+
+**Identification swung 86 → 97 between two back-to-back runs of the same build.** Separation and
+the matched median did not move (2.10/2.13, 13.53/13.64), so those are the metrics that mean
+something and the identification rate carries a ±6-preset band nobody had measured. Every
+single-run identification number quoted earlier in this document — 59%, 72%, Tiliqua's 72% —
+should be read with that band, including the 13-point two-board gap that started the M27 follow-up.
+The real, stable result of these two fixes is **matched median 19.65 → 13.5 and separation
+1.59x → 2.1x**: a sixth of a second of alignment error was costing more than either waveform bug.
+
 ---
 
 # Friction logs & learnings

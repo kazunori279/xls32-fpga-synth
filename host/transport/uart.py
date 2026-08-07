@@ -297,6 +297,7 @@ class UartTransport(Transport):
         self.dev = None
         self.fd = None
         self._rec = None
+        self._t0 = None                       # wall clock at record_start, for the backlog trim
         self._stream_t = None
         self._stream_run = False
         self.last_align = None                # (n_phase_changes, first_change_byte, nwin, worst)
@@ -319,12 +320,30 @@ class UartTransport(Transport):
     def record_start(self):
         if self._rec is not None:
             self._rec.stop()
-        self._rec = Recorder(self.fd)         # its ctor flushes, so old audio is dropped
+        self._rec = Recorder(self.fd)         # its ctor flushes the kernel queue
+        self._t0 = time.monotonic()
 
     def record_stop(self):
         if self._rec is None:
             return []
+        t0, self._t0 = self._t0, None
         raw, self._rec = self._rec.stop(), None
+        # Drop the backlog that predates record_start(). `tcflush` empties the kernel input queue
+        # but not the FTDI chip or the USB pipeline, which between captures fill up with whatever
+        # the board was playing -- the board never stops streaming and nothing drains it while the
+        # caller is sending CCs. Measured at ~20 kB, a steady 157 ms, and it lands at the FRONT of
+        # every recording: a 1.3 s capture of a note was really 157 ms of stale audio plus the
+        # first 1.14 s of the note, shifted against `engine.render()` by a sixth of a second.
+        #
+        # The excess is exactly measurable rather than guessed: the link runs at a fixed
+        # sr * bytes-per-frame, so anything beyond what the elapsed wall time can account for was
+        # already buffered when recording began. Verified: 1.80 s of wall clock returned 1.960 s of
+        # audio, 0.80 s returned 0.960 s -- the same 157 ms both times.
+        if t0 is not None:
+            bpf = 4 if self._board.stereo else 2
+            excess = len(raw) - int((time.monotonic() - t0) * self.sr * bpf)
+            if excess > 0:
+                raw = raw[excess - excess % bpf:]      # trim on a frame boundary
         # Stash whether the frame phase held for the whole capture, so a caller that gets a
         # full-scale noisy result can tell a misdecode from real audio. Attribute, not a return
         # value, so the Transport ABC and the USB-audio board are untouched -- USB delivers whole

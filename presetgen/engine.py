@@ -294,7 +294,7 @@ TANK_WORDS = int(_LEN.sum())
 
 CH_BASE, CH_SWEEP, CH_WORDS = 2400, 2048, 1024     # Q3 chorus tap: 300.0 .. 556.0 samples
 LFO_PERIOD = CH_SWEEP * 16                         # 32768 samples -> 0.977 Hz at 32 kHz
-ECHO_STEP, ECHO_MIN, ECHO_MAX = 128, 128, 32768    # edly = dtime*128 + 128 -> 4 .. 512 ms
+ECHO_MAX = 16384                                   # dmemL/dmemR depth in boards/basys3/rtl/top.v
 RVG = np.array([22000, 26000, 29000, 31200], dtype=np.int64)   # room/hall/large/cathedral
 
 
@@ -322,7 +322,11 @@ def _fx(dry, revwet, chdep, echodep, dtime, rvg, delays, region, tank_words):
     out = np.empty(n, dtype=np.float64)
     echo_on = echodep != 0
     chorus_on = chdep != 0
-    edly = (dtime * ECHO_STEP + ECHO_MIN) % ECHO_MAX
+    # boards/basys3/rtl/top.v:170 is `edly = {dtime, 7'd0} | 14'd128`, 14 bits wide -- an OR, not
+    # the addition this used to be. Bit 7 of `dtime<<7` is dtime's bit 0, so the floor only lands
+    # on EVEN dtime; for odd dtime the OR does nothing and the delay is 128 samples (4 ms) shorter
+    # than the model made it. That is why the sweep flagged dtime 85 and 127 and passed 0 and 42.
+    edly = ((dtime << 7) | 128) & 0x3FFF
     wetgn = revwet << 8
     chdep_q15 = chdep << 8
     echdep_q15 = echodep << 8
