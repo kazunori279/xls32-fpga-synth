@@ -735,6 +735,13 @@ is a byte-wide CDC into the engine's domain, which is one depth-4 `AsyncFIFO` �
 the audio path already uses. The boot ROM keeps absolute priority over that FIFO until it drains,
 which takes ~36 audio cycles, about 3 µs.
 
+> *Two-board note (M28a).* The Basys 3 shell has no equivalent FIFO — its RX overwrote an
+> uncollected byte silently, with two bytes of buffering total. That asymmetry looked like the
+> explanation for 6/274 presets railing on Basys 3 and 0/274 here, and it is not: simulating the
+> Basys 3 shell under an unpaced 2 Mbaud burst loses no bytes (891 clocks of worst-case stall
+> against 1000 clocks of capacity — thin, but deterministic and never exceeded). Worth recording
+> because the comparison is genuinely suggestive and someone will make it again.
+
 **The simulated `sync` clock is 62.5 MHz, and a naive harness would fail on it.**
 `sim_xls_core.cpp` computes `ns_in_sync_cycle = 1e9/60000000 = 16` in integer arithmetic, so the
 simulated sync period is 16 ns rather than 16.667 — 4.17% fast, the same class of artefact as the
