@@ -127,13 +127,45 @@ def best_align(raw):
     framing-free UART, not of the test harness: USB delivers whole frames and has
     nothing to guess, so the Tiliqua transport has no counterpart to this.
 
-    Note it does *not* de-interleave, where samples_from_bytes does — moved verbatim,
-    because changing it would move every Basys 3 score at the same time as the port."""
+    Note it does *not* de-interleave — see frame_align, which is what record_stop calls."""
     if len(raw) < 8:
         return []
     from synth import glitches
     a, b = _decode(raw, 0), _decode(raw, 1)
     return a if glitches(a) <= glitches(b) else b
+
+
+def _marker_score(raw, off, limit=8000):
+    """Fraction of samples whose LSB channel marker breaks the L,R,L,R (0,1,0,1) pattern."""
+    end = min(off + limit, len(raw) - 1)
+    n = (end - off) // 2
+    if n < 4:
+        return 1.0
+    bad = sum(1 for k in range(n) if ((raw[off + 2*k] | (raw[off + 2*k + 1] << 8)) & 1) != (k & 1))
+    return bad / n
+
+
+def frame_align(raw, stereo=True):
+    """Bracketed capture -> ONE channel of signed samples, which is what Transport.record_stop
+    promises. The bracketed counterpart of Aligner, and it uses the same evidence: the board
+    stamps a channel marker in each sample's LSB (L=0, R=1), so the frame offset whose LSBs read
+    0,1,0,1,... fixes byte alignment and L/R order at once.
+
+    This existed as `samples_from_bytes(..., stereo=True)` before M25, when moving the harness onto
+    the transport seam swapped it for `best_align`, which picks a 2-byte phase and stops there. The
+    interleaved stream that came back has twice the samples, so at the 32 kHz the harness assumes
+    every Basys 3 measurement since has been an octave low -- `pitch_a4` reading 220 for A4 was the
+    only case whose threshold was tight enough to say so out loud. Falls back to best_align when the
+    marker pattern is absent, so a mono board build still grades."""
+    if len(raw) < 8:
+        return []
+    if not stereo:
+        return best_align(raw)
+    off = min(range(4), key=lambda o: _marker_score(raw, o))
+    if _marker_score(raw, off) > 0.25:            # no usable marker -- don't trust the phase
+        s = best_align(raw)
+        return s[::2] if s else s
+    return _decode(raw, off)[::2]                 # channel 0 (L) at the true Fs
 
 
 class Aligner:
@@ -222,7 +254,7 @@ class UartTransport(Transport):
         if self._rec is None:
             return []
         raw, self._rec = self._rec.stop(), None
-        return best_align(raw)
+        return frame_align(raw, self._board.stereo)
 
     def read_frames(self, n):
         from synth import to_signed

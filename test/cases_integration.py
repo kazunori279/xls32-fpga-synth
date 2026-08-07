@@ -5,7 +5,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "webui"))
 from synth import (note_on, note_off, cc, pitch_bend, set_wave, set_cutoff, set_reso, set_fmode, set_sub,  # noqa: E402
-                   set_pw, set_detune, set_unison, set_porta, set_fx, set_trem, set_room, set_reverb,
+                   set_pw, set_detune, set_unison, set_porta, set_trem, set_room, set_reverb,
                    set_echo_depth)
 from harness import TestCase, mk            # noqa: E402
 import harness as H
@@ -42,7 +42,7 @@ def _chk_lead(s):
     base = 60 + 20 * hits + (20 if rolled else 0)
     score, g, clip = clean_score(s, base)
     return mk(score, f"pitch {'ok' if hits else 'x'}, rolloff {'ok' if rolled else 'x'}, {g} glitches", "clean filtered lead")
-def _setup_lead(fd): w(fd, set_wave(1), set_cutoff(72), set_reso(45), set_fmode(0), cc(20, 6), cc(22, 105), cc(23, 45), set_fx(0))
+def _setup_lead(fd): w(fd, set_wave(1), set_cutoff(72), set_reso(45), set_fmode(0), cc(20, 6), cc(22, 105), cc(23, 45))
 add(id="combo_lead", title="Classic subtractive lead", desc="Saw → resonant LP → amp ADSR: the bread-and-butter patch.",
     expected="correct pitch, highs rolled off, clean", setup=_setup_lead, perform=lambda fd: (w(fd, note_on(64, 110)), time.sleep(1.6), w(fd, note_off(64)), time.sleep(0.3)),
     check=_chk_lead, capture_s=2.1)
@@ -52,7 +52,7 @@ def _chk_pad(s):
     base = 45 + sc(cv, 0.12, 0.03) * 0.35 + sc(tail, 40, 5) * 0.2
     score, g, clip = clean_score(s, base)
     return mk(score, f"beating CV {cv:.2f}, reverb tail {tail:.0f}, {g} glitches", "thick detuned pad + reverb tail")
-def _setup_pad(fd): w(fd, set_wave(1), set_unison(3), set_detune(2), set_cutoff(85), set_reso(20), cc(20, 90), cc(22, 120), cc(23, 90), set_fx(0), set_reverb(100), set_room(1))
+def _setup_pad(fd): w(fd, set_wave(1), set_unison(3), set_detune(2), set_cutoff(85), set_reso(20), cc(20, 90), cc(22, 120), cc(23, 90), set_reverb(100), set_room(1))
 add(id="combo_pad", title="Super-saw pad + reverb", desc="Unison + detune + slow attack + hall reverb → a lush pad.",
     expected="thick beating + reverb tail", setup=_setup_pad, perform=lambda fd: (w(fd, note_on(52, 90), note_on(59, 90), note_on(64, 90)), time.sleep(2.0), w(fd, note_off(52), note_off(59), note_off(64)), time.sleep(1.4)),
     check=_chk_pad, capture_s=3.6)
@@ -63,7 +63,7 @@ def _chk_bass(s):
     base = 55 + sc(strong_low, 0.7, 0.3) * 0.45
     score, g, clip = clean_score(s, base, tail_ok=False)
     return mk(score, f"low-band fraction {strong_low:.2f}, {g} glitches", "strong clean low end")
-def _setup_bass(fd): w(fd, set_wave(2), set_sub(3), set_cutoff(48), set_reso(30), set_fmode(0), cc(20, 2), cc(21, 45), cc(22, 70), cc(23, 25), set_fx(0))
+def _setup_bass(fd): w(fd, set_wave(2), set_sub(3), set_cutoff(48), set_reso(30), set_fmode(0), cc(20, 2), cc(21, 45), cc(22, 70), cc(23, 25))
 add(id="combo_bass", title="Sub bass", desc="Square + full sub-osc + low cutoff + snappy env → deep bass.",
     expected="strong low end, clean, decays", setup=_setup_bass, perform=lambda fd: (w(fd, note_on(33, 115)), time.sleep(1.0), w(fd, note_off(33)), time.sleep(0.6)),
     check=_chk_bass, capture_s=1.8)
@@ -106,7 +106,7 @@ def _perf_expr(fd):
     for i in range(6): w(fd, pitch_bend(i / 5.0)); time.sleep(0.12)   # bend up
     w(fd, pitch_bend(0.0)); time.sleep(0.5)                  # vibrato continues
     w(fd, note_off(57), note_off(45)); time.sleep(0.2)
-def _setup_expr(fd): w(fd, set_wave(1), set_cutoff(100), set_reso(20), set_porta(2), cc(76, 80), cc(1, 96), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_expr(fd): w(fd, set_wave(1), set_cutoff(100), set_reso(20), set_porta(2), cc(76, 80), cc(1, 96), cc(20, 2), cc(22, 120))
 add(id="combo_expression", title="Expression stack", desc="Portamento + pitch bend + vibrato together on one lead.",
     expected="rich, continuous pitch movement", setup=_setup_expr, perform=_perf_expr, check=_chk_expr, capture_s=2.6)
 
@@ -115,7 +115,7 @@ def _chk_polyfx(s):
     base = 40 + 12 * hits + sc(tail, 400, 80) * 0.12
     score, g, clip = clean_score(s, base)
     return mk(score, f"{hits}/4 tones, reverb tail {tail:.0f}, {g} glitches", "polyphonic chord + reverb, clean")
-def _setup_polyfx(fd): w(fd, set_wave(1), set_cutoff(80), set_reso(25), set_fmode(0), cc(20, 6), cc(22, 110), cc(23, 60), set_fx(0), set_reverb(100), set_room(2))
+def _setup_polyfx(fd): w(fd, set_wave(1), set_cutoff(80), set_reso(25), set_fmode(0), cc(20, 6), cc(22, 110), cc(23, 60), set_reverb(100), set_room(2))
 add(id="combo_poly_reverb", title="Poly chord through filter + reverb", desc="A four-note chord filtered and sent to reverb.",
     expected="4 tones, reverb tail, no glitches", setup=_setup_polyfx, perform=lambda fd: (w(fd, note_on(48, 95), note_on(55, 95), note_on(60, 95), note_on(64, 95)), time.sleep(1.8), w(fd, note_off(48), note_off(55), note_off(60), note_off(64)), time.sleep(1.2)),
     check=_chk_polyfx, capture_s=3.2)

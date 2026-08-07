@@ -6,19 +6,19 @@ import os, sys, time, struct, wave, termios
 import os as _o, sys as _s; _s.path.insert(0, _o.path.dirname(_o.path.dirname(_o.path.abspath(__file__))))  # put host/ on sys.path
 from transport.uart import open_port, samples_from_bytes, Recorder
 from synth import (to_signed, normalize, glitches, note_on, note_off, set_wave, set_cutoff, set_reso,
-                   set_fx, set_trem, cc, SR)
+                   set_trem, cc, SR)
 
 WAVE = int(sys.argv[2]) if len(sys.argv) > 2 else 1     # 0=sine 1=saw 2=square 3=tri
 
 def perform(fd):
     for n in range(128): os.write(fd, note_off(n))
     time.sleep(0.05)
-    os.write(fd, set_fx(0)); os.write(fd, set_wave(WAVE)); os.write(fd, set_cutoff(60)); os.write(fd, set_reso(55))
+    os.write(fd, set_wave(WAVE)); os.write(fd, set_cutoff(60)); os.write(fd, set_reso(55))
     os.write(fd, cc(79, 0)); os.write(fd, cc(77, 0)); os.write(fd, cc(76, 40))   # LFO rate ~5-6 Hz
     vel = 78 if WAVE == 0 else 95                            # sine chord: a touch quieter (headroom)
     rec = Recorder(fd)
     for n in (45, 52, 57, 64): os.write(fd, note_on(n, vel))  # sustained pad chord
-    for d in (0, 1, 2, 3):                                     # ramp tremolo depth
+    for d in (0, 40, 80, 127):                                 # ramp tremolo depth (CC92 is 0..127)
         os.write(fd, set_trem(d)); time.sleep(2.2)
     for n in (45, 52, 57, 64): os.write(fd, note_off(n))
     os.write(fd, set_trem(0)); time.sleep(0.4)

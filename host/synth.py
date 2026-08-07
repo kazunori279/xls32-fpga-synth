@@ -49,7 +49,13 @@ def set_detune(d):        return cc(78, (d & 3) << 5)              # CC78 -> det
 def set_unison(u):        return cc(80, (u & 3) << 5)              # CC80 -> unison 0=off 1=2v 2=3v 3=4v (voice-stack)
 def set_vib(d):           return cc(1, (d & 3) << 5)               # CC1 mod wheel -> vibrato depth 0..3
 def set_porta(t):         return cc(5, (t & 3) << 5)               # CC5 portamento 0=off 1=fast 2=med 3=slow
-def set_fx(m):            return cc(83, (m & 7) << 4)              # DEPRECATED no-op: CC83 mode is ignored by the shell now (effects are depth-gated via CC94 chorus / CC95 echo / CC93 reverb). Kept for old callers.
+# set_fx() lived here until M27. It sent CC83, an effect-*mode* selector (0 dry, 1 chorus, 2 echo,
+# 3 both, 4 reverb) that the shell stopped reading when effects went depth-gated: `top.v:210-211`
+# gates on the depth knobs, and `fxmode` is written and never read. It was deleted rather than left
+# deprecated because `set_fx(0)` reads as "turn the effects off" and does nothing -- the 35 callers
+# were dry only because `harness.reset_board()` independently zeroes every CC to its synthspec
+# default. Two things being right for unrelated reasons is what hid `combo_wah` grading a dry pluck
+# for months. Use set_chorus_depth / set_echo_depth / set_reverb; zero is off.
 def set_trem(d):          return cc(92, d & 0x7f)                  # CC92 tremolo depth 0..127 (continuous)
 def set_volume(v):        return cc(7, v & 0x7f)                   # CC7 per-part output volume 0..127 (default 127)
 def set_room(r):          return cc(91, (r & 3) << 5)              # CC91 reverb room 0=room 1=hall 2=large 3=cathedral

@@ -4,7 +4,7 @@ import os, sys, time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
 from synth import (note_on, note_off, cc, pitch_bend, set_wave, set_cutoff, set_reso, set_fmode, set_sub,  # noqa: E402
-                   set_pw, set_detune, set_unison, set_vib, set_porta, set_fx, set_trem, set_room,
+                   set_pw, set_detune, set_unison, set_vib, set_porta, set_trem, set_room,
                    set_reverb, set_echo_depth, set_delay_time)
 from harness import TestCase, mk           # noqa: E402
 import harness as H
@@ -24,7 +24,7 @@ def hold(notes, secs, vel=100):
     return perform
 
 def open_bright(fd):                        # setup: filter wide open, snappy amp, steady tone
-    w(fd, set_cutoff(127), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 20), cc(79, 0), set_fx(0))
+    w(fd, set_cutoff(127), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 20), cc(79, 0))
 
 def score_scale(x, good, bad):
     """Linear score: x>=good -> 100, x<=bad -> 0."""
@@ -151,14 +151,14 @@ def _band_ratio(s):
 def _chk_lp_closed(s):
     c = A.spectral_centroid(s)
     return mk(score_scale(-c, -650, -1600), f"centroid {c:.0f} Hz", "dark (low centroid)")
-def _setup_lp_closed(fd): w(fd, set_wave(W_SAW), set_cutoff(6), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_lp_closed(fd): w(fd, set_wave(W_SAW), set_cutoff(6), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 120))
 add(id="filter_lp_closed", title="Filter — LP cutoff low", desc="A low LP cutoff rolls the sawtooth's highs off (dark tone).",
     expected="dark (low centroid)", setup=_setup_lp_closed, perform=hold([36], 1.6), check=_chk_lp_closed, capture_s=1.9)
 
 def _chk_lp_open(s):
     c = A.spectral_centroid(s)
     return mk(score_scale(c, 900, 350), f"centroid {c:.0f} Hz", "bright (centroid > 900 Hz)")
-def _setup_lp_open(fd): w(fd, set_wave(W_SAW), set_cutoff(127), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_lp_open(fd): w(fd, set_wave(W_SAW), set_cutoff(127), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 120))
 add(id="filter_lp_open", title="Filter — LP cutoff high", desc="A high LP cutoff (CC74=127) passes the full harmonic stack.",
     expected="highs present", setup=_setup_lp_open, perform=hold([57], 1.6), check=_chk_lp_open, capture_s=1.9)
 
@@ -171,7 +171,7 @@ def _perf_sweep(fd):
     for i in range(0, 8):
         H.send(fd, set_cutoff(20 + i * 14)); time.sleep(0.28)
     H.send(fd, note_off(57)); time.sleep(0.1)
-def _setup_sweep(fd): w(fd, set_wave(W_SAW), set_reso(40), set_fmode(0), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_sweep(fd): w(fd, set_wave(W_SAW), set_reso(40), set_fmode(0), cc(20, 2), cc(22, 120))
 add(id="filter_sweep", title="Filter — cutoff sweep", desc="Sweeping CC74 up while holding a note moves the bright edge upward.",
     expected="spectral centroid rises", setup=_setup_sweep, perform=_perf_sweep, check=_chk_sweep, capture_s=2.6)
 
@@ -182,7 +182,7 @@ def _chk_reso(s):
     pk = max(mags); med = sorted(mags)[len(mags) // 2] or 1
     r = pk / med
     return mk(score_scale(r, 8, 2), f"peak/median = {r:.1f}", "pronounced resonant peak")
-def _setup_reso(fd): w(fd, set_wave(W_SAW), set_cutoff(55), set_reso(120), set_fmode(0), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_reso(fd): w(fd, set_wave(W_SAW), set_cutoff(55), set_reso(120), set_fmode(0), cc(20, 2), cc(22, 120))
 add(id="resonance", title="Filter — resonance", desc="High resonance (CC71) makes a sharp peak at the cutoff.",
     expected="sharp resonant peak", setup=_setup_reso, perform=hold([45], 1.8), check=_chk_reso, capture_s=2.1)
 
@@ -190,7 +190,7 @@ def _chk_hp(s):
     lo = A.band_energy(s, 200, 500); hi = A.band_energy(s, 1500, 6000)
     r = lo / max(1.0, hi)
     return mk(score_scale(-r, -0.6, -3.0), f"low/high energy = {r:.2f}", "fundamental attenuated, highs pass")
-def _setup_hp(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(20), set_fmode(1), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_hp(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(20), set_fmode(1), cc(20, 2), cc(22, 120))
 add(id="filter_hp", title="Filter mode — high-pass", desc="CC72=HP attenuates the fundamental while highs pass.",
     expected="lows cut", setup=_setup_hp, perform=hold([57], 1.6), check=_chk_hp, capture_s=1.9)
 
@@ -200,13 +200,13 @@ def _chk_bp(s):
     if not mags or max(mags) < 1: return mk(0, "silent", "peaked band-pass")
     r = max(mags) / (sorted(mags)[len(mags) // 2] or 1)
     return mk(score_scale(r, 6, 2), f"peak/median = {r:.1f}", "peaked (band-limited) spectrum")
-def _setup_bp(fd): w(fd, set_wave(W_SAW), set_cutoff(45), set_reso(95), set_fmode(2), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_bp(fd): w(fd, set_wave(W_SAW), set_cutoff(45), set_reso(95), set_fmode(2), cc(20, 2), cc(22, 120))
 add(id="filter_bp", title="Filter mode — band-pass", desc="CC72=BP passes a band around the cutoff.",
     expected="band-limited spectrum", setup=_setup_bp, perform=hold([45], 1.6), check=_chk_bp, capture_s=1.9)
 
 def _chk_notch(s):
     return mk(100.0 if A.rms(s) > 200 else 0.0, f"RMS {A.rms(s):.0f}", "audible output (notch mode active)")
-def _setup_notch(fd): w(fd, set_wave(W_SAW), set_cutoff(70), set_reso(40), set_fmode(3), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_notch(fd): w(fd, set_wave(W_SAW), set_cutoff(70), set_reso(40), set_fmode(3), cc(20, 2), cc(22, 120))
 add(id="filter_notch", title="Filter mode — notch", desc="CC72=notch (LP+HP) still produces a shaped tone.",
     expected="audible shaped output", setup=_setup_notch, perform=hold([57], 1.6), check=_chk_notch, capture_s=1.9)
 
@@ -221,7 +221,7 @@ def _chk_keytrack(s):
 def _perf_keytrack(fd):
     H.send(fd, note_on(45, 100)); time.sleep(1.2); H.send(fd, note_off(45)); time.sleep(0.4)
     H.send(fd, note_on(69, 100)); time.sleep(1.2); H.send(fd, note_off(69)); time.sleep(0.1)
-def _setup_keytrack(fd): w(fd, set_wave(W_SAW), set_cutoff(45), set_reso(12), set_fmode(0), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_keytrack(fd): w(fd, set_wave(W_SAW), set_cutoff(45), set_reso(12), set_fmode(0), cc(20, 2), cc(22, 120))
 add(id="key_tracking", title="Filter — key tracking", desc="At a fixed cutoff, a higher note tracks brighter than a low one.",
     expected="centroid rises with pitch", setup=_setup_keytrack, perform=_perf_keytrack, check=_chk_keytrack, capture_s=2.8)
 
@@ -231,7 +231,7 @@ def _chk_filter_env(s):
     dark = c[-1] if c else 0                        # settled (darker) sustain
     drop = bright - dark
     return mk(score_scale(drop, 150, 25), f"centroid {bright:.0f}→{dark:.0f} Hz", "bright attack decaying to darker")
-def _setup_filter_env(fd): w(fd, set_wave(W_SAW), set_cutoff(30), set_reso(40), set_fmode(0), cc(79, 115), cc(24, 0), cc(25, 95), cc(26, 25), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_filter_env(fd): w(fd, set_wave(W_SAW), set_cutoff(30), set_reso(40), set_fmode(0), cc(79, 115), cc(24, 0), cc(25, 95), cc(26, 25), cc(20, 2), cc(22, 120))
 add(id="filter_env", title="Filter envelope (pluck)", desc="A filter-env with depth (CC79) opens then closes the cutoff → a pluck.",
     expected="bright attack, darker sustain", setup=_setup_filter_env, perform=hold([45], 2.0), check=_chk_filter_env, capture_s=2.3)
 
@@ -240,7 +240,7 @@ def _chk_attack_slow(s):
     env = A.envelope(s, 256); st = A.env_stats(env)
     r = st["rise50"] or 0
     return mk(score_scale(r, 16, 3), f"rise-to-50% = {r} windows", "slow attack (gradual swell)")
-def _setup_attack_slow(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 110), cc(22, 120), cc(21, 40), set_fx(0))
+def _setup_attack_slow(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 110), cc(22, 120), cc(21, 40))
 add(id="amp_attack", title="Amp envelope — slow attack", desc="A long amp attack (CC20=110) ramps the level up over ~1 s.",
     expected="gradual amplitude rise", setup=_setup_attack_slow, perform=hold([57], 1.6), check=_chk_attack_slow, capture_s=1.9)
 
@@ -250,7 +250,7 @@ def _chk_release_long(s):
     return mk(score_scale(tail, 1500, 200), f"tail RMS = {tail:.0f}", "long release still ringing")
 def _perf_release(fd):
     H.send(fd, note_on(57, 110)); time.sleep(0.6); H.send(fd, note_off(57)); time.sleep(0.7)
-def _setup_release(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 120), set_fx(0))
+def _setup_release(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 120))
 add(id="amp_release", title="Amp envelope — long release", desc="A long release (CC23=120) keeps the note ringing after note-off.",
     expected="audible release tail", setup=_setup_release, perform=_perf_release, check=_chk_release_long, capture_s=1.6)
 
@@ -259,7 +259,7 @@ def _chk_release_short(s):
     return mk(score_scale(-tail, -300, -3000), f"tail RMS = {tail:.0f}", "short release → quick silence")
 def _perf_release_short(fd):
     H.send(fd, note_on(57, 110)); time.sleep(0.6); H.send(fd, note_off(57)); time.sleep(0.6)
-def _setup_release_short(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 0), set_fx(0))
+def _setup_release_short(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120), cc(23, 0))
 add(id="amp_release_fast", title="Amp envelope — short release", desc="A short release (CC23=0) cuts the note off quickly.",
     expected="quick decay to silence", setup=_setup_release_short, perform=_perf_release_short, check=_chk_release_short, capture_s=1.5)
 
@@ -274,7 +274,7 @@ def _chk_sustain(s):
     sd = (sum((e - m) ** 2 for e in core) / len(core)) ** 0.5
     cv = sd / m
     return mk(score_scale(-cv, -0.18, -0.6), f"sustain level {m:.0f}, stability CV {cv:.2f}", "steady held level (sustain holds)")
-def _setup_sustain(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(21, 30), cc(22, 90), set_fx(0))
+def _setup_sustain(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(21, 30), cc(22, 90))
 add(id="amp_sustain", title="Amp envelope — sustain level", desc="CC22 sets the sustain plateau below the attack peak.",
     expected="sustain ≈ half of peak", setup=_setup_sustain, perform=hold([57], 1.8), check=_chk_sustain, capture_s=2.1)
 
@@ -284,7 +284,7 @@ def _chk_autowah(s):
     core = c[2:-2] or c
     m = sum(core) / len(core); swing = (max(core) - min(core)) / max(1.0, m)
     return mk(score_scale(swing, 0.18, 0.05), f"centroid swing = {swing:.2f}", "cutoff wobbles (LFO)")
-def _setup_autowah(fd): w(fd, set_wave(W_SAW), set_cutoff(55), set_reso(60), set_fmode(0), cc(76, 70), cc(77, 90), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_autowah(fd): w(fd, set_wave(W_SAW), set_cutoff(55), set_reso(60), set_fmode(0), cc(76, 70), cc(77, 90), cc(20, 2), cc(22, 120))
 add(id="lfo_autowah", title="LFO → cutoff (auto-wah)", desc="The LFO (CC76 rate, CC77 depth) sweeps the filter cutoff.",
     expected="periodic brightness wobble", setup=_setup_autowah, perform=hold([45], 2.6), check=_chk_autowah, capture_s=2.9)
 
@@ -293,14 +293,18 @@ def _chk_vibrato(s):
     if len(core) < 4: return mk(0, "no pitch", "pitch wobble")
     m = sum(core) / len(core); swing = (max(core) - min(core)) / max(1.0, m)
     return mk(score_scale(swing, 0.02, 0.002), f"pitch swing = {swing*100:.1f}%", "pitch wobbles (vibrato)")
-def _setup_vibrato(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(76, 80), cc(1, 96), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_vibrato(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(76, 80), cc(1, 96), cc(20, 2), cc(22, 120))
 add(id="vibrato", title="Vibrato (mod wheel)", desc="CC1 routes the LFO to pitch → the tone develops sidebands.",
     expected="periodic pitch modulation", setup=_setup_vibrato, perform=hold([69], 2.4), check=_chk_vibrato, capture_s=2.7)
 
 def _chk_tremolo(s):
     d = A.modulation_depth(s, 128)
     return mk(score_scale(d, 0.6, 0.1), f"amplitude mod depth = {d:.2f}", "amplitude pulses (tremolo)")
-def _setup_tremolo(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(76, 80), set_trem(3), cc(20, 2), cc(22, 120), set_fx(0))
+# set_trem(3) here until M27: CC92 was a 2-bit packed control when this case was written and is a
+# continuous 0..127 knob now, so it was asking for 2% depth and grading it against 60%. Measured on
+# the board: 3 -> 0.25, 16 -> 0.37, 48 -> 0.69, 127 -> 2.19. It only ever passed because the
+# interleaved capture (see uart.frame_align) inflated peak-to-trough.
+def _setup_tremolo(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(76, 80), set_trem(127), cc(20, 2), cc(22, 120))
 add(id="tremolo", title="Tremolo (LFO → amp)", desc="CC92 routes the LFO to amplitude → the level pulses.",
     expected="amplitude modulation", setup=_setup_tremolo, perform=hold([57], 2.4), check=_chk_tremolo, capture_s=2.7)
 
@@ -313,7 +317,7 @@ def _chk_portamento(s):
 def _perf_portamento(fd):
     H.send(fd, note_on(45, 110)); time.sleep(0.5)
     H.send(fd, note_on(69, 110)); time.sleep(1.3); H.send(fd, note_off(69)); H.send(fd, note_off(45)); time.sleep(0.1)
-def _setup_portamento(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), set_porta(3), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_portamento(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), set_porta(3), cc(20, 2), cc(22, 120))
 add(id="portamento", title="Portamento / glide", desc="With glide on (CC5), a new note slides up from the previous pitch.",
     expected="continuous pitch glide", setup=_setup_portamento, perform=_perf_portamento, check=_chk_portamento, capture_s=2.2)
 
@@ -327,7 +331,7 @@ def _perf_bend(fd):
     for i in range(9):
         H.send(fd, pitch_bend(i / 8.0)); time.sleep(0.15)
     H.send(fd, note_off(60)); H.send(fd, pitch_bend(0.0)); time.sleep(0.1)
-def _setup_bend(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_bend(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(22, 120))
 add(id="pitch_bend", title="Pitch bend", desc="A full pitch-bend up (0xE0) raises the pitch ~2 semitones.",
     expected="upward pitch bend", setup=_setup_bend, perform=_perf_bend, check=_chk_bend, capture_s=2.2)
 
@@ -335,7 +339,7 @@ add(id="pitch_bend", title="Pitch bend", desc="A full pitch-bend up (0xE0) raise
 def _chk_unison(s):
     cv = A.beating_cv(s)
     return mk(score_scale(cv, 0.15, 0.03), f"envelope CV = {cv:.3f}", "thick beating super-saw")
-def _setup_unison(fd): w(fd, set_wave(W_SAW), set_cutoff(100), set_reso(20), set_unison(3), cc(20, 2), cc(22, 120), set_fx(0))
+def _setup_unison(fd): w(fd, set_wave(W_SAW), set_cutoff(100), set_reso(20), set_unison(3), cc(20, 2), cc(22, 120))
 add(id="unison", title="Unison (4-voice super-saw)", desc="CC80 stacks 4 detuned voices on one note → thick beating.",
     expected="strong beating (CV > 0.1)", setup=_setup_unison, perform=hold([45], 2.4), check=_chk_unison, capture_s=2.7)
 
@@ -365,7 +369,7 @@ def _perf_reverb(fd):
     time.sleep(0.25)
     for n in (48, 55, 60): H.send(fd, note_off(n))
     time.sleep(2.4)
-def _setup_reverb(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 8), set_fx(0), set_reverb(110), set_room(2))
+def _setup_reverb(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 8), set_reverb(110), set_room(2))
 add(id="reverb", title="Effect — reverb", desc="CC93 reverb wet (8-comb Freeverb send) adds a diffuse decaying tail.",
     expected="reverb tail that decays", setup=_setup_reverb, perform=_perf_reverb, check=_chk_reverb, capture_s=2.8)
 
@@ -378,6 +382,6 @@ def _perf_reverb_size(fd):
     time.sleep(0.25)
     for n in (48, 55, 60): H.send(fd, note_off(n))
     time.sleep(3.2)
-def _setup_reverb_size(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 8), set_fx(0), set_reverb(120), set_room(3))
+def _setup_reverb_size(fd): w(fd, set_wave(W_SAW), set_cutoff(110), set_reso(15), cc(20, 2), cc(23, 8), set_reverb(120), set_room(3))
 add(id="reverb_cathedral", title="Reverb size — cathedral", desc="CC91=cathedral gives the longest RT60 tail.",
     expected="long-ringing tail", setup=_setup_reverb_size, perform=_perf_reverb_size, check=_chk_reverb_size, capture_s=3.6)

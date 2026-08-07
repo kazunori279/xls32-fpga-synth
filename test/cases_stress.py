@@ -4,7 +4,7 @@ can FAIL). Primary metrics: glitch count, clip ratio, and post-release silence."
 import os, sys, time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "host"))
-from synth import (note_on, note_off, cc, set_wave, set_cutoff, set_reso, set_fmode, set_unison, set_fx,  # noqa: E402
+from synth import (note_on, note_off, cc, set_wave, set_cutoff, set_reso, set_fmode, set_unison,  # noqa: E402
                    set_room, set_reverb)
 from harness import TestCase, mk            # noqa: E402
 import harness as H
@@ -44,7 +44,7 @@ def _perf_32(fd):
 def _chk_32(s):
     score, g, clip, latched = stress_score(s)
     return mk(score, metric(g, clip, latched, f", peak {A.peak(s)}"), "32 voices, no glitch/clip/latch")
-def _setup_32(fd): w(fd, set_wave(1), set_cutoff(70), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 100), cc(23, 30), set_fx(0))
+def _setup_32(fd): w(fd, set_wave(1), set_cutoff(70), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 100), cc(23, 30))
 add(id="stress_32voice", title="32-voice maximum polyphony", desc="All 32 physical voices at once, then released — must stay clean.",
     expected="no glitches, no clipping, silent after release", setup=_setup_32, perform=_perf_32, check=_chk_32, capture_s=3.0)
 
@@ -58,7 +58,7 @@ def _perf_retrig(fd):
 def _chk_retrig(s):
     score, g, clip, latched = stress_score(s)
     return mk(score, metric(g, clip, latched), "fast retrigger, no stuck voices, silent after")
-def _setup_retrig(fd): w(fd, set_wave(1), set_cutoff(90), set_reso(20), cc(20, 2), cc(22, 100), cc(23, 15), set_fx(0))
+def _setup_retrig(fd): w(fd, set_wave(1), set_cutoff(90), set_reso(20), cc(20, 2), cc(22, 100), cc(23, 15))
 add(id="stress_retrigger", title="Rapid retrigger", desc="Machine-gun note on/off — voices must free correctly (no hang).",
     expected="clean, returns to silence", setup=_setup_retrig, perform=_perf_retrig, check=_chk_retrig, capture_s=3.0)
 
@@ -72,7 +72,7 @@ def _perf_unichord(fd):
 def _chk_unichord(s):
     score, g, clip, latched = stress_score(s)
     return mk(score, metric(g, clip, latched), "unison×chord = 32 voices, clean")
-def _setup_unichord(fd): w(fd, set_wave(1), set_unison(3), set_cutoff(80), set_reso(20), cc(20, 2), cc(22, 100), cc(23, 30), set_fx(0))
+def _setup_unichord(fd): w(fd, set_wave(1), set_unison(3), set_cutoff(80), set_reso(20), cc(20, 2), cc(22, 100), cc(23, 30))
 add(id="stress_unison_chord", title="Unison × chord (32 voices)", desc="4-voice unison on an 8-note chord saturates voice allocation.",
     expected="no glitch/clip/latch", setup=_setup_unichord, perform=_perf_unichord, check=_chk_unichord, capture_s=3.0)
 
@@ -90,7 +90,7 @@ def _chk_fxtail(s):
     score = 100.0 - min(60.0, max(0.0, (g - 5)) * 0.5) - 400.0 * clip
     if not decayed: score = min(score, 45)      # stuck/growing tail = latch-like
     return mk(score, f"{g} glitches, clip {clip*100:.1f}%, late/mid {late/max(1.0,mid):.2f}", "reverb tail decays, no railing")
-def _setup_fxtail(fd): w(fd, set_wave(1), set_cutoff(90), set_reso(20), cc(20, 2), cc(23, 10), set_fx(0), set_reverb(115), set_room(3))
+def _setup_fxtail(fd): w(fd, set_wave(1), set_cutoff(90), set_reso(20), cc(20, 2), cc(23, 10), set_reverb(115), set_room(3))
 add(id="stress_fx_tail", title="All-effects cathedral tail", desc="Cathedral reverb (longest feedback) — the tail must decay, never rail.",
     expected="decaying tail, no clip/railing", setup=_setup_fxtail, perform=_perf_fxtail, check=_chk_fxtail, capture_s=4.0)
 
@@ -102,7 +102,7 @@ def _perf_selfosc(fd):
 def _chk_selfosc(s):
     score, g, clip, latched = stress_score(s)
     return mk(score, metric(g, clip, latched), "max-reso sweep recovers to silence")
-def _setup_selfosc(fd): w(fd, set_wave(1), set_reso(127), set_fmode(0), cc(20, 2), cc(22, 110), cc(23, 20), set_fx(0))
+def _setup_selfosc(fd): w(fd, set_wave(1), set_reso(127), set_fmode(0), cc(20, 2), cc(22, 110), cc(23, 20))
 add(id="stress_self_osc", title="Extreme resonance sweep", desc="Max resonance while sweeping cutoff — the filter must not latch/stick.",
     expected="no latch; silent after note-off", setup=_setup_selfosc, perform=_perf_selfosc, check=_chk_selfosc, capture_s=3.4)
 
@@ -119,7 +119,7 @@ def _perf_rapidcc(fd):
 def _chk_rapidcc(s):
     score, g, clip, latched = stress_score(s)
     return mk(score, metric(g, clip, latched), "fast CC automation, no glitches/latch")
-def _setup_rapidcc(fd): w(fd, set_wave(2), set_cutoff(70), set_reso(30), cc(20, 2), cc(22, 100), cc(23, 20), set_fx(0))
+def _setup_rapidcc(fd): w(fd, set_wave(2), set_cutoff(70), set_reso(30), cc(20, 2), cc(22, 100), cc(23, 20))
 add(id="stress_rapid_cc", title="Rapid CC automation", desc="Flooding cutoff/PW/reso changes while three notes are held.",
     expected="clean under CC flood", setup=_setup_rapidcc, perform=_perf_rapidcc, check=_chk_rapidcc, capture_s=3.0)
 
@@ -134,6 +134,6 @@ def _chk_recovery(s):
     score, g, clip, latched = stress_score(s)
     tail = A.silence_tail(s, 300)
     return mk(score, metric(g, clip, latched, f", tail RMS {tail:.0f}"), "dense chord → digital silence")
-def _setup_recovery(fd): w(fd, set_wave(1), set_cutoff(75), set_reso(25), cc(20, 2), cc(22, 95), cc(23, 25), set_fx(0))
+def _setup_recovery(fd): w(fd, set_wave(1), set_cutoff(75), set_reso(25), cc(20, 2), cc(22, 95), cc(23, 25))
 add(id="stress_silence_recovery", title="Sustain → silence recovery", desc="A dense 10-note chord held for 3 s must return to true silence.",
     expected="tail returns to digital silence", setup=_setup_recovery, perform=_perf_recovery, check=_chk_recovery, capture_s=4.4)

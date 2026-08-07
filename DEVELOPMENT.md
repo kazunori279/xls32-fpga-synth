@@ -1778,6 +1778,127 @@ and `contextlib.suppress(Exception)` around `await task` cannot catch `Cancelled
 been a `BaseException` since 3.8 and is the one thing that `await` is guaranteed to raise there.
 Three open/close cycles now log three clean `connection closed` lines and nothing else.
 
+### M27 addendum — going back to the Basys 3
+
+M27 was verified on the Tiliqua. Coming back to the other board turned up three things, one of
+which had been silently wrong for two milestones.
+
+**`set_fx()` is gone.** CC83 selected an effect *mode* (0 dry, 1 chorus, 2 echo, 3 both, 4 reverb)
+and the shell stopped reading it when effects went depth-gated — `top.v:210-211` gates on the depth
+knobs and `fxmode` is written and never read. 35 call sites passed `set_fx(0)`, which reads as
+"turn the effects off" and does nothing. They were dry anyway, but only because
+`harness.reset_board()` independently zeroes every CC to its synthspec default: two things right for
+unrelated reasons, which is the arrangement that hid `combo_wah` grading a dry pluck. Deleted rather
+than deprecated. Confirmed inert by stashing the change and re-running `basic` on the Basys 3 —
+identical verdicts, identical 95.3.
+
+**`record_stop()` on the UART never de-interleaved.** `Transport.record_stop` promises "one channel,
+ready to grade". The UART implementation returned `best_align(raw)`, which picks a 2-byte phase and
+stops there, so what came back was the L,R,L,R stream at twice the sample count. Read at the 32 kHz
+the harness assumes, **every Basys 3 measurement since M25 was an octave low** — M25 moved the
+harness onto the transport seam and swapped `samples_from_bytes(..., stereo=True)`, which did
+de-interleave, for `best_align`, which does not. The code even carried the symptom in a docstring
+("otherwise every tone reads an octave low") next to the function that had stopped being called.
+
+Only `pitch_a4` had a threshold tight enough to say so out loud, reading 220 Hz for A4 — and it was
+one of two standing failures, so the board looked like it had a known cosmetic problem rather than a
+broken decoder. `note_range` and `poly4` passed throughout because `found_pitches` accepts a
+harmonic, and an octave-down saw has one exactly where the right answer would be.
+
+`frame_align()` replaces it, using the evidence `Aligner` already uses for the continuous path: the
+board stamps a channel marker in each sample's LSB (L=0, R=1), so the 4-byte offset whose LSBs read
+0,1,0,1 fixes byte alignment and L/R order at once — strictly better than guessing from smoothness.
+
+The scores are not the interesting part; the direction every metric moved is:
+
+| metric | interleaved | de-interleaved | correct value |
+|---|---|---|---|
+| `pitch_a4` peak | 220 Hz | 440 Hz | 440 |
+| triangle h2 | 0.28 | 0.06 | ~0 (odd harmonics only) |
+| saw h2 | 0.42 | 0.54 | 1/2 |
+| `filter_hp` low/high | 0.20 | 0.02 | →0 |
+| `filter_sweep` centroid | 486→948 Hz | 962→1765 Hz | Tiliqua: 1019→1709 |
+
+That last row is the strongest evidence: the two boards had never agreed on this case, and now do.
+`basic` went 95.3 (32 pass / 2 fail) → **99.8 (34/0/0)**, `stress` 100.0 (7/0/0).
+
+One consequence worth noting: `glitches()` counts sample-to-sample jumps, and on the interleaved
+stream consecutive samples were L and R *at the same instant* — nearly equal. Every Basys 3 glitch
+count since M25 was understated by roughly 2×.
+
+**`set_trem(3)` was asking for 2% depth.** CC92 was a 2-bit packed control when the tremolo case was
+written and is a continuous 0..127 knob now. Measured on the board: 3 → 0.25, 16 → 0.37, 48 → 0.69,
+127 → 2.19, against a threshold of 0.6. It only ever passed because the interleaved capture inflated
+peak-to-trough. The case and `demo_tremolo.py` now use the full range.
+
+**Open: the Basys 3 SVF diverges intermittently, and the Tiliqua's does not.** `integration` will
+not hold identical verdicts across runs — run 1 failed `preset_slow_strings` and `preset_sostenuto`,
+run 2 failed neither and failed `preset_echo_lead` instead. Characterized but not fixed:
+
+- Per take it rails 30–60% of the time, and the signature is bimodal and preset-specific — clean
+  takes peak 17–23k with 0 glitches, railed ones peak ~32690 with 24.2% clipping (strings) or 38.2%
+  (Echo Lead) every single time. It is a discrete state, not gradual clipping.
+- **Not** a cascade from the previous case: gating each take on a verified-quiet board, the way
+  `validate_hw.recover()` does, changes nothing (9/18 railed gated vs 8/18 ungated).
+- Partly a dropped CC. Pacing the ~30-CC setup burst at 3 ms — the mitigation `validate_hw.capture()`
+  already applies and `_apply_preset` does not — took 16/24 railed down to 10/24. Not the whole story.
+- The presets involved all sit at high cutoff × high resonance (92/47, 108/47) or run echo feedback.
+- `run_case`'s 5 retries mask it: at ~40% per take, all five failing is ~1%, and 134 cases × 1%
+  predicts the 1–2 failures per run that both runs showed.
+
+`validate_hw.py` puts a number on the same thing across the banks: **6 of 274 presets diverge on the
+Basys 3, where the Tiliqua had 0 of 274** — all six in the soundfont bank (Clavinet, Clavinet G3,
+Trumpet G4, Synth Strings 1, Atmosphere G4, Brightness), with nsynth and fm clean. This is the
+fixed-point SVF divergence that `validate_hw.py` exists to find, it is Basys 3-specific, and fixing
+it is RTL work that has to ship with a Vivado rebuild.
+
+### Scoring the preset model against the hardware
+
+`validate_hw.py` only ever asked whether a preset *breaks* the board. That misses the failure mode
+M27 actually fixed: a model at the wrong sample rate with the wrong reverb topology rails nothing —
+it just quietly predicts the wrong instrument, and every preset fitted against it inherits the error.
+
+The obstacle is that a raw distance is uninterpretable. `presetgen/loss.py` returns a
+multi-resolution STFT + mel + envelope distance, and there is no unit in which 25.8 is "good". So
+the score is comparative: each preset's model render is compared to its own capture *and* to four
+other presets' captures (fixed offsets, so the number reproduces), and what gets reported is how
+often the model's render is closest to the recording it is supposed to predict. That is scale-free,
+and it fails loudly — a preset-blind model still produces plausible distances but stops being able
+to tell presets apart. Checked against synthetic controls before spending board time: a
+preset-tracking model scores 100% / 4.08× separation, a preset-blind one 17% against a 20% chance
+baseline.
+
+On the Basys 3, all three banks:
+
+| bank | scored | rail | matched | distractor | separation | identification |
+|---|---|---|---|---|---|---|
+| nsynth | 128 | 0 | 18.69 | 36.16 | 1.93× | **77%** |
+| soundfont | 122 | 6 | 25.81 | 36.26 | 1.40× | **66%** |
+| fm | 18 | 0 | 28.47 | 38.52 | 1.35× | **56%** |
+
+189/268 overall against a 20% chance baseline. The model genuinely tracks the hardware and is
+nowhere near exact. The residual is honest and the shape of it is legible: the worst-predicted
+patches are the bright, harmonically dense ones — `Saw Lead`, `Synth Strings`, `Synth Brass` — and
+fm scores lowest of the three banks with `Metallic Drone`, `Tubular Bells`, `Clangor` and
+`Ring Bells` at the bottom. Bell and metallic timbres are where a fixed-point cross-osc model and
+real hardware diverge most, which is the answer you would want a validation number to give.
+
+This is a measurement, not a fit. Re-fitting the banks against the corrected model still needs the
+corpora, which are still gone.
+
+### Both boards after the addendum
+
+| group | Basys 3 | Tiliqua |
+|---|---|---|
+| basic | 99.8 — 34 pass / 0 warn / 0 fail | 99.5 — 33 / 1 / 0 |
+| integration | 98.9 — 133 / 0 / 1 (intermittent, see above) | 99.9 — 134 / 0 / 0 |
+| stress | 100.0 — 7 / 0 / 0 | 100.0 — 7 / 0 / 0 |
+
+The Tiliqua numbers are its M27 baselines to the case — same single `filter_sweep` warn, same
+verdicts — which is what makes the host-side changes (`set_fx`, the tremolo depth) demonstrably
+inert, and confirms the `uart.py` fix reaches only the board that needed it. Tiliqua clock 12.289
+MHz over 34 captures.
+
 ---
 
 # Friction logs & learnings

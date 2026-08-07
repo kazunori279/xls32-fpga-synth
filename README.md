@@ -44,7 +44,7 @@ player with `/api/capture` and rendered with [`make_mp4.sh`](scripts/make_mp4.sh
 - **Hardware** — a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) board (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`), one 100 MHz clock. The whole synth is a literal circuit that computes one audio sample per tick.
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a thin Verilog shell for UART and the block-RAM effects. No hand-written datapath.
 - **Play it** — a browser analog-style panel drives the board live over USB (or drive it from Python); MIDI in, 16-bit stereo audio out.
-- **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 130+ scored end-to-end tests over USB.
+- **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB.
 - **Start here** — [Quickstart](#2-quickstart-guide) flashes the prebuilt board and plays it (no toolchain); the [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works. Build history + toolchain friction logs live in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ## Contents
@@ -102,7 +102,7 @@ browser **analog-style** front-end.
 | **Target** | Basys 3 — Xilinx Artix-7 `xc7a35t`, single 100 MHz clock |
 | **Toolchain** | F4PGA (VPR) · openXC7 (nextpnr-xilinx) · Vivado — all scriptable |
 | **FPGA resources** | Vivado (`xc7a35t`): ~50% LUTs · 26× DSP48E1 · 32× RAMB36E1 · ~42% FF |
-| **Verification** | 130+ scored end-to-end cases over USB (FFT / spectrogram) |
+| **Verification** | 175 scored end-to-end cases over USB (FFT / spectrogram) |
 
 ## Background & rationale
 
