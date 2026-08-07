@@ -145,7 +145,41 @@ def _marker_score(raw, off, limit=8000):
     return bad / n
 
 
-def frame_align(raw, stereo=True):
+def marker_integrity(raw, win=8000):
+    """Does the frame phase hold for the WHOLE capture, or only where frame_align looked?
+
+    frame_align picks one byte offset from the first 8000 bytes and keeps it for the entire buffer.
+    Its continuous sibling `Aligner` re-locks every 8192 bytes, with the comment "a mid-stream byte
+    drop self-heals within ~0.1 s" -- so the failure mode is known to exist, and the bracketed path
+    has no defence against it. A byte lost after the lock window shifts every following frame: the
+    "L" channel is then reassembled from (Lhi, Rlo) byte pairs, whose high halves are the *previous*
+    sample's low byte -- uniform noise at full scale. That decodes as peak ~1.0 with a large
+    fraction of half-scale sample-to-sample jumps, which is exactly what validate_hw.py's RAIL test
+    looks for and exactly what a diverging filter would also look like. Indistinguishable from the
+    samples alone, so measure the framing instead.
+
+    Measure the phase, not the score at one phase. Scoring the whole buffer against the offset
+    frame_align chose misses a drop in the first window entirely: the aligner picks whichever phase
+    the *majority* of those bytes are in, so an early drop makes it lock POST-drop and every later
+    window then reads clean (measured: drop at 5% -> worst score 0.13, no window over threshold).
+    Each window's own best offset does not have that blind spot -- it steps 0 -> 3 at the drop and
+    stays there, whatever the audio is doing.
+
+    Returns (n_phase_changes, first_change_byte or None, n_windows, worst_score_at_own_phase).
+    A capture that held frame lock returns n_phase_changes == 0.
+    """
+    phases, worst = [], 0.0
+    for start in range(0, max(0, len(raw) - 8), win):
+        if len(raw) - start < win // 2:
+            break                      # too short to score; a partial tail proves nothing
+        o = min(range(4), key=lambda k: _marker_score(raw, start + k, win))
+        worst = max(worst, _marker_score(raw, start + o, win))
+        phases.append((start, o))
+    changes = [s for (s, o), (_, po) in zip(phases[1:], phases) if o != po]
+    return len(changes), (changes[0] if changes else None), len(phases), worst
+
+
+def frame_align(raw, stereo=True, win=4000):
     """Bracketed capture -> ONE channel of signed samples, which is what Transport.record_stop
     promises. The bracketed counterpart of Aligner, and it uses the same evidence: the board
     stamps a channel marker in each sample's LSB (L=0, R=1), so the frame offset whose LSBs read
@@ -156,7 +190,15 @@ def frame_align(raw, stereo=True):
     interleaved stream that came back has twice the samples, so at the 32 kHz the harness assumes
     every Basys 3 measurement since has been an octave low -- `pitch_a4` reading 220 for A4 was the
     only case whose threshold was tight enough to say so out loud. Falls back to best_align when the
-    marker pattern is absent, so a mono board build still grades."""
+    marker pattern is absent, so a mono board build still grades.
+
+    The phase is re-locked every `win` bytes, as `Aligner` has always done for the continuous
+    stream. Locking once from the first window was the whole of the M28a rail bug: the frame phase
+    really does shift mid-capture on this link, and every byte after the shift then decodes as
+    (Lhi, Rlo) pairs whose high halves are the previous sample's low byte -- uniform full-scale
+    noise. Measured on the board: 16/128 presets "railed", all 16 with a phase change, and every one
+    of 24 lock-loss captures decoded to smooth audio (jump% 45 -> 0.1) from the *same bytes* once
+    re-locking was allowed. Nothing was ever wrong with the audio. See DEVELOPMENT.md, M28a."""
     if len(raw) < 8:
         return []
     if not stereo:
@@ -165,7 +207,24 @@ def frame_align(raw, stereo=True):
     if _marker_score(raw, off) > 0.25:            # no usable marker -- don't trust the phase
         s = best_align(raw)
         return s[::2] if s else s
-    return _decode(raw, off)[::2]                 # channel 0 (L) at the true Fs
+    out, pos = [], None
+    for i in range(0, len(raw) - 8, win):
+        # Each window picks its own phase, so a shift costs the frames between the shift and the
+        # next boundary rather than the rest of the capture.
+        want = i + min(range(4), key=lambda k: _marker_score(raw, i + k, win))
+        if pos is None:
+            pos = want
+        else:
+            # Carry the frame position ACROSS the boundary and step only if the phase really moved.
+            # Restarting the scan at each window instead drops the 1-3 bytes that do not fit a whole
+            # frame, every window -- ~32 samples per second of capture, a 0.1% timebase error that
+            # would quietly bias every pitch and duration measurement taken through this path.
+            pos += (want - pos) % 4
+        end = min(i + win, len(raw))
+        while pos + 4 <= end:                                      # a WHOLE frame must fit
+            out.append((raw[pos] | (raw[pos + 1] << 8)) - 32768)   # channel 0 (L) at the true Fs
+            pos += 4
+    return out
 
 
 class Aligner:
@@ -229,6 +288,7 @@ class UartTransport(Transport):
         self._rec = None
         self._stream_t = None
         self._stream_run = False
+        self.last_align = None                # (n_phase_changes, first_change_byte, nwin, worst)
 
     def open(self):
         if self.fd is None:
@@ -254,6 +314,11 @@ class UartTransport(Transport):
         if self._rec is None:
             return []
         raw, self._rec = self._rec.stop(), None
+        # Stash whether the frame phase held for the whole capture, so a caller that gets a
+        # full-scale noisy result can tell a misdecode from real audio. Attribute, not a return
+        # value, so the Transport ABC and the USB-audio board are untouched -- USB delivers whole
+        # frames and has nothing to guess, which is why only this transport needs the check.
+        self.last_align = marker_integrity(raw) if self._board.stereo else None
         return frame_align(raw, self._board.stereo)
 
     def read_frames(self, n):

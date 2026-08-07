@@ -61,7 +61,11 @@ def capture(tp, vals, note=NOTE, secs=CAP):
     tp.record_start(); tp.send_midi(u.note_on(note, 100)); time.sleep(secs)
     tp.send_midi(u.note_off(note)); time.sleep(0.04)
     L = np.asarray(tp.record_stop(), dtype=np.float32) / 32768.0
-    return L, settled
+    # A capture decoded at the wrong byte phase is full-scale noise, which is *exactly* the RAIL
+    # signature and is indistinguishable from a diverging filter in the samples alone. The UART
+    # transport measures the channel markers across the whole buffer and leaves the verdict here;
+    # USB delivers whole frames and has nothing to guess, so on Tiliqua this is None.
+    return L, settled, getattr(tp, "last_align", None)
 
 
 def score(pairs):
@@ -108,18 +112,25 @@ def main():
     print(f"board: {BOARD.name} over {BOARD.transport} at {tp.sr} Hz   source: {src}   presets: {len(presets)}\n")
     engine.render(presets[0]["values"], gate_s=GATE, tail_s=TAIL)
     scoring = os.environ.get("SCORE", "1") != "0"
-    rail, pairs, skipped = [], [], 0
+    rail, pairs, skipped, misdecoded = [], [], 0, []
     for i, p in enumerate(presets):
         vals = p["values"]
         sim = engine.render(vals, note=NOTE, gate_s=GATE, tail_s=TAIL)
-        L, settled = capture(tp, vals)
+        L, settled, align = capture(tp, vals)
         peak = float(np.max(np.abs(L))) if len(L) else 0
         glr = float(np.mean(np.abs(np.diff(L)) > 0.5)) if len(L) > 1 else 0     # jump fraction
         simq = float(np.sqrt(np.mean(sim**2)))
         bad = peak > 0.9 and glr > 0.15 and simq < 0.35                          # board noise, sim quiet
+        lost_lock = bool(align) and align[0] > 0
+        if lost_lock:
+            misdecoded.append(p["name"])
         if bad:
             rail.append(p["name"])
             tag = "" if settled else "  (started dirty!)"
+            if lost_lock:
+                # Not a rail: the frame phase moved mid-capture, so from that byte on the "L"
+                # channel is (Lhi,Rlo) pairs -- uniform noise. Say so instead of blaming the DSP.
+                tag += f"  MISDECODED ({align[0]} phase change(s), first at byte {align[1]})"
             print(f"  RAIL  [{i:3}] {p['name'][:26]:26} peak {peak:.2f} jump% {glr*100:4.0f} simrms {simq:.3f}{tag}", flush=True)
         if scoring:
             # Prep (resample + loudness-normalize) now, while the arrays are hot and one at a time;
@@ -133,6 +144,14 @@ def main():
     print(f"\n{len(rail)}/{len(presets)} presets diverge (rail) on hardware — measured from a verified-quiet start.")
     if rail:
         print("flagged:", ", ".join(rail))
+    if misdecoded:
+        # The count matters even when it is zero-overlap with `rail`: it says whether the link, not
+        # the synth, is what this run measured. Print it unconditionally when non-empty.
+        # "link" is now earned rather than assumed: the shell hands the transmitter whole 4-byte
+        # frames (`pend <- 4`, and the next sample is gated on `pend == 0`), so a board-side stall
+        # skips a whole frame and cannot move the phase. A 1-byte shift is lost off-chip.
+        print(f"{len(misdecoded)}/{len(presets)} captures shifted frame phase mid-buffer "
+              f"(link, not DSP — decoded correctly by the re-locking path):", ", ".join(misdecoded))
     if scoring:
         print(f"scoring {len(pairs)} presets (model {engine.SR} Hz vs board {sr} Hz)...", flush=True)
         report_score(pairs, skipped)
