@@ -2182,6 +2182,47 @@ one-byte shift itself is *not* fixed, and two things about it are open:
 Both are robustness questions now rather than correctness ones — the decoder handles the shift
 either way, exactly as the continuous path always did.
 
+### What the fixed number is worth: the same census on Tiliqua
+
+`0/128 rails` says the catastrophe is gone; it does not say the model is good. The agreement number
+does, and it had never been trustworthy on Basys 3 before. Tiliqua is the control — same presets,
+same loss, but UAC2 delivers whole frames so there is no framing to get wrong:
+
+| | rails | scored | separation | identification | matched median |
+|---|---|---|---|---|---|
+| Basys 3, 32 kHz | 0/128 | 128 | 1.30x | 75/128 (59%) | 29.82 |
+| **Tiliqua, 48 kHz** | 0/128 | 128 | **1.67x** | **92/128 (72%)** | **20.68** |
+
+So 59% was **not** the model's ceiling. Two things come out of the comparison:
+
+**Half the worst-predicted list is common to both boards** — Synth Brass 2 C5, Strings 2 G4,
+Fifths G4, Clavinet appear on each, and the Tiliqua-only entries (Synth Strings 1, Metallic Pad,
+Bass Lead, Saw Lead) are the same kind of patch. Stacked, detuned, unison-heavy. Those are
+`engine.render()`'s problem, not either board's, and they are the M27 follow-up work list.
+
+**Re-locking recovers at the next boundary, so the window size *is* the damage.** That was 4000
+bytes. Worst-case residual garbage over 40 drop positions × 4 signal types, in samples:
+
+| win | 4000 | 512 | 256 | **128** | 64 |
+|---|---|---|---|---|---|
+| tone + decay | 281 | 27 | 26 | **0** | 0 |
+| silence | 2 | 2 | 2 | **0** | 0 |
+| loud saw | 476 | 32 | 32 | **0** | 0 |
+| noise | 262 | 23 | 23 | **1** | 1 |
+
+Up to 9 ms of full-scale hash per shift, feeding a spectral loss, on most of the bank. Shrinking to
+`win=128` costs nothing on any axis: the marker is stamped regardless of the audio (silence
+separates as cleanly as a loud saw — a wrong phase reads a data byte's LSB and scores ~50% against
+0%), 128 bytes still carries 64 marker bits, total work is `4 * len(raw)` however it is divided so
+every size decodes in ~32 ms, and a capture whose phase never moves is byte-identical at all of
+them.
+
+The census after the change read 0/128 rails, separation 1.39x, **82/128 (64%)** — but that run saw
+only **8/128** shifts against the previous run's 88/128, so it is confounded and the improvement
+cannot be attributed to the window. The table above is the evidence for `win=128`; the census is
+not. What the 88 → 8 swing does say is that the shift rate is a property of the *host session*, not
+of the bank or the board — which is further support for reader-stall over anything on the wire.
+
 ---
 
 # Friction logs & learnings

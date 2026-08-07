@@ -179,7 +179,7 @@ def marker_integrity(raw, win=8000):
     return len(changes), (changes[0] if changes else None), len(phases), worst
 
 
-def frame_align(raw, stereo=True, win=4000):
+def frame_align(raw, stereo=True, win=128):
     """Bracketed capture -> ONE channel of signed samples, which is what Transport.record_stop
     promises. The bracketed counterpart of Aligner, and it uses the same evidence: the board
     stamps a channel marker in each sample's LSB (L=0, R=1), so the frame offset whose LSBs read
@@ -198,7 +198,18 @@ def frame_align(raw, stereo=True, win=4000):
     (Lhi, Rlo) pairs whose high halves are the previous sample's low byte -- uniform full-scale
     noise. Measured on the board: 16/128 presets "railed", all 16 with a phase change, and every one
     of 24 lock-loss captures decoded to smooth audio (jump% 45 -> 0.1) from the *same bytes* once
-    re-locking was allowed. Nothing was ever wrong with the audio. See DEVELOPMENT.md, M28a."""
+    re-locking was allowed. Nothing was ever wrong with the audio. See DEVELOPMENT.md, M28a.
+
+    `win` is small because re-locking only recovers at the NEXT boundary, so the window size is
+    also the amount of full-scale hash a shift leaves in the capture. Measured worst case over 40
+    drop positions x 4 signal types (tone, silence, loud saw, noise), in samples of residual
+    garbage: win=4000 -> 476, win=512 -> 32, win=256 -> 32, win=128 -> 1, win=64 -> 1. At 4000 that
+    is up to 9 ms of noise per shift, and 88/128 captures shift, which is not nothing when the
+    result feeds a spectral loss. Small windows cost neither accuracy nor time: the marker is
+    stamped whatever the audio does (silence separates as cleanly as a loud saw -- the wrong phase
+    reads a data byte's LSB and scores ~50% against 0%), 128 bytes still carries 64 marker bits,
+    and total work is 4 * len(raw) regardless of how it is divided, so all sizes decode in ~32 ms.
+    A capture whose phase never moves is byte-identical at every window size."""
     if len(raw) < 8:
         return []
     if not stereo:
