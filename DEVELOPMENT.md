@@ -2197,8 +2197,8 @@ So 59% was **not** the model's ceiling. Two things come out of the comparison:
 
 **Half the worst-predicted list is common to both boards** — Synth Brass 2 C5, Strings 2 G4,
 Fifths G4, Clavinet appear on each, and the Tiliqua-only entries (Synth Strings 1, Metallic Pad,
-Bass Lead, Saw Lead) are the same kind of patch. Stacked, detuned, unison-heavy. Those are
-`engine.render()`'s problem, not either board's, and they are the M27 follow-up work list.
+Bass Lead, Saw Lead) are the same kind of patch. Detuned, stacked. Those are `engine.render()`'s
+problem, not either board's, and they are the M27 follow-up work list. Resolved below.
 
 **Re-locking recovers at the next boundary, so the window size *is* the damage.** That was 4000
 bytes. Worst-case residual garbage over 40 drop positions × 4 signal types, in samples:
@@ -2222,6 +2222,55 @@ only **8/128** shifts against the previous run's 88/128, so it is confounded and
 cannot be attributed to the window. The table above is the evidence for `win=128`; the census is
 not. What the 88 → 8 swing does say is that the shift rate is a property of the *host session*, not
 of the bank or the board — which is further support for reader-stall over anything on the wire.
+
+### The M27 follow-up: the model was playing two waveforms the board never had
+
+**59% → 72%, no build, two edits in `presetgen/engine.py`.** The Tiliqua control said the gap was
+in the model; the worst-predicted list said it lived in detuned patches. Both were right.
+
+Parameter-fishing over the bank went nowhere — the eight probe presets have identical key coverage,
+and `wave`/`cutoff` split the match/mismatch groups the wrong way (Strings 2 has `cutoff: 95`, wide
+open, and is among the worst; E-Piano 1 shares its `wave: 0` and matches). What settled it was
+dropping the presets entirely and sweeping one explicit patch, reading the harmonic ladder directly
+(H2..H6 relative to the fundamental, sustain window, note 60):
+
+| | H2 | H3 | H4 | H5 | H6 |
+|---|---|---|---|---|---|
+| `detune: 64` model **before** | −9.3 | −12.7 | −14.9 | −15.7 | −17.7 |
+| `detune: 64` board | −88.5 | −96.7 | −90.3 | −92.5 | −89.1 |
+| `wave: 96` model **before** | **+1.9** | **+3.6** | **+3.6** | **+2.8** | **+2.1** |
+| `wave: 96` board | −87.3 | −94.5 | −83.8 | −89.7 | −97.9 |
+
+`cutoff` agreed at every step and `wave` 0/32/48 agreed to 0.0 dB, so the rig was sound and the two
+failures were specific:
+
+- **`engine.py` used a hardcoded saw as the detune oscillator.** `core/synth.x:264` computes
+  `det2 = voice_wave(wave, ph2_n, noise, pw)` — the *same* waveform as the main osc — and its
+  comment says so explicitly: "was hardcoded to a saw, which turned e.g. sine+detune into
+  sine+saw". The RTL was fixed; the model kept the old line. On the board a detuned sine is two
+  sines `inc >> 9` apart (~3.4 cents, a 0.5 Hz beat at 261 Hz) and has *no* harmonics at all.
+- **`engine.py` returned noise for every `wave` index above 3.** There are five waves and
+  `wave` is a `u3`, so 5/6/7 are reachable; the RTL's catch-all is `_ => SINE[t]`, the model's
+  `else` was the LFSR. CC70 ≥ 80 meant white noise in the model and a sine on the board — which is
+  exactly the flat, above-the-fundamental ladder in the table.
+
+Both are now one call to a shared `_voice_wave()` that mirrors the RTL's function, and the sweep
+re-runs at −85 to −92 dB on both sides for every detune and wave setting. Census:
+
+| Basys 3, 32 kHz | rails | separation | identification | matched median |
+|---|---|---|---|---|
+| before | 0/128 | 1.30x | 75/128 (59%) | 29.82 |
+| **after** | 0/128 | **1.59x** | **92/128 (72%)** | **19.65** |
+
+That is Tiliqua's number (92/128, 1.67x) reached on the noisier board, so the 13-point two-board
+gap was never the transport — it was one bank of presets scored against a saw the hardware does not
+make. The worst-predicted list turned over completely with it: the sustained, detuned patches are
+gone and what is left is percussive — Glockenspiel G4, Pizzicato, Marimba G4, Xylophone,
+Harpsichord. The next gap, if it is worth closing, is in the attack, not the sustain.
+
+The generalizable part: **the model and the RTL had drifted at a line the RTL's own comment
+documented as fixed.** Anywhere `engine.py` writes out a computation `synth.x` also writes out,
+that is a divergence waiting to happen, and the agreement census is the only thing that sees it.
 
 ---
 

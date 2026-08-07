@@ -99,6 +99,28 @@ def _adsr(env, st, att, dec, sus, rel):
 
 
 @njit(cache=True, fastmath=False)
+def _voice_wave(wave, t, noise, pwthr, sine):
+    """One oscillator sample, mirroring core/synth.x:voice_wave (a u3 selector over FIVE waves).
+
+    Kept as a function, and called for the detune oscillator too, because the two used to be
+    written out separately and drifted: `wave` selects only 0..4, and the RTL's catch-all `_` is
+    SINE, so indices 5-7 (CC70 >= 80) are sine on the board. The model returned noise there.
+    """
+    if wave == 0:
+        return sine[t]
+    elif wave == 1:
+        return t * 16 - 2048
+    elif wave == 2:
+        return 2047 if t < pwthr else -2047
+    elif wave == 3:
+        ff = t if t < 128 else 255 - t
+        return ff * 32 - 2048
+    elif wave == 4:
+        return noise
+    return sine[t]                                     # 5..7 fall through to sine, as in the RTL
+
+
+@njit(cache=True, fastmath=False)
 def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
           wave, pwbase, subsel, detsel, cutoff_base, reso, fdepth, fmode,
           lfo_rate, lfo_depth, tdsel, xmode, xdepth, xratio,
@@ -179,21 +201,16 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
             else:
                 fmoff = 0
             tt = ((newph + fmoff) & MASK) >> 24 & 255
-            if wave == 0:
-                main = sine[tt]
-            elif wave == 1:
-                main = tt * 16 - 2048
-            elif wave == 2:
-                main = 2047 if tt < pwthr else -2047
-            elif wave == 3:
-                ff = tt if tt < 128 else 255 - tt
-                main = ff * 32 - 2048
-            else:
-                main = (lfsr & 0xFFF) - 2048
+            noise = (lfsr & 0xFFF) - 2048
+            main = _voice_wave(wave, tt, noise, pwthr, sine)
             ring = (main * modsig) >> 11                        # ring product, ±2047
-            saw2 = ((nph2 >> 24) & 255) * 16 - 2048             # detune saw (xmode 0)
+            # DETUNE 2nd osc uses the SAME waveform as the main. This was a hardcoded saw here,
+            # which turned e.g. sine+detune into sine+saw -- core/synth.x:264 fixed it and the
+            # model kept the old behaviour, so every preset with detune>0 over a non-saw wave was
+            # scored against a sound the board has never made.
+            det2 = _voice_wave(wave, (nph2 >> 24) & 255, noise, pwthr, sine)
             if xmode == 0:
-                o12 = main if detsel == 0 else (main + saw2) >> 1
+                o12 = main if detsel == 0 else (main + det2) >> 1
             elif xmode == 1:                                    # ring: blend dry->ring by depth
                 xb = (xdepth >> 5) & 3
                 if xb == 0:
