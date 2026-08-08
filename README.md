@@ -786,7 +786,7 @@ almost none of the answers match:
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
 | **Visual feedback** | 16 LEDs, a voice-activity comet | 32 voices as 32 tiles on a 720×720p60 DVI beam-raced display, 32 bytes of state and no framebuffer |
-| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz (~42.5 MHz Fmax, inside luna) and runs anyway — carried, watched via the frame-gap rate |
+| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz (39.92 MHz Fmax, inside the effects block) and runs anyway — carried, watched via the frame-gap rate |
 
 Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8) are **built and timing-closed but not yet
 hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART. On Tiliqua both

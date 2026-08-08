@@ -1500,7 +1500,7 @@ three is invalid for the other two.
 
 **`nextpnr_opts` is an override, not an addition.** Amaranth's `get_override("nextpnr_opts")`
 *replaces* whatever the caller passed, and the Tiliqua SDK passes `--timing-allow-fail` at
-`build/cli.py:303`. Setting only `--router router2` silently drops it and turns the known 42.5 MHz
+`build/cli.py:303`. Setting only `--router router2` silently drops it and turns the known `sync`
 shortfall from a warning into an error that fails the build *after* it has routed successfully. Both
 flags have to be set together.
 

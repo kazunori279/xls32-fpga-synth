@@ -420,12 +420,41 @@ class StereoFx(wiring.Component):
             mul_g.eq(Cat(rvg, C(0, 1)).as_signed() * nlp_r),
         ]
 
-        # Damping: 0.5*old + 0.5*new (top.v:249). Feedback: g*y in Q15, rounded (top.v:250).
+        # Damping: 0.5*old + 0.5*new (top.v:249). Feedback: g*y in Q15 (top.v:250).
+        #
+        # The Verilog rounds half up -- `(mul_g + 16384) >> 15` -- and that is what this line did
+        # until the tank stopped reaching digital silence. Round-half-up gives the comb recurrence
+        # a dead band: it has a fixed point wherever the rounding pulls the product back up to the
+        # state it came from, i.e. wherever |v| * (32768 - g) <= 16384. At M29's cathedral g of
+        # 31974 that is every |v| <= 20, so each of the eight combs parks its whole delay line on a
+        # non-zero constant and never leaves. The sum came out of the wet multiplier as a steady
+        # +206 DC, about -44 dBFS: not a ringing tail, not railing, just a floor the tank could not
+        # get below. `stress_fx_tail` measured the same DC in both its windows and read the ratio
+        # as "the tail is not decaying"; `stress_silence_recovery` saw it as a tail RMS of 92
+        # against the 0 the Basys 3 returns. The Basys 3 has the same structure but g = 31200, so
+        # its dead band is |v| <= 10 and it stays under both checkers' floors -- the halved tank
+        # that pushed g from 0.952 to 0.976 is what made a latent artefact audible to the suite.
+        #
+        # Magnitude truncation -- round toward zero rather than to nearest -- removes it outright.
+        # |g*v| < |v| for every g < 1, so truncating the magnitude guarantees each round trip
+        # strictly shrinks the state and the only fixed point left is zero. It is the textbook
+        # cure for fixed-point limit cycles, and the bias is at most 1 LSB per round trip against
+        # a 16-bit state, so RT60 does not move.
+        #
+        # `>>` is already floor, which is truncation for positives; negatives want ceil, which is
+        # `(x + 32767) >> 15`. So the whole correction is a sign-selected addend into the adder
+        # that was there anyway -- the same shape as the +16384 it replaces, not extra depth.
+        #
+        # The select is driven from `nlp_r`, not from the product. `rvg` is always positive, so
+        # sign(mul_g) == sign(nlp_r), and `nlp_r` is a register output that is stable long before
+        # the multiplier settles. Deriving it from `mul_g` instead costs 5 MHz on a `sync` domain
+        # that is already short (see the M25 note above): it serialises a 15-bit OR reduce behind
+        # the multiply and drags the whole comb feedback onto the critical path.
         nlp = Signal(signed(16))
         fbm = Signal(signed(16))
         m.d.comb += [
             nlp.eq(cur_dlp + ((drd2 - cur_dlp + 1) >> 1)),
-            fbm.eq((mul_g + 16384) >> 15),
+            fbm.eq((mul_g + Mux(nlp_r < 0, 32767, 0)) >> 15),
         ]
         cbn = sat16(m, rin_r + fbm, "cbn")
 

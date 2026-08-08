@@ -742,6 +742,43 @@ that produces a working bitstream that merely sounds wrong, which nothing in the
 it was caught before the build and the halved tank was then accepted by ear on Bach's Prelude and Le
 Cygne, the two demos most exposed to it.
 
+**Raising `g` had a second consequence, and that one was not caught.** The feedback multiply was a
+transcription of the Verilog's round-half-up, `(g·v + 16384) >> 15`. Rounding to nearest gives the
+comb recurrence a **dead band**: wherever the rounding pulls the product back up to the state it
+came from, the state is a fixed point and stays there forever. The condition is
+`|v|·(32768 − g) ≤ 16384`, so the band scales with how close `g` sits to unity:
+
+| | `g` | dead band | where a decaying state stops |
+|---|---:|---|---:|
+| Basys 3 cathedral | 31200 (0.952) | \|v\| ≤ 10 | ±10 |
+| Tiliqua cathedral after M29 | 31974 (0.976) | \|v\| ≤ 20 | ±20 |
+
+Both boards have it; **√g doubled the band and pushed it over the graders' floors.** Each of the
+eight combs parked its whole delay line on a non-zero constant, and the sum came out of the wet
+multiplier as a steady **+206 DC, about −44 dBFS** — not a ringing tail, not railing, just a floor
+the tank could not get below. `stress_fx_tail` measured that same DC in both of its windows and read
+the ratio as "the tail is not decaying" (late/mid 1.07 against a 0.70 threshold); it is the only
+case in 175 that ever caught it, and it did so for the wrong reason.
+
+The cure is **magnitude truncation** — round toward zero rather than to nearest. `|g·v| < |v|` for
+every `g < 1`, so truncating the magnitude makes every round trip strictly shrink the state and
+leaves zero as the only fixed point. It is written as a sign-selected addend into the adder that was
+already there, so it is the same shape as the `+16384` it replaces:
+
+```python
+fbm.eq((mul_g + Mux(nlp_r < 0, 32767, 0)) >> 15)     # ceil for negatives, floor for positives
+```
+
+The select comes from `nlp_r` and not from the product: `rvg` is always positive, so the signs
+agree, and `nlp_r` is a register output that settles long before the multiplier does. Deriving it
+from `mul_g` instead — a 15-bit sticky-OR of the discarded bits — costs a further 2.6 MHz on `sync`
+by serialising behind the multiply ([E4](#e4-the-timing-shortfall-that-runs-anyway)).
+
+Measured on hardware, the tail's octile RMS went from `… 142 → 195 → 206 → 206 → 206` to
+`… 139 → 85 → 82 → 82`, and `stress_fx_tail` from FAIL 45.0 to PASS 100.0. **A floor of ~82 remains**
+and is not the tank's: it shows up at `revwet == 0` too, so a second source is still unaccounted for
+([docs/TODO.md](docs/TODO.md)).
+
 **Gotcha.** The tank runs unconditionally, even at `revwet == 0`. It costs 72 of the 1,250 cycles in
 a sample period and `rwet` comes out zero anyway, but it means the tank is primed when the wet knob
 comes up instead of starting from whatever was frozen in it — which is also what the Basys 3 does,
@@ -1035,13 +1072,33 @@ clock rather than a divided one — [A1](#a1-clock-domains).)
 | M25, engine + USB | 86% | 48.7–55.3 MHz across sixteen seeds |
 | M26, + effects | 97% | **43.40 MHz** |
 | M29, + video | 96% | 44.71 MHz |
-| shipped (M31) | 97% | ~42.5 MHz |
+| shipped (M31) | 97% | 42.51 MHz |
+| + comb magnitude truncation | 98% | 39.92 MHz |
 
-**The failing path is entirely inside luna** — about twenty LUT levels from an interpacket timer
-through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
-register. Logic accounts for roughly 5 ns of it and routing for roughly 15 ns, with single hops of
-0.9–1.2 ns between adjacent tiles. **That ratio is the diagnosis: congestion, not depth.** The same
+**The failing path used to be entirely inside luna** — about twenty LUT levels from an interpacket
+timer through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
+register. Logic accounted for roughly 5 ns of it and routing for roughly 15 ns, with single hops of
+0.9–1.2 ns between adjacent tiles. **That ratio was the diagnosis: congestion, not depth.** The same
 block makes 66.49 MHz in the stock bitstream at ~20% occupancy.
+
+**It is not luna's any more, and has not been for some time.** Both sides of the M31→M32 comparison
+above report the endpoints inside the effects block:
+
+| build | critical path | Fmax |
+|---|---|---|
+| shipped (M31) | `fx.nlp_r[12]` → `fx.acc[16]` — comb damping into the 8-comb running sum | 42.51 MHz |
+| + magnitude truncation | `fx.rsize[0]` → `fx.mul_g[22]` — the RVG room-size mux into the feedback multiply | 39.92 MHz |
+
+This was found by rebuilding M31's netlist unmodified for a like-for-like comparison, so it is a
+property of the shipped design and not of the change beside it: **`fx` overtook luna somewhere
+between M26 and M31 and the trajectory table above never noticed**, because it records only the
+number. The congestion diagnosis still holds — routing still dominates — but the levers in the two
+paragraphs below are aimed at a block that is no longer the one setting the number.
+
+The 2.59 MHz the magnitude truncation costs is real and is not placement noise: same seed, same
+flow, one netlist edit. It buys the tank a decay to zero ([C3](#c3-the-freeverb-tank-at-half-length)) and it was
+measured, twice, against a 175-case run with **zero glitches in either direction** — the same
+evidence the 60 MHz shortfall itself rests on.
 
 **Which kills the obvious levers.** Dropping `nr_channels` from 4 to 2 saves ~100 LUTs; dropping the
 host→device audio direction saves ~10. Neither touches the thing doing the crowding — **luna is not

@@ -13,25 +13,32 @@ those three; git history keeps the original.)*
 
 ## Unverified — things believed to work that have not been watched working
 
-1. **The Python test suite has not been run since M31.** `test/harness.py` and
-   `presetgen/{validate_hw,calibrate_bank,param_diff,calibrate}.py` were all edited when
-   `webui/server.py` came out; `test/run_tests.py` has not been invoked since. This is the
-   highest-risk item on the page — everything else here is cosmetic or already has a fallback.
-   Both boards are currently free.
-2. **`scripts/demo_video.sh` has never been executed** in its rewritten form (avfoundation loopback
+1. **`scripts/demo_video.sh` has never been executed** in its rewritten form (avfoundation loopback
    capture, `AUD_IDX`, `AV_OFFSET=0`). It was rewritten against the new audio path and left there.
-3. **Nothing publishes the web UI.** Pages serves from the repo root, from `/docs`, or from an
+2. **Nothing publishes the web UI.** Pages serves from the repo root, from `/docs`, or from an
    Actions workflow, and `webui/static` is none of the three. The README no longer claims the page
    "deploys cleanly to GitHub Pages" — it states the requirement instead (any static host, served
    over HTTPS or from localhost). Actually publishing it still needs either a workflow that
    deploys `webui/static` or a move.
-4. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
+3. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
    re-check that exists because of the M28a rail bug has only ever been exercised in Python.
 
 ## Known debt — recorded, not scheduled
 
+- **A residual DC offset on Tiliqua that is not the reverb tank's.** Fixing the comb dead band
+  (see [ARCHITECTURE_tiliqua.md → C3](../ARCHITECTURE_tiliqua.md#c3-the-freeverb-tank-at-half-length))
+  took `stress_fx_tail`'s late-window level from +206 to +82.3, but not to zero, and
+  `stress_silence_recovery` still settles at exactly **+115** — one unique sample value across the
+  whole window, so a DC rail rather than a decaying tail. That case runs with `revwet == 0`, which
+  puts the tank out of the path entirely: something *else* is holding a constant. Basys 3 returns
+  tail RMS 0 for the same case, so it is Tiliqua-side. Candidates not eliminated: the `>> 1` floors
+  in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path. At ~−49 dBFS it fails
+  no checker, which is exactly why it is written down here rather than fixed in passing.
+- **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
+  the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
+  the 48 kHz coefficient set as the difference.
 - **+369 TRELLIS_COMB from the part-select remap, still unexplained.** The estimate was ~50. The
   cells were paid and the design fits, so nothing forced the question, but a sevenfold miss on a
   design with ~515 cells free is a hole in the area model, not a rounding error.
@@ -39,8 +46,13 @@ those three; git history keeps the original.)*
   `nrel * HUE_K` frees two multipliers, at the cost of the resource that is *actually* scarce.
   Worth doing only when a feature needs a multiplier and cannot have one. See
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
-- **Risk 3b — `sync`/`usb` fails static timing at 60 MHz and runs anyway.** Unchanged since M25.
-  See [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway).
+- **Risk 3b — `sync`/`usb` fails static timing at 60 MHz and runs anyway.** Open since M25, but two
+  of the things it used to say are no longer true. The shortfall is now **39.92 MHz**, not the
+  42.51 MHz quoted through M31 (the comb magnitude-truncation fix cost 2.59 MHz), and the failing
+  path is **not inside luna** — rebuilding M31's netlist unmodified puts it in `fx`, so the
+  characterisation had already gone stale before this change. Both figures fail the 60 MHz
+  constraint by a wide margin and both run clean; that is the part that has not changed. See
+  [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway).
 - **M24's DIN/TRS MIDI passes in simulation and has never had a cable in it.** Same state as when
   it was written; the hardware exists, the test has not been done.
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not

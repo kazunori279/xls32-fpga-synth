@@ -101,7 +101,10 @@ class FxModel:
                 drd = self.tank[c][a]
                 nlp = wrap16(self.dlp[c][i] + ((drd - self.dlp[c][i] + 1) >> 1))
                 self.dlp[c][i] = nlp
-                fbm = wrap16((rvg * nlp + 16384) >> 15)
+                # Magnitude truncation, matching fx.py -- round-half-up parks the comb on a
+                # non-zero fixed point for every |v| <= 20 at cathedral g. `rvg` is positive, so
+                # the sign of the product is the sign of `nlp`. See the note there.
+                fbm = wrap16((rvg * nlp + (32767 if nlp < 0 else 0)) >> 15)
                 cbn = sat16(rin + fbm)
                 self.tank[c][a] = cbn
                 acc += cbn

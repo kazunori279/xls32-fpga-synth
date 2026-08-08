@@ -75,8 +75,8 @@ export XLS_ENGINE_V="$WORK/engine.v"
 #
 # This is an *override*, not an addition: whatever the SDK passes as `nextpnr_opts` is replaced
 # wholesale, so `--timing-allow-fail` has to be repeated here. Dropping it turns the known `clk`
-# shortfall (42.51 MHz against a 60 MHz constraint, unmet since M25 and harmless -- the engine
-# runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
+# shortfall (39.92 MHz against a 60 MHz constraint, unmet since M25 and so far harmless -- the
+# engine runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
 export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2}"
 
 cd "$WORK"
