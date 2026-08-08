@@ -26,8 +26,9 @@ from amaranth.lib.fifo import AsyncFIFO, SyncFIFO
 from tiliqua import midi
 from tiliqua.build import sim
 from tiliqua.build.cli import top_level_cli
-from tiliqua.periph import eurorack_pmod, psram
+from tiliqua.periph import eurorack_pmod
 from tiliqua.platform import RebootProvider
+from tiliqua.video import dvi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cvin import CvIn, CvTestRamp
@@ -35,7 +36,13 @@ from fx import StereoFx
 from midi_arb import MidiArbiter
 from midi_filter import SysCommonFilter
 from usb_iface import XlsUsbInterface
+from viz import VizStore, VoiceTiles
 from xls_core import XlsSynth
+
+# The panel's own EDID asks for this one, and the bootloader reads it and programs the SI5351
+# accordingly on every cold boot -- so a bitstream built against it inherits a live pixel clock
+# without writing anything to flash. See docs/TILIQUA_PORT.md.
+MODELINE = "720x720p60r2"
 
 
 class CoreTop(Elaboratable):
@@ -65,7 +72,18 @@ class CoreTop(Elaboratable):
     # one, which is what they are for.
     def __init__(self, clock_settings):
         self.cv = os.environ.get("XLS32_VARIANT", "fx") == "cv"
-        self.core = XlsSynth(led=self.cv)
+        # M29. Both bitstreams get video. It began as CV-only, because fx was at 98.9% of the die
+        # and could not afford the ~800 LUTs; moving the echo out of PSRAM into BRAM freed
+        # `psram_periph` and its DDR physical layer, which is what paid for it. The user-visible
+        # consequence is that effects and picture are no longer mutually exclusive, which is the
+        # whole reason the tank was halved -- see the effects block in elaborate().
+        #
+        # Still guarded on the modeline rather than assumed, because the video block is
+        # unbuildable without one: it is where the timings come from, and DVIPHY needs a `dvi5x`
+        # domain that the clock generator only creates when `clock_settings` names a resolution
+        # (pll.py:353).
+        self.video = clock_settings.modeline is not None
+        self.core = XlsSynth(led=self.cv, viz=self.video)
         self.clock_settings = clock_settings
         self.pmod0 = eurorack_pmod.EurorackPmod(clock_settings.audio_clock)
         self.bitstream_help = self.core.bitstream_help
@@ -104,11 +122,16 @@ class CoreTop(Elaboratable):
         # either board. This is also what finally makes out0/out1 a stereo pair; the engine is
         # mono and until now both jacks carried the same signal.
         #
-        # The echo line is PSRAM-backed on hardware and SRAM-backed in simulation. Not a
-        # fidelity compromise -- test_fx.py checks the SRAM build sample-for-sample against an
-        # independent model of the Basys 3 FSM -- but sim_xls_core.cpp has no HyperRAM model,
-        # and writing one to exercise a delay line whose arithmetic is already proven would be
-        # testing the SDK's cache rather than anything in this repo.
+        # Every delay line here is BRAM, including the echo, and that is M29's doing. Through M28
+        # the echo was a 32,768-word PSRAM line; video needed ~800 LUTs that this variant did not
+        # have, and `psram_periph` plus its DDR physical layer was the only block big enough to
+        # give up. So the echo moved inboard to 16,384 words, the reverb tank was halved to make
+        # the BRAM for it, and RVG rose to hold RT60 against the shorter round trip. What that
+        # costs is the top of CC82: 340 ms instead of 512. See the header of fx.py.
+        #
+        # A side effect worth having: hardware and simulation now run the *same* delay line.
+        # sim_xls_core.cpp never had a HyperRAM model, so until now test_fx.py's sample-for-sample
+        # agreement with fx_model was proving an SRAM build that hardware did not quite run.
         #
         # `dry` is whatever ends up feeding the jacks -- the effects output, or the engine itself
         # in the CV variant. Everything downstream (the codec, the USB tee) reads it through this
@@ -121,12 +144,9 @@ class CoreTop(Elaboratable):
             # gets attached further down, once the filter chain that feeds it exists.
             m.submodules.ramp = ramp = CvTestRamp()
         else:
-            m.submodules.fx = fx = StereoFx(psram=sim.is_hw(platform))
+            m.submodules.fx = fx = StereoFx(psram=False)
             wiring.connect(m, self.core.o, fx.i)
             dry = fx.o
-            if sim.is_hw(platform):
-                m.submodules.psram_periph = psram_periph = psram.Peripheral(size=16*1024*1024)
-                wiring.connect(m, fx.bus, psram_periph.bus)
         if ramp is None:
             wiring.connect(m, dry, pmod0.i_cal)
         else:
@@ -210,6 +230,52 @@ class CoreTop(Elaboratable):
         if not sim.is_hw(platform):
             return m
         usb_src = arb.i[n_src - 1]
+
+        # --- M29: the 32 voices as 32 tiles ------------------------------------------------
+        # Hardware only, and deliberately: the Verilator harness has no display and no `dvi5x`,
+        # and sim_xls_core.cpp is still the M23/M24 regression guard. Keeping video out of it
+        # leaves check_pitch.py and check_midi.py measuring exactly what they measured before.
+        #
+        # The pixel clock comes from outside the FPGA -- si5351 clk1 -> the second ECP5 PLL
+        # (pll.py:275) -- and *the bootloader has already programmed it* by the time a JTAG-loaded
+        # bitstream runs, from the panel's EDID. That is why there is no manifest work here and no
+        # flash write: this variant inherits a 39.07 MHz clk1 the same way it already inherits the
+        # 12.288 MHz clk0 that clocks the codec.
+        if self.video:
+            m.submodules.dvi_tgen = dvi_tgen = dvi.DVITimingGen()
+            for member in dvi_tgen.timings.signature.members:
+                m.d.comb += getattr(dvi_tgen.timings, member).eq(
+                    getattr(self.clock_settings.modeline, member))
+
+            # The store spans the two clocks; the renderer is entirely inside the pixel one.
+            m.submodules.viz_store = store = VizStore()
+            m.submodules.tiles = tiles = DomainRenamer("dvi")(VoiceTiles())
+            m.d.comb += [
+                store.i_viz.eq(self.core.o_viz),
+                store.i_strobe.eq(self.core.o_viz_valid),
+                store.i_addr.eq(tiles.o_addr),
+                tiles.i_level.eq(store.o_level),
+                tiles.i_note.eq(store.o_note),
+                tiles.i_x.eq(dvi_tgen.x),
+                tiles.i_y.eq(dvi_tgen.y),
+                # The inverted copies, because these go straight out of the connector.
+                tiles.i_de.eq(dvi_tgen.ctrl_phy.de),
+                tiles.i_hsync.eq(dvi_tgen.ctrl_phy.hsync),
+                tiles.i_vsync.eq(dvi_tgen.ctrl_phy.vsync),
+            ]
+
+            # One register between the renderer and the TMDS encoders, on all six signals at once
+            # so nothing skews. This is what top/beamrace/top.py:413 does, and the colour path
+            # arrives here out of a mux, which is the one worth registering.
+            m.submodules.dvi_gen = dvi_gen = dvi.DVIPHY()
+            m.d.dvi += [
+                dvi_gen.i.r.eq(tiles.o_r),
+                dvi_gen.i.g.eq(tiles.o_g),
+                dvi_gen.i.b.eq(tiles.o_b),
+                dvi_gen.i.de.eq(tiles.o_de),
+                dvi_gen.i.hsync.eq(tiles.o_hsync),
+                dvi_gen.i.vsync.eq(tiles.o_vsync),
+            ]
 
         # --- USB: MIDI down, audio up -----------------------------------------------------
         m.submodules.usbif = usbif = XlsUsbInterface(
@@ -354,10 +420,21 @@ def simulation_ports(fragment):
     }
 
 
+def argparse_callback(parser):
+    # `--modeline` belongs to the SDK's CLI (build/cli.py:70) and defaults to 1280x720p60, which
+    # is not what is plugged in. Overriding the default rather than passing the flag from build.sh
+    # keeps MODELINE the one place the resolution is written down -- it also has to match what the
+    # bootloader programmed clk1 to, so two copies of it is two chances to be silently wrong.
+    parser.set_defaults(modeline=MODELINE)
+
+
 if __name__ == "__main__":
     top_level_cli(
         CoreTop,
-        video_core=False,
+        argparse_callback=argparse_callback,
+        # `video_core` is what adds `--modeline`, and with it the second ECP5 PLL and the
+        # dvi/dvi5x domains. Both variants now, since the echo's move to BRAM made room in fx.
+        video_core=True,
         sim_ports=simulation_ports,
         # Verilator resolves --exe sources relative to its --Mdir, so this has to be absolute.
         sim_harness=os.path.join(os.path.dirname(os.path.abspath(__file__)),

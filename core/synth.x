@@ -324,7 +324,7 @@ fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
 proc engine {
     midi_in: chan<u8> in;
     audio_out: chan<u16> out;
-    viz_out: chan<u32> out;   // per-cycle {env[15:0], is_new@16, last@17} for the LED comet
+    viz_out: chan<u32> out;   // per-cycle {env[15:0], is_new@16, last@17, note@18..24, part@25..26}
     config(midi_in: chan<u8> in, audio_out: chan<u16> out, viz_out: chan<u32> out) {
         (midi_in, audio_out, viz_out)
     }
@@ -398,9 +398,15 @@ proc engine {
                      Part { lfo_ph: parts1[u32:2].lfo_ph + parts1[u32:2].lfo_rate, ..parts1[u32:2] },
                      Part { lfo_ph: parts1[u32:3].lfo_ph + parts1[u32:3].lfo_rate, ..parts1[u32:3] }]
         } else { parts1 };
-        // LED-comet tap: stream the slot-0 voice's live envelope every cycle.
+        // Visualiser tap: stream the slot-0 voice's live envelope every cycle.
+        // [M29] `note` and `part` ride along in bits 18..26, which were spare -- the channel was
+        // already u32 and only 18 bits of it were spoken for, so this costs no width and nothing
+        // downstream has to be told. The Tiliqua tile renderer colours by pitch class and the
+        // Basys 3 LED comet reads only bits 8..17 (boards/basys3/rtl/top.v:141), so it is
+        // unaffected. Both fields come from the *updated* voice, matching `env`.
         let is_new = (cur.env == u16:0) && (cur.env_st == Env::ATTACK);
-        let viz = (v2.env as u32) | ((is_new as u32) << u32:16) | ((last as u32) << u32:17);
+        let viz = (v2.env as u32) | ((is_new as u32) << u32:16) | ((last as u32) << u32:17)
+                | (((v2.note & u8:0x7F) as u32) << u32:18) | ((v2.part as u32) << u32:25);
         send(tok, viz_out, viz);
         Eng { voices: voices2, vidx: if last { u5:0 } else { st.vidx + u5:1 },
               mixacc: if last { s32:0 } else { mix1 }, parts: parts2, lfsr: lfsr1,

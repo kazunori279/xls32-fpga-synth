@@ -49,7 +49,9 @@ class FxModel:
         echo_on = self.echodep != 0
         chorus_on = self.chdep != 0
         rvg = RVG[self.rsize]
-        edly = (self.dtime * ECHO_STEP + ECHO_MIN) % self.max_echo
+        # Clamped, not folded -- `%` here would model the bug the gateware's clamp exists to
+        # prevent, where CC82 past the end of the line wraps round to a very short delay.
+        edly = min(self.dtime, self.max_echo // ECHO_STEP - 1) * ECHO_STEP + ECHO_MIN
         wetgn = self.revwet << 8
         chdep_q15 = self.chdep << 8
         echdep_q15 = self.echodep << 8

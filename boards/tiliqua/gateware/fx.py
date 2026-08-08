@@ -12,15 +12,21 @@
 # `wishbone.Arbiter` -- on a device that M25 left at 86% TRELLIS_COMB. The SDK itself does not do
 # that either: `src/top/dsp/top.py:822` keeps a `sram_max_delay = 1024` heuristic that routes
 # short taps to local memory and only long ones to PSRAM. Every Freeverb tap here is short
-# (<=1,880 samples); only the echo is long. So the tank is one plain `Memory` per channel with
+# (<=958 samples); only the echo is long. So the tank is one plain `Memory` per channel with
 # region offsets -- exactly what the Basys 3 does -- and `DelayLine` is used for the one delay
-# that genuinely wants a megabyte.
+# long enough to be worth its arbiter.
 #
 # Where the samples live
 # ----------------------
-#   reverb tank    2 x Memory(14,472 x 16)   BRAM, ~15 DP16KD per channel
+#   reverb tank    2 x Memory(7,450 x 16)    BRAM, 8 DP16KD per channel
 #   chorus history 2 x Memory(1,024 x 16)    BRAM, 1 DP16KD per channel
-#   echo history   2 x dsp.DelayLine(32768)  PSRAM, one L2 cache each
+#   echo history   2 x dsp.DelayLine(16384)  BRAM, 16 DP16KD per channel
+#
+# All three were in BRAM only from M29. Before that the echo sat in PSRAM at 32,768 words and the
+# tank ran at the Basys 3's full delay lengths, 15 DP16KD per channel. Video is what changed it:
+# the beam-raced tiles need no memory at all but do need ~800 LUTs, and `psram_periph` plus its
+# DDR physical layer was the only block of that size in this variant that could be given up. So
+# the echo came inboard, the tank was halved to make room for it, and RVG rose to hold RT60.
 #
 # On Basys 3 the chorus and the echo read the *same* buffer (`dmemL`/`dmemR`), so the chorus
 # hears the echo feedback and not the dry signal. That is preserved: the chorus ring is written
@@ -79,9 +85,11 @@ def _S(n):
     return (n * 3 + 1) // 2
 
 
-# Freeverb comb and all-pass delays (top.v:176-183), coprime-ish at 32 kHz and still so at 48.
-CL     = [_S(n) for n in (810, 878, 940, 1012, 1066, 1122, 1176, 1230)]
-AL     = [_S(n) for n in (403, 320, 247, 163)]
+# Freeverb comb and all-pass delays, half of the Basys 3 figures (top.v:176-183) and still
+# coprime-ish after the 3/2 scaling. M29 halved them to buy BRAM: the tank was 15 DP16KD per
+# channel and the echo needed somewhere to live once PSRAM went away. See the tank note below.
+CL     = [_S(n) for n in (405, 439, 470, 506, 533, 561, 588, 615)]
+AL     = [_S(n) for n in (202, 160, 124, 82)]
 SPREAD = _S(23)                          # R delay lengths = L + SPREAD; the Freeverb stereo image
 DELAYS = CL + AL                         # 12 regions: 8 combs then 4 all-pass
 NREG   = len(DELAYS)
@@ -89,10 +97,11 @@ NCOMB  = len(CL)
 
 # Region map. The Basys 3 spaces the regions uniformly (RB0..RB7 every 1300, RA0..RA3 every 600)
 # because it had 16 kwords of BRAM to spend and nothing else to spend them on. Here each region
-# is exactly as long as its own R-channel delay, which is what turns 2 x 19 DP16KD into 2 x 15.
+# is exactly as long as its own R-channel delay, which is what turns 2 x 10 DP16KD into 2 x 8.
 _LEN   = [d + SPREAD for d in DELAYS]
 REGION = [sum(_LEN[:i]) for i in range(NREG)]
-TANK_WORDS = sum(_LEN)                   # 14,472
+TANK_WORDS = sum(_LEN)                   # 7,450 -- 8 DP16KD per channel, was 15 at full length
+assert TANK_WORDS <= 8 * 1024, "the tank has outgrown the 8 DP16KD the echo's move left it"
 
 # Chorus: Q3 tap sweeping 450.0 .. 833.875 samples (9.375 .. 17.4 ms, same as Basys 3 at 32 kHz).
 CH_BASE   = _S(2400)                     # 3600 in Q3 = 450.0 samples
@@ -106,13 +115,29 @@ LFO_PERIOD = CH_SWEEP * 16               # 49,152 samples
 # Echo. `edly = (dtime << 7) | 128` is 4..512 ms at 32 kHz (top.v:167); x3/2 keeps the range.
 ECHO_STEP = _S(128)                      # 192 samples per CC82 count
 ECHO_MIN  = _S(128)                      # floor, so the tap is never == the write pointer
-ECHO_MAX_DELAY = 32768                   # DelayLine wants a power of two; 127*192+192 = 24,576
+# M29: 16,384 words, not 32,768. The line moved from PSRAM to BRAM to free `psram_periph` and its
+# DDR physical layer for the video block, and BRAM is what the halved reverb tank had to spare.
+# `DelayLine` wants a power of two, so the reachable range is 192*(dtime+1) <= 16,384, i.e. CC82
+# tops out at 84 and the echo at 340 ms instead of 512. The demo library's longest setting is
+# Ivory Orbit at dtime 85 (344 ms); it clamps to 340, a 4 ms difference.
+ECHO_MAX_DELAY = 16384
+ECHO_DTIME_MAX = ECHO_MAX_DELAY // ECHO_STEP - 1     # 84; StereoFx clamps CC82 to this
 
-# Room size -> comb feedback g (Q15). Not scaled: same g, same delay *time*, same RT60.
-RVG = [22000,   # 0  room      ~0.4 s
-       26000,   # 1  hall      ~0.8 s
-       29000,   # 2  large     ~1.5 s
-       31200]   # 3  cathedral ~3.5 s
+# Room size -> comb feedback g (Q15).
+#
+# These are NOT the Basys 3 numbers, and the difference is the one thing about M29's tank cut that
+# is audible if you get it wrong. RT60 = D * ln(0.001)/ln(g): the gain is per *round trip*, so
+# halving the comb delay D halves the decay unless g rises to compensate. Same RT60 at half the
+# delay wants ln(g') = ln(g)/2, i.e. g' = sqrt(g). Cathedral therefore climbs from 0.952 to 0.976
+# of unity -- high, but still inside the range Freeverb's own roomsize control reaches, and the
+# damping filter sits inside the same loop.
+#
+# The 3/2 rate scaling above is a different case and stays uncompensated: it preserves delay
+# *time*, so the round trip is unchanged and g must not move.
+RVG = [26850,   # 0  room      ~0.4 s   (was 22000 at full tank length)
+       29188,   # 1  hall      ~0.8 s   (was 26000)
+       30826,   # 2  large     ~1.5 s   (was 29000)
+       31974]   # 3  cathedral ~3.5 s   (was 31200)
 
 # PSRAM byte bases for the two echo lines. 32,768 samples x 2 bytes = 64 KiB each.
 ECHO_BASE_L = 0x000000
@@ -277,6 +302,7 @@ class StereoFx(wiring.Component):
         chorus_on  = Signal()
         rvg        = Signal(15)
         edly       = Signal(range(self.max_echo))
+        dtime_c    = Signal(7)
         wetgn      = Signal(signed(16))
         chdep_q15  = Signal(signed(16))
         echdep_q15 = Signal(signed(16))
@@ -284,11 +310,20 @@ class StereoFx(wiring.Component):
             echo_on.eq(ctrl.echodep != 0),         # top.v:210 -- depth-gated, no mode selector
             chorus_on.eq(ctrl.chdep != 0),
             rvg.eq(Array(RVG)[ctrl.rsize]),
-            edly.eq(ctrl.dtime * ECHO_STEP + ECHO_MIN),
+            edly.eq(dtime_c * ECHO_STEP + ECHO_MIN),
             wetgn.eq(ctrl.revwet << 8),            # CC 0..127 -> Q15 0..~0.99
             chdep_q15.eq(ctrl.chdep << 8),
             echdep_q15.eq(ctrl.echodep << 8),
         ]
+
+        # CC82 still accepts its full 0..127 -- presets in the wild carry values the BRAM line
+        # cannot reach, and rejecting them would mean editing every one. The tap is clamped here
+        # instead, at the single point of use, so the init value cannot slip past it either. Left
+        # unclamped, `dtime` 85..127 would compute past `max_echo` and `DelayLine`'s address mask
+        # would fold it back to a *short* delay -- the one failure mode that sounds like a bug
+        # rather than a limit.
+        dtime_max = min(self.max_echo // ECHO_STEP - 1, 127)
+        m.d.comb += dtime_c.eq(Mux(ctrl.dtime > dtime_max, dtime_max, ctrl.dtime))
 
         # --- chorus LFO ---------------------------------------------------------------------
         # Triangle in Q3 (1/8 sample) so the read can be linearly interpolated; an integer-only

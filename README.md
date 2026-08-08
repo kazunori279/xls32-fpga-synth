@@ -218,15 +218,22 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     UART check), `firmware/` (committed bitstream).
   - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
     [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
-    plus `midi_filter.py`, `midi_arb.py`, `fx.py`, `cvin.py`, `cv_proto.py`, `led.py` and their
-    Verilator/Amaranth harnesses), `sim/` (iverilog reference for the pitch check), `build.sh`,
-    `check_cv.py` (the M28 1 V/oct check), `spike/` (the M21/M22 fit sweeps). The bitstream
+    plus `midi_filter.py`, `midi_arb.py`, `fx.py`, `cvin.py`, `cv_proto.py`, `led.py`, `viz.py`
+    and their Verilator/Amaranth harnesses), `sim/` (iverilog reference for the pitch check),
+    `build.sh`, `check_cv.py` (the M28 1 V/oct check), `area.py` (per-block cell census),
+    `spike/` (the M21/M22 fit sweeps). The bitstream
     plays MIDI from the TRS jack (M24), runs the whole host loop over one USB cable — UAC2 audio
     up, USB-MIDI down (M25) — carries the full chorus / echo / Freeverb chain (M26), and drives
     the browser UI, the preset banks and all 175 graded cases (M27). M28 adds the Eurorack jacks,
-    which do not fit alongside the effects: `XLS32_VARIANT=cv` builds a second bitstream with
+    which did not fit alongside the effects: `XLS32_VARIANT=cv` builds a second bitstream with
     CV/gate in and the LED comet in place of the reverb tank, and it tracks 1 V/oct to within
     **1.98 cents over five octaves** — graded by the board against itself, with one patch cable.
+    M29 adds a **720×720p60 visualiser on the DVI output** — the 32 voices as 32 tiles, brightness
+    the envelope and hue the pitch — with *no framebuffer*: each pixel is computed in the cycle
+    before it is sent, from the beam position and 32 bytes of state. That is what let it back into
+    the default bitstream, since deleting the framebuffer deleted the PSRAM controller with it, so
+    **effects and picture ship together** at the cost of a half-length reverb tank and a 340 ms
+    echo ceiling.
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
@@ -647,7 +654,7 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 | 22 | amp sustain | 78 | detune (dual osc) |
 | 23 | amp release | 79 | filter-env depth |
 | 24 | filter-env attack | 80 | unison (off/2/3/4) |
-| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms) |
+| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms; 4–340 on Tiliqua) |
 | 26 | filter-env sustain | 83 | *(unused — effects are depth-gated)* |
 | 27 | filter-env release | 91 | reverb size (room/hall/large/cathedral) |
 | 70 | waveform (sine/saw/square/tri/noise) | 92 | tremolo depth |

@@ -91,6 +91,12 @@ class XlsSynth(wiring.Component):
     o: Out(stream.Signature(data.ArrayLayout(ASQ, 4)))
     i_midi_bytes: In(stream.Signature(unsigned(8)))
     o_led: Out(data.ArrayLayout(signed(8), 8))      # M28 LED comet; only driven when led=True
+    # M29: the raw `viz_out` tuple and its strobe, in the engine's own `audio` domain rather than
+    # `sync`. Exposed rather than consumed here because its second reader -- viz.VizStore -- ends
+    # in the *pixel* clock, and the crossing it wants is a dual-port BRAM in the video block, not
+    # another synchroniser next to the comet. Unused in the fx variant, and pruned there.
+    o_viz:       Out(32)
+    o_viz_valid: Out(1)
 
     bitstream_help = BitstreamHelp(
         brief="XLS32 synth: MIDI in (ch 1-4) over TRS or USB, audio out",
@@ -98,11 +104,17 @@ class XlsSynth(wiring.Component):
         io_right=['', 'USB MIDI + audio', '', '', '', ''],
     )
 
-    def __init__(self, engine_path=None, led=False):
+    def __init__(self, engine_path=None, led=False, viz=False):
         # `led` builds the M28 comet off `viz_out`. Off by default because the fx bitstream is at
         # 97% and has nowhere to put it, and because in that variant the pmod's automatic LED mode
         # is already showing something true -- the four jack levels. See elaborate().
         self.led = led
+        # `viz` exports the same tap for M29's tile renderer. A flag rather than an always-driven
+        # output because the tuple is 32 bits carried the length of a 12-stage pipeline: left
+        # dangling it is dead logic that yosys is *expected* to prune, and relying on that is how
+        # a variant with 181 spare cells acquires a mysterious regression. Tied off, there is
+        # nothing to prune.
+        self.viz = viz
         # Default to what boards/tiliqua/build.sh stages; XLS_ENGINE_V overrides for one-offs.
         if engine_path is None:
             repo = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -184,6 +196,9 @@ class XlsSynth(wiring.Component):
             o__viz_out_vld = viz_v,
             i__viz_out_rdy = C(1),   # unused, but the proc deadlocks if it is never drained
         )
+
+        if self.viz:
+            m.d.comb += [self.o_viz.eq(viz_o), self.o_viz_valid.eq(viz_v)]
 
         # Offset binary -> signed, then >>1 for the 6 dB pad. ASQ full scale is +-8.192 V, so
         # halving lands the output at +-4.1 V, inside normal Eurorack audio range.

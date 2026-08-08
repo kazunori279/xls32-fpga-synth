@@ -2689,6 +2689,175 @@ census re-run on the `fx` bitstream, which is the variant carrying the arbiter r
 measured a ±6-preset run-to-run band on. Replacing the MIDI mux with a three-way arbiter did not
 move the sound.
 
+## Milestone 29 — 32 voices as 32 tiles, drawn by racing the beam
+
+720×720p60 out of the DVI connector, showing the engine's 32 voices as a grid of rounded
+rectangles: **brightness is the envelope, hue is the pitch.** New: `gateware/viz.py` and
+`test_viz.py`. The roadmap asked for `tiliqua.video.framebuffer` streaming a 720×720 image out of
+PSRAM. That is not what got built, and the difference is the milestone.
+
+### There is no framebuffer
+
+The colour of each pixel is computed in the cycle before it is sent, from the beam position and a
+32-byte store. Two reasons, and only the second is about elegance.
+
+**PSRAM is where M26's echo delay line lives.** A framebuffer would put a second client on that
+controller for the whole of every frame, and the exit criterion — *"no audio glitching"* — would
+stop being a question with an obvious answer and become a bandwidth argument to be won, with an
+arbiter, a cache and a latency budget behind it. With no framebuffer there is no second client and
+nothing to argue about. (This turned out to matter more than it looked: the *reason* video would not
+fit in the `fx` bitstream was PSRAM, and deleting the framebuffer was the first move in deleting the
+controller entirely. See below.)
+
+**And the information is 32 bytes.** 32 tiles × 8 bits of brightness. A framebuffer holding the same
+picture is 1.5 MB, every byte of it a copy of one of those 32.
+
+So the whole clock crossing is one dual-port BRAM: `audio` (12.288 MHz) writes one byte per voice
+per scan, `dvi` (39.07 MHz) reads one per pixel. No FIFO, no handshake, no synchroniser — not an
+omission, a consequence. Neither side needs to know what the other is doing: the reader wants the
+freshest value and does not care which scan produced it, and a byte read mid-write yields one of the
+two, both of which were true within the last 2.7 ms. An `AsyncFIFO` here would be machinery in
+service of a guarantee nobody wants.
+
+`addr` tracks the voice on the wire rather than travelling with it, because `send(tok, viz_out, …)`
+at `synth.x:404` is unconditional and `vidx` is a ring — the same property `led.py` leans on to turn
+its lookup into a rotation. Unlike `led.py` this *does* read `last` (bit 17): a counter can drift
+where a rotation cannot, and one comparison makes it self-correcting every scan.
+
+The renderer is a pair of counters and a four-deep pipeline. No divider: `x // 90` and `y // 180`
+are counters that reset with the beam, which is the standard beamracing trade and the reason the
+tiles can be 90×180 — filling the panel exactly — rather than the power-of-two sizes a bit-slice
+would force, with a border of dead pixels to make up the difference. Splitting the pipeline that
+finely is free (nothing is on a feedback path) and buys the only thing at 39 MHz that would have had
+any reason to be marginal: an 8×8 multiply, then a five-way mux, then a compare.
+
+**The corner ROM.** Rounding the corners is `dx*dx + dy*dy <= r*r`, two multiplies in the pixel
+path, on a design that turned out to have zero multiplier margin. `r` is 18, so the answer is
+eighteen 5-bit words of quarter-circle inset, baked in.
+
+### What it draws took four rounds, and the plan named none of them
+
+The user drove this and every change was a correction to something that had looked fine on paper.
+
+**Size → brightness.** Loudness was a growing rectangle first. It has ~80 distinct sizes between
+silence and full and steps a pixel at a time; brightness has 235 levels and no quantised motion to
+give 60 Hz away. The envelope reaches the tiles at the engine's rate and is resampled once per
+pixel, so the only limit on how fast a tile can change is the panel — and a growing rectangle spends
+that bandwidth on edges.
+
+**`note % 12` → the whole keyboard → 44 keys of it.** Collapsing octaves made a chord read as one
+stable chord of colours, and made the bottom and top of the instrument identical. On 32 tiles the
+thing worth seeing is *register*. Stretched over all 88 keys instead, a real song came out in one
+shade of green, because real music lives in the middle two octaves and the map was spending both
+ends on notes nobody plays. The shipped window is **C2..G5, 44 keys**, which doubles the colour
+separation where the notes are, and **clamps rather than wraps** — so every bass note below the
+window is the same pure red and every lead above it the same pure blue, and "off the bottom" and
+"off the top" stay distinguishable at a glance. Four hue sectors for the same reason: red → yellow →
+green → cyan → blue lands exactly on (0, 0, 255) with no wrap, where a fifth would carry into
+magenta and a sixth would collide with the bottom of the range.
+
+**A silent voice is dim, not black.** `IDLE_V = 0x14`. All 32 cells stay visible when nothing is
+playing, because a black screen is indistinguishable from a video path that is not working, and that
+ambiguity has cost a debugging session before.
+
+### No manifest, no flash write
+
+The pixel clock is the SI5351's `clk1` into the second ECP5 PLL, and the *bootloader* programs it
+from the panel's own EDID on every cold boot. So a JTAG SRAM load inherits a live 39.07 MHz `clk1`
+exactly the way it already inherits `clk0`'s 12.288 MHz — the constraint of §2.7 in the port doc,
+here working in our favour. `720x720p60r2` is named once, at `top.py:45`, and `parser.set_defaults`
+overrides the SDK CLI's own 1280x720p60: two copies of a modeline is two chances to be silently
+wrong about what the hardware was programmed to.
+
+### The re-merge: BRAM was never the video constraint
+
+Video shipped in `cv` first, because `fx` was at 98.9% of the die and the screen wants ~800 LUTs.
+Two bitstreams, and now *mutually exclusive* ones — effects or picture, pick one. The user's
+proposal was to render the tiles on the host and have the FPGA pass the signal through. Measuring it
+killed it: `tiles` is 235 cells, **1.0% of the device**, against a ~2% shortfall, and `dvi_gen` (328)
+is the TMDS PHY, which is the wire protocol and cannot move off-chip. Streaming pixels in instead
+needs 93 MB/s against a UAC2 device with no bulk endpoint and a ~40 MB/s practical ceiling — and the
+burstiness of USB delivery would force a framebuffer into PSRAM, which is precisely the contention
+this design was built framebuffer-free to avoid.
+
+The measurement that mattered was a different one. **`cv`+video used 3 of 56 DP16KD.** BRAM was
+never the constraint; LUTs were, with 181 spare. Which makes the chain productive rather than
+circular:
+
+> halve the reverb tank → BRAM for the echo → the echo leaves PSRAM → `psram_periph` *and its DDR
+> physical layer* are deleted → the LUTs video needs
+
+Predicted ~800 cells freed. Actual: `fx` fell 2,417 → 1,603 (−814) **and** `psram_periph`'s 401
+disappeared with it. The design got smaller while gaining a screen.
+
+| | `fx`, no video | `fx` + video |
+|---|---:|---:|
+| TRELLIS_COMB | 24,107 (99%) | **23,404 (96%)** |
+| TRELLIS_FF | 13,029 | 13,064 (53%) |
+| DP16KD | 37 | 53 (94%) |
+| MULT18X18D | 25 | **28 (100%)** |
+| `sync` Fmax | 40.17 MHz | 44.71 MHz |
+
+`area.py --variant fx`: core 17,096 (70.4%), usbif 2,371, fx 1,603, pmod0 876, dvi_gen 325,
+tiles 225, reboot 137, arb 65, serialrx 58, common_filter 40.
+
+### RT60 is per round trip — the one place this could have gone quietly wrong
+
+Halving the Freeverb comb delays to free the BRAM looked free, and I wrote down that it was: same
+feedback gain, same decay. **That is false.** RT60 = D·ln(0.001)/ln(g); the gain applies once per
+*round trip*, so halving D halves the decay unless g rises to compensate. Same RT60 at half the
+delay wants ln(g′) = ln(g)/2, i.e. **g′ = √g**. Cathedral climbs from 0.952 to 0.976 of unity — high,
+but inside the range Freeverb's own roomsize control reaches, and the damping filter is inside the
+same loop. Caught before the build, but it is exactly the kind of error that produces a working
+bitstream that merely sounds wrong, which nothing in the test suite grades.
+
+Worth stating the contrast, because the same file contains the opposite case: the `_S(n)` 32→48 kHz
+scaling **stays uncompensated**, because it preserves delay *time*, so the round trip is unchanged
+and g must not move.
+
+### The echo's ceiling, and why it clamps rather than folds
+
+16,384 words of BRAM instead of 32,768 of PSRAM. `DelayLine` wants a power of two, so the reachable
+tap is 192·(dtime+1) ≤ 16,384: **CC82 tops out at 84, the echo at 340 ms instead of 512.**
+
+Grounded in the library rather than the knob range: four of the seven demo songs have `echod = 0`
+and use no echo at all, and the longest setting anywhere is Ivory Orbit at dtime 85 — 344 ms, which
+now plays at 340. A 4 ms difference in the one song that reaches the limit.
+
+CC82 still *accepts* 0..127, because presets in the wild carry values the line cannot reach and
+rejecting them would mean editing every one. The tap is clamped at the single point of use, so the
+init value cannot slip past it either. Left unclamped, `dtime` 85..127 computes past `max_echo` and
+`DelayLine`'s address mask folds it back to a **short** delay — the one failure mode that sounds
+like a bug rather than a limit. `fx_model.py` had to stop folding too (it used `% max_echo`), and
+test 5 checks the peak position independently rather than only that model and gateware agree.
+
+A side effect worth having: **hardware and simulation now run the same delay line.** `sim_xls_core.cpp`
+never had a HyperRAM model, so `test_fx.py`'s sample-for-sample agreement with `fx_model` had been
+proving an SRAM build that hardware did not quite run.
+
+### Where it stands
+
+```
+  tank   7450 words/channel  (8 DP16KD)
+  echo   192 .. 16320 samples (4.0 .. 340.0 ms), CC82 clamped at 84 (16 DP16KD/ch)
+  impulse, CC82 = 127 (past the line; clamps to 84)
+    16820 samples, worst 87 cycles/sample (budget 1250), 0 mismatches
+    first echo at sample 16320, tap is 16320
+  PASS
+```
+
+`check_loop.py` on the loaded bitstream: **frame gaps 0.000%, audio clock 12.289 MHz, note 69
+measured 440.02 Hz (+0.1 cents), PASS.** Video costs the audio path nothing measurable. Picture
+confirmed on the panel, and the halved tank accepted by ear on Bach's Prelude and Le Cygne — the two
+demos most exposed to it, both at reverb 127 / room 96.
+
+**MULT18X18D is at 28 of 28 and that is the thing to know before adding anything.** Three are
+`viz.py`'s, and only one is a real multiply: `f * v` at line 325. The other two are constant
+scalings yosys inferred — `nrel * HUE_K` (HUE_K = 6091, nrel 0..43) and `i_level * (255 - IDLE_V)`.
+A 44-entry ROM would free them for 60–80 TRELLIS_COMB, or one of the 3 spare DP16KD. Measured and
+deliberately not done: it spends the resource that is at 97% to relieve one that nothing is waiting
+on. Revisit when something actually needs a multiplier.
+
 ---
 
 # Friction logs & learnings

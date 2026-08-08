@@ -431,8 +431,8 @@ boards/
       cvin.py                  # (M28) CV/gate in → MIDI ch 4, and the out2 self-test ramp
       cv_proto.py              # (M28) the 3 constants check_cv.py shares with it, importing nothing
       led.py                   # (M28) viz_out → the 8-LED comet
-      video/                   # (M29+) framebuffer, scope, menu overlay
-    fw/                        # (M29) Rust firmware for the SoC menu
+      viz.py                   # (M29) viz_out → 32 beam-raced tiles; no framebuffer, see M29
+    fw/                        # (M30) Rust firmware for the SoC menu
     scripts/ build.sh          # (M21)   flash.sh (M31)
     firmware/                  # (M31) released .tar.gz bitstream archives
     deps/tiliqua               # (M21) git submodule (apfaudio/tiliqua)
@@ -789,7 +789,7 @@ was: it now exercises the whole MIDI path as well as the audio path.
 9,941 (40%); MULT18X18D and DP16KD unchanged at 21 and 0. Post-routing Fmax **28.00 MHz** on
 `audio` against 12.288 required and **80.77 MHz** on `sync` against 60. The +1,188 LUTs is more
 than the visible logic accounts for — see the M24 section of `DEVELOPMENT.md` — and it eats into
-the margin the §M29 area warning depends on. `SerialRx` is instantiated with `rx_depth=8` rather
+the margin M29's screen was later going to want. `SerialRx` is instantiated with `rx_depth=8` rather
 than the SDK default 64, which recovered 218 of them for nothing.
 
 *Exit:* met in simulation. **Hardware still pending**: DIN MIDI → adapter → the module's jack.
@@ -992,8 +992,8 @@ reader, no SoC.
 arbiter (102) against M26's 488 spare took the die to **24,848 / 24,288 = 102%** and nextpnr refused
 to place it. A per-block census — `core` 17,675 (70.5%), `usbif` 2,440, `fx` 2,398, `pmod0` 1,000 —
 rules out shrinking: the engine has no soft area, and dropping `usbif` would destroy the USB tee the
-exit criterion is graded over. So the design splits along `fx`, into the two bitstream slots the
-M29 area warning below already anticipated:
+exit criterion is graded over. So the design splits along `fx`, into the two bitstream slots M29's
+area warning had already anticipated needing (M29 then took them back to one — see its entry):
 
 | variant | build | contents | TRELLIS_COMB | `sync` Fmax |
 |---|---|---|---:|---:|
@@ -1028,16 +1028,92 @@ times). See the M28 entry in `DEVELOPMENT.md`.
 
 ### Phase D — the screen
 
-**M29 · Screen, no SoC — visualiser**
+**M29 · Screen, no SoC — visualiser** — ✅ **done** (and it re-merged the two bitstreams)
 Framebuffer in PSRAM + DVI at 720×720p60 (match-bootloader modeline), driven by
 `tiliqua.video.framebuffer` and `tiliqua.raster.*`. Show a vectorscope/spectrum of the output plus a
 per-voice envelope bar strip fed by `viz_out`.
 *Exit:* stable 720×720p60 output with no audio glitching, captured as a photo/screenshot in the
 report video.
 
-> **Area warning.** M21's numbers decide whether video and 32 voices coexist. If not, ship *two*
-> bitstream slots — `xls32-poly32` (audio only) and `xls32-video` (fewer voices) — which is exactly
-> what the 8-slot bootloader is for.
+**Built without a framebuffer at all**, which is the one design decision this milestone turns on.
+The colour of each pixel is computed in the cycle before it is sent, from the beam position and a
+32-byte store — the envelopes of the 32 voices, one byte each, plus the note that produced them. The
+plan's PSRAM path would have put a second client on the controller M26's echo delay line already
+owns, for the whole of every frame, and *"no audio glitching"* would have become a bandwidth
+argument to be won rather than a question that never arises. It is also 1.5 MB of framebuffer to
+hold 32 bytes of information, every one of the rest a copy. So: `viz.py`, one dual-port BRAM written
+from `audio` and read from `dvi` (no FIFO, no synchroniser — the reader wants the freshest byte and
+does not care which scan it came from), and a renderer that is a pair of counters and a four-deep
+pipeline. 235 TRELLIS_COMB for the tiles, 325 for the TMDS PHY.
+
+What it draws went through the user across four rounds and ended somewhere the plan did not name.
+**Brightness is loudness, hue is pitch.** Size-as-loudness was tried first and dropped: a growing
+rectangle has ~80 distinct sizes between silence and full and steps a pixel at a time, where
+brightness has 235 levels and no quantised motion to give 60 Hz away. Hue began as `note % 12`,
+which made every octave identical when *register* is the thing worth seeing on 32 tiles; stretched
+over all 88 keys it made a whole song one shade of green; the shipped window is **44 keys, C2..G5**,
+clamping rather than wrapping, so "off the bottom" is pure red and "off the top" pure blue.
+
+**No manifest work and no flash write.** The pixel clock is the SI5351's `clk1` into the second ECP5
+PLL, and the *bootloader* programs it from the panel's own EDID on every cold boot — so a JTAG SRAM
+load inherits a live 39.07 MHz `clk1` the same way it already inherits `clk0`'s 12.288 MHz (§2.7).
+`720x720p60r2` is named once, in `top.py:45`, because two copies of it is two chances to disagree.
+
+**The area warning below this entry said video and full polyphony might not coexist. They do, and
+M28's split is undone rather than deepened.** Video began as `cv`-only, because `fx` was at 98.9% of
+the die and could not afford the ~800 LUTs. The lever turned out not to be the video block at all:
+`cv`+video used 3 of 56 DP16KD, so BRAM was never the constraint — LUTs were. Halving the reverb
+tank freed the BRAM to bring the echo in from PSRAM, which deleted `psram_periph` *and* its DDR
+physical layer, which freed more LUTs than video costs. The design got **smaller while gaining a
+screen**:
+
+| | before (`fx`, no video) | after (`fx` + video) |
+|---|---:|---:|
+| TRELLIS_COMB | 24,107 (99%) | **23,404 (96%)** |
+| DP16KD | 37 | 53 (94%) |
+| MULT18X18D | 25 | **28 (100%)** |
+| `sync` Fmax | 40.17 MHz | 44.71 MHz |
+
+The price is paid in the effects, and it is worth stating exactly. The Freeverb tank is **half its
+Basys 3 delay lengths** (7,450 words/channel, 8 DP16KD instead of 15) with `RVG` raised to
+compensate — RT60 = D·ln(0.001)/ln(g) is per *round trip*, so halving D halves the decay unless
+g → √g; cathedral climbs 0.952 → 0.976 of unity. (The 3/2 rate scaling elsewhere in `fx.py` is the
+opposite case and stays uncompensated: it preserves delay *time*.) The echo line is 16,384 words of
+BRAM, so **CC82 tops out at 84 and the echo at 340 ms instead of 512**, clamped at the single point
+of use — left to fold, `dtime` 85..127 would have wrapped to a *short* delay, which sounds like a
+bug rather than a limit. Measured against the shipped library: four of seven demos use no echo at
+all, and the longest setting anywhere is Ivory Orbit at 344 ms, which now plays at 340.
+
+A side effect worth having: hardware and simulation run the *same* delay line for the first time.
+`sim_xls_core.cpp` never had a HyperRAM model, so `test_fx.py`'s sample-for-sample agreement with
+`fx_model` had been proving an SRAM build that hardware did not quite run.
+
+*Met.* Picture confirmed on the panel by the user (*"the display works so well"*), and the whole
+build — effects and video together — accepted after listening (*"works well"*). `check_loop.py`
+`PASS`: **frame gaps 0.000%, audio clock 12.289 MHz, note 69 measured 440.02 Hz (+0.1 cents)**, so
+video costs the audio path nothing. `test_fx.py` passes in full including the new clamp test:
+
+```
+  tank   7450 words/channel  (8 DP16KD)
+  echo   192 .. 16320 samples (4.0 .. 340.0 ms), CC82 clamped at 84 (16 DP16KD/ch)
+  impulse, CC82 = 127 (past the line; clamps to 84)
+    16820 samples, worst 87 cycles/sample (budget 1250), 0 mismatches
+    first echo at sample 16320, tap is 16320
+
+  dvi5x  465.33 MHz PASS at 195.35
+  dvi     92.13 MHz PASS at  39.07
+  audio   29.58 MHz PASS at  12.29
+  clk     44.71 MHz FAIL at  60.00   (pre-existing since M25 — the engine runs in `audio`)
+```
+
+`area.py --variant fx` attributes it: core 17,096 (70.4%), usbif 2,371, fx 1,603, pmod0 876,
+dvi_gen 325, tiles 225, reboot 137, arb 65, serialrx 58. See the M29 entry in `DEVELOPMENT.md`.
+
+> **Multipliers have no margin left.** 28 of 28 MULT18X18D. Three of them are `viz.py`'s, and only
+> one (`f * v`, line 325) is a genuine variable×variable multiply — the other two are constant
+> scalings yosys chose to infer. A 44-entry ROM for `nrel * HUE_K` would free them, at 60–80
+> TRELLIS_COMB or one of the 3 spare DP16KD, which is the resource actually under pressure. Not
+> worth doing until something needs a multiplier; worth knowing before anything is added.
 
 **M30 · SoC + on-screen patch editor**
 `TiliquaSoc` + Rust firmware (`riscv32im`): encoder-driven menu, the full CC map as editable
@@ -1096,7 +1172,7 @@ graded by hand or by simulation.
 | 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce** | Would have been noisy FFT grading | Re-measured 2026-08-03: our bitstream 99.84% / 0.000%, vendor XBEAM 100.27% / 0 zeros over eleven runs, M25 suite worst case 0.001% over six 34-case runs. What the original captures measured is unknown; the misclock is a lead that does not fit the numbers (§1.1, `TILIQUA_USB_DROPOUTS.md`). The M25 machinery stays: stream opened once, `blocksize=0`, channel 2 kept non-zero by the tee, holes interpolated in place — now mostly as the *measurement* that publishes `gap_rate` in every report |
 | 4c | Non-SoC bitstreams get no ADC/DAC calibration (−86…−116 mV offsets) | **Confirmed** | ~1.2% DC error pollutes M23 grading | *Sidestepped in M25*: the graded signal is teed off `core.o` digitally and never reaches a converter, so there is nothing to calibrate. Still applies to anything graded at the jacks (M28 CV) — *and turned out not to bite there either*: a DC offset is a constant transposition and cancels out of the slope fit `check_cv.py` grades on, so only gain error matters and the per-revision gain defaults already cover it |
 | 5 | Effects don't fit on-chip | **Certain** | Rewrite, not port | M26 against `tiliqua.dsp.delay_line` (PSRAM) |
-| 6 | Video + full polyphony don't coexist | Medium | Two bitstreams instead of one | Use the 8 bootloader slots; decide with M21 numbers |
+| 6 | ~~Video + full polyphony don't coexist~~ | **Retired by M29 — and it undid risk 2's split** | Would have been two bitstreams | The screen costs 550 cells (`tiles` 225 + `dvi_gen` 325) because it has no framebuffer, and the die found them by *deleting* memory: PSRAM was never the video constraint (`cv`+video used 3 of 56 DP16KD), LUTs were, so halving the reverb tank freed the BRAM to bring the echo inboard, which deleted `psram_periph` and its DDR PHY. `fx` went 24,107 (99%) → **23,404 (96%) with a screen**. Cost is in the effects, not the polyphony: echo 512 → 340 ms and half the tank length, `RVG` raised √g to hold RT60 |
 | 7 | Tiliqua submodule / Amaranth version drift | Medium | Build breakage | Pin the submodule; build gateware in Tiliqua's own `pdm` env, keep `uv` for host tooling |
 | 8 | 32→48 kHz resampling artifacts | Low | Audible aliasing | `tiliqua.dsp.resample` (2:3 rational); verify by FFT in M23 |
 | 9 | ~~Preset bank mismatches the ported path~~ | **Confirmed, and worse than stated** | Presets sounded wrong on *both* boards | **Retired by M27**, but the mismatch was never Tiliqua-specific: `engine.py` ran at 28 kHz (a rate no board has) and modelled a 4-comb reverb selected by CC83 modes, against 8 combs and depth gating in the shipped shell. So all 274 presets carried a dead `fx` key and were fitted with a tail they were then played without — on the Basys 3 too. Generator corrected against `fx_model.py`, banks migrated, `validate_hw.py` clean on all three. Re-fitting the corpora is deferred (they are gone) |
