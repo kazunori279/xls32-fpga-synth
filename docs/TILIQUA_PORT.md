@@ -370,7 +370,8 @@ Three ways to remove it entirely, none free:
    clock *underneath* a running `audio` domain needs care about reset ordering.
 2. **Write our own slot to flash and let autoboot pick it.** Cheapest by far, and it makes the
    problem disappear rather than solving it — but it spends one of the nine slots and writes flash,
-   which is a decision for the module's owner, not for the agent.
+   which is a decision for the module's owner, not for the agent. **Taken after M29** — see the
+   note below.
 3. **Live with it**, and treat "power-cycled since the last run" as a manual precondition, the way
    the load recipe in `boards/tiliqua/board.py` documents it today. Fine for a session that starts
    with a load; not fine for a loop that expects to survive a reboot.
@@ -386,11 +387,29 @@ Until one of these lands, the loop is autonomous within a session, autonomous ac
 *provided* no vendor slot gets booted by hand, and needs one encoder click to recover when one has.
 Worth stating plainly, because that is a narrower claim than "M25 restored autonomous verification."
 
-**Open, and not yet decided with the module's owner.** Option 1 is the recommendation — it is the
-only one that makes the bitstream self-sufficient, it needs no flash write, and it would slot in
-alongside M26 rather than blocking it. Option 2 needs the owner's consent because it writes flash;
-this port has made no flash write at all so far, and every load has been SRAM-only. Nothing here is
-blocking M26, so the choice can wait for whenever the encoder ritual next becomes annoying.
+**Resolved after M29 by option 2, with the owner's consent.** Through M28 this port made no flash
+write at all — every load was SRAM-only, which is why the paragraph that stood here left the choice
+open. With M29 built and verified on hardware, the owner picked a slot and the archive was written:
+
+```
+XLS32, tag d18366e -> slot 6 (0x700000), manifest at 0x7f0000
+```
+
+All eight user slots were occupied by the vendor examples, so this overwrote **DSP-MDIFF** — the one
+example with no firmware region, and the cheapest of the eight to rebuild from the SDK if it is ever
+wanted back.
+
+What that buys is exactly what option 2 promised. The manifest carries `clk0_hz: 12288000`, so once
+`last_boot_slot` points at slot 6 every cold boot programs the SI5351 to the rate this design wants
+and then loads this design — no encoder click, no measuring the clock to find out which state the
+module is in. It also pins the pixel clock: the manifest sets `clk1_inherit: false` and
+`clk1_hz: 39070000`, so the 720×720p60 mode no longer depends on the panel's EDID having been read
+by whatever booted last. One manual step remains, and only once: the module has to be caught in the
+countdown and slot 6 chosen from the menu, which is what writes `last_boot_slot`.
+
+Option 1 is still the better answer in principle — it is the only one that makes the *bitstream*
+self-sufficient rather than the flash image, and it would survive somebody booting a vendor slot by
+hand. It is no longer urgent.
 
 ---
 
