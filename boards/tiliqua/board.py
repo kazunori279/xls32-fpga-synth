@@ -1,12 +1,12 @@
 """apf.audio Tiliqua R5 (SoldierCrab R3, ECP5 LFE5U-25F) — the M21+ target.
 
 Gateware lives in boards/tiliqua/gateware/, built by boards/tiliqua/build.sh; see
-docs/TILIQUA_PORT.md. M24 made the bitstream play MIDI arriving at the TRS jack out
+ARCHITECTURE_tiliqua.md. M24 made the bitstream play MIDI arriving at the TRS jack out
 channels 0/1; M25 added the host loop the automated suite needs — audio up over USB Audio
 Class 2, MIDI down over USB-MIDI, both on the `usb2` port, so `run_tests.py --board tiliqua`
 has something to drive. `unsupported` is therefore clear.
 
-The bitstream places `sync` at ~48-50 MHz against a 60 MHz requirement (TILIQUA_PORT.md 2.6)
+The bitstream places `sync` at ~48-50 MHz against a 60 MHz requirement (ARCHITECTURE_tiliqua.md E4)
 and is loaded anyway, deliberately: on the module it enumerates and streams at that speed, so
 the shortfall is a known risk being carried rather than a blocker. Point
 `boards/tiliqua/check_loop.py` at it before the 175-case suite: it isolates a broken

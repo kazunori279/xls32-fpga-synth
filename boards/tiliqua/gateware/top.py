@@ -40,7 +40,7 @@ from xls_core import XlsSynth
 
 # The panel's own EDID asks for this one, and the bootloader reads it and programs the SI5351
 # accordingly on every cold boot -- so a bitstream built against it inherits a live pixel clock
-# without writing anything to flash. See docs/TILIQUA_PORT.md.
+# without writing anything to flash. See ARCHITECTURE_tiliqua.md A1.
 MODELINE = "720x720p60r2"
 
 

@@ -99,5 +99,5 @@ def open_transport(board=None):
         return UsbAudioTransport(board)
     raise NotImplementedError(
         f"board {board.name!r} wants transport {board.transport!r}, "
-        f"which is not implemented yet ({board.unsupported or 'see docs/TILIQUA_PORT.md'})"
+        f"which is not implemented yet ({board.unsupported or 'see the board package'})"
     )

@@ -4,7 +4,7 @@ One cable, both directions, no FTDI and no patch lead. The gateware side is
 ``boards/tiliqua/gateware/usb_iface.py``; this is the host half.
 
 Three things here are not obvious, and all three were paid for in M22's bring-up
-(``docs/TILIQUA_PORT.md`` 1.1):
+(``ARCHITECTURE_tiliqua.md``, "The module -- measured baseline"):
 
 **Open the stream once.** Nine open/close cycles wedged the device hard enough to
 need a power cycle. ``open()`` starts one ``InputStream`` and ``close()`` stops it;

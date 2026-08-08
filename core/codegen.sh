@@ -3,7 +3,7 @@
 #
 # The engine knows nothing about a board: it has three channels (midi_in, audio_out,
 # viz_out) and a clock. Everything board-specific — pins, clock rate, transport —
-# lives in boards/<name>/. Keep it that way; see docs/TILIQUA_PORT.md section 3.
+# lives in boards/<name>/. Keep it that way; see the Repository layout section of README.md.
 #
 # Env:
 #   XLS_DIR  (required) unpacked XLS release containing ir_converter_main etc.

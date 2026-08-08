@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Emit a reduced-voice-count copy of core/synth.x for the M21 spike.
 
-The fallback ladder in TILIQUA_PORT.md §2.3 (32 -> 24 -> 16 voices) is only worth anything if
+The fallback ladder (32 -> 24 -> 16 voices; ARCHITECTURE_tiliqua.md E1) is only worth anything if
 each rung has a number attached. But `core/synth.x` is the *shipping* Basys 3 gateware, and the
 voice count is written into it as bare literals rather than a constant, so there is nothing to
 override from the outside. Rather than parameterise production DSLX for a measurement, this

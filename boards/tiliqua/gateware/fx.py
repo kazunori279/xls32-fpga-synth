@@ -5,7 +5,7 @@
 # topology, so the arithmetic stays bit-for-bit where it can and every departure is called out
 # below with its reason.
 #
-# Why this is not built out of `tiliqua.dsp.delay_line` the way TILIQUA_PORT.md M26 originally
+# Why this is not built out of `tiliqua.dsp.delay_line` the way the port plan's M26 originally
 # said: `DelayLine` is single-writer / multi-reader over one circular buffer, but each Freeverb
 # comb has its *own* write pointer and writes its own feedback back into it. Expressing the tank
 # that way needs 12 `DelayLine` instances per channel -- 24 in total, each with its own

@@ -6,6 +6,15 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 [README §4](README.md#4-architecture--design), and for the milestone-by-milestone rationale
 (why each block is the way it is) see [DEVELOPMENT.md](DEVELOPMENT.md).
 
+> **Scope: the core engine plus the Basys 3 Verilog shell.** The engine
+> ([Parts A](#part-a--engine-skeleton--scheduling) and [B](#part-b--per-voice-datapath)) is
+> board-independent and is the same generated `engine.v` on both boards, so it is described once —
+> here. [Parts C](#part-c--the-verilog-shell), [D](#part-d--block-ram-effects) and
+> [E](#part-e--hardware-io--build-glue) are the **Basys 3** shell specifically. For the ECP5 /
+> Amaranth shell that replaces them on Tiliqua — the USB device, the effects as ported, the
+> visualiser, and the area and timing constraints — see
+> [ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md).
+
 > **Rendering note.** Plain dataflow diagrams are [Mermaid](https://mermaid.js.org/) (rendered by
 > GitHub). Timing charts are pre-rendered [WaveDrom](https://wavedrom.com/) **SVGs** in
 > [`docs/`](docs) so they display everywhere, including GitHub; the WaveDrom source for each is
@@ -35,13 +44,13 @@ real code, a dataflow diagram, and — where cycle timing matters — a timing c
 
 ## Conventions
 
-**Two source files hold the whole design**, and they sit on opposite sides of the
+**Two source files hold the whole design on this board**, and they sit on opposite sides of the
 board seam — the engine is portable, the shell is Basys 3:
 
 | File | What's in it |
 |------|--------------|
 | [`core/synth.x`](core/synth.x) | The entire synth engine in **DSLX** (Google XLS, Rust-like): all oscillators, the filter, envelopes, LFO, unison, voice allocation, multitimbral parts, and the mixer. One `proc engine` (378 lines). Compiled to `engine.v`. Mentions no pin, clock rate or transport. |
-| [`boards/basys3/rtl/top.v`](boards/basys3/rtl/top.v) | The **Verilog shell**: 100 MHz clocking + clock-enables, UART RX/TX, the ready/valid handshake to the engine, the stereo block-RAM **effects** (chorus/echo/reverb), I2S DAC out, DIN MIDI in, and the LED comet (457 lines). Everything a different board would replace. |
+| [`boards/basys3/rtl/top.v`](boards/basys3/rtl/top.v) | The **Verilog shell**: 100 MHz clocking + clock-enables, UART RX/TX, the ready/valid handshake to the engine, the stereo block-RAM **effects** (chorus/echo/reverb), I2S DAC out, DIN MIDI in, and the LED comet (457 lines). **One of two shells** — everything a different board replaces. The Tiliqua counterpart is [`boards/tiliqua/gateware/top.py`](boards/tiliqua/gateware/top.py) and the eight Amaranth modules around it; see [ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md#conventions--the-ecp5-seam). |
 
 Below, `synth.x` and `top.v` are shorthand for those two paths.
 
@@ -55,7 +64,9 @@ milestone-1 artifact — [see E4](#e4-luts--fix_verilogpy).)
 `next()` processes **one voice per invocation**, with the 32 voices held in a rotating ring so the
 "current" voice is always at slot 0 (constant-index — no 32:1 mux). A finished audio sample is
 emitted every **32** invocations — **~768 engine cycles** at `STAGES=48`, because the achieved
-initiation interval is ~24 cycles per voice, not 1 ([A1](#a1-the-engine-proc)). At 100 MHz the
+initiation interval is ~24 cycles per voice, not 1 ([A1](#a1-the-engine-proc)). (`STAGES` is the one
+number the two boards do not share: Tiliqua compiles the same DSLX at `STAGES=12`, so a sample costs
+224 cycles there — see [ARCHITECTURE_tiliqua.md A1](ARCHITECTURE_tiliqua.md#a1-clock-domains).) At 100 MHz the
 engine advances on a ÷3 clock-enable ([C1](#c1-clocking)); a sample leaves every
 `SAMPDIV = 3125` master clocks → **32 kHz**.
 
@@ -175,8 +186,8 @@ overlap, so the sample-rate floor is `max(compute, TX) = max(2304, 2000) = 2304`
 **~43 kHz** over this link — and it is the **compute**, not the stream, that sets it. The practical
 consequence is that the engine does *not* have free room to grow: at 74 % occupancy, ~35 % more
 engine work breaks 32 kHz. More voices or deeper per-voice DSP costs either a lower
-`--pipeline_stages` (cycles/sample scale with `STAGES` — see
-[`docs/TILIQUA_PORT.md`](docs/TILIQUA_PORT.md) §2.3) or a faster `ce`. **BRAM and timing closure**
+`--pipeline_stages` (cycles/sample scale with `STAGES` — the measured table is in
+[ARCHITECTURE_tiliqua.md → E1](ARCHITECTURE_tiliqua.md#e1-the-six-hard-constraints)) or a faster `ce`. **BRAM and timing closure**
 ([E5 floorplan](#e5-chip-floorplan-rough-resource-map)) are still limits too — the clock budget has
 simply joined them.
 

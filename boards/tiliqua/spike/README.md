@@ -2,7 +2,7 @@
 
 Answers one question: does the XLS32 engine fit an `LFE5U-25F`, and at what settings. **It does** —
 32 voices × 4 parts at `STAGES=12` costs 66% of the LUTs, 38% of the flip-flops, 0 BRAM and 86% of
-the multipliers. Results and the reasoning are in [the port plan](../../../docs/TILIQUA_PORT.md)
+the multipliers. Results and the reasoning are in [the port history](../../../DEVELOPMENT_tiliqua.md)
 (M21) and [DEVELOPMENT.md](../../../DEVELOPMENT.md) (Milestone 21); raw rows are in `results/`.
 
 Nothing here is part of a bitstream. It is measurement scaffolding, kept because the numbers have to

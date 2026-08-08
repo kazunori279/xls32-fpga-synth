@@ -156,7 +156,7 @@ def write_reports(results, overall, grade, counts, args, board, gaps=(), clocks=
         detail = ("interpolated back by the host transport" if worst >= 5e-5
                   else "nothing material to repair")
         caveat = (f"\n_USB frame gaps: mean {100*sum(gaps)/len(gaps):.3f}%, "
-                  f"worst {100*worst:.3f}% — {detail}; see docs/TILIQUA_PORT.md §1.1._\n")
+                  f"worst {100*worst:.3f}% — {detail}; see ARCHITECTURE_tiliqua.md._\n")
     if clocks:
         # The clock the run was graded at, not just the clock it was supposed to be graded
         # at. Pitch is measured in cents against a fixed reference, so a report that does not

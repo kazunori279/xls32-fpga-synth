@@ -15,7 +15,7 @@
 #     1.5 MB, and every one of those bytes would be a copy of one of these 32.
 #
 # So the whole store is one BRAM, written from the engine's domain and read from the pixel clock,
-# and the renderer is a pair of counters. See `docs/TILIQUA_PORT.md` for how it is clocked: the
+# and the renderer is a pair of counters. See `ARCHITECTURE_tiliqua.md` A1 for how it is clocked: the
 # pixel clock arrives from the SI5351's clk1, which the *bootloader* programs from the panel's
 # EDID before any slot runs, so this needs no flash write and no manifest of its own.
 
