@@ -3,8 +3,9 @@
 # Until now top.py fed the engine from a two-way mux: USB won, TRS got the cycles USB left over,
 # and the comment above it admitted the rest -- "playing both at once interleaves bytes mid-message
 # and is not supported". That was survivable while both sources were human-scale and rarely used
-# together. M28 adds a third that is neither: CvIn emits on its own schedule, forever, and cannot
-# be asked to wait for the keyboard.
+# together. M28 added a third that was neither -- CvIn, emitting on its own schedule forever -- and
+# that is what forced the issue. CvIn went away again in M31; the arbiter did not, because the
+# hazard it fixes was never CvIn's. Two sources are enough to hit it.
 #
 # What goes wrong without this is specific. core/synth.x:114 latches any byte >= 0x80 as running
 # status, and there is exactly one such register for the whole engine. Interleave
@@ -54,10 +55,10 @@ class MidiArbiter(wiring.Component):
 
     Arbitration is round-robin: whoever was granted last goes to the back of the queue. Fixed
     priority would be simpler and is wrong here, because these sources are not equally patient.
-    CvIn can have something to say on every one of its ticks, indefinitely; give it -- or the USB
-    host running a preset census -- a permanent claim on index 0 and the TRS jack never plays
-    another note. Round-robin bounds the wait at one message per other source, so worst-case
-    latency for the keyboard is a few microseconds rather than unbounded.
+    A USB host running a preset census has something to say on every cycle, indefinitely; give it
+    a permanent claim and the TRS jack never plays another note. Round-robin bounds the wait at
+    one message per other source, so worst-case latency for the keyboard is a few microseconds
+    rather than unbounded.
 
     A status byte arriving where a data byte was expected ends the message early and re-arbitrates
     without consuming it. That is the same choice SysCommonFilter makes: a truncated message should

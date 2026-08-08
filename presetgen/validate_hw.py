@@ -4,7 +4,7 @@ to full-scale noise (the sim's internal clamps hide this). Cheap use of physical
 capture per preset (~4 min/bank), vs the sim's blind spot.
 
 A preset is flagged RAIL if its board capture is near full-scale AND mostly sample-to-sample
-jumps (peak>0.9 & glitch-rate high) while the sim render is quiet. Stop webui/server.py first.
+jumps (peak>0.9 & glitch-rate high) while the sim render is quiet. Close the web UI tab first (it holds the board's link).
 
 Board-agnostic since M27, via `open_transport()` and the CC_MAP that calibrate.py already carries
 — which is what makes this, the roadmap's named check for the banks, runnable on the Tiliqua.

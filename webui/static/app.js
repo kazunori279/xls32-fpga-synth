@@ -1,14 +1,15 @@
-// XLS32 web front-end. Talks to the FastAPI bridge over one WebSocket: MIDI bytes up
-// (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
-// an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
+// XLS32 web front-end. Talks to the board directly — no server: MIDI bytes out (on-screen /
+// computer keyboard / Web-MIDI device) and audio back in, over Web MIDI + UAC2 on the Tiliqua or
+// Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
+// full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v79-part';  // bump on each front-end change; shown in the header + cache-busts the worklet
-let SR = 32000;                   // frame rate on the wire; /api/spec overwrites it in boot()
+const VERSION = 'v82-standalone';  // bump on each front-end change; shown in the header + cache-busts the worklet
+window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
+let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
-                                  // 32 kHz on both; this is the interface rate the bridge pushes at.
-let spec = null, ws = null, ctx = null, node = null, analyser = null;
-let powered = false, framesRecv = 0, resampleRatio = 1, audioEl = null;
-let localPlay = false;            // LOCAL play: server plays audio + reads MIDI on the host (low latency)
+                                  // 32 kHz on both; this is the interface rate the board pushes at.
+let spec = null, link = null, ctx = null, node = null, analyser = null;
+let powered = false, audioEl = null;
 let masterVol = 64, mvolKnob = null, masterGainNode = null;   // header MASTER OUTPUT volume (final-mix gain)
 const ctlEl = {};                 // id -> {set(v), get()}
 const NPARTS = 4;                 // MULTITIMBRAL: 4 parts on MIDI channels 0-3
@@ -27,9 +28,12 @@ let baseOct = 4, curUserSlot = 1;
 
 window.__stats = { ctx: 'off', frames: 0, rms: 0, notes: 0, connected: false };
 
-// ---------- MIDI out (to board via WS) ----------
-function sendMidi(bytes) {
-  if (ws && ws.readyState === 1) ws.send(new Uint8Array(bytes));
+// ---------- MIDI out (straight to the board) ----------
+// `when` is a performance.now() timestamp and only the sequencer passes one; everything driven by
+// a finger wants the byte gone now. Silently dropped before the board is chosen, which is the
+// same thing the closed WebSocket used to do and is what makes every caller here gate-free.
+function sendMidi(bytes, when) {
+  if (link) link.sendMidi(bytes, when);
 }
 function noteChans() { return selSet.size ? [...selSet] : [activeCh]; }   // LIVE notes -> the selected part(s)
 function noteOn(n, vel = 100) {
@@ -62,14 +66,12 @@ function setValue(id, v, send = true) {
   if (send && id in ccById) sendCC(ccById[id], v);
 }
 // ---------- header MASTER OUTPUT volume: scales the FINAL audio (not per-part), so it stays put
-//           across demos/presets. WEB -> browser GainNode; LOCAL -> server output gain. ----------
+//           across demos/presets. A GainNode on the way to the speakers — it does not touch the
+//           board, so the line out and the headphone jack keep their own level. ----------
 function renderMasterVol(v) { masterVol = v; if (mvolKnob) mvolKnob.style.transform = `rotate(${-135 + (v / 127) * 270}deg)`; }
 function setMasterVolume(v) {
   masterVol = v;
-  const g = v / 127;                                // linear final-output gain (0..1, 127 = unity)
-  if (masterGainNode) masterGainNode.gain.value = g;              // WEB: browser output gain
-  fetch('/api/gain', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gain: g }) }).catch(() => {});         // LOCAL: server output gain
+  if (masterGainNode) masterGainNode.gain.value = v / 127;   // linear (0..1, 127 = unity)
   renderMasterVol(v);
 }
 function initMasterVol() {
@@ -193,24 +195,16 @@ function sendPartSelect(force = false) {
   lastPartCC = ch;
   sendMidi([0xB0 | ch, 103, ch]);
 }
-function postLocalChans() {   // LOCAL play: the host-side MIDI keyboard targets the selected part too
-  if (!localPlay) return;
-  fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ on: true, chans: noteChans() }) })
-    .then((r) => r.json()).then(applyLocalState).catch(() => {});
-}
-function mutedChans() { const m = []; for (let ch = 0; ch < NPARTS; ch++) if (!playSet.has(ch)) m.push(ch); return m; }
-function postDemoMute() {   // DEMO notes are sequenced server-side, so the LED set has to go to the server too
-  fetch('/api/demo_mute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mute: mutedChans() }) }).catch(() => {});
-}
+// The mute set is read live by the sequencer (see demoTick), so toggling an LED mid-song takes
+// effect on the next note without anything having to be told about it.
 function setPlay(ch, on) {   // the LED = this part's demo mute
   if (on) playSet.add(ch);
   else {
     playSet.delete(ch);
     for (const [n, chans] of activeNotes) if (chans.includes(ch)) sendMidi([0x80 | ch, n, 0]);  // release held on this part
+    for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);   // and whatever the demo is holding there
   }
-  refreshPartUI(); postDemoMute();
+  refreshPartUI();
 }
 function sameSet(a, b) { return a.size === b.size && [...a].every((v) => b.has(v)); }
 function setPart(ch, layer = false) {   // click = this part alone · ⇧-click = add it to / drop it from the layer
@@ -226,10 +220,7 @@ function focusPart(ch) {                          // the PRIMARY part: the one t
   activeCh = ch;
   values = partValues[ch];                        // repoint; panel + knob sends now target this part
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);   // refresh knobs (no send)
-  let unmuted = false;                            // a part you selected is never left demo-muted
-  for (const c of selSet) if (!playSet.has(c)) { playSet.add(c); unmuted = true; }
-  if (unmuted) postDemoMute();
-  postLocalChans();                                        // host MIDI-in follows the selection
+  for (const c of selSet) playSet.add(c);         // a part you selected is never left demo-muted
   refreshPartUI();
   const pp = partPreset[ch];                       // restore this part's patch name + browse position
   if (pp) { setBar(pp.cat, pp.name); curIndex = pp.index; }
@@ -488,13 +479,11 @@ function setupWheels() {
 // The readout in the footer exists because the failure this routing has is silent: if no port is
 // bound, the chips look like they are being ignored when in fact nothing ever arrived to route.
 let midiPorts = [];              // Web-MIDI inputs bound in this tab
-let midiHostPorts = [];          // host-side inputs the server opened (LOCAL play)
 function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); }
 function renderMidiIn() {
   const el = document.getElementById('midiin'); if (!el) return;
-  const src = [...midiPorts, ...midiHostPorts.map((n) => n + ' ⟨host⟩')];
-  el.textContent = 'MIDI in: ' + (src.length ? src.join(', ') : 'none') + ' → ' + partsLabel();
-  el.classList.toggle('none', !src.length);
+  el.textContent = 'MIDI in: ' + (midiPorts.length ? midiPorts.join(', ') : 'none') + ' → ' + partsLabel();
+  el.classList.toggle('none', !midiPorts.length);
 }
 function bindMidiInput(inp) {
   if (inp.__xls32) return;              // re-scanning must not stack a second handler -> double notes
@@ -512,7 +501,8 @@ function bindMidiInput(inp) {
 async function initWebMidi() {
   if (!navigator.requestMIDIAccess) return;
   try {
-    const access = await navigator.requestMIDIAccess();
+    // Shared with transport.js, which wants the *outputs* off the same grant.
+    const access = await window.XLS32.midiAccess();
     const scan = () => {
       midiPorts = [];                              // rebuilt from scratch; `__xls32` keeps binds unique
       access.inputs.forEach(bindMidiInput);
@@ -526,7 +516,7 @@ async function initWebMidi() {
   } catch (e) { /* no Web-MIDI permission */ }
 }
 
-// ---------- audio + websocket ----------
+// ---------- audio + the board link ----------
 function silentWavURL() {                          // 1 s of silence as a WAV blob (iOS unlock)
   const sr = 8000, n = sr, b = new ArrayBuffer(44 + n * 2), dv = new DataView(b);
   const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
@@ -548,9 +538,9 @@ async function startAudio() {
     if (audioEl && audioEl.paused) audioEl.play().catch(() => {});
   };
   ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, resume));
-  await ctx.audioWorklet.addModule('worklet.js?' + VERSION);   // cache-bust (Safari caches worklets)
-  node = new AudioWorkletNode(ctx, 'pcm-player',
-                              { outputChannelCount: [2], processorOptions: { sr: SR } });
+  // The transport decides what the source is: a MediaStream off the Tiliqua's UAC2 input, or the
+  // resampling worklet fed by the Basys 3's UART. Either way it hands back one AudioNode.
+  node = await link.attachAudio(ctx);
   analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
   // Unity gain node (kept as an easy volume tap). The board output already saturates ≤1.0
   // and per-note levels are conservative (~0.2 peak), so no attenuation is needed.
@@ -568,7 +558,6 @@ async function startAudio() {
     audioEl.loop = true; audioEl.setAttribute('playsinline', '');
     await audioEl.play().catch(() => {});
   }
-  resampleRatio = SR / ctx.sampleRate;              // ~1 if the browser honored the board's rate
   window.__stats.ctx = ctx.state + '@' + ctx.sampleRate;
   const buf = new Float32Array(analyser.fftSize);
   setInterval(() => {
@@ -576,43 +565,19 @@ async function startAudio() {
     analyser.getFloatTimeDomainData(buf);
     let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
     window.__stats.rms = Math.sqrt(s / buf.length);
-    window.__stats.frames = framesRecv; window.__stats.ctx = ctx.state + '@' + ctx.sampleRate;
+    window.__stats.ctx = ctx.state + '@' + ctx.sampleRate;
     const dbg = document.getElementById('dbg');
-    if (dbg) dbg.textContent = `${ctx.state}@${ctx.sampleRate} · ws ${ws && ws.readyState === 1 ? 'up' : 'down'} · rx ${framesRecv} · rms ${window.__stats.rms.toFixed(3)}`
+    if (dbg) dbg.textContent = `${ctx.state}@${ctx.sampleRate} · ${link ? link.label : 'no board'}`
+      + ` · rms ${window.__stats.rms.toFixed(3)}`
       + (audioEl ? ` · el ${audioEl.paused ? 'paused' : 'play'}` : '');
   }, 150);
 }
-function onPCM(ab) {
-  if (!node) return;              // the socket is up before POWER now; nothing to play into yet
-  framesRecv++;
-  const u16 = new Uint16Array(ab);               // interleaved L,R unsigned 16-bit LE, centered 32768
-  const n = u16.length >> 1;                      // stereo frames
-  const L = new Float32Array(n), R = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    L[i] = (u16[2 * i]     - 32768) / 32768;
-    R[i] = (u16[2 * i + 1] - 32768) / 32768;
-  }
-  node.port.postMessage({ L, R }, [L.buffer, R.buffer]);   // worklet: dual-ring resample → stereo
-}
-// The socket carries MIDI *up* as well as audio down, so it is opened at boot and kept open --
-// it used to be created by powerOn() and reconnected only while `powered`. POWER is a browser-
-// audio control, and in LOCAL play the host makes the sound, so gating MIDI on it meant the keys
-// and any Web-MIDI keyboard were silently dead until someone pressed a button that, in that mode,
-// does nothing else. Idempotent: repeated calls while connecting/open are a no-op.
-function connectWS() {
-  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';   // match page scheme
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.binaryType = 'arraybuffer';
-  ws.onopen = () => {                                   // clear stale board state, then sync all parts to UI
-    setStatus(true);
-    for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
-    syncAllParts();
-    sendPartSelect(true);     // forced: the board may have rebooted, and its default is off
-  };
-  ws.onclose = () => { setStatus(false); setTimeout(connectWS, 1200); };   // auto-reconnect
-  ws.onerror = () => { try { ws.close(); } catch (e) {} };
-  ws.onmessage = (e) => { if (e.data instanceof ArrayBuffer) onPCM(e.data); };
+// Everything the board needs told after a fresh link: it may have been power-cycled since the
+// page loaded, and it keeps no state we can read back.
+function syncBoard() {
+  for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
+  syncAllParts();
+  sendPartSelect(true);       // forced: the board's part-select default is off
 }
 function currentAll() { const v = {}; spec.controls.forEach((c) => v[c.id] = values[c.id]); return v; }
 function setStatus(on) {
@@ -621,13 +586,79 @@ function setStatus(on) {
   document.getElementById('statustext').textContent = on ? 'live' : 'off';
 }
 
+// ---------- picking a board ----------
+// Web MIDI, getUserMedia and serial.requestPort all prompt, and the last two only prompt from
+// inside a user gesture, so POWER is what starts this. Nothing here can be done at boot on the
+// page's behalf, which is the one real cost of dropping the server: it could open a device because
+// it was told to on a command line.
+function chooseBoard(det) {
+  const overlay = document.getElementById('boardbox');
+  const list = document.getElementById('boardlist');
+  list.innerHTML = '';
+  return new Promise((resolve) => {
+    const close = (v) => { overlay.classList.add('hidden'); resolve(v); };
+    for (const [key, t] of Object.entries(window.XLS32.TRANSPORTS)) {
+      const el = document.createElement('div'); el.className = 'bitem';
+      const ok = t.ok();
+      const state = det && det[key];
+      // 'no' is a real answer -- permission is held and the board is not on the bus -- so say so
+      // rather than offer it. It stays clickable: the check can only see hardware the browser has
+      // been shown before, and being wrong about that must not lock anyone out.
+      const note = !ok ? 'not supported by this browser'
+                 : state === 'yes' ? t.hint + ' · detected'
+                 : state === 'no' ? t.hint + ' · not found'
+                 : t.hint;
+      el.innerHTML = `<b>${t.name}</b><span class="dhint"> — ${note}</span>`;
+      if (state === 'yes') el.classList.add('found');
+      if (!ok) el.classList.add('off');
+      else el.addEventListener('click', () => close(key));
+      list.append(el);
+    }
+    document.getElementById('boardclose').onclick = () => close(null);
+    overlay.classList.remove('hidden');
+  });
+}
+
+async function openBoard(key) {
+  const t = window.XLS32.TRANSPORTS[key].make();
+  await t.connect();
+  link = t; SR = t.sr;
+  setStatus(true);
+  return true;
+}
+
+async function connectBoard() {
+  // Skip the picker when the answer is not in doubt. Detection is silent and only ever sees boards
+  // the browser has already been given permission for, so this helps on the second visit onwards --
+  // exactly the visits where being asked the same question again is noise.
+  const det = await window.XLS32.detectBoards();
+  const found = Object.keys(det).filter((k) => det[k] === 'yes');
+  if (found.length === 1) {
+    try {
+      return await openBoard(found[0]);
+    } catch (e) {
+      // Detected but would not open (bitstream swapped, sound device claimed, wrong FTDI channel).
+      // Fall through to the picker rather than dead-end on an alert: the other board may be there.
+      console.warn('auto-connect failed:', e);
+    }
+  }
+  const key = await chooseBoard(det);
+  if (!key) return false;
+  try {
+    return await openBoard(key);
+  } catch (e) {
+    document.getElementById('statustext').textContent = 'no board';
+    alert('Could not open the board: ' + (e && e.message ? e.message : e));
+    return false;
+  }
+}
+
 function togglePower() { return powered ? powerOff() : powerOn(); }
 function powerOff() {
   powered = false;
   if (masterGainNode) { try { masterGainNode.disconnect(); } catch (_) {} }   // mute browser output
   for (const n of Array.from(activeNotes.keys())) noteOff(n);                          // release held notes
   document.getElementById('power').classList.remove('on');
-  setStatus(false);
 }
 async function powerOn() {
   if (powered) return;
@@ -636,17 +667,17 @@ async function powerOn() {
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
     powered = true;
     document.getElementById('power').classList.add('on');
-    setStatus(ws && ws.readyState === 1);
     return;
   }
-  // Web Audio's AudioWorklet only works in a secure context (HTTPS or localhost).
-  // Over plain http://<ip> it's unavailable, so surface that instead of failing silently.
+  // Web MIDI, Web Serial and AudioWorklet are all secure-context only. Over plain http://<ip>
+  // they are simply absent, so say that rather than fail three different ways.
   if (!window.isSecureContext || !(window.AudioContext || window.webkitAudioContext)) {
     document.getElementById('statustext').textContent = 'need https';
-    alert('Audio needs a secure context. Open this page over HTTPS or localhost — e.g. an ' +
-          'HTTPS hostname like https://your-host.example (or a Tailscale name) — not plain http://<ip>.');
+    alert('This page needs a secure context. Open it over HTTPS or from localhost — e.g. ' +
+          'http://127.0.0.1:8765 — not plain http://<ip>, and not file://.');
     return;
   }
+  if (!link && !await connectBoard()) return;
   try {
     await startAudio();        // needs the user gesture (the POWER click)
   } catch (e) {
@@ -654,25 +685,60 @@ async function powerOn() {
     alert('Audio init failed: ' + (e && e.message ? e.message : e));
     return;
   }
-  connectWS();
+  syncBoard();                 // the board may have rebooted since the page loaded
   powered = true;
   document.getElementById('power').classList.add('on');
 }
 
 // ---------- demo player (4-part authored songs, played live to the board) ----------
+// M31 moved the sequencer here from a Python thread (webui/server.py `_demo_run`). The shape
+// changed with the move: a thread can sleep until each note is due, a tab cannot -- setTimeout
+// is throttled, and coarse besides. So this schedules AHEAD instead, handing every event a
+// performance.now() timestamp a quarter-second early and letting the transport hold it. On the
+// Tiliqua that means the MIDI service emits it, so the timing survives a busy main thread; on
+// the Basys 3 there is no hardware scheduler and it degrades to a timer per event.
+const LOOKAHEAD_MS = 250;        // how far past `now` each tick schedules
+const TICK_MS = 60;              // and how often it does so -- comfortably inside the look-ahead
 let demos = { songs: [] }, demoIdx = -1, demoPlaying = false;
+let demoEvents = [], demoLoopMs = 0, demoBase = 0, demoPos = 0, demoTimer = null;
+
+function demoTick() {
+  demoTimer = null;
+  if (!demoPlaying) return;
+  const horizon = performance.now() + LOOKAHEAD_MS;
+  for (;;) {
+    if (demoPos >= demoEvents.length) {           // end of the bar: wrap and keep going
+      if (demoBase + demoLoopMs > horizon) break;
+      demoBase += demoLoopMs; demoPos = 0;
+      continue;
+    }
+    const [tms, m] = demoEvents[demoPos];
+    const when = demoBase + tms;
+    if (when > horizon) break;
+    demoPos++;
+    // A muted part swallows its note-ons and still gets its note-offs, so muting mid-note
+    // releases what is already sounding instead of stranding it.
+    if ((m[0] & 0xF0) === 0x90 && !playSet.has(m[0] & 0x0F)) continue;
+    sendMidi(m, when);
+  }
+  demoTimer = setTimeout(demoTick, TICK_MS);
+}
 function stopDemo() {
   demoPlaying = false; demoIdx = -1;
-  fetch('/api/demo_stop', { method: 'POST' }).catch(() => {});   // server sequences + does all-notes-off
+  if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+  if (link) link.cancelPending();               // drop whatever was scheduled but not yet sent
+  // Explicit note-offs, all 4 parts, all 128 notes: the engine implements no CC123 all-notes-off,
+  // and a cancelled look-ahead has certainly dropped some note-offs on the floor.
+  for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
   document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
   const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
 }
 async function playDemo(idx) {
   if (idx === demoIdx && demoPlaying) { stopDemo(); return; }   // toggle off if same song
-  if (!powered && !localPlay) { await powerOn(); if (!powered) return; }   // WEB needs browser audio; LOCAL plays on host
+  if (!powered) { await powerOn(); if (!powered) return; }
   stopDemo();
   const song = demos.songs[idx]; if (!song) return;
-  demoPlaying = true; demoIdx = idx;
+  demoIdx = idx;
   // the song's shared effect state (mode + reverb/room/chorus/delay); default any it omits (old songs)
   const fxState = {};
   EFFECT_IDS.forEach((id) => { fxState[id] = (song[id] != null) ? song[id] : spec.defaults[id]; });
@@ -688,7 +754,7 @@ async function playDemo(idx) {
   for (let ch = 0; ch < NPARTS; ch++)
     for (const id in partValues[ch])
       if ((id in ccById) && !globalIds.has(id)) setup.push([0xB0 | ch, ccById[id], partValues[ch][id] & 0x7f]);
-  // build timed note events (ms) and hand the whole sequence to the server to play with tight timing
+  // build timed note events (ms), sorted so the look-ahead loop can walk them with one cursor
   const beatMs = 60000 / song.bpm, loopMs = song.bars * 4 * beatMs;
   const events = [];
   song.notes.forEach(([t, dur, ch, note, vel]) => {
@@ -696,22 +762,16 @@ async function playDemo(idx) {
     events.push([(t + dur) * beatMs, [0x80 | ch, note, 0]]);
   });
   events.sort((a, b) => a[0] - b[0]);
-  fetch('/api/demo_play', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ setup, events, loop_ms: loopMs, mute: mutedChans() }) }).catch(() => {});
+  for (const m of setup) sendMidi(m);        // untimed: these want to land before the clock starts
+  demoEvents = events; demoLoopMs = loopMs; demoPos = 0;
+  // 240 ms of head start, as the Python sequencer had: the setup burst is ~200 CC messages and the
+  // first downbeat must not race the patch that shapes it.
+  demoBase = performance.now() + 240;
+  demoPlaying = true;
+  demoTick();
   document.querySelectorAll('#demolist .bitem').forEach((el, k) => el.classList.toggle('on', k === idx));
   setBar(song.genre, song.name);
   const b = document.getElementById('demo'); if (b) b.textContent = '■ DEMO';
-}
-async function replaceDemo(idx) {
-  const genre = demos.songs[idx].genre;
-  const el = document.querySelectorAll('#demolist .bitem')[idx];
-  const lbl = el.querySelector('.dlabel'); const prev = lbl.textContent;
-  lbl.textContent = genre + ' · …';                             // server composes a fresh one (midigen / PD)
-  try {
-    const s = await fetch('/api/demo?genre=' + encodeURIComponent(genre) + '&seed=' + Math.floor(Math.random() * 1e9)).then((r) => r.json());
-    demos.songs[idx] = s; lbl.textContent = s.genre + ' · ' + s.name;
-    if (demoPlaying && demoIdx === idx) { demoIdx = -1; playDemo(idx); }   // restart with the fresh song
-  } catch (e) { lbl.textContent = prev; }
 }
 async function saveDemoTones() {
   const btn = document.getElementById('demosave'); const label = btn.textContent;
@@ -725,11 +785,23 @@ async function saveDemoTones() {
   }
   const fxState = {}; EFFECT_IDS.forEach((id) => { fxState[id] = partValues[activeCh][id]; });   // full effect state
   song.parts = parts; Object.assign(song, fxState);           // update in memory
-  try {                                                        // persist the whole song into demos.json (single source of truth)
-    const r = await fetch('/api/demo_save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ song }) }).then((x) => x.json());
-    btn.textContent = r.ok ? '✓ saved' : '✗ err';
-  } catch (e) { btn.textContent = '✗ err'; }
+  // The server used to patch demos.json in place. With no server the page cannot write into its
+  // own directory, so it hands the whole file back and you drop it into webui/static/ yourself.
+  // Whole file, not the one song: demos.json is the single source of truth and a diff of one song
+  // is not something you can put back without a tool.
+  const blob = new Blob([JSON.stringify(demos, null, 1)], { type: 'application/json' });
+  try {
+    if (window.showSaveFilePicker) {
+      const h = await window.showSaveFilePicker({ suggestedName: 'demos.json',
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+    } else {                                     // Firefox / Safari: fall back to a plain download
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'demos.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+    btn.textContent = '✓ saved';
+  } catch (e) { btn.textContent = (e && e.name === 'AbortError') ? label : '✗ err'; }
   setTimeout(() => (btn.textContent = label), 1300);
 }
 function buildDemo() {
@@ -737,10 +809,7 @@ function buildDemo() {
   (demos.songs || []).forEach((s, idx) => {
     const el = document.createElement('div'); el.className = 'bitem demoitem';
     const lbl = document.createElement('span'); lbl.className = 'dlabel'; lbl.textContent = s.genre + ' · ' + s.name;
-    const rep = document.createElement('button'); rep.className = 'drep'; rep.textContent = '⟳';
-    rep.title = 'replace with a new ' + s.genre + ' song';
-    rep.addEventListener('click', (e) => { e.stopPropagation(); replaceDemo(idx); });
-    el.append(lbl, rep);
+    el.append(lbl);
     el.addEventListener('click', () => playDemo(idx));
     box.append(el);
   });
@@ -758,76 +827,20 @@ function buildDemo() {
   overlay.addEventListener('click', (e) => { if (e.target.id === 'demobox') overlay.classList.add('hidden'); });
 }
 
-// ---------- play mode (WEB = browser audio over WS · LOCAL = host audio device + MIDI in) ----------
-function renderPlayMode() {
-  const b = document.getElementById('playmode'); if (!b) return;
-  b.textContent = localPlay ? '💻 LOCAL' : '🔊 WEB';
-  b.classList.toggle('local', localPlay);
-}
-async function setPlayMode(on) {
-  const dbg = document.getElementById('dbg');
-  try {
-    const r = await fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ on, chans: noteChans() }) }).then((x) => x.json());
-    localPlay = !!r.on;
-    applyLocalState(r);
-    renderPlayMode();
-    if (on && !localPlay) {                        // requested LOCAL but the server couldn't switch
-      if (dbg) { dbg.textContent = 'LOCAL failed: ' + (r.error || 'audio device unavailable'); setTimeout(() => { if (dbg.textContent.startsWith('LOCAL failed')) dbg.textContent = ''; }, 6000); }
-    } else if (dbg) { dbg.textContent = ''; }
-    // WEB mode needs the browser audio powered on (a user gesture) to be heard; LOCAL plays on the host.
-    if (!localPlay && !powered) powerOn();
-  } catch (e) { if (dbg) dbg.textContent = 'LOCAL failed: ' + e; }
-}
-async function setAudioOut(v) {
-  const device = (v === '') ? null : parseInt(v, 10);   // '' = system default
-  try {
-    await fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ on: localPlay, chans: noteChans(), device }) });
-  } catch (e) {}
-}
-function applyLocalState(st) {   // whatever /api/local last said about the host's MIDI inputs
-  if (!st || typeof st !== 'object') return;
-  if (Array.isArray(st.midi_open)) { midiHostPorts = st.midi_open; renderMidiIn(); }
-}
-async function initPlayMode() {
-  const b = document.getElementById('playmode'); const sel = document.getElementById('audioout');
-  if (!b) return;
-  try {
-    const st = await fetch('/api/local').then((x) => x.json());
-    applyLocalState(st);
-    if (!st.available) { b.style.display = 'none'; if (sel) sel.style.display = 'none'; return; }   // WEB only
-    localPlay = !!st.on; renderPlayMode();
-    if (sel) {
-      sel.innerHTML = '';
-      const def = document.createElement('option'); def.value = ''; def.textContent = '🔈 Default out'; sel.append(def);
-      (st.output_devices || []).forEach((d) => {
-        const o = document.createElement('option'); o.value = String(d.index); o.textContent = d.name; sel.append(o);
-      });
-      sel.value = (st.device == null) ? '' : String(st.device);
-      sel.addEventListener('change', () => setAudioOut(sel.value));
-    }
-    b.title = 'WEB: audio to this browser · LOCAL: host plays audio + reads MIDI ('
-      + ((st.midi_inputs || []).join(', ') || 'none') + ') — lower latency';
-  } catch (e) {}
-  b.addEventListener('click', () => setPlayMode(!localPlay));
-  // The server rescans its MIDI ports on this GET, so the poll is also what picks a keyboard up
-  // when it is plugged in mid-session. Cheap: a CoreMIDI enumeration on localhost.
-  setInterval(() => { fetch('/api/local').then((x) => x.json()).then(applyLocalState).catch(() => {}); }, 3000);
-}
-
 // ---------- boot ----------
+// M31 deleted the LOCAL play mode from here (host audio device + host MIDI in, `/api/local`, and
+// the 3 s poll that rescanned CoreMIDI). It existed because the server owned the hardware and
+// could play with lower latency than a WebSocket round trip; with the page owning the hardware
+// there is no round trip left to avoid, and the host has nothing the browser cannot reach.
 async function boot() {
   document.getElementById('ver').textContent = VERSION;
-  fetch('/api/demo_stop', { method: 'POST' }).catch(() => {});   // clear any demo left looping on the server
-  spec = await (await fetch('/api/spec')).json();
-  if (spec.sr) SR = spec.sr;         // before startAudio(), which is gated behind the POWER click
-  demos = await fetch('/demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));  // single source of truth (tones saved back into it)
+  // Both baked at build time now (presetgen/build_spec.py, presetgen/build_demos.py) -- fetched as
+  // plain files, so any static host serves the whole app.
+  spec = await (await fetch('spec.json?' + VERSION)).json();
+  demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');
   initMasterVol();
-  initPlayMode();
-  connectWS();               // MIDI up does not wait for POWER (which only arms browser audio)
   document.getElementById('power').addEventListener('click', togglePower);
   document.getElementById('save').addEventListener('click', saveUser);
   document.getElementById('init').addEventListener('click', () => {

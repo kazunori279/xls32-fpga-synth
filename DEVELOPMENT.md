@@ -600,7 +600,11 @@ flowchart LR
   couldn't keep up with the stream and dropped data — the browser decodes instead); MIDI bytes
   from the browser are written straight to the board. Multiple tabs supported. Serve HTTPS
   (needed for Web Audio off-localhost, e.g. over [Tailscale](https://tailscale.com/)) with `SSL_CERT`/`SSL_KEY`; bind
-  with `HOST`. Run: `uv run python webui/server.py` (or `HOST=0.0.0.0 SSL_CERT=… SSL_KEY=… …`).
+  with `HOST`.
+  **Gone since M31** — Chrome grew both halves natively (Web MIDI + UAC2 capture on the Tiliqua,
+  Web Serial at 2 Mbaud on the Basys 3), so the page owns the hardware and `webui/server.py` was
+  deleted. Everything below still describes the audio path faithfully; only the transport under it
+  changed. To run it today: `python3 -m http.server 8765 -d webui/static`.
 - **Front-end** (`webui/static/`): a `<canvas>`-free P5 panel (wood cheeks, cream sections,
   black knobs, pitch/mod wheels, keyboard; a version tag in the header). Knobs/switches send
   MIDI CCs; a preset applies a full CC burst so the board matches the UI. The AudioWorklet is
@@ -2929,6 +2933,135 @@ on the answer — but it is unattributed, not accounted for.
 Also fixed in the same pass, from the same report: the DEMO button now stops the song when one is
 playing, instead of reopening the picker. The label already flipped to `■ DEMO`, so the one control
 that looked like a stop button was the one control that could not stop anything.
+
+## Milestone 31 — deleting the Python hop
+
+`webui/server.py` is gone: 566 lines of FastAPI that sat between the browser and the board,
+taking MIDI over a WebSocket, writing it to the port, and pushing PCM back the other way. The
+browser now opens the board itself. `python3 -m http.server 8765 -d webui/static` is the whole
+runtime, and only because a page has to come from *somewhere* — nothing in that process ever
+touches the hardware.
+
+This became possible in pieces rather than all at once, and the last piece was the browser
+catching up: Web MIDI sends to the Tiliqua, `getUserMedia` reads its UAC2 capture endpoint back,
+Web Serial drives the Basys 3's 2 Mbaud UART, and the File System Access API writes `demos.json`
+where the old `/api/demo_save` used to. Every server route had a browser equivalent or no reason
+to exist. `/api/spec` became a build artifact (`presetgen/build_spec.py` → `spec.json`, factory
+banks folded in); `/api/gain` and `/api/local` were LOCAL-playback plumbing and went with it;
+`/api/demo` generated random songs, which the user cut.
+
+### A thread can sleep until the next note; a tab cannot
+
+The sequencer was the one part that did not port straight across. `_demo_run` was a Python thread
+that slept until each event was due — accurate to well under a millisecond and costing nothing to
+write. `setTimeout` is coarse, clamped, and throttled harder the moment the tab loses focus, so
+the same shape in JS gives audibly ragged eighth notes.
+
+So the JS sequencer never waits for an event. It wakes every 60 ms and hands the transport
+everything due in the next 250 ms, each message carrying a `performance.now()` timestamp. On the
+Tiliqua `output.send(data, when)` passes that timestamp to the MIDI service, which is not
+JavaScript and does not get throttled — the timer's jitter is absorbed inside the look-ahead and
+never reaches the wire. The Basys 3 has no such scheduler and degrades to one timer per event,
+which is the same accuracy the old WebSocket path had.
+
+The look-ahead costs one thing: `stopDemo` must cancel work already handed downstream. It calls
+`cancelPending()` and then blasts note-offs across 4 channels × 128 notes, exactly as the server
+did — the engine implements no CC123 all-notes-off, and a cancelled look-ahead has certainly
+dropped some note-offs on the floor. Mute is filtered on note-*ons* only, so muting a part
+mid-note releases what is already sounding instead of stranding it.
+
+### Proving the Aligner port instead of testing it
+
+`host/transport/uart.py`'s `Aligner` is the piece that makes the Basys 3's frameless stream
+readable: the board marks each sample's LSB with L=0 / R=1, so byte phase and channel order fall
+out of one piece of evidence, scored over 4000 samples and re-checked every 8192 bytes. Frame
+phase genuinely slips mid-stream — that was the M28a rail bug — so this is not startup-only code.
+
+Testing the JS copy by ear would have proven very little. Instead: a synthetic stereo stream with
+a 3-byte initial offset and a 1-byte slip partway through, fed to both implementations in
+identical 1024-byte chunks. **47,996 bytes out of each, byte-identical, no divergence.** That is
+a stronger statement than any capture, and it took less time.
+
+### Two traps worth writing down
+
+**The identity string has to be the whole thing.** `TILIQUA_MATCH` is `'tiliqua xls32'`, the full
+`iProduct`. Matching just "Tiliqua" also matches the vendor's own 4-in/4-out UAC2 bitstream, which
+enumerates happily, accepts MIDI, and returns silence — reported as a synth failure.
+
+**The 6 dB Eurorack pad has to be undone in the browser.** `xls_core.py:201` shifts the output
+right by one so a modular rack sees sane levels; `usbaudio.py` multiplied by 2 on the way back in.
+The browser does it with a `GainNode` at 2.0, which is what keeps browser levels equal to every
+threshold hard-coded in `test/`.
+
+### `file://` is not an option
+
+An opaque origin cannot persist a Web MIDI permission grant, so the page would ask again on every
+load and forget the answer. `http://127.0.0.1` is a secure context and needs no certificate, which
+also retired `webui/certs/`.
+
+### What is measured, and what is not
+
+On the Tiliqua, with no Python running anywhere: POWER → board picker → `link:"Tiliqua · USB MIDI
++ UAC2", ctxRate:48000`. On the INIT patch the analyser reads **exactly 0.0 → 0.049 → exactly
+0.0** across a note. All four MIDI channels sound (0.0509 / 0.0263 / 0.0229 / 0.0168) with
+exact-zero silence between them, so part select survived the move. A full demo song runs at 0.229
+and returns to the floor after stop, so the teardown strands nothing.
+
+One early reading looked like a noise floor — 0.0048 at rest — and was not: it was the demo
+patch's Freeverb tail still decaying. The INIT patch reads exact zero. Neither number is the
+board's noise floor and neither should be quoted as one.
+
+**Web Serial does reach 2 Mbaud on macOS.** This was the one premise the plan could not prove up
+front: macOS termios cannot express 2 Mbaud, and `host/transport/uart.py` only gets there through an
+`IOSSIOSPEED` ioctl. Chrome does the equivalent internally — `open({baudRate: 2000000})` streams. On
+the Basys 3 the analyser reads **0.000038 → 0.0487 → 0.0000077** across a note, a three-note chord
+peaks at 0.33 with **zero sample-to-sample jumps above 0.4** (so the ported Aligner is locked and
+byte phase is right), and a demo song runs at 0.08–0.18 before falling back to 0.000008 on INIT.
+
+### The failure that looked like a dead board
+
+First attempt: no sound, and the board's LEDs — which follow the per-voice envelope, so they are a
+direct read-out of whether MIDI is arriving — stayed dark. The page said `live`.
+
+The Basys 3's FT2232H enumerates **two** serial ports. Channel A is JTAG, channel B is the UART, and
+Python has always known this (`find_port` takes `p[-1]`, with the comment right there). Web Serial
+cannot: `getInfo()` returns `{usbVendorId: 0x0403, usbProductId: 0x6010}` for both, the picker labels
+them identically, and channel A **opens without complaint and then does nothing**. No error, no
+data, no way to tell from the outside. `getPorts()` had two grants and the wrong one won.
+
+There is no attribute to select on, so the port is now identified by behaviour: open a candidate,
+read for 400 ms, and keep it only if ≥4 KB arrives. The gateware streams unconditionally — silence
+is still 32000 centred frames a second — so "sends nothing" is a reliable negative, and the JTAG
+channel fails it every time. Granted ports are probed in turn rather than trusted by index, and one
+that fails gets `port.forget()`, because a remembered grant for channel A would otherwise win the
+race on every future visit. A wrong pick at the picker now raises instead of going quiet.
+
+Worth noting how it was diagnosed, since the symptom pointed at the hardware: opening both `/dev`
+nodes from Python settled it in one shot — `…941` gave 134,640 bytes/s, `…940` gave `EBUSY`. The
+board was fine and streaming; the browser was holding the other channel.
+
+### The picker mostly does not appear
+
+Asking "which board is plugged in?" on every POWER is the server's old `--board` flag rewritten as
+a dialog, and the browser can usually answer it. Both checks are **silent** — they may not prompt,
+because they run before the user has said what they want, and a MIDI prompt is the wrong thing to
+show someone holding a Basys 3. That constrains what is knowable: `permissions.query({name:'midi'})`
+first, and only enumerate outputs if it already says `granted`; `serial.getPorts()` only ever
+returns ports already granted, so it is silent by construction. Each answers `yes` / `no` /
+`unknown`, and `unknown` is the honest reply on a first visit, when nothing has been granted and
+the picker is unavoidable.
+
+One `yes` connects straight through. Anything else falls back to the dialog, now annotated — and a
+board that auto-connected but failed to open falls back too, rather than dead-ending on an alert
+when the other board is sitting right there. `no` is displayed but stays clickable: it means
+"permission held, not on the bus", which is a good guess and not a fact worth locking someone out
+over.
+
+Verified both ways with the other board's probe stubbed out, since both are physically attached
+here: Basys 3 alone → `Basys 3 · UART 2 Mbaud`, 32 kHz, no dialog; Tiliqua alone → `Tiliqua · USB
+MIDI + UAC2`, 48 kHz, no dialog; both present → the dialog, both rows marked *detected*. The
+`getUserMedia` call on the Tiliqua path still lands inside the POWER click's activation window,
+which the detection pass had to be fast enough not to spend.
 
 ---
 

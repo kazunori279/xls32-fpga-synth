@@ -5,25 +5,26 @@ description = "Verify the Basys 3 XLS synthesizer over USB"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 # Core verify/analysis is stdlib-only (termios); analysis uses math/statistics.
-# RUNTIME (run/demo the synth: web UI server, host tools, tests). Everything here has wheels on
-# common platforms so `uv sync` works on any Mac. The heavy preset-generation tools live in the
-# optional [presetgen] extra below (dawdreamer etc. lack wheels on some platforms and aren't
-# needed to run the synth) -> install those only for dev work with `uv sync --extra presetgen`.
+# RUNTIME (host tools and tests). Everything here has wheels on common platforms so `uv sync`
+# works on any Mac. The heavy preset-generation tools live in the optional [presetgen] extra below
+# (dawdreamer etc. lack wheels on some platforms and aren't needed to run the synth) -> install
+# those only for dev work with `uv sync --extra presetgen`.
+#
+# Nothing here is needed to PLAY the synth: M31 made webui/ a static page that reaches the board
+# through Web MIDI / Web Serial, so fastapi, uvicorn and midigen-lib left with the server.
 dependencies = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.29",
     "numpy>=2.0.2",
-    "sounddevice>=0.5.5",       # LOCAL play: host audio out (ships prebuilt wheels — no compiler)
+    "sounddevice>=0.5.5",       # host Tiliqua transport: UAC2 capture (prebuilt wheels — no compiler)
     "mido>=1.3.3",              # MIDI message helpers
-    "midigen-lib>=1.1.0",       # /api/demo procedural composer
     "soundfile>=0.13.1",        # capture/record WAVs
     "pillow>=11.3.0",           # test-suite caption cards
 ]
 
 [project.optional-dependencies]
-# LOCAL-mode host MIDI input. python-rtmidi builds from C++ source, which some locked-down
-# machines block (e.g. Santa on corp Macs). It's NOT needed for WEB mode or LOCAL audio-out —
-# only for reading a MIDI keyboard plugged into the host. Install where a compiler is allowed:
+# MIDI out from the HOST to the Tiliqua (host/transport/usbaudio.py, used by test/ and presetgen/).
+# python-rtmidi builds from C++ source, which some locked-down machines block (e.g. Santa on corp
+# Macs), so it stays optional: the Basys 3 flow sends MIDI down the same UART and never wants it,
+# and the browser UI has its own Web MIDI. Install where a compiler is allowed:
 #   uv sync --extra localmidi
 localmidi = ["python-rtmidi>=1.5.8"]
 # Docs: regenerate the DSP signal-flow SVGs in docs/ from docs/gen_dsp_diagrams.py.

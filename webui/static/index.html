@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v79-part">
+<link rel="stylesheet" href="style.css?v82-standalone">
 </head>
 <body>
 <div id="synth">
@@ -19,8 +19,6 @@
       </div>
       <div class="head-right">
         <div class="status" id="status"><span class="dot" id="dot"></span><span id="statustext">off</span></div>
-        <select id="audioout" class="audioout" title="LOCAL play: host audio output device"></select>
-        <button id="playmode" class="power" title="WEB: audio streams to this browser · LOCAL: server plays audio + reads a MIDI keyboard on the host machine (lower latency)">🔊 WEB</button>
         <div id="mvol" class="mvol" title="Master output volume (final mix)"><div class="knob" id="mvolknob"></div><div class="mvollabel">VOL</div></div>
         <button id="power" class="power">POWER</button>
       </div>
@@ -61,6 +59,16 @@
       </div>
     </div>
 
+    <div id="boardbox" class="browser hidden">
+      <div class="bwin">
+        <div class="bhead">
+          <div class="dtitle">BOARD<span class="dhint"> — which one is plugged in? the browser will ask for permission next</span></div>
+          <button id="boardclose" class="bclose" title="close">✕</button>
+        </div>
+        <div class="bbody"><div id="boardlist" class="blist"></div></div>
+      </div>
+    </div>
+
     <div id="browser" class="browser hidden">
       <div class="bwin">
         <div class="bhead">
@@ -95,6 +103,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="app.js?v79-part"></script>
+<script src="transport.js?v82-standalone"></script>
+<script src="app.js?v82-standalone"></script>
 </body>
 </html>

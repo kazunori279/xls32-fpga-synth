@@ -18,7 +18,7 @@ the very line the model still had wrong. Nothing but hardware sees these.
     uv run python presetgen/param_diff.py              # all parameters
     uv run python presetgen/param_diff.py cutoff reso  # just these
 
-Stop webui/server.py first. Costs no build and ~15 min of board time for the full sweep.
+Close the web UI tab first (it holds the board's link). Costs no build and ~15 min of board time for the full sweep.
 """
 import os, sys, time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host")))

@@ -2,7 +2,7 @@
 
 Samples presets across categories from webui/presets_*.json, renders each on the sim and the
 board, and reports the spectrogram loss split by feature usage (dry vs FX vs unison) — the real
-"does the offline search transfer to hardware?" number. Stop webui/server.py first.
+"does the offline search transfer to hardware?" number. Close the web UI tab first (it holds the board's link).
 
 Board-agnostic since M27 (`open_transport()`), and the feature split now keys off the effect
 depths rather than the retired CC83 mode.

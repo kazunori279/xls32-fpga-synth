@@ -442,18 +442,14 @@ boards/
   tiliqua/
     board.py                   # descriptor: transport="usbaudio", sr=48000, unsupported="…M21"
     gateware/                  # (M21)
-      top.py                   # Amaranth top — XLS32_VARIANT selects fx (M26) or cv (M28)
+      top.py                   # Amaranth top — one bitstream since M31 (M28's cv variant is gone)
       xls_core.py              # Instance() wrapper around core/engine.v + CE/CDC
-      fx.py                    # (M26) PSRAM-backed chorus / echo / reverb
+      fx.py                    # (M26) chorus / echo / reverb; all-BRAM since M29
       midi_filter.py           # (M24) TRS + USB-MIDI → engine's u8 midi_in channel
-      midi_arb.py              # (M28) round-robin, message-atomic; 3 sources into one stream
-      cvin.py                  # (M28) CV/gate in → MIDI ch 4, and the out2 self-test ramp
-      cv_proto.py              # (M28) the 3 constants check_cv.py shares with it, importing nothing
-      led.py                   # (M28) viz_out → the 8-LED comet
+      midi_arb.py              # (M28) round-robin, message-atomic; TRS + USB into one stream
       viz.py                   # (M29) viz_out → 32 beam-raced tiles; no framebuffer, see M29
-    fw/                        # (M30) Rust firmware for the SoC menu
-    scripts/ build.sh          # (M21)   flash.sh (M31)
-    firmware/                  # (M31) released .tar.gz bitstream archives
+    scripts/ build.sh          # (M21)   flash.sh (M32)
+    firmware/                  # (M32) released .tar.gz bitstream archives
     deps/tiliqua               # (M21) git submodule (apfaudio/tiliqua)
 
 host/
@@ -1045,6 +1041,13 @@ avoiding. A re-run of `presetgen/validate_hw.py` on the `fx` bitstream puts the 
 where M27 left it (0/128 rails, separation 2.00x → 1.96x, matched median 14.84 → 14.94, 97/128 both
 times). See the M28 entry in `DEVELOPMENT.md`.
 
+**Withdrawn in M31.** Everything above happened and the measurement stands; the code is gone.
+M29 dissolved the reason for the split — with `psram_periph` deleted there was room for one
+bitstream again — which left `$XLS32_VARIANT` selecting between a live variant and one nothing
+built. `cvin.py`, `cv_proto.py`, `led.py`, their tests and `check_cv.py` were removed rather than
+carried as a second target that no milestone since M28 has built or graded. `midi_arb.py` stayed:
+the interleave hazard it fixes belongs to two sources, not three.
+
 ### Phase D — the screen
 
 **M29 · Screen, no SoC — visualiser** — ✅ **done** (and it re-merged the two bitstreams)
@@ -1134,17 +1137,26 @@ dvi_gen 325, tiles 225, reboot 137, arb 65, serialrx 58. See the M29 entry in `D
 > TRELLIS_COMB or one of the 3 spare DP16KD, which is the resource actually under pressure. Not
 > worth doing until something needs a multiplier; worth knowing before anything is added.
 
-**M30 · SoC + on-screen patch editor**
-`TiliquaSoc` + Rust firmware (`riscv32im`): encoder-driven menu, the full CC map as editable
-parameters, preset browsing from SPI flash, per-part selection. This is the Tiliqua-native
-equivalent of the browser panel and is a substantial subproject in its own right — treat the
-`polysyn` and `xbeam` examples as the reference.
-*Exit:* every CC in the map is reachable from the encoder without a host attached, and presets
-load/save to flash.
+**~~M30 · SoC + on-screen patch editor~~ — cancelled**
+`TiliquaSoc` + Rust firmware (`riscv32im`) would have put the full CC map behind the encoder.
+**It cannot be built on top of M29.** `TiliquaSoc` mandates PSRAM — `psram_periph`
+(`tiliqua_soc.py:187`), `DMAFramebuffer` (`:224`), and firmware that executes from `psram_base` —
+and PSRAM is exactly the block M29 deleted to buy the screen. Putting it back costs the DDR PHY
+and the framebuffer, on a design at 23,773 / 24,288 cells (97%, ~515 free). The two are not
+alternatives to weigh: M29's beam-raced visualiser exists *because* the memory went away.
+Nothing about the plan was wrong except its order, and the order is not recoverable.
+The browser panel covers the same use case, and M31 is what made it cheap to reach.
+
+**M31 · Standalone browser UI** ← current
+Delete `webui/server.py`. The page reaches the board itself: Web MIDI + `getUserMedia` on the
+Tiliqua's UAC2 input, Web Serial at 2 Mbaud on the Basys 3 (`host/transport/uart.py`'s `Aligner`
+ported to JS). The demo sequencer, the CC spec and the tone save move into the browser with it.
+*Exit:* `python3 -m http.server -d webui/static` — or a GitHub Pages URL — plays both boards with
+no Python process anywhere.
 
 ### Phase E — release
 
-**M31 · Bitstream archives, CI, docs**
+**M32 · Bitstream archives, CI, docs** (was M31)
 `manifest.json` metadata (name, IO assignments for the bootloader help screen), `pdm flash archive`
 recipes, prebuilt `.tar.gz` in `boards/tiliqua/firmware/`, webflash-compatible release. CI that
 builds both boards. Rewrite README §1–§3 as genuinely two-board; add a Tiliqua section to
@@ -1169,8 +1181,10 @@ flowchart TD
   M25 --> M28["M28 CV / LEDs / touch"]
   M27 --> M29["M29 screen visualiser"]
   M28 --> M29
-  M29 --> M30["M30 SoC patch editor"]
-  M30 --> M31["M31 release"]
+  M29 --> M31["M31 standalone browser UI"]
+  M31 --> M32["M32 release"]
+  M29 -.->|"cancelled: SoC needs<br/>the PSRAM M29 deleted"| M30["M30 SoC patch editor"]
+  style M30 stroke-dasharray: 4 4
 ```
 
 M25 is the load-bearing one: everything after it is graded automatically, everything before it is
@@ -1195,7 +1209,7 @@ graded by hand or by simulation.
 | 7 | Tiliqua submodule / Amaranth version drift | Medium | Build breakage | Pin the submodule; build gateware in Tiliqua's own `pdm` env, keep `uv` for host tooling |
 | 8 | 32→48 kHz resampling artifacts | Low | Audible aliasing | `tiliqua.dsp.resample` (2:3 rational); verify by FFT in M23 |
 | 9 | ~~Preset bank mismatches the ported path~~ | **Confirmed, and worse than stated** | Presets sounded wrong on *both* boards | **Retired by M27**, but the mismatch was never Tiliqua-specific: `engine.py` ran at 28 kHz (a rate no board has) and modelled a 4-comb reverb selected by CC83 modes, against 8 combs and depth gating in the shipped shell. So all 274 presets carried a dead `fx` key and were fitted with a tail they were then played without — on the Basys 3 too. Generator corrected against `fx_model.py`, banks migrated, `validate_hw.py` clean on all three. Re-fitting the corpora is deferred (they are gone) |
-| 10 | SoC firmware is a project unto itself | **High** | Schedule | M30 is explicitly last and optional; the browser UI already covers the use case |
+| 10 | SoC firmware is a project unto itself | **Realised — M30 cancelled** | None taken | It was scheduled last and optional precisely so this could happen. What killed it was not the schedule but M29: `TiliquaSoc` mandates PSRAM, M29 deleted PSRAM to fit the screen, and `fx` has ~515 cells free. The browser UI already covered the use case, and M31 made it a static page that needs no host process — so the capability the SoC was for is closer than it was, not further |
 
 ---
 
@@ -1209,11 +1223,9 @@ brew install pdm                       # or: curl -sSL https://pdm-project.org/i
 # oss-cad-suite (arm64 native) — or let pdm use yowasp-yosys / yowasp-nextpnr-ecp5
 brew install verilator
 brew install openfpgaloader             # already installed for Basys 3; needs >= 0.12.1 for dirtyJtag
-
-# Rust, only for M30
-rustup target add riscv32im-unknown-none-elf
-cargo install cargo-binutils svd2rust form
 ```
+
+(No Rust toolchain here: it was listed for M30's SoC firmware, which is cancelled.)
 
 Hardware: a Eurorack case + PSU (the module and the screen each take 16-pin Eurorack power), a USB-C
 cable to `dbg`, and a second to `usb2` for M25 onward.

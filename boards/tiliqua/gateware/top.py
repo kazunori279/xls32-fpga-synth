@@ -31,7 +31,6 @@ from tiliqua.platform import RebootProvider
 from tiliqua.video import dvi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cvin import CvIn, CvTestRamp
 from fx import StereoFx
 from midi_arb import MidiArbiter, MidiPartSelect
 from midi_filter import SysCommonFilter
@@ -47,43 +46,22 @@ MODELINE = "720x720p60r2"
 
 class CoreTop(Elaboratable):
 
-    # M28 · two bitstreams, because the effects and the jacks do not fit in one.
-    #
-    # This was measured, not assumed. M26 closed at 23,800 of 24,288 TRELLIS_COMB -- 488 cells of
-    # headroom on the whole die -- and CvIn plus the arbiter cost 639, so the first full build
-    # after M28's steps 1-2 landed at **24,848 (102%)** and nextpnr refused to place it. A
-    # per-block census of `top.json` says where the die actually went:
-    #
-    #     core 17,675 (70.5%) | usbif 2,440 | fx 2,398 | pmod0 1,000 | cvin 537 | arb 102
-    #
-    # and it rules out shrinking our way out: even deleting all of M28 only just clears the
-    # overrun, and the engine has no soft area (§2.6 -- XLS unrolls the voice loop into a flat
-    # register file, so there is no BRAM win hiding in it). Dropping `usbif` would free plenty and
-    # is exactly wrong, because M28's exit criterion is graded by FFT over the USB tee.
-    #
-    # So the split is along `fx`, and it is the fallback docs/TILIQUA_PORT.md:1042 already named:
-    #
-    #     variant "fx" (default) -- effects + USB, no jacks.  What M26/M27 shipped.
-    #     variant "cv"           -- CV/gate in + USB, effects bypassed.  M28's instrument.
-    #
-    # Dropping the effects for the CV bitstream costs nothing the measurement wants: an FFT of a
-    # 1 V/oct sweep grades a dry oscillator, and reverb on the graded signal would be noise in the
-    # literal sense. The Tiliqua bootloader holds eight user slots (§1.1) and this spends a second
-    # one, which is what they are for.
+    # One bitstream. M28 split this file in two -- a "cv" variant with CV/gate in and the effects
+    # bypassed, an "fx" variant with the effects and no jacks -- because at 24,848 of 24,288
+    # TRELLIS_COMB nextpnr refused to place both. M29 dissolved the reason: moving the echo out of
+    # PSRAM into BRAM deleted `psram_periph` and its DDR physical layer, and the ~1,500 cells that
+    # freed paid for the video block *and* closed the overrun. With the two halves back under one
+    # roof there was nothing left for `$XLS32_VARIANT` to select, so it is gone, along with CvIn
+    # and the LED comet it drove. DEVELOPMENT.md keeps the M28 record.
     def __init__(self, clock_settings):
-        self.cv = os.environ.get("XLS32_VARIANT", "fx") == "cv"
-        # M29. Both bitstreams get video. It began as CV-only, because fx was at 98.9% of the die
-        # and could not afford the ~800 LUTs; moving the echo out of PSRAM into BRAM freed
-        # `psram_periph` and its DDR physical layer, which is what paid for it. The user-visible
-        # consequence is that effects and picture are no longer mutually exclusive, which is the
-        # whole reason the tank was halved -- see the effects block in elaborate().
+        # M29 video.
         #
         # Still guarded on the modeline rather than assumed, because the video block is
         # unbuildable without one: it is where the timings come from, and DVIPHY needs a `dvi5x`
         # domain that the clock generator only creates when `clock_settings` names a resolution
         # (pll.py:353).
         self.video = clock_settings.modeline is not None
-        self.core = XlsSynth(led=self.cv, viz=self.video)
+        self.core = XlsSynth(viz=self.video)
         self.clock_settings = clock_settings
         self.pmod0 = eurorack_pmod.EurorackPmod(clock_settings.audio_clock)
         self.bitstream_help = self.core.bitstream_help
@@ -123,7 +101,7 @@ class CoreTop(Elaboratable):
         # mono and until now both jacks carried the same signal.
         #
         # Every delay line here is BRAM, including the echo, and that is M29's doing. Through M28
-        # the echo was a 32,768-word PSRAM line; video needed ~800 LUTs that this variant did not
+        # the echo was a 32,768-word PSRAM line; video needed ~800 LUTs the design did not
         # have, and `psram_periph` plus its DDR physical layer was the only block big enough to
         # give up. So the echo moved inboard to 16,384 words, the reverb tank was halved to make
         # the BRAM for it, and RVG rose to hold RT60 against the shorter round trip. What that
@@ -133,46 +111,19 @@ class CoreTop(Elaboratable):
         # sim_xls_core.cpp never had a HyperRAM model, so until now test_fx.py's sample-for-sample
         # agreement with fx_model was proving an SRAM build that hardware did not quite run.
         #
-        # `dry` is whatever ends up feeding the jacks -- the effects output, or the engine itself
-        # in the CV variant. Everything downstream (the codec, the USB tee) reads it through this
-        # name so the two bitstreams differ in one place rather than four.
+        # `dry` is what feeds the jacks. Everything downstream (the codec, the USB tee) reads it
+        # through this name; it kept the two M28 variants differing in one place rather than four,
+        # and it is still the one place to intercept the signal on its way out.
         wiring.connect(m, pmod0.o_cal, self.core.i)
-        fx = ramp = None
-        if self.cv:
-            dry = self.core.o
-            # Built here so `pmod0.i_cal` can be assigned below; its MIDI input is a sniffer and
-            # gets attached further down, once the filter chain that feeds it exists.
-            m.submodules.ramp = ramp = CvTestRamp()
-        else:
-            m.submodules.fx = fx = StereoFx(psram=False)
-            wiring.connect(m, self.core.o, fx.i)
-            dry = fx.o
-        if ramp is None:
-            wiring.connect(m, dry, pmod0.i_cal)
-        else:
-            # The same connection, by hand, so channel 2 can carry the self-test level instead of
-            # the engine's empty third channel. out3 is left as it was: an unused output is a
-            # useful thing to still have when the next measurement needs one.
-            m.d.comb += [
-                pmod0.i_cal.valid.eq(dry.valid),
-                dry.ready.eq(pmod0.i_cal.ready),
-                pmod0.i_cal.payload[0].eq(dry.payload[0]),
-                pmod0.i_cal.payload[1].eq(dry.payload[1]),
-                pmod0.i_cal.payload[2].as_value().eq(ramp.o_level),
-                pmod0.i_cal.payload[3].eq(dry.payload[3]),
-            ]
+        m.submodules.fx = fx = StereoFx(psram=False)
+        wiring.connect(m, self.core.o, fx.i)
+        dry = fx.o
+        wiring.connect(m, dry, pmod0.i_cal)
 
-        # --- M28: the eight LEDs -------------------------------------------------------------
-        # Taking all eight for the comet costs the pmod's automatic mode, which shows the four
-        # input levels on 0-3 and the four output levels on 4-7. That is a fair trade *in this
-        # variant and only here*: the comet head advances on every note CvIn strikes, so during a
-        # check_cv.py sweep it is a live readout of the CV path working, where the automatic mode
-        # would show a DC level sitting still. The fx variant keeps the automatic mode, and gets
-        # no comet, because it has no room for one.
-        if self.cv:
-            m.d.comb += pmod0.led_mode.eq(0)
-            for n in range(8):
-                m.d.comb += pmod0.led[n].eq(self.core.o_led[n])
+        # The eight LEDs are left in the pmod's automatic mode, which shows the four input levels
+        # on 0-3 and the four output levels on 4-7. M28's alternative was a comet driven off
+        # `viz_out`; M29's screen shows the same tap thirty-two voices at a time, so the LEDs are
+        # better spent saying something the screen does not.
 
         # --- TRS MIDI in ------------------------------------------------------------------
         # The jack is optoisolated and idles high, so the synchroniser resets to 1: a reset that
@@ -197,35 +148,22 @@ class CoreTop(Elaboratable):
         # sniffer can never stall the MIDI path -- which rules out the failure the SDK's usual
         # answer (a SyncFIFO that drops on full) exists to prevent, and costs nothing to do.
         # A byte is taken on the cycle the engine accepts it, so the two see the same stream.
-        for snoop in (fx.i_midi_bytes if fx is not None else None,
-                      ramp.i_midi if ramp is not None else None):
-            if snoop is not None:
-                m.d.comb += [
-                    snoop.payload.eq(common_filter.o.payload),
-                    snoop.valid.eq(common_filter.o.valid & common_filter.o.ready),
-                ]
+        m.d.comb += [
+            fx.i_midi_bytes.payload.eq(common_filter.o.payload),
+            fx.i_midi_bytes.valid.eq(common_filter.o.valid & common_filter.o.ready),
+        ]
 
-        # --- M28: the input jacks become another MIDI source ------------------------------
-        # Sniffed off `pmod0.o_cal` rather than consumed from it. `core.i` is already the consumer
-        # and ties `ready` high (xls_core.py:219), so a second handshake would be a second claim on
-        # the same bytes; this takes a copy on the cycle the engine takes one, like the fx sniffer.
-        n_src = 1 + int(self.cv) + int(sim.is_hw(platform))
-        # The arbiter is in both variants even though only the CV one has three sources, because
-        # the two-way mux it replaces was already wrong: `top.py` used to admit that playing USB
-        # and TRS at once "interleaves bytes mid-message and is not supported". It costs 102 cells
-        # to stop being true. See midi_arb.py -- round-robin, message-atomic, and it expands each
-        # source's running status so what reaches the engine is always self-describing.
+        # --- the MIDI sources ---------------------------------------------------------------
+        # TRS always; USB on hardware. The arbiter replaced a two-way mux that was already wrong:
+        # `top.py` used to admit that playing USB and TRS at once "interleaves bytes mid-message
+        # and is not supported". It costs 102 cells to stop being true. See midi_arb.py --
+        # round-robin, message-atomic, and it expands each source's running status so what reaches
+        # the engine is always self-describing. M28 briefly gave it a third source (CvIn); nothing
+        # about the arbiter assumed there were exactly three, so removing that one changed a count.
+        n_src = 1 + int(sim.is_hw(platform))
         m.submodules.arb = arb = MidiArbiter(n_src)
         wiring.connect(m, arb.o, rt_filter.i)
         wiring.connect(m, serialrx.o, arb.i[0])
-        if self.cv:
-            m.submodules.cvin = cvin = CvIn()
-            m.d.comb += [
-                cvin.i_cv.eq(pmod0.o_cal.payload),
-                cvin.i_strobe.eq(pmod0.o_cal.valid & pmod0.o_cal.ready),
-                cvin.jack.eq(pmod0.jack),
-            ]
-            wiring.connect(m, cvin.o_midi, arb.i[1])
 
         if not sim.is_hw(platform):
             return m
@@ -322,10 +260,7 @@ class CoreTop(Elaboratable):
         #
         # The tap moved from `core.o` to `fx.o` in M26, and had to: `echo`, `reverb`,
         # `reverb_cathedral` and `stress_fx_tail` all grade the effects, and all four are
-        # ungradable while the capture point sits upstream of them. In the CV variant there is no
-        # `fx` and `dry` *is* `core.o`, which puts the tap back where M25 had it -- correct for
-        # what that bitstream is graded on, and the reason those four presets are graded on the
-        # other one.
+        # ungradable while the capture point sits upstream of them.
         #
         # The tee must never backpressure `pmod0.i_cal`: a host that is not recording would
         # otherwise stall the codec. So it takes a copy only when the FIFO has room and silently
@@ -444,7 +379,7 @@ if __name__ == "__main__":
         CoreTop,
         argparse_callback=argparse_callback,
         # `video_core` is what adds `--modeline`, and with it the second ECP5 PLL and the
-        # dvi/dvi5x domains. Both variants now, since the echo's move to BRAM made room in fx.
+        # dvi/dvi5x domains -- affordable since the echo's move to BRAM freed `psram_periph`.
         video_core=True,
         sim_ports=simulation_ports,
         # Verilator resolves --exe sources relative to its --Mdir, so this has to be absolute.

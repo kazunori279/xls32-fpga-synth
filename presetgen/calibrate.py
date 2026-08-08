@@ -8,7 +8,7 @@ Board-agnostic since M27: `open_transport()` picks the link from $XLS32_BOARD, s
 the Tiliqua over USB as well as the Basys 3 over UART. It used to open the serial port itself and
 hand-align the LSB channel markers, which is now the UART transport's business.
 
-Needs the board connected and its link free (stop webui/server.py first).
+Needs the board connected and its link free (close the web UI tab first).
 """
 import os, sys, time
 import numpy as np

@@ -6,9 +6,8 @@ bitstream places at all, but when it says 102% -- as it did in M28 -- it says no
 *where* to look, and the answer to that question has twice now decided the shape of a milestone
 (M28 split the design into two slots on the strength of ``core`` being 70.5% on its own).
 
-    uv run boards/tiliqua/area.py                       # the cv variant
-    uv run boards/tiliqua/area.py --variant fx
-    uv run boards/tiliqua/area.py --top 5 --path build/tiliqua/build/xls32cv-r5/top.json
+    uv run boards/tiliqua/area.py
+    uv run boards/tiliqua/area.py --top 5 --path build/tiliqua/build/xls32-r5/top.json
 
 **What is being counted, and why it is a proxy.** ``top.json`` is yosys' output, so it predates
 packing: there are no ``TRELLIS_COMB`` cells in it at all, only the ``LUT4`` / ``CCU2C`` /
@@ -25,7 +24,6 @@ unattributed remainder is printed rather than hidden for exactly that reason.
 
 import argparse
 import collections
-import os
 import re
 import sys
 from pathlib import Path
@@ -74,20 +72,16 @@ def census(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--variant", default=os.environ.get("XLS32_VARIANT", "cv"),
-                    help="which bitstream to read (default: $XLS32_VARIANT, else cv)")
-    ap.add_argument("--path", help="an explicit top.json, overriding --variant")
+    ap.add_argument("--path", help="an explicit top.json (default: the build.sh output)")
     ap.add_argument("--top", type=int, default=12, help="how many blocks to name (default: 12)")
     ap.add_argument("--capacity", type=int, default=24288,
                     help="TRELLIS_COMB on the part (default: 24288, an LFE5U-25F)")
     args = ap.parse_args()
 
-    # build.sh names the fx build directory after NAME=XLS32, not XLS32FX -- fx is the default
-    # variant and predates there being a second one.
-    subdir = "xls32-r5" if args.variant == "fx" else f"xls32{args.variant}-r5"
-    path = Path(args.path) if args.path else (REPO / f"build/tiliqua/build/{subdir}/top.json")
+    # build.sh names the build directory after NAME=XLS32.
+    path = Path(args.path) if args.path else (REPO / "build/tiliqua/build/xls32-r5/top.json")
     if not path.exists():
-        sys.exit(f"no netlist at {path} -- build the {args.variant} variant first")
+        sys.exit(f"no netlist at {path} -- run boards/tiliqua/build.sh first")
 
     comb, ff, other = census(path)
     total = sum(comb.values())

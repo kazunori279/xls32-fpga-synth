@@ -170,4 +170,4 @@ def open_board(board=None):
         raise
     except OSError as e:
         raise SystemExit(f"could not open the board ({e}); is something else holding it? "
-                         "for the Basys 3 web UI:  pkill -f webui/server.py")
+                         "the web UI holds it — close that browser tab")

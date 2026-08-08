@@ -410,20 +410,13 @@
   <div class="split" style="grid-template-columns: 560px 1fr; margin-top: 48px;">
     <div>
       <div class="dgbox">
-        <div class="dgt">Browser UI <small>any device on the network</small></div>
+        <div class="dgt">Browser UI <small>a static page — no server</small></div>
         <div class="dgd">Analog-style panel — knobs send MIDI CCs; play via on-screen keys,
-        computer keys, or a Web-MIDI controller</div>
+        computer keys, or a Web-MIDI controller. The tab owns the port and byte-aligns the
+        audio stream itself</div>
       </div>
       <div class="dgarr">
-        <span class="dn">▼ MIDI</span><span class="md">WebSocket</span><span class="up">PCM frames ▲</span>
-      </div>
-      <div class="dgbox">
-        <div class="dgt">Web server <small>webui/server.py — the host Mac</small></div>
-        <div class="dgd">FastAPI bridge — owns the serial port, byte-aligns the audio stream,
-        forwards MIDI down and audio up</div>
-      </div>
-      <div class="dgarr">
-        <span class="dn">▼ MIDI bytes</span><span class="md">USB UART · 2 Mbaud</span><span class="up">16-bit stereo ▲</span>
+        <span class="dn">▼ MIDI bytes</span><span class="md">Web Serial · USB UART · 2 Mbaud</span><span class="up">16-bit stereo ▲</span>
       </div>
       <div class="dgbox">
         <div class="dgt">Basys 3 board <small>the synth circuit</small></div>

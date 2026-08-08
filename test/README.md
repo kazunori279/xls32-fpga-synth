@@ -13,8 +13,8 @@ uv run python test/run_tests.py --only basic|integration|stress
 uv run python test/run_tests.py --no-reflash --skip-video   # fastest iteration
 ```
 
-The board must be connected and the **web server stopped** (it owns the serial port):
-`pkill -f webui/server.py`. A full run takes several minutes (all captures with best-of-N retry,
+The board must be connected and its link free — **close the web UI's browser tab**, which holds
+the port through Web Serial. A full run takes several minutes (all captures with best-of-N retry,
 plus ffmpeg). Outputs land in `test/out/` (gitignored):
 
 - `report.md` / `report.json` — per-test scores (0–100), verdicts, metrics, overall grade.

@@ -37,14 +37,9 @@ body{
   background:linear-gradient(#3a3630,#211e19);color:#e9dcc2;border:1px solid #000;box-shadow:0 2px 0 #000}
 .power.on{background:linear-gradient(#8a2418,#5c130b);color:#ffd;box-shadow:0 0 10px rgba(255,80,50,.5)}
 /* uniform height for every top-bar button/control */
-.power,.pbtn,.pstep,.partchip,.pcur,.audioout{height:36px;box-sizing:border-box}
+.power,.pbtn,.pstep,.partchip,.pcur{height:36px;box-sizing:border-box}
 .power,.pbtn,.pstep{display:inline-flex;align-items:center;justify-content:center}
 .pcur{display:inline-flex;flex-direction:column;justify-content:center}
-.power.local{background:linear-gradient(#1c5a3a,#0e3221);color:#dfffe9;box-shadow:0 0 10px rgba(60,220,130,.45)}
-#playmode{margin-right:8px}
-.audioout{margin-right:8px;background:linear-gradient(#3a3630,#211e19);color:#e9dcc2;border:1px solid #000;
-  border-radius:5px;font-size:11px;line-height:1;padding:0 8px;max-width:160px;cursor:pointer;
-  appearance:none;-webkit-appearance:none;vertical-align:middle;box-shadow:0 2px 0 #000}   /* match the buttons' raised lip */
 .mvol{display:flex;flex-direction:row;align-items:center;gap:6px;height:36px}
 .mvol .knob{width:28px;height:28px}
 .mvollabel{font-size:9px;letter-spacing:.5px;color:#b8ac95;font-weight:700}
@@ -93,9 +88,6 @@ body{
 .dhint{font-weight:400;color:#8a8272}
 .bitem.demoitem{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drep{background:#2a2620;border:1px solid #4a453a;color:#c9b98a;border-radius:4px;cursor:pointer;
-  font-size:12px;padding:1px 7px;flex:none}
-.drep:hover{background:#3a352c;color:#fff}
 .btabs{display:flex;gap:6px}
 .btab{padding:6px 14px;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;
   font-weight:700;font-family:inherit;background:linear-gradient(#4a453c,#2a2620);
@@ -138,6 +130,11 @@ body{
 .bitem:hover{background:linear-gradient(#f8f2e3,#e8ddc6)}
 .bitem.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10}
 .bitem.empty{color:#a89b83;font-style:italic}
+/* a board this browser cannot open: shown, not hidden, so the reason is visible */
+.bitem.off{color:#a89b83;cursor:default}
+.bitem.off:hover{background:linear-gradient(#f3ecdb,#e2d7be)}   /* no hover lift: nothing to click */
+/* a board the page can see on the bus — only shown when a second candidate makes it a real choice */
+.bitem.found{border-color:#8a5e10;box-shadow:inset 0 0 0 1px rgba(232,178,74,.55)}
 
 /* panel grid */
 .panel{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}

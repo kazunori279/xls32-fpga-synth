@@ -11,11 +11,11 @@ const N = 1 << 16;                          // per-channel ring size (power of t
 class PCMPlayer extends AudioWorkletProcessor {
   constructor(opts) {
     super();
-    // Nominal wire rate, from /api/spec via processorOptions (M27): 32 kHz on the Basys 3,
-    // 48 kHz on the Tiliqua. Only a SEED — the estimator below measures the real arrival rate
-    // and is what actually sets the step. It matters for the pre-roll target (a 48 kHz stream
-    // pre-rolled against 28 kHz starts on 117 ms, not 200) and for the first half-second,
-    // before `arr` has converged.
+    // Nominal wire rate (32 kHz on the Basys 3), handed in via processorOptions by the transport
+    // that opened the board. Only the Basys 3 comes through here since M31 -- the Tiliqua's UAC2
+    // input is a real capture device and the driver keeps its own rate. Only a SEED: the estimator
+    // below measures the real arrival rate and is what actually sets the step. It matters for the
+    // pre-roll target and for the first half-second, before `arr` has converged.
     this.nom = (opts && opts.processorOptions && opts.processorOptions.sr) || 32000;
     this.ringL = new Float32Array(N);       // stereo: one ring per channel sharing ONE rpos, so
     this.ringR = new Float32Array(N);       // L/R stay phase-locked through the resampler

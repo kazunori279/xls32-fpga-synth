@@ -36,7 +36,7 @@ scrolling spectrogram of that same signal.
 *▶️ **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)** — 4 parts, 2:18 (click to listen on YouTube).*
 
 *(Both MP4s also live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo
-player with `/api/capture` and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
+player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 
 ## At a glance
 
@@ -218,16 +218,13 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
     UART check), `firmware/` (committed bitstream).
   - **`boards/tiliqua/`** — `board.py` (descriptor), `gateware/` (`top.py` + `xls_core.py`, an
     [Amaranth](https://amaranth-lang.org/) shell that `Instance()`s the same generated `engine.v`,
-    plus `midi_filter.py`, `midi_arb.py`, `fx.py`, `cvin.py`, `cv_proto.py`, `led.py`, `viz.py`
+    plus `midi_filter.py`, `midi_arb.py`, `fx.py`, `viz.py`
     and their Verilator/Amaranth harnesses), `sim/` (iverilog reference for the pitch check),
-    `build.sh`, `check_cv.py` (the M28 1 V/oct check), `area.py` (per-block cell census),
+    `build.sh`, `area.py` (per-block cell census),
     `spike/` (the M21/M22 fit sweeps). The bitstream
     plays MIDI from the TRS jack (M24), runs the whole host loop over one USB cable — UAC2 audio
     up, USB-MIDI down (M25) — carries the full chorus / echo / Freeverb chain (M26), and drives
-    the browser UI, the preset banks and all 175 graded cases (M27). M28 adds the Eurorack jacks,
-    which did not fit alongside the effects: `XLS32_VARIANT=cv` builds a second bitstream with
-    CV/gate in and the LED comet in place of the reverb tank, and it tracks 1 V/oct to within
-    **1.98 cents over five octaves** — graded by the board against itself, with one patch cable.
+    the browser UI, the preset banks and all 175 graded cases (M27).
     M29 adds a **720×720p60 visualiser on the DVI output** — the 32 voices as 32 tiles, brightness
     the envelope and hue the pitch — with *no framebuffer*: each pixel is computed in the cycle
     before it is sent, from the beam position and 32 bytes of state. That is what let it back into
@@ -243,19 +240,18 @@ addition rather than a rewrite — see [the Tiliqua port plan](docs/TILIQUA_PORT
   (envelope/pitch checks), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
-- **`webui/`** — the browser synth UI (`server.py` bridge, `synthspec.py` CC map/presets,
-  `static/` UI, a Serum/Vital-style **preset browser**, and a **DEMO player** — 7 authored
-  4-part songs (classical/techno/pop/ambient) in `static/demos.json`, played live
-  to the board, with a per-song "replace" that composes a fresh one on the fly (`/api/demo`). Classical
-  = four complete public-domain pieces arranged for the 4 parts (Bach's *Prelude in C* BWV 846 and
-  *Goldberg* Aria, Saint-Saëns' *Le Cygne*, Vivaldi's *Winter* Largo — notes in
-  `presetgen/demo_scores.py`); techno/pop/ambient use a **theory-aware composer** ([MidiGen](https://pypi.org/project/midigen-lib/)):
-  an in-scale random-walk melody snapped to the bar's chord, over voice-led Roman-numeral
-  extended-chord harmony (`presetgen/build_demos.py`). While a demo plays, its 4 part tones load
+- **`webui/`** — the browser synth UI: a **static page** that talks to the board itself over
+  Web MIDI / Web Serial, with no server behind it (`synthspec.py` is the CC map/preset source,
+  baked to `static/spec.json` at build time;
+  `static/` UI, a Serum/Vital-style **preset browser**, and a **DEMO player** — 4 authored
+  4-part songs in `static/demos.json`, played live to the board: complete public-domain classical
+  pieces arranged for the 4 parts (Bach's *Prelude in C* BWV 846 and *Goldberg* Aria,
+  Saint-Saëns' *Le Cygne*, Vivaldi's *Winter* Largo — notes in `presetgen/demo_scores.py`).
+  While a demo plays, its 4 part tones load
   into the multitimbral editor — tweak each part live and **💾 TONES** saves them straight back
-  into `static/demos.json` (`/api/demo_save`), which is the **single source of truth** for the
-  bank (re-running `build_demos.py` regenerates the notes but carries tone edits over by song
-  name). The matched preset banks live here as
+  out as `demos.json` (File System Access API — drop it into `static/`), which is the
+  **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
+  carries tone edits over by song name). The matched preset banks live here as
   `presets_*.json`. See the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
@@ -313,11 +309,12 @@ git clone <repo-url> && cd <repo-dir>
 uv sync                     # runtime deps only (all have prebuilt wheels — works on any Mac)
 ```
 
-> `uv sync` installs everything needed for **WEB mode and LOCAL audio-out**. Two extras are opt-in:
-> `--extra localmidi` adds `python-rtmidi` for reading a MIDI keyboard **plugged into the host** in
-> LOCAL mode (it builds from C++ source, so skip it on locked-down machines — e.g. Santa on corp
-> Macs blocks the compiler; WEB mode and on-screen/computer/Web-MIDI keyboards still work).
-> `--extra presetgen` adds the preset-generation toolchain (`dawdreamer` etc.), only for dev work.
+> `uv sync` installs the host tools and the test suite. **The web UI needs none of it** — it is a
+> static page. Two extras are opt-in: `--extra localmidi` adds `python-rtmidi`, which the *host*
+> Tiliqua transport needs to send MIDI (it builds from C++ source, so skip it on locked-down
+> machines — e.g. Santa on corp Macs blocks the compiler; the Basys 3 sends MIDI down its UART and
+> the browser has its own Web MIDI). `--extra presetgen` adds the preset-generation toolchain
+> (`dawdreamer` etc.), only for dev work.
 
 > **A prebuilt bitstream ships in the repo** at [`top.bit`](boards/basys3/firmware/top.bit.md), so you can
 > flash a board **without building** (no Vivado / F4PGA — just `openFPGALoader`). See
@@ -371,24 +368,47 @@ Notes:
 - **Power:** the board runs off USB. Some laptops (e.g. a MacBook Air over a single USB-C hub) don't
   supply enough current — if the board's power LED stays dark, use a powered USB hub or the board's
   external supply.
-- **JTAG vs UART share the FTDI.** Free the serial port before flashing (`pkill -f webui/server.py`),
-  then restart the server after — the audio stream (UART) and JTAG programming use the same USB chip.
+- **JTAG vs UART share the FTDI.** Free the serial port before flashing — close the web UI tab
+  (it holds the port through Web Serial) — then reopen it after: the audio stream (UART) and JTAG
+  programming use the same USB chip.
 
 Then jump to [Run the web UI](#run-the-web-ui-browser-synth-panel) to play it.
 
 ### Run the web UI (browser synth panel)
-```bash
-uv run python webui/server.py                          # Basys 3 (default), over the serial port
-XLS32_BOARD=tiliqua uv run python webui/server.py      # Tiliqua, over USB audio + USB-MIDI
-```
-Either way it serves http://localhost:8765 and owns the board's link. The panel is the same on both
-boards — it goes through the same `Transport` seam the graded suite uses, and asks the server what
-rate frames arrive at (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming.
+The UI is a **static page** — there is no server to run. It reaches the board itself, through
+[Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) + the Tiliqua's UAC2
+input, or [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) at 2 Mbaud
+on the Basys 3. Any static host will do:
 
-Open the URL, click **POWER** (starts audio + the [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)), and play with the on-screen
-keyboard, your computer keys, or a [Web-MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) controller. Hit **▶ DEMO** for the built-in
-songs (sequenced on the server for steady timing). The server holds the board's link, so
-stop it before running the `host/` tools above. See the
+```bash
+python3 -m http.server 8765 -d webui/static      # then open http://127.0.0.1:8765
+```
+
+Open the URL, click **POWER**, pick your board, and approve the browser's prompts (MIDI, then
+microphone — that "microphone" is the board's audio input). Then play with the on-screen keyboard,
+your computer keys, or a Web-MIDI controller. Hit **▶ DEMO** for the built-in songs.
+
+After that first visit the board is found on its own and **POWER connects straight to it** — the
+picker only comes back when both boards are plugged in, or when neither has been approved yet. The
+check is silent by design: it can only see hardware you have already granted access to, so it never
+prompts to answer a question you have not asked.
+
+On the Basys 3 the serial picker lists the FT2232H **twice** — channel A is JTAG, channel B is the
+UART — and the browser cannot tell them apart. Pick either: the page reads the port for 400 ms and
+rejects a silent one, so a wrong choice says so instead of playing nothing.
+
+Two constraints come with owning the hardware from a page:
+
+- **`file://` does not work.** These APIs need a
+  [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts), and a
+  `file://` page is an opaque origin that cannot even keep its MIDI permission. `127.0.0.1` is a
+  secure context with no certificate; anything else needs HTTPS. That is also why this deploys
+  cleanly to GitHub Pages.
+- **The tab holds the board's link.** Close it before running the `host/` tools or the test suite,
+  the way you used to stop the server.
+
+The panel is the same on both boards; it takes the frame rate from the transport it opened
+(32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming. See the
 [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) section for the architecture.
 
 **Playing it — the computer keyboard.** Your laptop's keys are a piano, one octave plus a fourth:
@@ -419,43 +439,28 @@ each with its own patch. The PART chips at the top right carry two separate cont
 Loading a demo song fills all 4 parts with the song's patches and lights every LED (the song plays
 all 4); your keys start on Part 1, so you can play along on top.
 
-> **Demoing on one Mac** (board + browser on the same machine): `http://localhost:8765` is a
-> secure context, so audio works with **no certificate**. Just `uv run python webui/server.py`
-> and open the URL. To open the UI from **other devices** on the network, serve HTTPS (Web Audio
-> needs a secure context off-localhost) — point `SSL_CERT`/`SSL_KEY` at a (self-signed is fine)
-> cert and bind all interfaces:
-> ```bash
-> HOST=0.0.0.0 SSL_CERT=cert.pem SSL_KEY=key.pem uv run python webui/server.py
-> ```
-
-The **🔊 WEB / 💻 LOCAL** toggle (next to POWER) picks where audio + live MIDI run:
-
-- **WEB** streams PCM to the browser — play from any device on the network.
-- **LOCAL** makes the *host* (the machine running `server.py`, wired to the board) play the audio on
-  its own output device (pick which from the dropdown next to the toggle — switchable live) and read
-  a MIDI keyboard plugged into it directly. This skips the WebSocket + AudioWorklet round-trip for
-  **much lower play latency**; the browser stays the control + demo surface.
-
-LOCAL audio-out works out of the box (`sounddevice`, a runtime dep). Reading a host-plugged MIDI
-keyboard additionally needs `python-rtmidi` (`uv sync --extra localmidi`); without it, LOCAL still
-plays audio — you just drive it from the browser (on-screen/computer/Web-MIDI keys or the demos).
-The toggle hides itself entirely if no host audio backend is present.
+> **One machine only.** The page must run on the computer the board is plugged into: it opens the
+> USB devices directly, so there is nothing left to reach over the network. The old
+> stream-to-any-device mode went away with the server, and with it the certificate dance —
+> `127.0.0.1` needs none.
 
 ### Record a demo video (web UI + board webcam + sound)
 
 Compose one MP4 from the **web UI** (screen), the **board** (a webcam, picture-in-picture), and the
-synth's **own audio** (a pristine digital capture from the server — not a room mic):
+synth's **own audio** — taken off a **loopback audio device**, so it is the browser's digital
+output rather than a room mic:
 
 ```bash
-# server running + board connected; grant Terminal Screen-Recording + Camera perms once.
-scripts/demo_video.sh demo.mp4            # records ~45s, muxes the board's audio
+# UI open + board connected; grant Terminal Screen-Recording, Camera and Microphone perms once.
 # find your device indices with:  ffmpeg -f avfoundation -list_devices true -i ""
-SCREEN_IDX=2 CAM_IDX=0 DUR=60 scripts/demo_video.sh bach.mp4
+AUD_IDX=1 scripts/demo_video.sh demo.mp4            # records ~45s
+SCREEN_IDX=2 CAM_IDX=0 AUD_IDX=1 DUR=60 scripts/demo_video.sh bach.mp4
 ```
 
-The script switches the server to LOCAL play, records the screen + webcam, and pulls the exact
-board output via `/api/capture`; when it prints **NOW**, open **DEMO** in the browser and click the
-song (e.g. *Bach · Prelude in C*). It muxes video + audio at the end (`AV_OFFSET` tunes A/V drift).
+`AUD_IDX` is a loopback input — [BlackHole](https://existential.audio/blackhole/)
+(`brew install blackhole-2ch`) routed through a Multi-Output Device so you can still hear the
+demo. When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
+Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a
@@ -561,7 +566,7 @@ SPAN=10 CRF=24 scripts/make_mp4.sh x.wav  # SPAN = seconds the window shows at o
 
 ### Run the e2e test suite
 ```bash
-pkill -f webui/server.py                   # free the serial port first
+# close the web UI tab first — it holds the serial port
 uv run python test/run_tests.py            # reflash + full suite + captioned video + scored report
 uv run python test/run_tests.py --smoke    # fast subset;  --only basic|integration|stress ; --no-reflash --skip-video
 ```
@@ -664,14 +669,14 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 | 85 | cross-osc mode (off/ring/FM/FM+) | 86 | cross-osc depth |
 | 87 | cross-osc ratio (8: 1/1.5/2/3/4/5/7/½) | 0xE0 | pitch bend (±2 st) |
 
-`webui/synthspec.py` is the machine-readable source of truth for this map (served to the
-browser at `/api/spec`); `host/synth.py` has the matching `set_*` helpers. The map grew
+`webui/synthspec.py` is the machine-readable source of truth for this map (baked to
+`webui/static/spec.json` by `presetgen/build_spec.py`, which is what the browser loads); `host/synth.py` has the matching `set_*` helpers. The map grew
 milestone by milestone — the historical "CC map so far" snapshots live in the M10/M11/M13
 sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified).
 
-† **Two CCs the engine never sees.** The Tiliqua shell sniffs them out of the USB stream before the
-engine does, both undefined in the MIDI spec: **CC102** sets the DC level `check_cv.py` sweeps out
-of jack out2, and **CC103** picks which part a keyboard on the **TRS jack** plays. The second exists
+† **One CC the engine never sees.** The Tiliqua shell sniffs it out of the USB stream before the
+engine does, and it is undefined in the MIDI spec: **CC103** picks which part a keyboard on the
+**TRS jack** plays. It exists
 because TRS is the one input that arrives already addressed to a channel — the browser and the host
 bridge both re-address their keys before sending, but a hardware keyboard's bytes reach the FPGA
 untouched, so the part chips are honoured in gateware (`midi_arb.py`) or not at all. CC82's shorter
