@@ -62,6 +62,10 @@ class MidiArbiter(wiring.Component):
     A status byte arriving where a data byte was expected ends the message early and re-arbitrates
     without consuming it. That is the same choice SysCommonFilter makes: a truncated message should
     cost its own bytes and not the next one's.
+
+    Each source can also be re-addressed to a fixed channel: raise `chan_en[k]` and every
+    channel-voice status byte from source k leaves with `chan[k]` in its low nibble. See
+    MidiPartSelect below for why that lives here rather than in a block of its own.
     """
 
     def __init__(self, n_sources):
@@ -69,6 +73,10 @@ class MidiArbiter(wiring.Component):
         super().__init__({
             "i": In(stream.Signature(unsigned(8))).array(n_sources),
             "o": Out(stream.Signature(unsigned(8))),
+            # Per-source channel override. Off at reset, so a source nobody drives these for
+            # behaves exactly as it did before they existed.
+            "chan":    In(4).array(n_sources),
+            "chan_en": In(1).array(n_sources),
         })
 
     def elaborate(self, platform):
@@ -77,6 +85,8 @@ class MidiArbiter(wiring.Component):
         pay = Array([s.payload for s in self.i])
         val = Array([s.valid   for s in self.i])
         rdy = Array([s.ready   for s in self.i])
+        ch  = Array(self.chan)
+        cen = Array(self.chan_en)
         # Running status per source, 0 for "this source has not sent one yet", which is
         # unambiguous because a status byte always has bit 7 set.
         run = Array([Signal(8, name=f"run{k}") for k in range(self.n)])
@@ -108,6 +118,16 @@ class MidiArbiter(wiring.Component):
             is_rt.eq((b[4:8] == 0xF) & b[3]),
         ]
 
+        def rechan(byte):
+            """`byte` re-addressed to the granted source's channel, if that source has one set.
+
+            Only channel-voice status survives the guard: 0xF0-0xFF has no channel nibble, and a
+            data byte's bit 7 is clear. Note this rewrites at the *output*, not on the way into
+            `run[]` -- which is what makes a change of target take effect on the very next message
+            even from a keyboard that has stopped resending its status byte.
+            """
+            return Mux(cen[sel] & byte[7] & (byte[4:8] != 0xF), Cat(ch[sel], byte[4:8]), byte)
+
         len_new, len_run = Signal(2), Signal(2)
         _data_len(m, b, len_new)
         _data_len(m, run[sel], len_run)
@@ -124,7 +144,7 @@ class MidiArbiter(wiring.Component):
                         m.d.sync += last.eq(sel)
 
                     with m.If(is_status):
-                        m.d.comb += [self.o.valid.eq(1), self.o.payload.eq(b),
+                        m.d.comb += [self.o.valid.eq(1), self.o.payload.eq(rechan(b)),
                                      rdy[sel].eq(self.o.ready)]
                         with m.If(self.o.ready & ~is_rt):
                             m.d.sync += [cur.eq(sel), rem.eq(len_new),
@@ -139,7 +159,7 @@ class MidiArbiter(wiring.Component):
                         # Running status. Send the remembered status *without* consuming this data
                         # byte, so the message that reaches the engine carries its own status even
                         # though the source did not resend one.
-                        m.d.comb += [self.o.valid.eq(1), self.o.payload.eq(run[sel])]
+                        m.d.comb += [self.o.valid.eq(1), self.o.payload.eq(rechan(run[sel]))]
                         with m.If(self.o.ready):
                             m.d.sync += [cur.eq(sel), rem.eq(len_run)]
                             m.next = "DATA"
@@ -166,5 +186,61 @@ class MidiArbiter(wiring.Component):
                              rdy[sel].eq(self.o.ready)]
                 with m.If(val[sel] & self.o.ready & is_status & ~is_rt):
                     m.next = "ARB"
+
+        return m
+
+
+CC_PART = 103                                   # undefined in the MIDI spec; unused by synth.x
+
+
+class MidiPartSelect(wiring.Component):
+
+    """
+    CC103 -> which of the four parts the TRS keyboard plays.
+
+    A hardware keyboard transmits on the channel it was configured with -- in practice channel 1,
+    always -- so it reaches part 1 and nothing the web UI does moves it. The on-screen keys have no
+    such problem because the browser re-addresses them before they leave (app.js `noteChans`), and
+    so does the bridge for a host-side keyboard in LOCAL play. TRS is the one path where the bytes
+    arrive already addressed, past every piece of software involved, which is why the fix has to be
+    here at all: by the time anything can see them they are on the FPGA.
+
+    So the PART chips send CC103 over USB, and the arbiter re-addresses source 0 to match. Reading
+    the target from the USB side rather than from the merged stream is deliberate -- it means a
+    keyboard cannot retarget itself by sending CC103, and that the two directions cannot fight.
+
+    Value 0-15 selects a channel; anything above (the UI sends 127) turns the override off and the
+    keyboard plays on its own channel again. Off is also the reset state, so check_midi.py and every
+    bitstream built before this one behave identically until something asks otherwise.
+
+    Like the other sniffers this ties `ready` high: an observer that can stall the path it observes
+    is a deadlock waiting for the one day both sources are busy.
+    """
+
+    i_midi: In(stream.Signature(unsigned(8)))
+    o_chan: Out(4)
+    o_en:   Out(1)
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += self.i_midi.ready.eq(1)
+
+        b   = self.i_midi.payload
+        st  = Signal(8)
+        idx = Signal()
+        num = Signal(7)
+
+        # This sits *upstream* of the arbiter's running-status expansion, on the raw USB stream, so
+        # latching `st` here is load-bearing rather than defensive: the bridge sends CC103 with no
+        # status byte of its own if the last thing it sent was also a CC.
+        with m.If(self.i_midi.valid):
+            with m.If(b[7]):
+                m.d.sync += [st.eq(b), idx.eq(0)]
+            with m.Elif(st[4:8] == 0xB):
+                m.d.sync += idx.eq(~idx)
+                with m.If(~idx):
+                    m.d.sync += num.eq(b)
+                with m.Elif(num == CC_PART):
+                    m.d.sync += [self.o_chan.eq(b[0:4]), self.o_en.eq(b < 16)]
 
         return m

@@ -654,7 +654,7 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 | 22 | amp sustain | 78 | detune (dual osc) |
 | 23 | amp release | 79 | filter-env depth |
 | 24 | filter-env attack | 80 | unison (off/2/3/4) |
-| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms; 4–340 on Tiliqua) |
+| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms; 4–340 on Tiliqua†) |
 | 26 | filter-env sustain | 83 | *(unused — effects are depth-gated)* |
 | 27 | filter-env release | 91 | reverb size (room/hall/large/cathedral) |
 | 70 | waveform (sine/saw/square/tri/noise) | 92 | tremolo depth |
@@ -668,6 +668,15 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 browser at `/api/spec`); `host/synth.py` has the matching `set_*` helpers. The map grew
 milestone by milestone — the historical "CC map so far" snapshots live in the M10/M11/M13
 sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified).
+
+† **Two CCs the engine never sees.** The Tiliqua shell sniffs them out of the USB stream before the
+engine does, both undefined in the MIDI spec: **CC102** sets the DC level `check_cv.py` sweeps out
+of jack out2, and **CC103** picks which part a keyboard on the **TRS jack** plays. The second exists
+because TRS is the one input that arrives already addressed to a channel — the browser and the host
+bridge both re-address their keys before sending, but a hardware keyboard's bytes reach the FPGA
+untouched, so the part chips are honoured in gateware (`midi_arb.py`) or not at all. CC82's shorter
+ceiling on Tiliqua is M29's: the echo line moved from PSRAM into block RAM to make room for the
+screen.
 
 ## Multitimbral — 4 parts (done, hardware-verified)
 

@@ -2858,6 +2858,78 @@ A 44-entry ROM would free them for 60–80 TRELLIS_COMB, or one of the 3 spare D
 deliberately not done: it spends the resource that is at 97% to relieve one that nothing is waiting
 on. Revisit when something actually needs a multiplier.
 
+## The PART chips and the MIDI keyboard — four bugs wearing one costume
+
+One report: *"the part button works with the software keyboard, but doesn't work for a midi
+keyboard."* Four independent causes, three in the browser and the host, one that could only be fixed
+in gateware.
+
+**1. Web-MIDI was enumerated once, at boot.** `access.inputs.forEach(...)` ran in `initWebMidi` and
+never again, so a keyboard plugged in after the page loaded got no handler at all. `access.onstatechange`
+now rescans, and `inp.__xls32` guards against a second handler stacking on a port already bound —
+which would double every note. **2. The host bridge had the same bug**, on the OFF→ON transition of
+LOCAL play. `_rescan_midi()` runs on every `/api/local` hit including the GET the UI polls, so
+plugging in and touching anything is enough; ports that vanish are closed, or the next scan reopens
+a dead one. **3. The WebSocket was created by POWER.** MIDI goes *up* that socket. POWER is a
+browser-audio control, and in LOCAL play the host makes the sound — so gating MIDI on it left the
+keys dead until you pressed a button that, in that mode, does nothing else. The socket is opened at
+boot now and reconnects unconditionally.
+
+All three are the same shape: **a silent binding failure reads as a routing bug.** Hence the footer
+readout — `MIDI in: <ports> → P1+P3`, amber when nothing is bound — because "no port was ever
+opened" and "the PART chips are ignoring me" look identical from the front panel.
+
+### 4. TRS is past every piece of software involved
+
+The on-screen keys are re-addressed by the browser before they leave (`noteChans`), and the bridge
+does the same for a host-side keyboard in LOCAL play. **The TRS jack is the one path where the bytes
+arrive already addressed** — a hardware keyboard transmits on the channel it was configured with, in
+practice channel 1, always — and by the time anything can see them they are on the FPGA. So the fix
+has to be there.
+
+`MidiPartSelect` sniffs **CC103** (undefined in the spec, unused by `synth.x`) off the USB stream
+and drives a per-source channel override on the arbiter. Reading the target from the USB side rather
+than from the merged stream is deliberate: a keyboard cannot retarget itself, and the two directions
+cannot fight. Value 0–15 selects a part; 127 releases it, which is also the reset state, so
+`check_midi.py` and every bitstream built before this one behave identically until something asks
+otherwise.
+
+**The load-bearing detail is *where* the rewrite happens.** The arbiter already re-emits a
+remembered status byte for every message — that is what M28 built it to do. Rewriting the channel
+nibble at its **output** rather than on the way into `run[]` means a part change takes effect on the
+very next message, even from a keyboard that sent `0x90` once an hour ago and has been sending bare
+pairs ever since. Done the other way, only the first note after a part change would move and the
+rest would keep playing part 1 — a bug that would present as "it works sometimes."
+`test_rechannel` is that case, plus every channel-voice status type, plus the proof that an unset
+override is byte-for-byte what the arbiter did before the ports existed.
+
+### nextpnr's default router does not converge on this design
+
+Unrelated to the feature and the most expensive thing in the session. At 97% TRELLIS_COMB, router1
+spent **two hours** ripping up more arcs than it laid: 62,719 of 105,900 still unrouted with the
+count *rising*, and 240 s per 1000 iterations against 0.4 s at the start. `--router router2`
+finishes the same netlist in **81 seconds, overused=0**. Whole build 5:43.
+
+Two things about wiring it in. It is an **override**, not an addition — Amaranth's
+`get_override("nextpnr_opts")` *replaces* what the caller passed, and the Tiliqua SDK passes
+`--timing-allow-fail` at `build/cli.py:303`. Setting only `--router router2` dropped it, and the
+known `clk` shortfall (42.51 MHz against a 60 MHz constraint, unmet since M25 and harmless — the
+engine runs in `audio_clk`) turned from a warning into an error that failed the build *after* it had
+routed successfully. Both flags go in `build.sh` together. And the vendor alternative was checked
+before settling: Lattice **Diamond** is the only ECP5 vendor tool (Radiant dropped ECP5), Amaranth
+has a native path to it, but it is Linux/Windows x86-64 only — it would mean moving builds to the
+GCE VM — and the SDK's tar.gz/bootloader-slot packaging is `ecppack`-specific. A one-env-var fix
+beat a multi-day migration.
+
+**One number is unexplained.** The part-select remap cost **+369 TRELLIS_COMB** (23,404 → 23,773)
+against an estimate of ~50. The arbiter gained a 4-bit mux on two output paths and a 15-cell
+sniffer; 369 is not that. Left alone deliberately — the design places, it runs, and nothing depends
+on the answer — but it is unattributed, not accounted for.
+
+Also fixed in the same pass, from the same report: the DEMO button now stops the song when one is
+playing, instead of reopening the picker. The label already flipped to `■ DEMO`, so the one control
+that looked like a stop button was the one control that could not stop anything.
+
 ---
 
 # Friction logs & learnings

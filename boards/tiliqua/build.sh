@@ -74,6 +74,18 @@ export NEXTPNR_ECP5=yowasp-nextpnr-ecp5
 export ECPPACK=yowasp-ecppack
 export XLS_ENGINE_V="$WORK/engine.v"
 
+# nextpnr's default router does not converge on this design. At 97% TRELLIS_COMB, router1 spent
+# two hours ripping up more arcs than it laid -- 62,719 of 105,900 still unrouted, the count
+# rising, and each 1000 iterations taking 240 s against 0.4 s at the start. router2 finishes the
+# same netlist in 81 s with overused=0. It is not a tuning preference; it is the difference
+# between a six-minute build and one that never ends.
+#
+# This is an *override*, not an addition: whatever the SDK passes as `nextpnr_opts` is replaced
+# wholesale, so `--timing-allow-fail` has to be repeated here. Dropping it turns the known `clk`
+# shortfall (42.51 MHz against a 60 MHz constraint, unmet since M25 and harmless -- the engine
+# runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2}"
+
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then
   # 250 ms is past the ADSR attack and decay with ~8k sustain samples left over, which is what

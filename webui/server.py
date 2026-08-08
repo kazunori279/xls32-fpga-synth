@@ -230,6 +230,34 @@ class Bridge:
                 sd._terminate(); sd._initialize()
             self._astream = _open()
 
+    def _rescan_midi(self):
+        """Open any host MIDI input that has appeared, close any that has gone.
+
+        Ports used to be enumerated exactly once, on the OFF->ON transition of LOCAL play. A
+        keyboard plugged in after that was never opened, so nothing arrived for `_on_local_midi`
+        to re-address -- which from the UI is indistinguishable from the PART chips being
+        ignored. Called on every /api/local hit (GET included), so plugging in and then touching
+        anything in the UI is enough.
+        """
+        if mido is None:                          # host MIDI in needs python-rtmidi; audio works without
+            return
+        names = []
+        with contextlib.suppress(Exception):
+            names = mido.get_input_names()
+        have = {p.name for p in self._midi_ins}
+        for name in names:
+            if name in have:
+                continue
+            with contextlib.suppress(Exception):
+                self._midi_ins.append(mido.open_input(name, callback=self._on_local_midi))
+                print(f"[bridge] host MIDI in opened: {name} -> parts {self.local_chans}")
+        for p in list(self._midi_ins):
+            if p.name not in names:               # unplugged: drop it or the next scan reopens a dead port
+                with contextlib.suppress(Exception):
+                    p.close()
+                self._midi_ins.remove(p)
+                print(f"[bridge] host MIDI in gone: {p.name}")
+
     def set_local(self, on: bool, ch=None, device="keep", chans=None):
         if chans is not None:                          # the play/layer set (list of part indices)
             self.local_chans = [int(c) & 0x0f for c in chans] or [0]
@@ -244,16 +272,14 @@ class Bridge:
             if not self.local_mode:
                 self._open_astream()
                 self._midi_ins = []
-                if mido is not None:                   # host MIDI in is optional (needs python-rtmidi);
-                    with contextlib.suppress(Exception):   # LOCAL audio still works without it
-                        for name in mido.get_input_names():
-                            with contextlib.suppress(Exception):
-                                self._midi_ins.append(mido.open_input(name, callback=self._on_local_midi))
+                self._rescan_midi()
                 self.local_mode = True
                 print(f"[bridge] LOCAL play ON: audio -> {self._devname()}; midi in: {[p.name for p in self._midi_ins]}")
-            elif dev_changed:
-                self._open_astream()               # hot-switch output device (MIDI unchanged)
-                print(f"[bridge] LOCAL audio device -> {self._devname()}")
+            else:
+                self._rescan_midi()                # hot-plug: the UI posts here on every part change
+                if dev_changed:
+                    self._open_astream()           # hot-switch output device (MIDI unchanged)
+                    print(f"[bridge] LOCAL audio device -> {self._devname()}")
         elif self.local_mode:
             self.local_mode = False
             for p in self._midi_ins:
@@ -336,10 +362,14 @@ class Bridge:
         ins = []
         with contextlib.suppress(Exception):
             ins = mido.get_input_names() if mido else []
+        # `midi_inputs` is what the machine offers; `midi_open` is what this bridge actually holds
+        # and re-addresses to `chans`. The UI shows the second one -- a port that exists but is not
+        # open is exactly the case that looks like the PART chips are broken.
         return {"on": self.local_mode, "ch": (self.local_chans[0] if self.local_chans else 0),
                 "chans": list(self.local_chans), "available": bool(sd and np),
                 "device": self.audio_dev, "audio_device": self._devname(),
-                "output_devices": devs, "midi_inputs": ins}
+                "output_devices": devs, "midi_inputs": ins,
+                "midi_open": [p.name for p in self._midi_ins]}
 
 
 bridge = Bridge()
@@ -437,7 +467,11 @@ async def api_demo_stop():
 
 @app.get("/api/local")
 async def api_local_get():
-    # current local-play state + the machine's audio out / MIDI in (for the UI toggle)
+    # current local-play state + the machine's audio out / MIDI in (for the UI toggle).
+    # The UI polls this, so it doubles as the hot-plug scan: a keyboard connected mid-session
+    # is picked up here rather than only on the next LOCAL off/on cycle.
+    if bridge.local_mode:
+        bridge._rescan_midi()
     return bridge.local_state()
 
 

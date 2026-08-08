@@ -208,6 +208,10 @@ body{
 .bkey.down{background:linear-gradient(#b6301f,#7c1a12)}
 
 .foot{display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#6d6455;letter-spacing:.5px}
+/* which MIDI ports are OPEN and which part they play — dim when a port is bound, amber when none
+   is, because "no port" is the state that gets mistaken for the PART chips not working */
+.foot .midiin{white-space:nowrap;color:#c8a24a}
+.foot .midiin.none{color:#6d6455}
 
 @media (max-width:900px){
   .panel{grid-template-columns:repeat(6,1fr)}

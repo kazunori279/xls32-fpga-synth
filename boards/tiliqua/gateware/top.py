@@ -33,7 +33,7 @@ from tiliqua.video import dvi
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cvin import CvIn, CvTestRamp
 from fx import StereoFx
-from midi_arb import MidiArbiter
+from midi_arb import MidiArbiter, MidiPartSelect
 from midi_filter import SysCommonFilter
 from usb_iface import XlsUsbInterface
 from viz import VizStore, VoiceTiles
@@ -301,6 +301,17 @@ class CoreTop(Elaboratable):
             usb_src.payload.eq(usb_midi_cdc.r_data),
             usb_src.valid.eq(usb_midi_cdc.r_rdy),
             usb_midi_cdc.r_en.eq(usb_midi_cdc.r_rdy & usb_src.ready),
+        ]
+
+        # --- The TRS keyboard follows the web UI's PART selection ---------------------------
+        # Sniffed off the USB side, not the merged stream, so the keyboard cannot retarget itself.
+        # Off until the UI says otherwise; source 0 is the TRS jack.
+        m.submodules.partsel = partsel = MidiPartSelect()
+        m.d.comb += [
+            partsel.i_midi.payload.eq(usb_src.payload),
+            partsel.i_midi.valid.eq(usb_src.valid & usb_src.ready),
+            arb.chan[0].eq(partsel.o_chan),
+            arb.chan_en[0].eq(partsel.o_en),
         ]
 
         # Audio up, tapped digitally rather than looped back through a patch cable. Without an

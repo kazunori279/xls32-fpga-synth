@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from amaranth.sim import Simulator
 
-from midi_arb import MidiArbiter
+from midi_arb import CC_PART, MidiArbiter, MidiPartSelect
 
 DATA_LEN = {0x8: 2, 0x9: 2, 0xA: 2, 0xB: 2, 0xC: 1, 0xD: 1, 0xE: 2}
 COMMON_LEN = {0xF1: 1, 0xF2: 2, 0xF3: 1}                # the rest of 0xF0-0xF7 carry none
@@ -45,16 +45,21 @@ def messages(stream):
     return out
 
 
-def run(sources, gap=0, stall=0):
+def run(sources, gap=0, stall=0, chan=None):
     """Drive every source at once and return the merged byte stream.
 
     `gap` idles each source between bytes and `stall` withholds `o.ready`; between them they move
     the moment the arbiter has to decide something, which is where an off-by-one in the grant hides.
+    `chan` is a per-source channel override, or None to leave that source alone.
     """
     dut = MidiArbiter(len(sources))
     seen = []
 
     async def tb(ctx):
+        for k, c in enumerate(chan or []):
+            if c is not None:
+                ctx.set(dut.chan[k], c)
+                ctx.set(dut.chan_en[k], 1)
         pos = [0] * len(sources)
         wait = [0] * len(sources)
         clk = 0
@@ -143,7 +148,61 @@ def test_system():
     print("  system:       real-time, system common, truncation             PASS")
 
 
+def test_rechannel():
+    """A source re-addressed to another part, including the messages it never restated."""
+    # Running status is the case that matters. The keyboard says 0x90 once and then sends bare
+    # pairs forever; if the rewrite happened on the way *into* the running-status register instead
+    # of on the way out, only the first note would move and the rest would keep playing part 1.
+    a = [0x90, 0x3C, 0x64, 0x3E, 0x64]
+    got = messages(run([a], chan=[2]))
+    assert got == [(0x92, 0x3C, 0x64), (0x92, 0x3E, 0x64)], got
+
+    # Every channel-voice type moves; system messages have no channel and must not be touched.
+    b = [0xB0, 0x4A, 0x20, 0xC5, 0x07, 0xE0, 0x00, 0x40, 0xF1, 0x20, 0xFE]
+    got = messages(run([b], chan=[3]))
+    assert got == [(0xB3, 0x4A, 0x20), (0xC3, 0x07), (0xE3, 0x00, 0x40), (0xF1, 0x20), (0xFE,)], got
+
+    # The override is per source: one keyboard moves, the other keeps the channel it sent on.
+    got = messages(run([[0x90, 0x3C, 0x64], [0x90, 0x40, 0x64]], chan=[1, None]))
+    assert (0x91, 0x3C, 0x64) in got and (0x90, 0x40, 0x64) in got, got
+
+    # Unset, the arbiter is byte-for-byte what it was before the override existed.
+    assert run([[0x90, 0x3C, 0x64]]) == run([[0x90, 0x3C, 0x64]], chan=[None])
+    print("  rechannel:    running status, every voice type, per source       PASS")
+
+
+def test_partselect():
+    """CC103 -> (channel, enable), from a stream that uses running status like the bridge does."""
+    dut = MidiPartSelect()
+    seen = []
+
+    async def tb(ctx):
+        # CC7 first so the sniffer has to keep its place, then CC103=2 by running status, then a
+        # note (which must not disturb the latch), then CC103=127 to hand the keyboard back.
+        for byte in [0xB0, 0x07, 0x64, CC_PART, 0x02, 0x90, 0x3C, 0x40,
+                     0xB0, CC_PART, 0x7F]:
+            ctx.set(dut.i_midi.payload, byte)
+            ctx.set(dut.i_midi.valid, 1)
+            await ctx.tick()
+            seen.append((ctx.get(dut.o_en), ctx.get(dut.o_chan)))
+        ctx.set(dut.i_midi.valid, 0)
+        await ctx.tick()
+        seen.append((ctx.get(dut.o_en), ctx.get(dut.o_chan)))
+
+    sim = Simulator(dut)
+    sim.add_clock(1 / 60e6)
+    sim.add_testbench(tb)
+    sim.run()
+
+    assert seen[0] == (0, 0), f"enabled before any CC103: {seen[0]}"
+    assert (1, 2) in seen, f"CC103=2 never selected part 3: {seen}"
+    assert seen[-1][0] == 0, f"CC103=127 did not release the keyboard: {seen[-1]}"
+    print("  partselect:   CC103 latched under running status, 127 releases   PASS")
+
+
 if __name__ == "__main__":
     test_interleave()
     test_fairness()
     test_system()
+    test_rechannel()
+    test_partselect()

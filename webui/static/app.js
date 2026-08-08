@@ -2,7 +2,7 @@
 // (on-screen / computer keyboard / Web-MIDI device), 16-bit PCM frames down (played via
 // an AudioWorklet). Knobs & switches send MIDI CCs; presets send a full CC burst.
 
-const VERSION = 'v76-sr';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v79-part';  // bump on each front-end change; shown in the header + cache-busts the worklet
 let SR = 32000;                   // frame rate on the wire; /api/spec overwrites it in boot()
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
                                   // 32 kHz on both; this is the interface rate the bridge pushes at.
@@ -178,11 +178,26 @@ function refreshPartUI() {
     chip.classList.toggle('layered', selSet.has(ch) && ch !== activeCh);
     chip.querySelector('.partled').classList.toggle('on', playSet.has(ch));
   });
+  renderMidiIn();                     // the footer names the part a hardware keyboard now plays
+  sendPartSelect();
+}
+// A keyboard on the Tiliqua's TRS jack sends on its own channel and reaches the FPGA without
+// passing through any of this, so the PART chips cannot re-address it the way they do the
+// on-screen keys. The gateware does it instead (midi_arb.py MidiPartSelect) and CC103 is how it
+// is told which part. Only the primary part: the TRS stream is one stream, so layering it across
+// parts would mean the arbiter replicating messages, which it does not do.
+let lastPartCC = -1;
+function sendPartSelect(force = false) {
+  const ch = noteChans()[0] & 0x0f;
+  if (ch === lastPartCC && !force) return;      // refreshPartUI runs on plenty that is not a part change
+  lastPartCC = ch;
+  sendMidi([0xB0 | ch, 103, ch]);
 }
 function postLocalChans() {   // LOCAL play: the host-side MIDI keyboard targets the selected part too
   if (!localPlay) return;
   fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ on: true, chans: noteChans() }) }).catch(() => {});
+    body: JSON.stringify({ on: true, chans: noteChans() }) })
+    .then((r) => r.json()).then(applyLocalState).catch(() => {});
 }
 function mutedChans() { const m = []; for (let ch = 0; ch < NPARTS; ch++) if (!playSet.has(ch)) m.push(ch); return m; }
 function postDemoMute() {   // DEMO notes are sequenced server-side, so the LED set has to go to the server too
@@ -466,18 +481,48 @@ function setupWheels() {
 }
 
 // ---------- Web MIDI ----------
+// A hardware keyboard transmits on whatever channel it feels like -- usually 1, always the same
+// one -- so its channel is DISCARDED here and the note is re-addressed to the selected part(s),
+// exactly as the on-screen keys are. That makes the PART chips steer both the same way.
+//
+// The readout in the footer exists because the failure this routing has is silent: if no port is
+// bound, the chips look like they are being ignored when in fact nothing ever arrived to route.
+let midiPorts = [];              // Web-MIDI inputs bound in this tab
+let midiHostPorts = [];          // host-side inputs the server opened (LOCAL play)
+function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); }
+function renderMidiIn() {
+  const el = document.getElementById('midiin'); if (!el) return;
+  const src = [...midiPorts, ...midiHostPorts.map((n) => n + ' ⟨host⟩')];
+  el.textContent = 'MIDI in: ' + (src.length ? src.join(', ') : 'none') + ' → ' + partsLabel();
+  el.classList.toggle('none', !src.length);
+}
+function bindMidiInput(inp) {
+  if (inp.__xls32) return;              // re-scanning must not stack a second handler -> double notes
+  inp.__xls32 = true;
+  midiPorts.push(inp.name || 'MIDI');
+  inp.onmidimessage = (e) => {
+    const d = Array.from(e.data);                  // re-address voice messages to the selected part
+    if (d[0] >= 0x80 && d[0] < 0xf0) { const st = d[0] & 0xf0; for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
+    else sendMidi(d);
+    const [st, d1] = e.data;                       // reflect notes on the on-screen keys
+    if ((st & 0xf0) === 0x90 && e.data[2] > 0) highlightKey(d1, true);
+    else if ((st & 0xf0) === 0x80 || ((st & 0xf0) === 0x90)) highlightKey(d1, false);
+  };
+}
 async function initWebMidi() {
   if (!navigator.requestMIDIAccess) return;
   try {
     const access = await navigator.requestMIDIAccess();
-    access.inputs.forEach((inp) => inp.onmidimessage = (e) => {
-      const d = Array.from(e.data);                  // re-address voice messages to the selected part
-      if (d[0] >= 0x80 && d[0] < 0xf0) { const st = d[0] & 0xf0; for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
-      else sendMidi(d);
-      const [st, d1] = e.data;                       // reflect notes on the on-screen keys
-      if ((st & 0xf0) === 0x90 && e.data[2] > 0) highlightKey(d1, true);
-      else if ((st & 0xf0) === 0x80 || ((st & 0xf0) === 0x90)) highlightKey(d1, false);
-    });
+    const scan = () => {
+      midiPorts = [];                              // rebuilt from scratch; `__xls32` keeps binds unique
+      access.inputs.forEach(bindMidiInput);
+      renderMidiIn();
+    };
+    scan();
+    // `inputs` used to be walked exactly once, at boot. A keyboard plugged in after the page
+    // loaded therefore never got a handler and was simply inert -- which reads as "the PART
+    // buttons don't work for MIDI" rather than as "this port was never opened".
+    access.onstatechange = scan;
   } catch (e) { /* no Web-MIDI permission */ }
 }
 
@@ -538,6 +583,7 @@ async function startAudio() {
   }, 150);
 }
 function onPCM(ab) {
+  if (!node) return;              // the socket is up before POWER now; nothing to play into yet
   framesRecv++;
   const u16 = new Uint16Array(ab);               // interleaved L,R unsigned 16-bit LE, centered 32768
   const n = u16.length >> 1;                      // stereo frames
@@ -548,7 +594,13 @@ function onPCM(ab) {
   }
   node.port.postMessage({ L, R }, [L.buffer, R.buffer]);   // worklet: dual-ring resample → stereo
 }
+// The socket carries MIDI *up* as well as audio down, so it is opened at boot and kept open --
+// it used to be created by powerOn() and reconnected only while `powered`. POWER is a browser-
+// audio control, and in LOCAL play the host makes the sound, so gating MIDI on it meant the keys
+// and any Web-MIDI keyboard were silently dead until someone pressed a button that, in that mode,
+// does nothing else. Idempotent: repeated calls while connecting/open are a no-op.
 function connectWS() {
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';   // match page scheme
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.binaryType = 'arraybuffer';
@@ -556,8 +608,9 @@ function connectWS() {
     setStatus(true);
     for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
     syncAllParts();
+    sendPartSelect(true);     // forced: the board may have rebooted, and its default is off
   };
-  ws.onclose = () => { setStatus(false); if (powered) setTimeout(connectWS, 1200); };   // auto-reconnect
+  ws.onclose = () => { setStatus(false); setTimeout(connectWS, 1200); };   // auto-reconnect
   ws.onerror = () => { try { ws.close(); } catch (e) {} };
   ws.onmessage = (e) => { if (e.data instanceof ArrayBuffer) onPCM(e.data); };
 }
@@ -692,7 +745,13 @@ function buildDemo() {
     box.append(el);
   });
   const overlay = document.getElementById('demobox');
-  document.getElementById('demo').addEventListener('click', () => overlay.classList.remove('hidden'));
+  // The label already flips to `■ DEMO` while a song plays, so make the button do what it says:
+  // stop. The picker only opens when nothing is playing -- otherwise the one control that looks
+  // like a stop button is the one control that cannot stop anything.
+  document.getElementById('demo').addEventListener('click', () => {
+    if (demoPlaying) { stopDemo(); return; }
+    overlay.classList.remove('hidden');
+  });
   document.getElementById('democlose').addEventListener('click', () => overlay.classList.add('hidden'));
   document.getElementById('demostop').addEventListener('click', stopDemo);
   document.getElementById('demosave').addEventListener('click', saveDemoTones);
@@ -711,6 +770,7 @@ async function setPlayMode(on) {
     const r = await fetch('/api/local', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ on, chans: noteChans() }) }).then((x) => x.json());
     localPlay = !!r.on;
+    applyLocalState(r);
     renderPlayMode();
     if (on && !localPlay) {                        // requested LOCAL but the server couldn't switch
       if (dbg) { dbg.textContent = 'LOCAL failed: ' + (r.error || 'audio device unavailable'); setTimeout(() => { if (dbg.textContent.startsWith('LOCAL failed')) dbg.textContent = ''; }, 6000); }
@@ -726,11 +786,16 @@ async function setAudioOut(v) {
       body: JSON.stringify({ on: localPlay, chans: noteChans(), device }) });
   } catch (e) {}
 }
+function applyLocalState(st) {   // whatever /api/local last said about the host's MIDI inputs
+  if (!st || typeof st !== 'object') return;
+  if (Array.isArray(st.midi_open)) { midiHostPorts = st.midi_open; renderMidiIn(); }
+}
 async function initPlayMode() {
   const b = document.getElementById('playmode'); const sel = document.getElementById('audioout');
   if (!b) return;
   try {
     const st = await fetch('/api/local').then((x) => x.json());
+    applyLocalState(st);
     if (!st.available) { b.style.display = 'none'; if (sel) sel.style.display = 'none'; return; }   // WEB only
     localPlay = !!st.on; renderPlayMode();
     if (sel) {
@@ -746,6 +811,9 @@ async function initPlayMode() {
       + ((st.midi_inputs || []).join(', ') || 'none') + ') — lower latency';
   } catch (e) {}
   b.addEventListener('click', () => setPlayMode(!localPlay));
+  // The server rescans its MIDI ports on this GET, so the poll is also what picks a keyboard up
+  // when it is plugged in mid-session. Cheap: a CoreMIDI enumeration on localhost.
+  setInterval(() => { fetch('/api/local').then((x) => x.json()).then(applyLocalState).catch(() => {}); }, 3000);
 }
 
 // ---------- boot ----------
@@ -759,6 +827,7 @@ async function boot() {
   setBar('—', 'Init');
   initMasterVol();
   initPlayMode();
+  connectWS();               // MIDI up does not wait for POWER (which only arms browser audio)
   document.getElementById('power').addEventListener('click', togglePower);
   document.getElementById('save').addEventListener('click', saveUser);
   document.getElementById('init').addEventListener('click', () => {
