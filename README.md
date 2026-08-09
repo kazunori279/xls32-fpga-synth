@@ -119,7 +119,7 @@ clocking, the transport, and where the audio physically comes out.
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
 | **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,773 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
-| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | `openFPGALoader -c dirtyJtag` to SRAM; a flash archive lives in slot 6 |
+| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
 | **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✗ not yet — build it (M32) |
 
 Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
@@ -253,7 +253,7 @@ addition rather than a rewrite.
     `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py` and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` (the per-milestone exit checks),
-    `spike/` (the M21/M22 fit sweeps).
+    `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
 - **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
   `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
@@ -396,35 +396,47 @@ tools use). Check the module is talking before anything else:
 openFPGALoader --scan-usb        # expect: 0x1209:0xc0ca dirtyJtag  apf.audio  Tiliqua R5
 ```
 
-There is **no committed Tiliqua bitstream yet** — build one first with
-[§3 · Tiliqua](#b--tiliqua--build-flash-verify), then load it:
+[`boards/tiliqua/firmware/xls32-r5.tar.gz`](boards/tiliqua/firmware/) is a committed **bitstream
+archive** — the bitstream plus the manifest the bootloader needs — so you can run the synth without
+building. Write it to a slot, either way round:
 
 ```bash
-openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit    # SRAM load
+# A) No toolchain — open https://apfaudio.github.io/tiliqua-webflash/ in Chrome, pick the
+#    module over WebUSB, upload boards/tiliqua/firmware/xls32-r5.tar.gz, choose slot 6.
+
+# B) With the vendor SDK checked out (see §3 · Tiliqua for what `pdm` needs):
+cd ~/Documents/GitHub/tiliqua/gateware
+pdm flash archive ~/Documents/GitHub/xls32-fpga-synth/boards/tiliqua/firmware/xls32-r5.tar.gz \
+    --slot 6
 ```
 
-> **⚠ The module must be sitting in the bootloader when you load.** The `audio` domain is the
-> SI5351's `clk0` wired straight into the fabric — no FPGA PLL — and **only the bootloader programs
-> that chip**, from the manifest of whichever slot it last booted. Five seconds after power-on it
-> autoboots `last_boot_slot` and takes that slot's `clk0` with it, so an SRAM load made after a
-> vendor 192 kHz slot has booted inherits **49.152 MHz** and the whole instrument plays 2,616 cents
-> sharp — with no other symptom, and neither a power cycle nor a JTAG refresh clears it. Touch the
-> encoder during the countdown to cancel the autoboot (which also clears the flag). The full story
-> is in [`boards/tiliqua/board.py`](boards/tiliqua/board.py) and
-> [ARCHITECTURE_tiliqua.md → A1](ARCHITECTURE_tiliqua.md#a1-clock-domains).
+Any slot 0–7 works; **slot 6 is what this repo's docs and tooling assume**, and it is where the
+vendor DSP-MDIFF example used to live. Catch the five-second countdown, pick the slot from the menu
+once, and every cold boot from then on loads it directly.
 
-**A flash archive already lives in slot 6** (it overwrote the vendor DSP-MDIFF example). Its
-manifest carries `clk0_hz: 12288000` and pins `clk1_hz: 39070000`, so once `last_boot_slot` points
-at slot 6 every cold boot clocks the module correctly and then loads this design — no encoder click,
-no measuring the clock to find out which state the module is in. Catching the countdown and picking
-slot 6 from the menu once is what writes that flag.
+> **Flashing to a slot is also how you avoid the clock trap — take the archive path if you can.**
+> The `audio` domain is the SI5351's `clk0` wired straight into the fabric, with no FPGA PLL, and
+> **only the bootloader programs that chip**, from the manifest of whichever slot it last booted.
+> This archive's manifest carries `clk0_hz: 12288000` and pins `clk1_hz: 39070000`, so booting it
+> from a slot always clocks the module correctly.
+>
+> **An SRAM load does not, and that is the trap.** Five seconds after power-on the bootloader
+> autoboots `last_boot_slot` and takes that slot's `clk0` with it, so a bitstream pushed into SRAM
+> after a vendor 192 kHz slot has booted inherits **49.152 MHz** and the whole instrument plays
+> 2,616 cents sharp — with no other symptom, and neither a power cycle nor a JTAG refresh clears
+> it. If you are SRAM-loading your own build, **the module must be sitting in the bootloader when
+> you load**: touch the encoder during the countdown to cancel the autoboot. The full story is in
+> [`boards/tiliqua/board.py`](boards/tiliqua/board.py) and
+> [ARCHITECTURE_tiliqua.md → A1](ARCHITECTURE_tiliqua.md#a1-clock-domains).
 
 What you should see and hear when it comes up:
 
 - **The screen** — 720×720p60 on the DVI output: 32 tiles, one per voice, brightness the envelope
   and hue the pitch. It is beam-raced, with no framebuffer.
-- **The jacks** — `out0`/`out1` are the stereo effects pair; `out2` carries the dry mono engine.
-  The eight LEDs show the four input and four output levels (the pmod's automatic mode).
+- **The jacks** — `out0`/`out1` are the stereo effects pair, and the only two that make sound;
+  `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
+  show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
+  dark by design.
 - **MIDI** — plays from the **TRS MIDI-In jack** and from USB-MIDI simultaneously; the web UI's
   PART selection is honoured for the TRS keyboard too (CC103, sniffed in gateware).
 
@@ -662,11 +674,21 @@ uv run boards/tiliqua/area.py             # per-block cell census out of yosys' 
 > with `--timing-allow-fail` for the known `sync`-domain shortfall
 > ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway)).
 
-Flash it (SRAM; read the bootloader warning in
-[§2 · Tiliqua](#b--tiliqua--flash-and-go) first):
+The build leaves two things worth having in `build/tiliqua/build/xls32-r5/`: `top.bit`, and a
+`xls32-<tag>-r5.tar.gz` **bitstream archive** pairing it with a generated `manifest.json`. Load
+whichever suits — but read the bootloader warning in
+[§2 · Tiliqua](#b--tiliqua--flash-and-go) before the SRAM one:
 
 ```bash
-openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit
+openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit   # SRAM: fast, inherits clk0
+(cd $TILIQUA_SDK && pdm flash archive \
+   $OLDPWD/build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz --slot 6)   # slot: sets clk0 itself
+```
+
+To refresh the committed archive, copy it over with its tag stripped:
+
+```bash
+cp build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz boards/tiliqua/firmware/xls32-r5.tar.gz
 ```
 
 Verify, cheapest check first — each isolates one layer, and each was a milestone's exit gate:

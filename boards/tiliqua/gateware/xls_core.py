@@ -94,10 +94,16 @@ class XlsSynth(wiring.Component):
     o_viz:       Out(32)
     o_viz_valid: Out(1)
 
+    # What the bootloader prints beside the module when you highlight this slot. `io_left` is the
+    # eight eurorack jacks in port order -- in0..in3 then out0..out3 -- and `io_right` is the rest
+    # of the panel: encoder, `usb2`, video, then the TRS MIDI jack last. The SDK's own
+    # src/top/usb_audio/top.py is the reference for both orderings. An empty string means the jack
+    # is unused, which is why in0..in3 and out2/out3 are blank: nothing reads the ADC (M28's CV
+    # variant that did was deleted in M31) and out2/out3 have carried silence since M26.
     bitstream_help = BitstreamHelp(
         brief="XLS32 synth: MIDI in (ch 1-4) over TRS or USB, audio out",
-        io_left=['', '', '', '', 'synth out', 'synth out', '', ''],
-        io_right=['', 'USB MIDI + audio', '', '', '', ''],
+        io_left=['', '', '', '', 'out L', 'out R', '', ''],
+        io_right=['', 'USB MIDI + audio', 'video out', '', '', 'TRS MIDI in'],
     )
 
     def __init__(self, engine_path=None, viz=False):

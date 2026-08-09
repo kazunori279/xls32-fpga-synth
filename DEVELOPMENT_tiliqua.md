@@ -55,7 +55,7 @@ graded automatically, everything before it by hand or by simulation.
 | **29 ✅** | **32 voices as 32 tiles**, 720×720p60 with no framebuffer — and the two bitstreams re-merge | **picture confirmed on the panel; `check_loop.py` PASS with frame gaps 0.000%, clock 12.289 MHz, note 69 at 440.02 Hz (+0.1 cents).** The design got *smaller* while gaining a screen: 24,107 (99%) → 23,404 (96%) |
 | **30 ⛔** | ~~**SoC + on-screen patch editor**~~ — cancelled | `TiliquaSoc` mandates PSRAM; M29 deleted PSRAM to buy the screen. Not a trade to re-weigh — see [below](#milestone-30--soc--on-screen-patch-editor-cancelled) |
 | **31 ✅** | **Standalone browser UI** — cross-board, so it lives in [DEVELOPMENT.md](DEVELOPMENT.md#milestone-31--deleting-the-python-hop) | |
-| **32 ◻** | **Bitstream archives, CI, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/`, CI that builds both boards | *Exit:* a fresh Tiliqua can be flashed from the web flasher and played with no toolchain, mirroring today's `boards/basys3/firmware/top.bit` story |
+| **32 ◐** | **Bitstream archives, CI, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/`, CI that builds both boards | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest. **CI is the one part not done**, and is held rather than dropped: Vivado cannot run in Actions, so a two-board matrix has no second half. See [docs/TODO.md](docs/TODO.md) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1411,8 +1411,37 @@ bootloader's help screen), `pdm flash archive` recipes, a prebuilt `.tar.gz` in
 `boards/tiliqua/firmware/`, a webflash-compatible release, and CI that builds both boards.
 *Exit:* a fresh Tiliqua can be flashed from the web flasher and played with no toolchain, mirroring
 what `boards/basys3/firmware/top.bit` already does for the other board. The documentation half of
-M32 is what produced the file you are reading; the open items that remain are in
-[docs/TODO.md](docs/TODO.md).
+M32 is what produced the file you are reading.
+
+**The release half turned out to be almost free**, because the SDK's build already emits a
+`xls32-<tag>-r5.tar.gz` beside `top.bit` — bitstream plus manifest, which is exactly the format
+`tiliqua-webflash` accepts as an upload. Shipping one is a `cp`. What needed thought was two things
+either side of it.
+
+*The manifest was describing a different module.* `BitstreamHelp` is what the bootloader prints
+beside a highlighted slot, and ours read `io_left[4..5] = 'synth out', 'synth out'` with everything
+else blank — including `io_right[5]`, the TRS MIDI jack this design has taken note-ons from since
+M24, and `io_right[2]`, the video output M29 built. A user reading the screen would not have known
+either existed. Corrected to `out L` / `out R` and the two missing labels; `in0..in3` and
+`out2/out3` stay deliberately blank, because nothing reads the ADC (M28's CV variant went in M31)
+and out2/out3 have carried silence since M26. The README claimed out2 carried the dry mono engine.
+It does not, and has not since M26 — `xls_core.py` drives channels 0 and 1 only.
+
+*Nothing verified that the shipped binary is the tested one.* The fix here was cheap and worth
+recording: `bitstream_help` is a class attribute consumed by the manifest generator and never
+elaborated, so changing it must not change the netlist. Rebuilding gave a `top.bit` **byte-identical**
+to the one the 175-case suite had just graded at 99.8/100 — same `sha256`, `3703aa89…`, and the same
+39.92 MHz on `clk`. That is worth more than the manifest fix itself: it says the ECP5 flow is
+deterministic enough that the archive in `boards/tiliqua/firmware/` is the artefact that was
+measured, not a rebuild of it.
+
+**CI is the part that is not done, and it is held rather than dropped.** Actions can plausibly run
+the Tiliqua half — yowasp is WebAssembly and the XLS codegen step is already containerised for
+amd64 — but Basys 3 needs Vivado, which wants a licence and about 100 GB. A one-board matrix would
+green-tick a repo whose other bitstream had gone stale, which is worse than no badge. The cheaper
+idea, recorded in [docs/TODO.md](docs/TODO.md), is to check in a hash of the sources each artefact
+was built from and fail on drift, which catches the thing CI was wanted for without building
+anything. The open items that remain are on the same page.
 
 **How the milestones depended on each other**, including the branch that was cancelled:
 

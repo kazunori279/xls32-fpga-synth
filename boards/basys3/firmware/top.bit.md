@@ -18,9 +18,10 @@ openFPGALoader -b basys3 -f firmware/top.bit
 
 For standalone boot from flash, set the Basys 3 **mode jumper JP1 to QSPI**.
 
-See the repo README §3 "Set up a board without building" for the full walkthrough.
+See the repo README §2 "Basys 3 — flash and go" for the full walkthrough. The Tiliqua equivalent is
+`boards/tiliqua/firmware/`, which ships a flash archive rather than a bare bitstream.
 
 ## Rebuilding
 
-This file is a copy of `build/top.bit` (gitignored build output). To regenerate it, see the README
-"Build the bitstream" / "Build in the cloud" sections, then `cp build/top.bit firmware/top.bit`.
+This file is a copy of `build/top.bit` (gitignored build output). To regenerate it, see README §3
+"Basys 3 — build, flash, verify", then `cp build/top.bit boards/basys3/firmware/top.bit`.
