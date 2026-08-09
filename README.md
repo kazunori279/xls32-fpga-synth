@@ -115,12 +115,12 @@ clocking, the transport, and where the audio physically comes out.
 | **Sample rate** | 32 kHz (28 kHz on the soft-multiplier backends) | engine 32 kHz, resampled 3/2 → **48 kHz** out |
 | **Host link** | USB UART @ 2 Mbaud (FT2232H channel B) | one USB-C: UAC2 audio up + USB-MIDI down |
 | **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee |
-| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware) |
+| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; built, HW-pending) |
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
 | **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,773 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
 | **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
-| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✗ not yet — build it (M32) |
+| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls32-r5.tar.gz` (bitstream archive) |
 
 Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
 transport is chosen by `$XLS32_BOARD` (default `basys3`). The per-board shells are documented in
@@ -438,8 +438,11 @@ What you should see and hear when it comes up:
   `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
   show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
   dark by design.
-- **MIDI** — plays from the **TRS MIDI-In jack** and from USB-MIDI simultaneously; the web UI's
-  PART selection is honoured for the TRS keyboard too (CC103, sniffed in gateware).
+- **MIDI** — **USB-MIDI over `usb2` is the path that has been played on hardware.** The **TRS
+  MIDI-In jack** is built and arbitrated in gateware alongside it, and the web UI's PART selection
+  is honoured for a TRS keyboard too (CC103, sniffed in gateware) — but that half has only ever
+  passed in simulation; **no cable has been put in the jack yet** ([docs/TODO.md](docs/TODO.md)).
+  If a TRS keyboard is silent, that is the likely reason, not your wiring.
 
 Smoke-test the host link before anything heavier — this isolates a broken transport from a broken
 synth, which the 175-case suite cannot:
