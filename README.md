@@ -510,6 +510,15 @@ SCREEN_IDX=2 CAM_IDX=0 AUD_IDX=1 DUR=60 scripts/demo_video.sh bach.mp4
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
   Multi-Output Device so you can still hear the demo.
 
+A webcam framed on a Eurorack module sees a lot of rack either side of it, so trim it before it is
+scaled into the corner — `CAM_CROP=w:h:x:y`, in capture pixels. Find the rectangle by grabbing a
+still first rather than guessing at it:
+
+```bash
+CAM_IDX=0 CAM_PREVIEW=/tmp/cam.png scripts/demo_video.sh              # a still, then exits
+CAM_IDX=0 CAM_CROP=640:480:320:120 CAM_PREVIEW=/tmp/cam.png scripts/demo_video.sh   # check it
+```
+
 When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
 Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
 `DUR` is a clip length, not a song: the shortest demo (*Goldberg Aria*) runs 50 s and the longest
