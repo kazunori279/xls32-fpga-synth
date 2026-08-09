@@ -516,8 +516,12 @@ still first rather than guessing at it:
 
 ```bash
 CAM_IDX=0 CAM_PREVIEW=/tmp/cam.png scripts/demo_video.sh              # a still, then exits
-CAM_IDX=0 CAM_CROP=640:480:320:120 CAM_PREVIEW=/tmp/cam.png scripts/demo_video.sh   # check it
+CAM_IDX=0 CAM_CROP=712:400:368:154 CAM_PREVIEW=/tmp/cam.png scripts/demo_video.sh   # check it
 ```
+
+Those numbers are one camera on one rack — yours will differ, and they change the moment the
+camera or the case moves, so preview again rather than reusing them. Keep the crop landscape:
+`CAM_W` fixes the PIP's *width*, so a portrait rectangle scales up into a very tall corner.
 
 When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
 Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
