@@ -142,6 +142,15 @@ points at it every cold boot lands correctly clocked — which is why the design
 slot at all. `check_loop.py` measures the clock before grading anything
 ([A3](#a3-the-rate-is-set-by-the-pull) explains where the measurement comes from).
 
+**That manifest is generated, not hand-written**, which is what makes it shippable. The build emits
+it beside `top.bit` from three sources — the `MODELINE`, the clock settings, and the
+`BitstreamHelp` literal in `xls_core.py` — and tars the pair into a *bitstream archive*, the format
+both `pdm flash archive` and `tiliqua-webflash` take. M32 committed one as
+`boards/tiliqua/firmware/xls32-r5.tar.gz`, so the correct `clk0` now travels with the design
+instead of being a thing the reader has to know. `BitstreamHelp` is a class attribute the manifest
+generator reads and the elaborator never sees, so correcting the help text is provably free:
+the rebuild that fixed it produced a byte-identical `top.bit`.
+
 **Calibration needs a CPU, and there isn't one.** The AK4619's calibration constants live in an I²C
 EEPROM and are read at boot by firmware. With an SoC present the DC offsets are
 ch0 −2.81 mV · ch1 −4.44 mV · ch2 −1.13 mV · ch3 −3.94 mV, all inside the quoted ±5 mV. A bare

@@ -46,7 +46,7 @@ player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a per-board shell (Verilog on Basys 3, [Amaranth](https://amaranth-lang.org/) on Tiliqua) for I/O and the block-RAM effects. No hand-written datapath.
 - **Play it** — a browser analog-style panel drives either board live over USB (or drive it from Python); MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [Prerequisites](#prerequisites).
 - **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB, run against both boards.
-- **Start here** — [Getting started](#2-getting-started) flashes a board and plays it (no toolchain on Basys 3); the [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works.
+- **Start here** — [Getting started](#2-getting-started) flashes a board and plays it; both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works.
 
 ## Contents
 
@@ -311,9 +311,9 @@ addition rather than a rewrite.
 
 # 2. Getting started
 
-Get a board making sound, then play it from the browser. On **Basys 3** this needs no FPGA
-toolchain at all — a prebuilt bitstream ships in the repo. On **Tiliqua** you currently have to
-build once (see [§3](#3-builders-guide)); a prebuilt archive is M32 work.
+Get a board making sound, then play it from the browser. Neither board needs an FPGA toolchain for
+this: both ship a prebuilt bitstream in the repo — a bare `top.bit` for Basys 3, a bitstream archive
+for Tiliqua. Building from source is [§3](#3-builders-guide) and is optional.
 
 Commands are shown from the **project root**; Python tools run under
 [`uv`](https://docs.astral.sh/uv/) (`pyproject.toml` pins the deps; `uv sync` once to set up).
@@ -680,9 +680,13 @@ whichever suits — but read the bootloader warning in
 [§2 · Tiliqua](#b--tiliqua--flash-and-go) before the SRAM one:
 
 ```bash
-openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit   # SRAM: fast, inherits clk0
-(cd $TILIQUA_SDK && pdm flash archive \
-   $OLDPWD/build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz --slot 6)   # slot: sets clk0 itself
+# SRAM — fast, but inherits whatever clk0 the last-booted slot left behind:
+openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit
+
+# Slot — slower, and programs clk0 from the archive's own manifest. `pdm` must run from the SDK,
+# so pass an absolute path back to this repo:
+ARCHIVE="$PWD"/build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz
+(cd ~/Documents/GitHub/tiliqua/gateware && pdm flash archive $ARCHIVE --slot 6)
 ```
 
 To refresh the committed archive, copy it over with its tag stripped:
