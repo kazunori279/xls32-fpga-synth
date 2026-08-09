@@ -44,6 +44,18 @@ player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 If you have a **Tiliqua** in front of you, this is the whole thing: **no toolchain, no terminal, no
 clone of this repo.** About five minutes.
 
+**What you need first:**
+
+- A **Tiliqua R5** in a Eurorack case with power on.
+- **Two USB-C cables** — one for the module's `dbg` port (flashing), one for `usb2` if you want to
+  play it from the browser. One is enough to get sound out.
+- A computer running **Chrome**, Edge, Brave or another Chromium browser. Firefox and Safari ship
+  neither Web MIDI nor Web Serial, so they cannot drive the board at all; an iPhone or iPad cannot
+  either, for the same reason ([details](#what-you-need)).
+- **Something to listen on.** `out0`/`out1` are Eurorack line level, which is hotter than a
+  headphone output expects — go through a mixer, an audio interface, or a Eurorack output module.
+- *Optional:* a **USB-MIDI keyboard**, if you want to play it without a computer.
+
 1. **Download one file** —
    **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
    (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
@@ -64,8 +76,9 @@ Now play it, either way round:
   Allow MIDI and audio input when the browser asks. You get the full analog-style panel, a preset
   browser, and four demo songs the board plays itself.
 
-**Basys 3 instead?** One command —
-`openFPGALoader -b basys3 -f boards/basys3/firmware/top.bit` — then the same panel over USB.
+**Basys 3 instead?** You need the board, a USB cable, a clone of this repo and
+[`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) — then one command,
+`openFPGALoader -b basys3 -f boards/basys3/firmware/top.bit`, and the same panel over USB.
 Full version in [§2 · A](#a--basys-3--flash-and-go).
 
 *Nothing happening?* [§2 · B](#b--tiliqua--flash-and-go) has the long form and a list of the
