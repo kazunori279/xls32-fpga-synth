@@ -41,41 +41,69 @@ player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 
 ## ▶ Quick start — play it
 
-If you have a **Tiliqua** in front of you, this is the whole thing: **no toolchain, no terminal, no
-clone of this repo.** About five minutes.
+Getting a **Tiliqua** singing is three separate things, and they ask for different equipment —
+which is why "what do I need?" has no one answer. **Flashing** happens once and wants a Chromium
+browser. **Playing** needs no computer at all. **The panel** is optional, and is the only part that
+rules any device out. **No toolchain, no terminal, no clone of this repo** at any point.
 
-**What you need first:**
+**The hardware, whichever route you take:** a **Tiliqua R5** in a powered Eurorack case, a **USB-C
+cable**, and something to listen on — `out0`/`out1` are Eurorack line level, hotter than a
+headphone jack expects, so go through a mixer, an audio interface or a Eurorack output module.
 
-- A **Tiliqua R5** in a Eurorack case with power on.
-- **Two USB-C cables** — one for the module's `dbg` port (flashing), one for `usb2` if you want to
-  play it from the browser. One is enough to get sound out.
-- A computer **or an Android tablet** running **Chrome**, Edge, Brave or another Chromium browser.
-  Firefox and Safari ship neither Web MIDI nor Web Serial, so they cannot drive the board — and
-  since every iOS browser is WebKit underneath, an iPhone or iPad cannot either
-  ([details](#what-you-need)).
-- **Something to listen on.** `out0`/`out1` are Eurorack line level, which is hotter than a
-  headphone output expects — go through a mixer, an audio interface, or a Eurorack output module.
-- *Optional:* a **USB-MIDI keyboard**, if you want to play it without a computer.
+### 1 · Flash it — once, from a Chromium browser
 
 1. **Download one file** —
    **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
    (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
    given at boot.
-2. **Flash it** — connect a USB-C cable to the module's **`dbg`** port, open
+2. **Write it to the module** — connect USB-C to the module's **`dbg`** port, open
    **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
-   upload the file you just downloaded, and write it to **slot 6**. Power-cycle the case; the
-   bootloader counts down for five seconds — pick slot 6 from the menu once, and every cold boot
-   after that goes straight there.
-3. **Listen** — **`out0` and `out1`** are the stereo pair (the other two jacks are silent by
-   design). The screen shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
+   upload the file, and write it to **slot 6**. Power-cycle the case; the bootloader counts down
+   for five seconds — pick slot 6 from the menu once, and every cold boot after that goes straight
+   there.
 
-Now play it, either way round:
+This is the **only** step that needs a computer or an Android tablet, so borrow one if you have to.
+Once slot 6 is written the module never asks again.
 
-- **From a keyboard** — plug a **USB-MIDI** keyboard into the module and play. 32 voices, 4 parts.
-- **From the browser** — add a second USB-C cable to **`usb2`**, open
-  **[the panel](https://kazunori279.github.io/xls32-fpga-synth/)** in Chrome, and press **POWER**.
-  Allow MIDI and audio input when the browser asks. You get the full analog-style panel, a preset
-  browser, and four demo songs the board plays itself.
+### 2 · Play it — no computer at all
+
+Move the cable to **`usb2`** and plug in a **USB-MIDI keyboard**. That is the entire setup: 32
+voices across 4 parts, on MIDI channels 1–4.
+
+**`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. The screen
+shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
+
+### 3 · Control it — the panel, or anything that speaks MIDI CC
+
+**The panel** is the full experience: every parameter, a preset browser, and four demo songs the
+board plays to itself. Connect **`usb2`** to a computer or an Android tablet, open
+**[the panel](https://kazunori279.github.io/xls32-fpga-synth/)** in Chrome, press **POWER**, and
+allow MIDI and audio input when the browser asks.
+
+**Or drive it from anything else that sends MIDI CC.** Every control on that panel is one plain CC
+message — no sysex, no custom protocol — so a hardware controller, a DAW, or a Core MIDI app on an
+iPhone or iPad reaches exactly the same parameters. The full map is
+[`webui/static/spec.json`](webui/static/spec.json) (`wave` is CC70, `detune` CC78, and so on), one
+MIDI channel per part.
+
+### Which host can do what
+
+| Host | 1 · Flash | 2 · Send notes | 3 · The panel |
+|---|:---:|:---:|:---:|
+| **Desktop Chrome / Edge / Brave** | ✅ | ✅ | ✅ |
+| **Android tablet or phone + Chrome** | ✅ | ✅ | ✅ — audio path untested |
+| **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
+| **A USB-MIDI keyboard, no host at all** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
+| **Desktop Firefox / Safari** | ✗ | ✗ | ✗ |
+
+The crosses are all the same cross: **Firefox and Safari ship neither Web MIDI nor Web Serial**,
+and Apple requires every iOS browser to use WebKit, so an iPhone's Chrome is Safari underneath.
+That is a limit of those *browsers*, not of the synth — which only ever speaks standard MIDI, and
+so will talk to almost anything that does.
+
+† Untested with this board. iOS handles class-compliant USB-MIDI and USB audio natively and the
+module draws its power from the Eurorack case rather than from the phone, so it ought to work; no
+one has actually tried it.
 
 **Basys 3 instead?** You need the board, a USB cable, a clone of this repo and
 [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) — then one command,
@@ -204,10 +232,13 @@ no mouse-only interactions anywhere, and a layout that folds to a single narrow 
 case, not from the tablet, so a phone or tablet is a genuinely practical host. A 10-inch screen is
 the comfortable size; phone-sized ones fit, but the knobs get tight.
 
-Three limits worth knowing before you rely on it:
+Three limits worth knowing before you rely on it — see
+[Which host can do what](#which-host-can-do-what) for the summary:
 
-- **iPhone and iPad cannot**, at all. WebKit ships neither Web MIDI nor Web Serial, and Apple
-  requires every iOS browser to use WebKit — so installing Chrome there changes nothing.
+- **iPhone and iPad cannot run the panel.** WebKit ships neither Web MIDI nor Web Serial, and Apple
+  requires every iOS browser to use WebKit, so installing Chrome there changes nothing. They can
+  still *play* the synth: every parameter the panel touches is a plain MIDI CC, which a Core MIDI
+  app sends just as well.
 - **Basys 3 is desktop-only.** It needs Web Serial, which only reached Android in 2026 on a limited
   set of devices, and its 2 Mbaud link has never been tried over one.
 - **The Android audio path is untested on hardware.** It should work, but two things could bite:
