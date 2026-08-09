@@ -90,11 +90,11 @@ MIDI channel per part.
 
 | Host | 1 · Flash | 2 · Send notes | 3 · The panel |
 |---|:---:|:---:|:---:|
-| **Desktop Chrome / Edge / Brave** | ✅ | ✅ | ✅ |
+| **Mac, Windows or Linux computer — Chrome / Edge / Brave** | ✅ | ✅ | ✅ |
 | **Android tablet or phone + Chrome** | ✅ | ✅ | ✅ — audio path untested |
 | **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
 | **A USB-MIDI keyboard, no host at all** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
-| **Desktop Firefox / Safari** | ✗ | ✗ | ✗ |
+| **Same computer, but Firefox or Safari** | ✗ | ✗ | ✗ |
 
 The crosses are all the same cross: **Firefox and Safari ship neither Web MIDI nor Web Serial**,
 and Apple requires every iOS browser to use WebKit, so an iPhone's Chrome is Safari underneath.
@@ -239,8 +239,8 @@ Three limits worth knowing before you rely on it — see
   requires every iOS browser to use WebKit, so installing Chrome there changes nothing. They can
   still *play* the synth: every parameter the panel touches is a plain MIDI CC, which a Core MIDI
   app sends just as well.
-- **Basys 3 is desktop-only.** It needs Web Serial, which only reached Android in 2026 on a limited
-  set of devices, and its 2 Mbaud link has never been tried over one.
+- **Basys 3 needs a Mac, Windows or Linux machine.** It talks over Web Serial, which only reached
+  Android in 2026 on a limited set of devices, and its 2 Mbaud link has never been tried over one.
 - **The Android audio path is untested on hardware.** It should work, but two things could bite:
   Android may label the board's audio input differently than the panel expects, and if its audio
   layer downmixes all four USB channels instead of taking the first two, the clock counter carried
