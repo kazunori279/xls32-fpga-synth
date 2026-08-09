@@ -3,21 +3,31 @@
 # synth's own audio. All three are captured live with ffmpeg and muxed at the end.
 #
 # The audio used to come from the server (`/api/capture` in LOCAL mode), which no longer exists:
-# since M31 the browser owns the board's link and plays the audio itself. So the sound is taken
-# from a **loopback audio device** instead — the browser's output, digitally, never a room mic.
-# Install one (BlackHole 2ch is free: `brew install blackhole-2ch`) and make it the Mac's output,
-# or better, build a Multi-Output Device in Audio MIDI Setup so you can still hear the demo.
+# since M31 the browser owns the board's link and plays the audio itself. So the sound is captured
+# from an audio *input* device -- digitally, never a room mic. Two ways, depending on the board:
 #
-# Prereqs: the UI is open with a board connected (see README: `python3 -m http.server 8765 -d
-# webui/static`); Terminal has macOS **Screen Recording**, **Camera** and **Microphone**
-# permissions (System Settings > Privacy).
+#   Tiliqua -- point AUD_IDX at the board itself. Its UAC2 interface enumerates as an input
+#     ("Tiliqua XLS32", 4ch @ 48 kHz), which is the synth's own output before the host touches it.
+#     No extra software, and one fewer resampling stage than a loopback. Untested alongside a
+#     browser that is streaming the same device; if CoreAudio refuses the second client, fall back.
+#   Basys 3 (or the fallback) -- a **loopback device**, capturing what the browser plays. BlackHole
+#     2ch is free (`brew install blackhole-2ch`); make it the Mac's output, or better, build a
+#     Multi-Output Device in Audio MIDI Setup so you can still hear the demo while it records.
+#
+# Prereqs: the UI is open in Chrome with a board connected and POWER pressed -- either the hosted
+# panel at https://kazunori279.github.io/xls32-fpga-synth/ (nothing to run) or a local copy served
+# with `python3 -m http.server 8765 -d webui/static`. Terminal needs macOS **Screen Recording**,
+# **Camera** and **Microphone** permissions (System Settings > Privacy).
 #
 # Usage:
 #   scripts/demo_video.sh [out.mp4]
 # Env overrides (see `ffmpeg -f avfoundation -list_devices true -i ""` for indices):
 #   SCREEN_IDX=2  CAM_IDX=0  AUD_IDX=1  DUR=45  CAM_W=480  AV_OFFSET=0
-#   AUD_IDX          avfoundation index of the loopback INPUT (BlackHole 2ch etc.). Required —
-#                    the list_devices output above names it.
+#   AUD_IDX          avfoundation index of the audio INPUT — the Tiliqua itself, or a loopback
+#                    (BlackHole 2ch etc.). Required; the list_devices output above names it.
+#                    Note the indices are per-machine and per-session: with a Tiliqua plugged in
+#                    and no webcam, screen 0 is video 0 and the board is audio 0, so the defaults
+#                    below (SCREEN_IDX=2, CAM_IDX=0) are both wrong. Always check the list first.
 #   CROP=w:h:x:y      crop the screen grab to just the browser window (drop the rest of the
 #                     desktop). Get the geometry from the browser: window.screenX/screenY +
 #                     (outerHeight-innerHeight) for the content top, innerWidth/innerHeight
