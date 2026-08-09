@@ -39,21 +39,55 @@ scrolling spectrogram of that same signal.
 *(Both MP4s also live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo
 player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 
+## ▶ Quick start — play it
+
+If you have a **Tiliqua** in front of you, this is the whole thing: **no toolchain, no terminal, no
+clone of this repo.** About five minutes.
+
+1. **Download one file** —
+   **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
+   (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
+   given at boot.
+2. **Flash it** — connect a USB-C cable to the module's **`dbg`** port, open
+   **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
+   upload the file you just downloaded, and write it to **slot 6**. Power-cycle the case; the
+   bootloader counts down for five seconds — pick slot 6 from the menu once, and every cold boot
+   after that goes straight there.
+3. **Listen** — **`out0` and `out1`** are the stereo pair (the other two jacks are silent by
+   design). The screen shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
+
+Now play it, either way round:
+
+- **From a keyboard** — plug a **USB-MIDI** keyboard into the module and play. 32 voices, 4 parts.
+- **From the browser** — add a second USB-C cable to **`usb2`**, open
+  **[the panel](https://kazunori279.github.io/xls32-fpga-synth/)** in Chrome, and press **POWER**.
+  Allow MIDI and audio input when the browser asks. You get the full analog-style panel, a preset
+  browser, and four demo songs the board plays itself.
+
+**Basys 3 instead?** One command —
+`openFPGALoader -b basys3 -f boards/basys3/firmware/top.bit` — then the same panel over USB.
+Full version in [§2 · A](#a--basys-3--flash-and-go).
+
+*Nothing happening?* [§2 · B](#b--tiliqua--flash-and-go) has the long form and a list of the
+things that usually go wrong. *Want to build it from source?* [§3](#3-builders-guide).
+*Want to know how it works?* [§5](#5-architecture--design).
+
 ## At a glance
 
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
 - **Hardware** — one engine, two boards: a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`, audio over USB) and a [Tiliqua](https://apf.audio/) Eurorack module (Lattice [ECP5](https://www.latticesemi.com/Products/FPGAandCPLD/ECP5) `LFE5U-25F`, analog jacks + a DVI visualiser). The synth is a literal circuit that computes one audio sample per tick — see [The two boards](#the-two-boards).
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a per-board shell (Verilog on Basys 3, [Amaranth](https://amaranth-lang.org/) on Tiliqua) for I/O and the block-RAM effects. No hand-written datapath.
-- **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [Prerequisites](#prerequisites).
+- **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [What you need](#what-you-need).
 - **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB, run against both boards.
-- **Start here** — [Getting started](#2-getting-started) flashes a board and plays it; both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works.
+- **Start here** — the [Quick start](#-quick-start--play-it) above is the five-minute path; [Getting started](#2-getting-started) is the same thing at length, for either board. Both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#5-architecture--design) is how it works.
 
 ## Contents
 
-1. [Overview](#1-overview) — what it is, the two boards, background & rationale, the repo layout.
+1. [Overview](#1-overview) — what it is, and how the two boards differ.
 2. [Getting started](#2-getting-started) — flash a board, run and play the web UI.
 3. [Builder's guide](#3-builders-guide) — build the bitstream for either board, flash, verify, test.
-4. [Architecture & design](#4-architecture--design) — how the synth works today.
+4. [Background & rationale](#4-background--rationale) — why XLS, why an FPGA, how it was built.
+5. [Architecture & design](#5-architecture--design) — how the synth works today.
 
 Four companion documents go deeper, split the same way the code is — **core + Basys 3** in one
 pair, **Tiliqua** in the other:
@@ -125,220 +159,43 @@ clocking, the transport, and where the audio physically comes out.
 Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
 transport is chosen by `$XLS32_BOARD` (default `basys3`). The per-board shells are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) (Basys 3) and
-[ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md) (Tiliqua).
-
-## Background & rationale
-
-*Why this design — the technologies, the trade-offs, and the build method. Skip to
-[Getting started](#2-getting-started) if you just want to run it.*
-
-### The technologies
-
-Three technologies do the heavy lifting; here's what each is and why it's here.
-
-- **The boards — an FPGA dev board and a Eurorack module.** The **[Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start)** is an entry-level
-  development board built on a [Xilinx](https://en.wikipedia.org/wiki/Xilinx) **[Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html)** chip (`xc7a35t`); it is
-  cheap, well-documented, and carries the USB-[UART](https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter) + [JTAG](https://en.wikipedia.org/wiki/JTAG) needed to program it and stream data
-  back. The **[Tiliqua](https://apf.audio/)** is a Lattice **ECP5** Eurorack module with a real audio
-  codec, analog jacks, TRS MIDI and a DVI output — the same design as an instrument you can patch.
-  An FPGA is a grid of reconfigurable logic you wire up into an arbitrary digital circuit, so the
-  synth is a *literal circuit* that computes one audio sample per tick — sample-accurate timing no
-  OS scheduler can jitter.
-- **Google XLS (DSLX) — the language.** An open-source **[High-Level Synthesis (HLS)](https://en.wikipedia.org/wiki/High-level_synthesis)**
-  toolkit: you write hardware as *pure functions* and small stateful *procs* in a Rust-like
-  language, and the compiler schedules them into a pipelined Verilog circuit.
-- **The toolchains.** DSLX → Verilog (XLS) is placed & routed by whichever backend the board wants:
-  on Basys 3 by the fully open-source **[F4PGA](https://f4pga.org/)** ([yosys](https://yosyshq.net/yosys/) · [VPR](https://verilogtorouting.org/) · [Project X-Ray](https://github.com/f4pga/prjxray)),
-  **openXC7** (nextpnr-xilinx), or **Xilinx Vivado** — the last builds the committed 32 kHz/DSP48
-  bitstream; on Tiliqua by **yosys + nextpnr-ecp5**. [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) flashes both; the whole
-  build is scriptable.
-
-### Why XLS, not hand-written Verilog?
-
-The DSP here — [DDS](https://en.wikipedia.org/wiki/Direct_digital_synthesis) oscillators, [ADSR](https://en.wikipedia.org/wiki/Envelope_(music)) math, a [state-variable filter](https://en.wikipedia.org/wiki/State_variable_filter), a mixer — is naturally
-expressed as functions over numbers. In DSLX that's a few lines with unit tests that run in
-milliseconds, and the compiler handles pipelining, register insertion, and bit-width narrowing.
-The Verilog equivalent means hand-managing pipeline registers, valid/ready handshakes, and
-[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) widths yourself.
-
-XLS trades some low-level control for a much tighter write-test loop. Where you *do* need that
-control — the block-RAM effects, the clock-enable multicycle — the board shell provides it. It also
-pays a dividend the second board collected: because the engine is a scheduling problem rather than
-a hand-placed pipeline, retargeting it to an ECP5 was *recompiling the same source at a different
-`--pipeline_stages`*, not a rewrite. This project is partly a candid stress test of that trade-off;
-the [friction log](DEVELOPMENT.md#friction-logs--learnings) documents exactly where the seams leak.
-
-### Why an FPGA, not Web Audio?
-
-You *could* synthesize these voices in a few lines of JavaScript with the
-[Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) API. The question is what that costs you. Pushing the DSP into hardware
-buys three concrete things:
-- **Deterministic, tiny latency.** The FPGA computes one sample per clock in a fixed-length
-  pipeline, so the delay through the datapath is a fixed handful of clock cycles —
-  sub-millisecond and *jitter-free*. Web Audio renders in fixed 128-sample blocks (an
-  [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) quantum ≈ 2.7 ms at 48 kHz) stacked on top of the OS audio buffer (~10 ms on
-  Windows, 30–40 ms on Linux) while sharing the CPU with the UI thread and the garbage
-  collector — so its timing is best-effort and can glitch under load.
-- **A dedicated, hard-real-time datapath.** This engine *time-multiplexes* its 32 voices
-  through one pipeline — one voice per clock, all 32 finished inside every sample tick — so the
-  per-sample work is a *fixed* cycle budget that always completes on time, regardless of the patch.
-  (An FPGA *can* instead lay voices out as fully parallel spatial hardware; this design multiplexes
-  one deep pipeline to fit the area/timing budget, and still hits the deadline every sample with
-  margin.) A CPU shares one core across the voices, the UI, and the OS, so its timing is
-  best-effort and degrades as polyphony and load grow.
-- **Customizable to the bit.** You design the exact circuit — arbitrary fixed-point widths,
-  a bespoke oscillator/filter topology, sample-accurate modulation routing — none of it
-  boxed into a fixed set of Web Audio nodes, and the same design can drive a [DAC](https://en.wikipedia.org/wiki/Digital-to-analog_converter), a [PWM](https://en.wikipedia.org/wiki/Pulse-width_modulation) pin,
-  or hardware MIDI directly with no OS/driver round-trip. It's a real instrument, not a
-  browser tab.
-
-### Loop engineering with FPGA and AI coding agents
-
-Both boards were brought up *remotely and headlessly* by an AI coding agent — no one
-watching LEDs, listening to a speaker, or pressing buttons. That works because the project is
-built for *loop engineering*: you design a tight, self-verifying edit → build → run → observe
-cycle and let the agent iterate *inside* it, instead of hand-prompting each step.
-
-The load-bearing ingredient is **autonomous verification** — every feature emits a signal a
-machine can grade without human senses. Audio is teed out over USB and checked by
-[FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)/[spectrogram](https://en.wikipedia.org/wiki/Spectrogram); the end-to-end suite scores each test 0–100 and fails on a regression.
-Give the agent that objective pass/fail and the loop runs unattended: change the DSLX, build,
-flash, measure, read the number, revise.
-- **Fast builds keep the loop tight.** A loop is only as good as its cycle time, and FPGA
-  place-and-route is the slow step. Building F4PGA under x86 *emulation* on an Apple-Silicon
-  Mac takes ~8–10 min per iteration; offloading the build to a **native x86 [GCE](https://cloud.google.com/products/compute) VM** in the
-  cloud cuts it to ~6 min and frees the laptop — so the agent gets its verdict sooner and
-  fits more iterations into an hour. (`boards/basys3/scripts/remote_build.sh` pushes the sources up, builds
-  on the VM, and pulls the bitstream + timing report back.) The Tiliqua build is ECP5-sized and
-  runs locally in ~6 min, so it never needed the VM.
-
-```mermaid
-flowchart LR
-  EDIT["edit synth.x (DSLX)"] --> BUILD["build bitstream<br/>GCE VM ~6 min (Basys 3)<br/>local ~6 min (Tiliqua)"]
-  BUILD --> FLASH["flash board<br/>openFPGALoader"]
-  FLASH --> DRIVE["drive MIDI +<br/>capture audio over USB"]
-  DRIVE --> CHECK{"verify:<br/>FFT / spectrogram<br/>e2e score 0–100"}
-  CHECK -->|pass| DONE["milestone done"]
-  CHECK -->|regression| EDIT
-```
-
-### Design principle
-
-One clock, one sample rate. Everything is either a **pure function** (the DSP
-math — XLS's sweet spot) or a small **proc** (the stateful/streaming stages). No
-generated clocks, no per-note clocks, no daisy-chained voice stealing. The synth
-emits **one audio sample per sample-rate tick**.
-
-## Repository layout
-
-The tree is split down one line: what is the *synth*, and what is the *board*. The engine
-knows nothing about pins, clock rates or how audio gets to a host, so the second board was an
-addition rather than a rewrite.
-
-- **`core/`** — board-independent hardware sources: `synth.x` (DSLX — the whole engine),
-  `codegen.sh` (DSLX → IR → optimised IR → pipelined Verilog; **every board calls this one
-  script**, differing only in `STAGES`), `fix_verilog.py` (post-codegen fixups), `gen_lut.py`
-  (LUT + phase-increment generator), and `sim/tb*.v` ([iverilog](http://iverilog.icarus.com/) testbenches). `engine.v` is
-  generated into `build/`.
-- **`boards/`** — one package per target, plus a small registry (`get_board()`, selected with
-  `$XLS32_BOARD`, default `basys3`). A board package owns its descriptor (sample rate, transport,
-  flash command), its shell sources, and its build script — and nothing else:
-  - **`boards/basys3/`** — `board.py` (descriptor: 32 kHz, UART transport), `rtl/` (`top.v`
-    Verilog shell, `basys3.xdc`, `build_vivado.tcl`), `scripts/` (`build.sh` local
-    [Docker](https://www.docker.com/); `remote_build.sh` + `vmbuild*.sh` native x86 GCE build; `verify.sh` flash +
-    UART check), `firmware/` (the committed prebuilt `top.bit`).
-  - **`boards/tiliqua/`** — `board.py` (descriptor: 48 kHz, UAC2 + USB-MIDI transport),
-    `gateware/` (`top.py` + `xls_core.py`, an [Amaranth](https://amaranth-lang.org/) shell that
-    `Instance()`s the same generated `engine.v`, plus `usb_iface.py`, `midi_filter.py`,
-    `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py` and their Verilator/Amaranth harnesses),
-    `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
-    census), `check_pitch.py` / `check_midi.py` / `check_loop.py` (the per-milestone exit checks),
-    `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
-- **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
-  `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
-- **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
-  (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
-  Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
-  suite, the web UI and the presetgen hardware tools), `analyze.py`
-  (envelope/pitch checks), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
-  MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
-  **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
-- **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over
-  Web MIDI / Web Serial, with no server behind it (`synthspec.py` is the CC map/preset source,
-  baked to `static/spec.json` at build time;
-  `static/` UI, a Serum/Vital-style **preset browser**, and a **DEMO player** — 4 authored
-  4-part songs in `static/demos.json`, played live to the board: complete public-domain classical
-  pieces arranged for the 4 parts (Bach's *Prelude in C* BWV 846 and *Goldberg* Aria,
-  Saint-Saëns' *Le Cygne*, Vivaldi's *Winter* Largo — notes in `presetgen/demo_scores.py`).
-  While a demo plays, its 4 part tones load
-  into the multitimbral editor — tweak each part live and **💾 TONES** saves them straight back
-  out as `demos.json` (File System Access API — drop it into `static/`), which is the
-  **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
-  carries tone edits over by song name). The matched preset banks live here as
-  `presets_*.json`. See the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
-  [Preset banks](DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
-- **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
-  model of the engine (`engine.py`), a multi-resolution spectrogram loss (`loss.py`), the
-  CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board
-  calibration probe (`calibrate.py`), and the orchestrator (`build_presets.py`). See
-  [Preset banks](DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis).
-- **`test/`** — the end-to-end hardware test suite: drives **either** board over USB, scores the
-  captured audio (0–100), and builds a captioned report video. See [§3](#3-builders-guide) and
-  `test/README.md`.
-- **`docs/`** — diagrams & spectrogram PNGs (in `docs/assets/`), the open-TODO list
-  ([`docs/TODO.md`](docs/TODO.md)), the USB dropout report, and the session slides
-  (`docs/slides/`, self-contained HTML, no build step). **`media/`** (captured
-  .wav/.mp4/screenshots) and **`build/`** (bitstream build output) are gitignored.
-
-> **Publishing.** Both the web UI and the slides are served from **GitHub Pages**, assembled by
-> [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main` that
-> touches `webui/static/` or `docs/slides/`. `webui/static/` becomes the site root and
-> `docs/slides/` becomes `/slides/`; nothing is rewritten, because a real directory resolves the
-> decks' relative `src="assets/…"` on its own. There is no separate publish step — `git push` is
-> the publish step.
->
-> The workflow **deploys, it does not build**. No XLS codegen, no yosys, no Vivado: a green run
-> says the page is up, not that the bitstreams under `boards/*/firmware/` still match their
-> sources. See [`docs/TODO.md`](docs/TODO.md) for that gap and why building on push was cancelled.
->
-> [`docs/slides/publish_gist.py`](docs/slides/publish_gist.py) is the **legacy** path: it PATCHes
-> the [public gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab) the
-> decks used to be linked from, rewriting `src="assets/…"` to `raw.githubusercontent.com` URLs on
-> `main` because a gist has no directories. That URL has been shared, so it is kept working —
-> run the script (after pushing, since the rewritten URLs read from `main`) only if you care
-> about it.
+[ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md) (Tiliqua); the directory-by-directory tour of
+the source tree is [docs/REPO_MAP.md](docs/REPO_MAP.md).
 
 ---
 
 # 2. Getting started
 
-Get a board making sound, then play it from the browser. Neither board needs an FPGA toolchain for
-this: both ship a prebuilt bitstream in the repo — a bare `top.bit` for Basys 3, a bitstream archive
-for Tiliqua. Building from source is [§3](#3-builders-guide) and is optional.
+Get a board making sound, then play it from the browser. The long form of the
+[Quick start](#-quick-start--play-it) above, with the reasons and the failure modes.
 
-Commands are shown from the **project root**; Python tools run under
-[`uv`](https://docs.astral.sh/uv/) (`pyproject.toml` pins the deps; `uv sync` once to set up).
+Neither board needs an FPGA toolchain: both ship a prebuilt bitstream in the repo — a bare
+`top.bit` for Basys 3, a bitstream archive for Tiliqua. Building from source is
+[§3](#3-builders-guide) and is optional.
 
-### Prerequisites
+### What you need
 
-**A Chromium browser is required.** The web UI owns the hardware directly from the page — it uses
-[Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) and
-[Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API), and **neither ships
-in Firefox or Safari**. In those browsers **POWER** reports the board as unsupported and there is
-nothing to configure — use **Chrome**, Edge, Brave, or another Chromium build. (The Python tools in
-`host/` have no such requirement; they talk to the board over the same USB devices from the shell.)
+**To play the synth: a Chromium browser, and that is all.** The web UI owns the hardware directly
+from the page — it uses [Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API)
+and [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API), and **neither
+ships in Firefox or Safari**. In those browsers **POWER** reports the board as unsupported and
+there is nothing to configure — use **Chrome**, Edge, Brave, or another Chromium build. On Tiliqua
+the flashing is a browser page too ([tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)),
+so nothing at all has to be installed; on Basys 3 you need `openFPGALoader`, one line below.
 
-Common tools, either board:
+**For the command-line tools, the demos and the test suite** — none of which is needed to play:
 
 - **[`uv`](https://docs.astral.sh/uv/)** (Python env + deps): `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **[`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/)** (flash over USB-JTAG): `brew install openfpgaloader` — ≥ 0.12.1 for the Tiliqua's `dirtyJtag` probe.
-- **Chrome** (or another Chromium browser), as above.
+- **[`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/)** (flash over USB-JTAG): `brew install openfpgaloader` — required for Basys 3, and for Tiliqua only if you SRAM-load your own build instead of using the web flasher (≥ 0.12.1 for the Tiliqua's `dirtyJtag` probe).
 
 Then, once per checkout:
 ```bash
 git clone <repo-url> && cd <repo-dir>
 uv sync                     # runtime deps only (all have prebuilt wheels — works on any Mac)
 ```
+
+Command-line examples below are shown from that **project root**, and the Python ones run under
+`uv` (`pyproject.toml` pins the deps).
 
 > `uv sync` installs the host tools and the test suite. **The web UI needs none of it** — it is a
 > static page. Two extras are opt-in: `--extra localmidi` adds `python-rtmidi`, which the *host*
@@ -389,23 +246,27 @@ Then jump to [Run the web UI](#run-the-web-ui) to play it.
 
 ### B · Tiliqua — flash and go
 
-You need a **Tiliqua R5** in a Eurorack case with power, a USB-C cable to the **`dbg`** port (JTAG +
-the bootloader's serial log), and a second to **`usb2`** (the UAC2 audio + USB-MIDI link the host
-tools use). Check the module is talking before anything else:
-
-```bash
-openFPGALoader --scan-usb        # expect: 0x1209:0xc0ca dirtyJtag  apf.audio  Tiliqua R5
-```
+You need a **Tiliqua R5** in a Eurorack case with power and **one USB-C cable to the `dbg` port**
+(JTAG + the bootloader's serial log). That is enough to flash it and hear it. A **second cable to
+`usb2`** carries the UAC2 audio and USB-MIDI link — add it when you want to play from the browser
+or from the `host/` tools, which is [Run the web UI](#run-the-web-ui) below.
 
 [`boards/tiliqua/firmware/xls32-r5.tar.gz`](boards/tiliqua/firmware/) is a committed **bitstream
 archive** — the bitstream plus the manifest the bootloader needs — so you can run the synth without
-building. Write it to a slot, either way round:
+building. **Download it directly**
+([raw link](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz),
+430 KB) if you have not cloned the repo. Then write it to a slot.
+
+**A · The web flasher — the default, and nothing to install.** Open
+[**tiliqua-webflash**](https://apfaudio.github.io/tiliqua-webflash/) in Chrome, pick the module over
+WebUSB, upload `xls32-r5.tar.gz`, and choose **slot 6**.
+
+**B · `pdm flash`, if you already have the vendor SDK checked out** (see
+[§3 · Tiliqua](#b--tiliqua--build-flash-verify) for what `pdm` needs). `openFPGALoader --scan-usb`
+should print `0x1209:0xc0ca dirtyJtag  apf.audio  Tiliqua R5` first — if it does not, the module is
+not talking and nothing below will work:
 
 ```bash
-# A) No toolchain — open https://apfaudio.github.io/tiliqua-webflash/ in Chrome, pick the
-#    module over WebUSB, upload boards/tiliqua/firmware/xls32-r5.tar.gz, choose slot 6.
-
-# B) With the vendor SDK checked out (see §3 · Tiliqua for what `pdm` needs):
 cd ~/Documents/GitHub/tiliqua/gateware
 pdm flash archive ~/Documents/GitHub/xls32-fpga-synth/boards/tiliqua/firmware/xls32-r5.tar.gz \
     --slot 6
@@ -444,8 +305,22 @@ What you should see and hear when it comes up:
   passed in simulation; **no cable has been put in the jack yet** ([docs/TODO.md](docs/TODO.md)).
   If a TRS keyboard is silent, that is the likely reason, not your wiring.
 
+> **If it does not work.** In rough order of how often each one bites:
+>
+> - **Everything plays wildly sharp.** You SRAM-loaded instead of booting a slot, and the module
+>   inherited the previous slot's clock — see the clock trap above. Flash the archive to slot 6 and
+>   boot it from the menu.
+> - **No sound at all.** Patch from **`out0`/`out1`**. `out2`/`out3` are silent by design, and the
+>   bottom four of the eight LEDs stay dark for the same reason.
+> - **The browser panel says the board is unsupported.** It is not a Chromium browser. Web MIDI and
+>   Web Serial do not exist in Firefox or Safari — see [What you need](#what-you-need).
+> - **POWER cannot find the board.** Check the second cable is in **`usb2`**, not just `dbg`, and
+>   that nothing else is holding the device — another panel tab, or `check_loop.py` mid-run.
+> - **The web flasher does not see the module.** WebUSB needs the `dbg` cable and a Chromium
+>   browser, and the module has to be sitting in the bootloader rather than running a slot.
+
 Smoke-test the host link before anything heavier — this isolates a broken transport from a broken
-synth, which the 175-case suite cannot:
+synth, which the 175-case suite cannot (needs the `usb2` cable and `uv sync`):
 
 ```bash
 uv run boards/tiliqua/check_loop.py    # one note down over USB-MIDI, recorded back over USB audio
@@ -458,7 +333,7 @@ Then jump to [Run the web UI](#run-the-web-ui).
 The UI is a **static page** — there is no server to run. It reaches the board itself, through
 [Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) + the Tiliqua's UAC2
 input, or [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) at 2 Mbaud
-on the Basys 3. **Open it in Chrome** (see [Prerequisites](#prerequisites)):
+on the Basys 3. **Open it in Chrome** (see [What you need](#what-you-need)):
 
 ### 👉 **[kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**
 
@@ -569,6 +444,8 @@ Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tun
 
 Build from the DSLX sources, then flash, verify, simulate, and test. Commands are
 shown from the **project root** (Python tools run under [`uv`](https://docs.astral.sh/uv/)).
+**[docs/REPO_MAP.md](docs/REPO_MAP.md) is the map of what is where** — read it alongside this
+section if the tree is unfamiliar.
 
 ### The shared step — DSLX to engine.v
 
@@ -771,7 +648,111 @@ video, each test preceded by a caption card + its spectrogram), and per-test `.w
 
 ---
 
-# 4. Architecture & design
+# 4. Background & rationale
+
+*Why this design — the technologies, the trade-offs, and the build method. It sits down here on
+purpose: none of it is needed to play the synth, or to build it.*
+
+## The technologies
+
+Three technologies do the heavy lifting; here's what each is and why it's here.
+
+- **The boards — an FPGA dev board and a Eurorack module.** The **[Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start)** is an entry-level
+  development board built on a [Xilinx](https://en.wikipedia.org/wiki/Xilinx) **[Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html)** chip (`xc7a35t`); it is
+  cheap, well-documented, and carries the USB-[UART](https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter) + [JTAG](https://en.wikipedia.org/wiki/JTAG) needed to program it and stream data
+  back. The **[Tiliqua](https://apf.audio/)** is a Lattice **ECP5** Eurorack module with a real audio
+  codec, analog jacks, TRS MIDI and a DVI output — the same design as an instrument you can patch.
+  An FPGA is a grid of reconfigurable logic you wire up into an arbitrary digital circuit, so the
+  synth is a *literal circuit* that computes one audio sample per tick — sample-accurate timing no
+  OS scheduler can jitter.
+- **Google XLS (DSLX) — the language.** An open-source **[High-Level Synthesis (HLS)](https://en.wikipedia.org/wiki/High-level_synthesis)**
+  toolkit: you write hardware as *pure functions* and small stateful *procs* in a Rust-like
+  language, and the compiler schedules them into a pipelined Verilog circuit.
+- **The toolchains.** DSLX → Verilog (XLS) is placed & routed by whichever backend the board wants:
+  on Basys 3 by the fully open-source **[F4PGA](https://f4pga.org/)** ([yosys](https://yosyshq.net/yosys/) · [VPR](https://verilogtorouting.org/) · [Project X-Ray](https://github.com/f4pga/prjxray)),
+  **openXC7** (nextpnr-xilinx), or **Xilinx Vivado** — the last builds the committed 32 kHz/DSP48
+  bitstream; on Tiliqua by **yosys + nextpnr-ecp5**. [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) flashes both; the whole
+  build is scriptable.
+
+## Why XLS, not hand-written Verilog?
+
+The DSP here — [DDS](https://en.wikipedia.org/wiki/Direct_digital_synthesis) oscillators, [ADSR](https://en.wikipedia.org/wiki/Envelope_(music)) math, a [state-variable filter](https://en.wikipedia.org/wiki/State_variable_filter), a mixer — is naturally
+expressed as functions over numbers. In DSLX that's a few lines with unit tests that run in
+milliseconds, and the compiler handles pipelining, register insertion, and bit-width narrowing.
+The Verilog equivalent means hand-managing pipeline registers, valid/ready handshakes, and
+[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) widths yourself.
+
+XLS trades some low-level control for a much tighter write-test loop. Where you *do* need that
+control — the block-RAM effects, the clock-enable multicycle — the board shell provides it. It also
+pays a dividend the second board collected: because the engine is a scheduling problem rather than
+a hand-placed pipeline, retargeting it to an ECP5 was *recompiling the same source at a different
+`--pipeline_stages`*, not a rewrite. This project is partly a candid stress test of that trade-off;
+the [friction log](DEVELOPMENT.md#friction-logs--learnings) documents exactly where the seams leak.
+
+## Why an FPGA, not Web Audio?
+
+You *could* synthesize these voices in a few lines of JavaScript with the
+[Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) API. The question is what that costs you. Pushing the DSP into hardware
+buys three concrete things:
+- **Deterministic, tiny latency.** The FPGA computes one sample per clock in a fixed-length
+  pipeline, so the delay through the datapath is a fixed handful of clock cycles —
+  sub-millisecond and *jitter-free*. Web Audio renders in fixed 128-sample blocks (an
+  [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) quantum ≈ 2.7 ms at 48 kHz) stacked on top of the OS audio buffer (~10 ms on
+  Windows, 30–40 ms on Linux) while sharing the CPU with the UI thread and the garbage
+  collector — so its timing is best-effort and can glitch under load.
+- **A dedicated, hard-real-time datapath.** This engine *time-multiplexes* its 32 voices
+  through one pipeline — one voice per clock, all 32 finished inside every sample tick — so the
+  per-sample work is a *fixed* cycle budget that always completes on time, regardless of the patch.
+  (An FPGA *can* instead lay voices out as fully parallel spatial hardware; this design multiplexes
+  one deep pipeline to fit the area/timing budget, and still hits the deadline every sample with
+  margin.) A CPU shares one core across the voices, the UI, and the OS, so its timing is
+  best-effort and degrades as polyphony and load grow.
+- **Customizable to the bit.** You design the exact circuit — arbitrary fixed-point widths,
+  a bespoke oscillator/filter topology, sample-accurate modulation routing — none of it
+  boxed into a fixed set of Web Audio nodes, and the same design can drive a [DAC](https://en.wikipedia.org/wiki/Digital-to-analog_converter), a [PWM](https://en.wikipedia.org/wiki/Pulse-width_modulation) pin,
+  or hardware MIDI directly with no OS/driver round-trip. It's a real instrument, not a
+  browser tab.
+
+## Loop engineering with FPGA and AI coding agents
+
+Both boards were brought up *remotely and headlessly* by an AI coding agent — no one
+watching LEDs, listening to a speaker, or pressing buttons. That works because the project is
+built for *loop engineering*: you design a tight, self-verifying edit → build → run → observe
+cycle and let the agent iterate *inside* it, instead of hand-prompting each step.
+
+The load-bearing ingredient is **autonomous verification** — every feature emits a signal a
+machine can grade without human senses. Audio is teed out over USB and checked by
+[FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)/[spectrogram](https://en.wikipedia.org/wiki/Spectrogram); the end-to-end suite scores each test 0–100 and fails on a regression.
+Give the agent that objective pass/fail and the loop runs unattended: change the DSLX, build,
+flash, measure, read the number, revise.
+- **Fast builds keep the loop tight.** A loop is only as good as its cycle time, and FPGA
+  place-and-route is the slow step. Building F4PGA under x86 *emulation* on an Apple-Silicon
+  Mac takes ~8–10 min per iteration; offloading the build to a **native x86 [GCE](https://cloud.google.com/products/compute) VM** in the
+  cloud cuts it to ~6 min and frees the laptop — so the agent gets its verdict sooner and
+  fits more iterations into an hour. (`boards/basys3/scripts/remote_build.sh` pushes the sources up, builds
+  on the VM, and pulls the bitstream + timing report back.) The Tiliqua build is ECP5-sized and
+  runs locally in ~6 min, so it never needed the VM.
+
+```mermaid
+flowchart LR
+  EDIT["edit synth.x (DSLX)"] --> BUILD["build bitstream<br/>GCE VM ~6 min (Basys 3)<br/>local ~6 min (Tiliqua)"]
+  BUILD --> FLASH["flash board<br/>openFPGALoader"]
+  FLASH --> DRIVE["drive MIDI +<br/>capture audio over USB"]
+  DRIVE --> CHECK{"verify:<br/>FFT / spectrogram<br/>e2e score 0–100"}
+  CHECK -->|pass| DONE["milestone done"]
+  CHECK -->|regression| EDIT
+```
+
+## Design principle
+
+One clock, one sample rate. Everything is either a **pure function** (the DSP
+math — XLS's sweet spot) or a small **proc** (the stateful/streaming stages). No
+generated clocks, no per-note clocks, no daisy-chained voice stealing. The synth
+emits **one audio sample per sample-rate tick**.
+
+---
+
+# 5. Architecture & design
 
 The consolidated overview of how the shipped synth works. For the **per-block implementation
 deep-dive** — real code, a dataflow diagram, and a timing chart for every block — see
@@ -918,6 +899,7 @@ doesn't cut another.
 | **[ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md)** | The same treatment for the **Amaranth/ECP5 shell**: clock domains, the pull-driven rate, UAC2 + MIDI on one cable, the ported effects, the beam-raced visualiser, and the area/timing budget. |
 | **[DEVELOPMENT.md](DEVELOPMENT.md)** | Milestone-by-milestone build history for the core and Basys 3 (M1–M20, M28a, M31), plus eight toolchain **friction logs & learnings**. |
 | **[DEVELOPMENT_tiliqua.md](DEVELOPMENT_tiliqua.md)** | The Tiliqua port's history (M21–M29), the cancelled M30, what is left in M32, and the risk register. |
+| **[docs/REPO_MAP.md](docs/REPO_MAP.md)** | Directory-by-directory tour of the source tree, and how the front-end gets published. |
 | **[docs/TODO.md](docs/TODO.md)** | The open list — unverified items and known debt. |
 | **[docs/TILIQUA_USB_DROPOUTS.md](docs/TILIQUA_USB_DROPOUTS.md)** | The USB dropout investigation, written up and then withdrawn. |
 | **[`docs/slides/`](docs/slides/)** | The 50-minute talk, with playable audio clips from each milestone ([English](https://kazunori279.github.io/xls32-fpga-synth/slides/) · [日本語](https://kazunori279.github.io/xls32-fpga-synth/slides/index_ja.html)). |

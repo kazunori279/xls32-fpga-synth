@@ -3,7 +3,7 @@
 How every functional block of the synth is actually built in the RTL: what it does, the
 real code, a dataflow diagram, and — where cycle timing matters — a timing chart. This is the
 **implementation reference**; for the big-picture overview see the
-[README §4](README.md#4-architecture--design), and for the milestone-by-milestone rationale
+[README §5](README.md#5-architecture--design), and for the milestone-by-milestone rationale
 (why each block is the way it is) see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 > **Scope: the core engine plus the Basys 3 Verilog shell.** The engine

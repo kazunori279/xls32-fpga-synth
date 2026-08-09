@@ -4,7 +4,7 @@ How the Tiliqua build is actually put together: the Amaranth shell around the ge
 USB device, the effects, the visualiser, and the area and timing constraints all four of them are
 squeezed against. This is the **implementation reference for the second board**; for the
 milestone-by-milestone rationale see [DEVELOPMENT_tiliqua.md](DEVELOPMENT_tiliqua.md), and for the
-big-picture overview [README §4](README.md#4-architecture--design).
+big-picture overview [README §5](README.md#5-architecture--design).
 
 > **Parts A and B of [`ARCHITECTURE.md`](ARCHITECTURE.md) apply here verbatim.** The ECP5 runs the
 > same `engine.v` the Artix-7 does, out of the same `core/synth.x`, through the same
