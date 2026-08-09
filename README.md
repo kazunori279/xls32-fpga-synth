@@ -49,9 +49,10 @@ clone of this repo.** About five minutes.
 - A **Tiliqua R5** in a Eurorack case with power on.
 - **Two USB-C cables** — one for the module's `dbg` port (flashing), one for `usb2` if you want to
   play it from the browser. One is enough to get sound out.
-- A computer running **Chrome**, Edge, Brave or another Chromium browser. Firefox and Safari ship
-  neither Web MIDI nor Web Serial, so they cannot drive the board at all; an iPhone or iPad cannot
-  either, for the same reason ([details](#what-you-need)).
+- A computer **or an Android tablet** running **Chrome**, Edge, Brave or another Chromium browser.
+  Firefox and Safari ship neither Web MIDI nor Web Serial, so they cannot drive the board — and
+  since every iOS browser is WebKit underneath, an iPhone or iPad cannot either
+  ([details](#what-you-need)).
 - **Something to listen on.** `out0`/`out1` are Eurorack line level, which is hotter than a
   headphone output expects — go through a mixer, an audio interface, or a Eurorack output module.
 - *Optional:* a **USB-MIDI keyboard**, if you want to play it without a computer.
@@ -196,16 +197,23 @@ there is nothing to configure — use **Chrome**, Edge, Brave, or another Chromi
 the flashing is a browser page too ([tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)),
 so nothing at all has to be installed; on Basys 3 you need `openFPGALoader`, one line below.
 
-**Phones and tablets: Android only, and only for the Tiliqua.** The panel itself is built for
-touch — no mouse events anywhere, and it folds to a narrower layout below 900 px — so a 10-inch
-Android tablet running Chrome is a reasonable host, with the module powered from its Eurorack case
-rather than from the tablet. Two caveats, neither yet tried on real hardware: Android may name the
-board's audio input differently, and if its audio layer downmixes all four USB channels instead of
-taking the first two, you will hear the clock counter on `ch2/3` as noise. **iPhone and iPad cannot
-work at all** — WebKit ships neither Web MIDI nor Web Serial, and every iOS browser is WebKit, so
-Chrome there changes nothing. **Basys 3 needs Web Serial**, which only reached Android in 2026 on a
-limited set of devices and has not been tried at this bitrate; treat a phone or tablet as
-desktop-only for that board. Phone-sized screens are cramped either way.
+**Phones and tablets can be the UI too.** The panel is touch-native — pointer events throughout,
+no mouse-only interactions anywhere, and a layout that folds to a single narrow column below
+900 px — so an **Android tablet running Chrome** drives a Tiliqua the same way a laptop does: plug
+`usb2` into the tablet, open the panel, press POWER. The module takes its power from the Eurorack
+case, not from the tablet, so a phone or tablet is a genuinely practical host. A 10-inch screen is
+the comfortable size; phone-sized ones fit, but the knobs get tight.
+
+Three limits worth knowing before you rely on it:
+
+- **iPhone and iPad cannot**, at all. WebKit ships neither Web MIDI nor Web Serial, and Apple
+  requires every iOS browser to use WebKit — so installing Chrome there changes nothing.
+- **Basys 3 is desktop-only.** It needs Web Serial, which only reached Android in 2026 on a limited
+  set of devices, and its 2 Mbaud link has never been tried over one.
+- **The Android audio path is untested on hardware.** It should work, but two things could bite:
+  Android may label the board's audio input differently than the panel expects, and if its audio
+  layer downmixes all four USB channels instead of taking the first two, the clock counter carried
+  on `ch2/3` will come through as noise. If you try it, that noise is the symptom to listen for.
 
 **For the command-line tools, the demos and the test suite** — none of which is needed to play:
 
