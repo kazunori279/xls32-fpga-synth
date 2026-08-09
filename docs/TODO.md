@@ -52,13 +52,22 @@ those three; git history keeps the original.)*
   it was written; the hardware exists, the test has not been done.
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not
   hardware-tested — parts on order.
-- **Nothing detects that a committed bitstream has gone stale.** M32 shipped prebuilt artefacts for
-  both boards — `boards/basys3/firmware/top.bit` and `boards/tiliqua/firmware/xls32-r5.tar.gz` —
-  and both are refreshed by hand, so the repo can hold a bitstream that no longer matches the
-  sources beside it and nothing will say so. The idea on the shelf is a checked-in hash of the
-  sources each artefact was built from, compared on demand; it catches the drift without building
-  anything. **Building on push was considered and cancelled**, not deferred: Vivado needs a licence
-  and ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one
-  board of two claims more than it checks. The repo does now have an Actions workflow
-  (`.github/workflows/pages.yml`), but it only copies `webui/static/` and `docs/slides/` onto
-  Pages — it deploys, it does not build, and it leaves this entry exactly where it was.
+- **The committed Basys 3 bitstream is stale, and known to be.** `boards/basys3/firmware/top.bit`
+  is byte-for-byte the 2026-07-13 initial-release blob (`refactor(M20)` only moved it); `core/synth.x`
+  has changed twice since (M22's 18×18 narrowing, M29), as have `rtl/top.v` and
+  `rtl/build_vivado.tcl`. It plays, but it is an older engine than the one documented. Refreshing it
+  needs Vivado on x86 (`boards/basys3/scripts/remote_build.sh`) — which is exactly why it drifted.
+  The Tiliqua archive beside it is current.
+
+  The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
+  each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted
+  edits as well as commits. Two gaps remain in the check itself: it covers no **Tiliqua SDK**
+  checkout (outside this repo, unhashable from here), and **nothing runs it automatically** — no
+  hook, no CI step, so it only helps someone who thinks to run it. Once the Basys 3 bitstream is
+  rebuilt it will have a real recorded provenance; today its record is an honest `null`, because
+  its sources predate the M20 tree split and no truthful hash can be reconstructed for them.
+
+  **Building on push was considered and cancelled**, not deferred: Vivado needs a licence and
+  ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one board of
+  two claims more than it checks. `.github/workflows/pages.yml` deploys `webui/static/` and
+  `docs/slides/` — it does not build, and it never will.

@@ -242,6 +242,13 @@ Notes:
 The committed bitstream is the Vivado/DSP48 build: 32 kHz, `STAGES=48`. To regenerate it see
 [§3 · Basys 3](#a--basys-3--build-flash-verify), then `cp build/top.bit boards/basys3/firmware/top.bit`.
 
+> **This one is behind the sources.** `top.bit` is byte-for-byte the July 13 initial-release
+> build; `core/synth.x` and `rtl/top.v` have moved on since (M22's 18×18 narrowing, M29). It
+> plays — it is a complete engine, just an older one — but it is not what the repo describes.
+> Rebuilding it needs Vivado, which is why it has drifted. `uv run --no-project python
+> scripts/check_artefacts.py` reports exactly this, and the Tiliqua archive beside it is
+> current.
+
 Then jump to [Run the web UI](#run-the-web-ui) to play it.
 
 ### B · Tiliqua — flash and go

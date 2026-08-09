@@ -35,8 +35,9 @@ addition rather than a rewrite.
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` (the per-milestone exit checks),
     `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
-- **`scripts/`** — board-agnostic media tools: `spectro.sh` (.wav → PNG),
-  `make_mp4.sh` (.wav → spectrogram MP4), `demo_video.sh`.
+- **`scripts/`** — board-agnostic tools: `spectro.sh` (.wav → PNG), `make_mp4.sh` (.wav →
+  spectrogram MP4), `demo_video.sh`, and `check_artefacts.py` — which hashes the sources behind
+  each committed bitstream into `artefact_hashes.json` and tells you when one has drifted.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
   (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
@@ -82,7 +83,10 @@ the publish step.
 
 The workflow **deploys, it does not build**. No XLS codegen, no yosys, no Vivado: a green run
 says the page is up, not that the bitstreams under `boards/*/firmware/` still match their
-sources. See [`docs/TODO.md`](TODO.md) for that gap and why building on push was cancelled.
+sources. That second question is answered separately and on demand, by
+[`scripts/check_artefacts.py`](../scripts/check_artefacts.py) — which today reports the Basys 3
+bitstream as behind its sources. See [`docs/TODO.md`](TODO.md) for that, and for why building on
+push was cancelled.
 
 [`docs/slides/publish_gist.py`](slides/publish_gist.py) is the **legacy** path: it PATCHes
 the [public gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab) the

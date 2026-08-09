@@ -36,6 +36,16 @@ walkthrough, including what you should see and hear when it comes up.
 The manifest's `tag` field names the commit. A trailing `-` means the tree was dirty at build time
 and the archive should not be trusted as a release.
 
+The commit alone does not tell you whether the archive is still *current*, so the sources that feed
+it are hashed into `scripts/artefact_hashes.json`:
+
+```bash
+uv run --no-project python scripts/check_artefacts.py tiliqua
+```
+
+That catches uncommitted edits too, which the `tag` cannot. It does **not** cover the Tiliqua SDK
+checkout the build links against — that lives outside this repo and cannot be hashed from here.
+
 ## Rebuilding
 
 This file is a copy of the archive the build drops beside `top.bit` (both gitignored). See README §3
@@ -43,6 +53,8 @@ This file is a copy of the archive the build drops beside `top.bit` (both gitign
 
 ```bash
 cp build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz boards/tiliqua/firmware/xls32-r5.tar.gz
+uv run --no-project python scripts/check_artefacts.py --update tiliqua
 ```
 
-Nothing checks that this file still matches the sources — see [docs/TODO.md](../../../docs/TODO.md).
+Run `--update` only when the archive you just copied in was built from the tree as it stands — the
+record is a provenance claim, and a false one is worse than none.

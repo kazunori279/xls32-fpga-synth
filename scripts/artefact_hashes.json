@@ -1,0 +1,39 @@
+{
+  "basys3": {
+    "artefact": "boards/basys3/firmware/top.bit",
+    "artefact_sha256": "e1f84880580c1561f600652c87cc08ae9943121896551d20165240f1f3ec8d74",
+    "built_from_commit": "a38cffe",
+    "built_on": "2026-07-13",
+    "note": "This blob is byte-identical to the one in the initial public release; 60287a1 only moved it. It predates the M20 tree split, so the sources it was built from do not exist under today's paths and no honest hash can be recorded for them retroactively. Rebuild (README 3, Basys 3) and run --update to give it a real record. Sources have changed in these commits since:",
+    "params": {
+      "STAGES": "48",
+      "WCT": "48",
+      "backend": "vivado"
+    },
+    "sources": null
+  },
+  "tiliqua": {
+    "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
+    "artefact_sha256": "5c919f408d0d1567fb2166425f2acfc2783fedb3a0380481cb66f939a1da325f",
+    "built_from_commit": "d5a0819",
+    "built_on": "2026-08-09",
+    "params": {
+      "STAGES": "12",
+      "WCT": "12",
+      "hw_rev": "5"
+    },
+    "sources": {
+      "boards/tiliqua/build.sh": "f7cddb030c3d5484ac2ab09f05e94b3726611957dd999cc74ef58a9676bf3399",
+      "boards/tiliqua/gateware/fx.py": "c195e1c76b4c6fae351a67fa8071c3c0650ae2b29ef370fb87dbc5b604114ebe",
+      "boards/tiliqua/gateware/midi_arb.py": "7be7ce06530990affc63c0d5ce66985527d3de6fb36797f2eb1102f2b36017a1",
+      "boards/tiliqua/gateware/midi_filter.py": "3884f3a9d0127c6440fef53dcbfe0f40b91019f52ea066de8195bdb99c722918",
+      "boards/tiliqua/gateware/top.py": "79e71cdc439d21e0e54c4aea9412bf9c4afee07861e286f3b62c3772ead52d80",
+      "boards/tiliqua/gateware/usb_iface.py": "fce220fc507b309e061118756b6ac626015d29e8d48910600b0d95cc48393696",
+      "boards/tiliqua/gateware/viz.py": "a248acea3164380a3037ca3cfcb295014c97c2556648eed0363cfd0237aaa45d",
+      "boards/tiliqua/gateware/xls_core.py": "a5b7a94107ae6f9a6268d4829dce540153d1c9fdaf46a22c4ae2c134e15d31e3",
+      "core/codegen.sh": "1b225060370115699164c0bca82c7a694fb99a8e8edf0054059ffd0a02d217a0",
+      "core/fix_verilog.py": "bd2ab3b9b3899ce9215f6f4015fc63df2cb2c63ca9e2edeeebb706145097be65",
+      "core/synth.x": "f92a4cc9d87157a138b85af8c91d8887cabc7f1927a67b6f4ec90f4adde21c7c"
+    }
+  }
+}
