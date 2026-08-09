@@ -55,7 +55,7 @@ graded automatically, everything before it by hand or by simulation.
 | **29 ✅** | **32 voices as 32 tiles**, 720×720p60 with no framebuffer — and the two bitstreams re-merge | **picture confirmed on the panel; `check_loop.py` PASS with frame gaps 0.000%, clock 12.289 MHz, note 69 at 440.02 Hz (+0.1 cents).** The design got *smaller* while gaining a screen: 24,107 (99%) → 23,404 (96%) |
 | **30 ⛔** | ~~**SoC + on-screen patch editor**~~ — cancelled | `TiliquaSoc` mandates PSRAM; M29 deleted PSRAM to buy the screen. Not a trade to re-weigh — see [below](#milestone-30--soc--on-screen-patch-editor-cancelled) |
 | **31 ✅** | **Standalone browser UI** — cross-board, so it lives in [DEVELOPMENT.md](DEVELOPMENT.md#milestone-31--deleting-the-python-hop) | |
-| **32 ◐** | **Bitstream archives, CI, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/`, CI that builds both boards | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest. **CI is the one part not done**, and is held rather than dropped: Vivado cannot run in Actions, so a two-board matrix has no second half. See [docs/TODO.md](docs/TODO.md) |
+| **32 ✅** | **Bitstream archives, ~~CI~~, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/` | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest, verified as the committed file. **CI was cut from the milestone**: Vivado cannot run in Actions, so a two-board matrix has no second half — see [below](#what-is-left--m32-and-the-risk-register) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1406,9 +1406,10 @@ This is [risk 10](#what-is-left--m32-and-the-risk-register) realised, with no im
 
 ## What is left — M32, and the risk register
 
-**M32 · Bitstream archives, CI, docs.** `manifest.json` metadata (name and IO assignments for the
-bootloader's help screen), `pdm flash archive` recipes, a prebuilt `.tar.gz` in
-`boards/tiliqua/firmware/`, a webflash-compatible release, and CI that builds both boards.
+**M32 · Bitstream archives, ~~CI~~, docs.** `manifest.json` metadata (name and IO assignments for
+the bootloader's help screen), `pdm flash archive` recipes, a prebuilt `.tar.gz` in
+`boards/tiliqua/firmware/`, and a webflash-compatible release. It was also written to include CI
+that builds both boards; that half was **cancelled**, for the reason below.
 *Exit:* a fresh Tiliqua can be flashed from the web flasher and played with no toolchain, mirroring
 what `boards/basys3/firmware/top.bit` already does for the other board. The documentation half of
 M32 is what produced the file you are reading.
@@ -1435,13 +1436,19 @@ to the one the 175-case suite had just graded at 99.8/100 — same `sha256`, `37
 deterministic enough that the archive in `boards/tiliqua/firmware/` is the artefact that was
 measured, not a rebuild of it.
 
-**CI is the part that is not done, and it is held rather than dropped.** Actions can plausibly run
-the Tiliqua half — yowasp is WebAssembly and the XLS codegen step is already containerised for
-amd64 — but Basys 3 needs Vivado, which wants a licence and about 100 GB. A one-board matrix would
-green-tick a repo whose other bitstream had gone stale, which is worse than no badge. The cheaper
-idea, recorded in [docs/TODO.md](docs/TODO.md), is to check in a hash of the sources each artefact
-was built from and fail on drift, which catches the thing CI was wanted for without building
-anything. The open items that remain are on the same page.
+**CI was cut from the milestone.** It was written into M32 as "CI that builds both boards", and the
+second board is the problem: Basys 3 needs Vivado, which wants a licence and about 100 GB, and no
+hosted runner is going to have it. Actions could run the Tiliqua half on its own — yowasp is
+WebAssembly and the XLS codegen step is already containerised for amd64 — but a one-board matrix
+green-ticks a repo whose *other* bitstream may have gone stale, and a badge that means less than it
+appears to is worse than no badge.
+
+Cutting it leaves a real gap, which [docs/TODO.md](docs/TODO.md) records rather than closes:
+**nothing detects that a committed artefact no longer matches its sources.** Both firmware files are
+refreshed by hand. The cheap version of what CI was actually wanted for is a checked-in hash of the
+sources each artefact was built from, compared on demand — it catches the drift without building
+anything, and it does not need a runner that can hold Vivado. The other open items are on the same
+page.
 
 **How the milestones depended on each other**, including the branch that was cancelled:
 

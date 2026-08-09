@@ -57,10 +57,11 @@ those three; git history keeps the original.)*
   it was written; the hardware exists, the test has not been done.
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not
   hardware-tested — parts on order.
-- **Nothing builds either board on push.** M32 shipped the prebuilt artefacts for both — Basys 3's
-  `boards/basys3/firmware/top.bit` and Tiliqua's `boards/tiliqua/firmware/xls32-r5.tar.gz` — but
-  both are refreshed by hand, so the repo can hold a bitstream that no longer matches its sources
-  and nothing will say so. Tiliqua's flow could run in CI (yowasp is WebAssembly, and the XLS
-  codegen step already runs in an amd64 container); Basys 3's cannot, because Vivado needs a
-  licence and ~100 GB. A checked-in hash of the sources each artefact was built from would catch
-  the drift without building anything, and is the cheaper half of the same idea.
+- **Nothing detects that a committed bitstream has gone stale.** M32 shipped prebuilt artefacts for
+  both boards — `boards/basys3/firmware/top.bit` and `boards/tiliqua/firmware/xls32-r5.tar.gz` —
+  and both are refreshed by hand, so the repo can hold a bitstream that no longer matches the
+  sources beside it and nothing will say so. The idea on the shelf is a checked-in hash of the
+  sources each artefact was built from, compared on demand; it catches the drift without building
+  anything. **Building on push was considered and cancelled**, not deferred: Vivado needs a licence
+  and ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one
+  board of two claims more than it checks.
