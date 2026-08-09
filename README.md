@@ -183,6 +183,17 @@ there is nothing to configure — use **Chrome**, Edge, Brave, or another Chromi
 the flashing is a browser page too ([tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)),
 so nothing at all has to be installed; on Basys 3 you need `openFPGALoader`, one line below.
 
+**Phones and tablets: Android only, and only for the Tiliqua.** The panel itself is built for
+touch — no mouse events anywhere, and it folds to a narrower layout below 900 px — so a 10-inch
+Android tablet running Chrome is a reasonable host, with the module powered from its Eurorack case
+rather than from the tablet. Two caveats, neither yet tried on real hardware: Android may name the
+board's audio input differently, and if its audio layer downmixes all four USB channels instead of
+taking the first two, you will hear the clock counter on `ch2/3` as noise. **iPhone and iPad cannot
+work at all** — WebKit ships neither Web MIDI nor Web Serial, and every iOS browser is WebKit, so
+Chrome there changes nothing. **Basys 3 needs Web Serial**, which only reached Android in 2026 on a
+limited set of devices and has not been tried at this bitrate; treat a phone or tablet as
+desktop-only for that board. Phone-sized screens are cramped either way.
+
 **For the command-line tools, the demos and the test suite** — none of which is needed to play:
 
 - **[`uv`](https://docs.astral.sh/uv/)** (Python env + deps): `curl -LsSf https://astral.sh/uv/install.sh | sh`
