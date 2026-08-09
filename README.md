@@ -42,15 +42,15 @@ player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 ## ▶ Quick start — play it
 
 Getting a **Tiliqua** singing is three separate things, and they ask for different equipment —
-which is why "what do I need?" has no one answer. **Flashing** happens once and wants a Chromium
-browser. **Playing** needs no computer at all. **The panel** is optional, and is the only part that
-rules any device out. **No toolchain, no terminal, no clone of this repo** at any point.
+which is why "what do I need?" has no one answer. **Flashing** happens once and wants Chrome.
+**Playing** needs no computer at all. **The panel** is optional, and is the only part that rules
+any device out. **No toolchain, no terminal, no clone of this repo** at any point.
 
 **The hardware, whichever route you take:** a **Tiliqua R5** in a powered Eurorack case, a **USB-C
 cable**, and something to listen on — `out0`/`out1` are Eurorack line level, hotter than a
 headphone jack expects, so go through a mixer, an audio interface or a Eurorack output module.
 
-### 1 · Flash it — once, from a Chromium browser
+### 1 · Flash it — once, from Chrome
 
 1. **Download one file** —
    **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
@@ -90,7 +90,7 @@ MIDI channel per part.
 
 | Host | 1 · Flash | 2 · Send notes | 3 · The panel |
 |---|:---:|:---:|:---:|
-| **Mac, Windows or Linux computer — Chrome / Edge / Brave** | ✅ | ✅ | ✅ |
+| **Mac, Windows or Linux computer + Chrome** | ✅ | ✅ | ✅ |
 | **Android tablet or phone + Chrome** | ✅ | ✅ | ✅ — audio path untested |
 | **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
 | **A USB-MIDI keyboard, no host at all** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
@@ -119,7 +119,7 @@ things that usually go wrong. *Want to build it from source?* [§3](#3-builders-
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
 - **Hardware** — one engine, two boards: a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`, audio over USB) and a [Tiliqua](https://apf.audio/) Eurorack module (Lattice [ECP5](https://www.latticesemi.com/Products/FPGAandCPLD/ECP5) `LFE5U-25F`, analog jacks + a DVI visualiser). The synth is a literal circuit that computes one audio sample per tick — see [The two boards](#the-two-boards).
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a per-board shell (Verilog on Basys 3, [Amaranth](https://amaranth-lang.org/) on Tiliqua) for I/O and the block-RAM effects. No hand-written datapath.
-- **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [What you need](#what-you-need).
+- **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** — see [What you need](#what-you-need).
 - **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB, run against both boards.
 - **Start here** — the [Quick start](#-quick-start--play-it) above is the five-minute path; [Getting started](#2-getting-started) is the same thing at length, for either board. Both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#5-architecture--design) is how it works.
 
@@ -217,13 +217,13 @@ Neither board needs an FPGA toolchain: both ship a prebuilt bitstream in the rep
 
 ### What you need
 
-**To play the synth: a Chromium browser, and that is all.** The web UI owns the hardware directly
+**To play the synth: Chrome, and that is all.** The web UI owns the hardware directly
 from the page — it uses [Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API)
 and [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API), and **neither
 ships in Firefox or Safari**. In those browsers **POWER** reports the board as unsupported and
-there is nothing to configure — use **Chrome**, Edge, Brave, or another Chromium build. On Tiliqua
-the flashing is a browser page too ([tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)),
-so nothing at all has to be installed; on Basys 3 you need `openFPGALoader`, one line below.
+there is nothing to configure — use **Chrome**. On Tiliqua the flashing is a browser page too
+([tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)), so nothing at all has to be
+installed; on Basys 3 you need `openFPGALoader`, one line below.
 
 **Phones and tablets can be the UI too.** The panel is touch-native — pointer events throughout,
 no mouse-only interactions anywhere, and a layout that folds to a single narrow column below
@@ -382,12 +382,12 @@ What you should see and hear when it comes up:
 >   boot it from the menu.
 > - **No sound at all.** Patch from **`out0`/`out1`**. `out2`/`out3` are silent by design, and the
 >   bottom four of the eight LEDs stay dark for the same reason.
-> - **The browser panel says the board is unsupported.** It is not a Chromium browser. Web MIDI and
->   Web Serial do not exist in Firefox or Safari — see [What you need](#what-you-need).
+> - **The browser panel says the board is unsupported.** It is not Chrome. Web MIDI and Web
+>   Serial do not exist in Firefox or Safari — see [What you need](#what-you-need).
 > - **POWER cannot find the board.** Check the second cable is in **`usb2`**, not just `dbg`, and
 >   that nothing else is holding the device — another panel tab, or `check_loop.py` mid-run.
-> - **The web flasher does not see the module.** WebUSB needs the `dbg` cable and a Chromium
->   browser, and the module has to be sitting in the bootloader rather than running a slot.
+> - **The web flasher does not see the module.** WebUSB needs the `dbg` cable and Chrome, and
+>   the module has to be sitting in the bootloader rather than running a slot.
 
 Smoke-test the host link before anything heavier — this isolates a broken transport from a broken
 synth, which the 175-case suite cannot (needs the `usb2` cable and `uv sync`):
