@@ -44,7 +44,7 @@ player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
 - **Hardware** — one engine, two boards: a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`, audio over USB) and a [Tiliqua](https://apf.audio/) Eurorack module (Lattice [ECP5](https://www.latticesemi.com/Products/FPGAandCPLD/ECP5) `LFE5U-25F`, analog jacks + a DVI visualiser). The synth is a literal circuit that computes one audio sample per tick — see [The two boards](#the-two-boards).
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a per-board shell (Verilog on Basys 3, [Amaranth](https://amaranth-lang.org/) on Tiliqua) for I/O and the block-RAM effects. No hand-written datapath.
-- **Play it** — a browser analog-style panel drives either board live over USB (or drive it from Python); MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [Prerequisites](#prerequisites).
+- **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** (or another Chromium browser) — see [Prerequisites](#prerequisites).
 - **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB, run against both boards.
 - **Start here** — [Getting started](#2-getting-started) flashes a board and plays it; both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#4-architecture--design) is how it works.
 
@@ -65,8 +65,8 @@ pair, **Tiliqua** in the other:
 
 The 50-minute talk that covers all of the above — with playable audio clips from each milestone —
 lives in **[`docs/slides/`](docs/slides/)**
-([English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html) ·
-[日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)).
+([English](https://kazunori279.github.io/xls32-fpga-synth/slides/) ·
+[日本語](https://kazunori279.github.io/xls32-fpga-synth/slides/index_ja.html)).
 
 ---
 
@@ -290,22 +290,23 @@ addition rather than a rewrite.
   (`docs/slides/`, self-contained HTML, no build step). **`media/`** (captured
   .wav/.mp4/screenshots) and **`build/`** (bitstream build output) are gitignored.
 
-> **Publishing the slides.** The deck links at the top of this file point at a **[public
-> gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab)**, which is a
-> separate copy — `git push` does not update it. After editing `docs/slides/`, re-publish both
-> decks:
+> **Publishing.** Both the web UI and the slides are served from **GitHub Pages**, assembled by
+> [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main` that
+> touches `webui/static/` or `docs/slides/`. `webui/static/` becomes the site root and
+> `docs/slides/` becomes `/slides/`; nothing is rewritten, because a real directory resolves the
+> decks' relative `src="assets/…"` on its own. There is no separate publish step — `git push` is
+> the publish step.
 >
-> ```bash
-> uv run docs/slides/publish_gist.py --dry-run   # what would change
-> uv run docs/slides/publish_gist.py             # PATCH the gist
-> ```
+> The workflow **deploys, it does not build**. No XLS codegen, no yosys, no Vivado: a green run
+> says the page is up, not that the bitstreams under `boards/*/firmware/` still match their
+> sources. See [`docs/TODO.md`](docs/TODO.md) for that gap and why building on push was cancelled.
 >
-> Publish **after** pushing to `main`. A gist has no directories, so the decks' relative
-> `src="assets/…"` cannot resolve there; `publish_gist.py` rewrites those 21 paths to
-> `raw.githubusercontent.com/…/main/docs/slides/assets/…` in the published copy (the files in
-> the repo keep the relative paths). Those URLs read from `main`, so an asset that is only local
-> renders as a hole in the published deck — the script fails early if a referenced asset is
-> missing from `docs/slides/assets/`, but it cannot tell whether you have pushed it yet.
+> [`docs/slides/publish_gist.py`](docs/slides/publish_gist.py) is the **legacy** path: it PATCHes
+> the [public gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab) the
+> decks used to be linked from, rewriting `src="assets/…"` to `raw.githubusercontent.com` URLs on
+> `main` because a gist has no directories. That URL has been shared, so it is kept working —
+> run the script (after pushing, since the rewritten URLs read from `main`) only if you care
+> about it.
 
 ---
 
@@ -454,11 +455,21 @@ Then jump to [Run the web UI](#run-the-web-ui).
 The UI is a **static page** — there is no server to run. It reaches the board itself, through
 [Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API) + the Tiliqua's UAC2
 input, or [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) at 2 Mbaud
-on the Basys 3. **Open it in Chrome** (see [Prerequisites](#prerequisites)). Any static host will do:
+on the Basys 3. **Open it in Chrome** (see [Prerequisites](#prerequisites)):
+
+### 👉 **[kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**
+
+That is the copy on `main`, served over HTTPS — which is what Web MIDI and Web Serial require, and
+the reason a `file://` copy will not work. Nothing is installed and nothing is uploaded: the page
+talks to the board over USB from your machine.
+
+To run it from a clone instead — offline, or to try an edit — any static host will do:
 
 ```bash
 python3 -m http.server 8765 -d webui/static      # then open http://127.0.0.1:8765
 ```
+
+`localhost` counts as a secure context, so the browser APIs work there too.
 
 Open the URL, click **POWER**, pick your board, and approve the browser's prompts (MIDI, then
 microphone — that "microphone" is the board's audio input). Then play with the on-screen keyboard,
@@ -906,4 +917,4 @@ doesn't cut another.
 | **[DEVELOPMENT_tiliqua.md](DEVELOPMENT_tiliqua.md)** | The Tiliqua port's history (M21–M29), the cancelled M30, what is left in M32, and the risk register. |
 | **[docs/TODO.md](docs/TODO.md)** | The open list — unverified items and known debt. |
 | **[docs/TILIQUA_USB_DROPOUTS.md](docs/TILIQUA_USB_DROPOUTS.md)** | The USB dropout investigation, written up and then withdrawn. |
-| **[`docs/slides/`](docs/slides/)** | The 50-minute talk, with playable audio clips from each milestone ([English](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index.html) · [日本語](https://htmlpreview.github.io/?https://gist.githubusercontent.com/kazunori279/36e7232e247738f36460c5d1a97191ab/raw/index_ja.html)). |
+| **[`docs/slides/`](docs/slides/)** | The 50-minute talk, with playable audio clips from each milestone ([English](https://kazunori279.github.io/xls32-fpga-synth/slides/) · [日本語](https://kazunori279.github.io/xls32-fpga-synth/slides/index_ja.html)). |

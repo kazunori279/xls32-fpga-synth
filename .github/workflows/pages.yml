@@ -1,0 +1,58 @@
+# Publish the static front-end to GitHub Pages.
+#
+# This copies files and uploads them. It does NOT build the gateware -- no XLS codegen, no yosys,
+# no Vivado -- so a green run here says nothing about whether the bitstreams committed under
+# boards/*/firmware/ still match their sources. That gap is deliberate and recorded in
+# docs/TODO.md; building both boards on push was considered for M32 and cancelled, because Vivado
+# needs a licence and ~100 GB and no hosted runner can produce the Basys 3 half.
+#
+# The site is assembled, not moved: webui/static/ becomes the root and docs/slides/ becomes
+# /slides/. Both keep their relative asset paths, so nothing is rewritten on the way out.
+
+name: Deploy web UI to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'webui/static/**'
+      - 'docs/slides/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. Queue instead of cancelling, so a push that lands mid-deploy still
+# ends up published rather than silently dropped.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/slides
+          cp -r webui/static/. _site/
+          cp -r docs/slides/. _site/slides/
+          rm -f _site/slides/publish_gist.py   # the gist publisher is a dev tool, not content
+          find _site -maxdepth 2 -not -path '*/assets/*' | sort
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

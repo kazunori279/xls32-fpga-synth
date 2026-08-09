@@ -1775,6 +1775,22 @@ MIDI + UAC2`, 48 kHz, no dialog; both present → the dialog, both rows marked *
 `getUserMedia` call on the Tiliqua path still lands inside the POWER click's activation window,
 which the detection pass had to be fast enough not to spend.
 
+### The payoff, collected later: the page is hosted
+
+Deleting the server is what made the UI *hostable* — a directory of seven files with no build step
+and no backend can be handed to any static host, which the version with `webui/server.py` in front
+of it could not. That was left as an open TODO for two milestones and is now done:
+`.github/workflows/pages.yml` puts `webui/static/` at the root of
+**[kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)** and
+`docs/slides/` at `/slides/`, on every push to `main` that touches either.
+
+Two details are the interesting part. Pages serves **HTTPS**, and Web Serial, Web MIDI and
+`getUserMedia` all require a secure context — so the hosted copy is not merely convenient, it is
+the only URL form other than `localhost` where the transport layer works at all. And the slides
+stop needing `publish_gist.py`'s URL rewriting: that script exists solely because a gist has no
+directories, and `/slides/assets/…` is a directory. The workflow builds nothing — it is a `cp`
+followed by an upload, which is worth stating plainly next to M32's cancelled build CI.
+
 ---
 
 # Friction logs & learnings

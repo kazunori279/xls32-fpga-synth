@@ -15,12 +15,7 @@ those three; git history keeps the original.)*
 
 1. **`scripts/demo_video.sh` has never been executed** in its rewritten form (avfoundation loopback
    capture, `AUD_IDX`, `AV_OFFSET=0`). It was rewritten against the new audio path and left there.
-2. **Nothing publishes the web UI.** Pages serves from the repo root, from `/docs`, or from an
-   Actions workflow, and `webui/static` is none of the three. The README no longer claims the page
-   "deploys cleanly to GitHub Pages" — it states the requirement instead (any static host, served
-   over HTTPS or from localhost). Actually publishing it still needs either a workflow that
-   deploys `webui/static` or a move.
-3. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
+2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
    re-check that exists because of the M28a rail bug has only ever been exercised in Python.
@@ -64,4 +59,6 @@ those three; git history keeps the original.)*
   sources each artefact was built from, compared on demand; it catches the drift without building
   anything. **Building on push was considered and cancelled**, not deferred: Vivado needs a licence
   and ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one
-  board of two claims more than it checks.
+  board of two claims more than it checks. The repo does now have an Actions workflow
+  (`.github/workflows/pages.yml`), but it only copies `webui/static/` and `docs/slides/` onto
+  Pages — it deploys, it does not build, and it leaves this entry exactly where it was.

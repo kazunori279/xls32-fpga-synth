@@ -1,4 +1,9 @@
-"""Publish the slide decks to the public gist that the README links to.
+"""Publish the slide decks to the public gist they used to be linked from.
+
+LEGACY. The canonical copy is now GitHub Pages -- .github/workflows/pages.yml serves
+docs/slides/ at /slides/ on every push to main, where the relative asset paths resolve
+on their own and none of the rewriting below is needed. The gist URL has been shared,
+so this keeps it working; run it only if you care about that copy.
 
 The decks are self-contained HTML, but their images and videos are relative
 (src="assets/..."), which only resolves when the deck sits next to
