@@ -489,8 +489,8 @@ all 4); your keys start on Part 1, so you can play along on top.
 ### Record a demo video
 
 Compose one MP4 from the **web UI** (screen), the **board** (a webcam, picture-in-picture), and the
-synth's **own audio** — taken off a **loopback audio device**, so it is the browser's digital
-output rather than a room mic:
+synth's **own audio** — captured from an audio *input*, so it is a digital feed and never a room
+mic:
 
 ```bash
 # UI open + board connected; grant Terminal Screen-Recording, Camera and Microphone perms once.
@@ -499,10 +499,21 @@ AUD_IDX=1 scripts/demo_video.sh demo.mp4            # records ~45s
 SCREEN_IDX=2 CAM_IDX=0 AUD_IDX=1 DUR=60 scripts/demo_video.sh bach.mp4
 ```
 
-`AUD_IDX` is a loopback input — [BlackHole](https://existential.audio/blackhole/)
-(`brew install blackhole-2ch`) routed through a Multi-Output Device so you can still hear the
-demo. When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
+`AUD_IDX` is that input, and which one it is depends on the board:
+
+- **Tiliqua — point it at the board.** The UAC2 interface enumerates as an input (`Tiliqua XLS32`,
+  4ch @ 48 kHz): the synth's output *before* the host touches it, with nothing to install and one
+  fewer resampling stage than a loopback. Only ch0/1 are audio — ch2/3 carry the gray-coded clock
+  counter `check_loop.py` reads the board's real rate from, and they sit near full scale — so the
+  script drops them (`AFILTER`, on by default; it is the identity on a stereo input).
+- **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
+  [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
+  Multi-Output Device so you can still hear the demo.
+
+When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
 Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
+`DUR` is a clip length, not a song: the shortest demo (*Goldberg Aria*) runs 50 s and the longest
+(*Le Cygne*) 134 s, so the 45 s default captures an opening.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a
