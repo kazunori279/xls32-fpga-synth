@@ -27,8 +27,10 @@ there as a resolved fact, with the code that resolves it.
   - [M29 — 32 voices as 32 tiles, drawn by racing the beam](#milestone-29--32-voices-as-32-tiles-drawn-by-racing-the-beam)
   - [M30 — SoC + on-screen patch editor, cancelled](#milestone-30--soc--on-screen-patch-editor-cancelled)
   - [What is left — M32, and the risk register](#what-is-left--m32-and-the-risk-register)
+  - [M33 — the USB capture path](#milestone-33--the-usb-capture-path-done-hardware-verified)
 - [Friction logs & learnings (Tiliqua)](#friction-logs--learnings-tiliqua)
   - [Toolchain setup](#toolchain-setup)
+  - [Repair what the counter names, not what the waveform looks like](#repair-what-the-counter-names-not-what-the-waveform-looks-like)
   - [The USB dropout report that was withdrawn](#the-usb-dropout-report-that-was-withdrawn)
   - [References](#references)
 
@@ -1688,6 +1690,26 @@ emitted `top.bit`. A seed is not a fix that can be banked.
 GCE detour, the vendor's reference core end to end in 35.8 s. The sample format already matched
 (`ASQ` is Q1.15, which is what `synth.x` emits). The DIN MIDI parser finally has a jack to be tested
 against. And the bootloader holds eight slots, so variants can coexist on the module.
+
+## Repair what the counter names, not what the waveform looks like
+
+[`scripts/declick.py`](scripts/declick.py) exists because of the pre-M33 tee: every ~10.4 s a run of
+~60 frames went missing from the USB capture and each gap was a step in a sustained tone, which is
+to say a click. It bridges each one with an LPC continuation of the 40 ms before it, cross-faded
+over 5 ms. M33 removed the cause, but the script stays in `demo_video.sh` — it has to keep working
+on material recorded from older gateware, and it is a no-op on a clean take.
+
+**The first version looked for the steps in the waveform, and that was the mistake.** A waveform
+hunter cannot tell a dropped buffer from a knob. MIDI CC is 7 bits, so a dragged control moves the
+sound in 1/128 jumps at the pointer's ~50 Hz, and a burst of small steps 20 ms apart has exactly the
+shape it was hunting. On a take recorded while someone played the panel it found 50 seams, of which
+about 12 were the clock, and rebuilt the performance along with them: the LPC bridge lands ~0.18
+from what was really there, so against a 0.0078 knob step the cure ran twenty times the disease.
+
+The version that shipped repairs the samples ch2/3's counter *names*. Nothing is inferred, so a
+performance can be as jumpy as it likes and the repair still only touches the frames that are
+actually gone. The general form: if a signal already carries ground truth about its own damage,
+read it — do not re-derive it from the payload, where the damage and the content look alike.
 
 ## The USB dropout report that was withdrawn
 

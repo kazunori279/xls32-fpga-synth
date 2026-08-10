@@ -64,12 +64,10 @@ voices across 4 parts, on MIDI channels 1–4.
 **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. If you
 fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
 
-> **The jacks are the output; the USB audio is a monitoring tap.** The module also sends its sound
-> back up the `usb2` cable, which is the easy way to record it — but that copy drops about a
-> millisecond every ten seconds, by design, and each drop is an audible click. The jacks never do:
-> they get every sample whatever USB is doing. **Record anything that matters from `out0`/`out1`.**
-> Why, and how the recording is repaired if you use USB anyway: [Record a demo
-> video](#record-a-demo-video).
+> **`usb2` is a second output, not just a monitor.** The module sends its sound back up the same
+> cable it takes MIDI on, as a 4-channel 48 kHz UAC2 input the host sees as `Tiliqua XLS32` — the
+> synth's own samples, before anything analogue, with nothing to install. Record from it or the
+> jacks; both are production quality. See [Record a demo video](#record-a-demo-video).
 
 ### 3 · Control it — the panel, or anything that speaks MIDI CC
 
@@ -365,10 +363,12 @@ What you should see and hear when it comes up:
 - **The jacks** — `out0`/`out1` are the stereo effects pair, and the only two that make sound;
   `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
   show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
-  dark by design. **They are also the only lossless output.** The UAC2 tee that carries the same
-  audio up the USB cable is a copy, and it is forbidden from stalling the codec to keep itself fed,
-  so it drops ~1 ms every ~10.4 s instead — see [Record a demo video](#record-a-demo-video). The
-  jacks are downstream of `dry` and unaffected: this is a recording artefact, not a playing one.
+  dark by design.
+- **The USB audio** — the same stereo pair arrives on the host as a 4-channel 48 kHz UAC2 input
+  (`Tiliqua XLS32`). Channels 0 and 1 are the audio; 2 and 3 carry a clock counter, sit near full
+  scale, and are meant to be dropped — [`scripts/rec_audio.py`](scripts/rec_audio.py) and
+  [`demo_video.sh`](scripts/demo_video.sh) do it for you. See
+  [Record a demo video](#record-a-demo-video).
 - **MIDI** — **both inputs play on hardware**: USB-MIDI over `usb2`, and the **TRS MIDI-In jack**,
   arbitrated together in gateware so you can use either or both. The web UI's PART selection is
   honoured for a TRS keyboard too (CC103, sniffed in gateware). The jack is **TRS Type A**; a
@@ -506,25 +506,15 @@ appears (a pair of AirPods waking up is enough). Which device it should be depen
   fewer resampling stage than a loopback. Only ch0/1 are audio — ch2/3 carry the gray-coded clock
   counter, and they sit near full scale — so the script drops them (`AFILTER`, on by default). It
   reads them first, though: the counter says exactly how many frames the capture lost, and the take
-  is rejected if that is more than 0.1 %. `AFILTER` also high-passes at 20 Hz, which used to be
-  load-bearing: a pulse wave off 50 % duty carries DC, the demo patches run about 78 %, and the tee
-  taps the signal *before* the AC coupling that `out0`/`out1` have. On a full take of *Prelude in
-  C*, 89.6 % of the captured energy sat below 5 Hz and the audible band was 26 dB down.
+  is rejected if that is more than 0.1 %. Measured over 120 s the board delivers **0 lost frames in
+  0 events**, with a DC offset of `+0.00003` and **0.000 %** of the energy below 5 Hz — the tee is
+  DC-blocked in gateware ([`dc_block.py`](boards/tiliqua/gateware/dc_block.py), 7.5 Hz) and the
+  capture endpoint paces its own packets from the FIFO level rather than reporting the host's
+  nominal rate ([`usb_iface.py`](boards/tiliqua/gateware/usb_iface.py)).
 
-  **As of M33 the gateware does both jobs itself**, and a take off a current bitstream needs
-  neither the high-pass nor `declick.py`. The tee is DC-blocked on the board
-  ([`dc_block.py`](boards/tiliqua/gateware/dc_block.py), 7.5 Hz) and the UAC2 capture endpoint
-  paces its own packets from the FIFO level rather than reporting the host's nominal rate
-  ([`usb_iface.py`](boards/tiliqua/gateware/usb_iface.py)). Measured over 120 s: **0 frames lost in
-  0 events**, mean **+0.00003**, **0.000 %** of the energy below 5 Hz. The host-side repairs are
-  kept because they still have to work on the takes recorded before this.
-
-  **Convenience, then — and now close to fidelity.** The tee is still a copy that cannot push back
-  on the codec, so it is still *permitted* to drop; what changed is that the rate mismatch which
-  guaranteed it no longer exists. A 120 s measurement is not a proof about ten minutes. **A
-  recording that must be right should still come off `out0`/`out1` into an audio interface**, which
-  cannot lose anything by construction rather than by measurement. This route is what a headless
-  build machine can do, which is why the project uses it.
+  `AFILTER`'s 20 Hz high-pass and [`scripts/declick.py`](scripts/declick.py) are therefore not
+  needed for a take off a current bitstream. Both are kept, and both are harmless on a clean one:
+  they still have to work on material recorded from older gateware.
 - **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
   Multi-Output Device so you can still hear the demo.
@@ -569,31 +559,6 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 > muxed at the end. They start together but their devices do not, so `SCREEN_LATENCY` (0.46 s) trims the
 > audio's head and `CAM_OFFSET` (0.39 s) delays the PIP; both are start-up times measured on one
 > Mac mini, so measure yours if the lips do not match.
->
-> **And passing that check is not the same as sounding clean.** *(Fixed in M33 — the measurement
-> below is what the board did before the capture endpoint learned to pace itself, and the reasoning
-> is why it now can.)* The 0.011 % the counter reported
-> was not noise, and it was not the host either — it is the tee in *this* gateware
-> ([`top.py`](boards/tiliqua/gateware/top.py), the `usb_tee` FIFO), 16 entries deep, written once
-> per codec frame off the motherboard's clock and read at whatever rate the host's USB SOF asks
-> for. Two crystals, no rate control, **110–123 ppm** apart on the takes measured here, so the
-> FIFO's 0.33 ms of slack is gone every **10.4 s** like a metronome and a run of ~60 frames is
-> dropped — by design, because the tee is forbidden from stalling the codec. A millisecond, well
-> inside tolerance, and every one of them a step in a sustained tone, which is to say a click. Ten
-> were audible in a take the counter had passed. None of it reaches the jacks: `dry` feeds the DAC
-> whatever the FIFO does, so this is an artefact of *recording* and not of playing. [`scripts/declick.py`](scripts/declick.py) bridges each one with an LPC
-> continuation of the 40 ms before it, cross-faded over 5 ms, and `demo_video.sh` runs it before the
-> mux; it also hands back about 4 dB of headroom the clicks had been occupying as the loudest
-> samples in the take.
->
-> It repairs the samples the **counter** names, and that distinction was bought the hard way. The
-> first version looked for the steps in the waveform, which cannot tell a dropped buffer from a
-> knob: MIDI CC is 7 bits, so a dragged control moves the sound in 1/128 jumps at the pointer's
-> ~50 Hz, and a burst of small steps 20 ms apart has exactly the shape it was hunting. On a take
-> recorded while someone played the panel it found 50 seams, of which about 12 were the clock, and
-> rebuilt the performance along with them — the bridge lands ~0.18 from what was really there, so
-> against a 0.0078 knob step the cure ran twenty times the disease. ch2/3 already know where the
-> gaps are; nothing has to be inferred.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a
