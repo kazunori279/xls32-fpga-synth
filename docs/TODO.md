@@ -23,9 +23,12 @@ those three; git history keeps the original.)*
    5,902,732, in 12 events); an ffmpeg capture of the same device scored 10.6 %. It was trimmed to
    one pass of *Prelude in C* against the measured 110.531 s loop period, and three frames were
    pulled at 30 s, 60 s and 110 s to confirm the panel and the lit tiles. A listener then caught
-   what none of that had: **ten short clicks**. They are that same 0.011 % — the board's 48 kHz and
-   the host's are two free-running clocks, so a buffer goes every 10.4 s, and a millisecond cut out
-   of a sustained tone is a step. `scripts/declick.py` bridges them and `demo_video.sh` now runs it
+   what none of that had: **ten short clicks**. They are that same 0.011 % — and they are made on
+   the board, by the `usb_tee` FIFO in this repo's own gateware, which is written off the
+   motherboard's clock and read off the host's with no rate control between them and is required to
+   drop rather than stall the codec. 110–123 ppm apart eats its 16 entries every 10.4 s, and a
+   millisecond cut out of a sustained tone is a step. (`out0`/`out1` never see it — the tee is a
+   copy that cannot push back on the DAC path.) `scripts/declick.py` bridges them and `demo_video.sh` now runs it
    before the mux; the repaired file measures no seam above the music's own transients. It is worth
    noting how the check was passed and the take still wrong: the counter measures *arrival*, and
    nothing measured what it sounded like.

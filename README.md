@@ -558,10 +558,15 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 > Mac mini, so measure yours if the lips do not match.
 >
 > **And passing that check is not the same as sounding clean.** The 0.011 % the counter still
-> reports is not noise — it is two free-running clocks, the board's 48 kHz against the host's, so a
-> buffer goes every **10.4 s** like a metronome. A millisecond, well inside tolerance, and every one
-> of them a step in a sustained tone, which is to say a click. Ten were audible in a take the
-> counter had passed. [`scripts/declick.py`](scripts/declick.py) bridges each one with an LPC
+> reports is not noise, and it is not the host either — it is the tee in *this* gateware
+> ([`top.py`](boards/tiliqua/gateware/top.py), the `usb_tee` FIFO), 16 entries deep, written once
+> per codec frame off the motherboard's clock and read at whatever rate the host's USB SOF asks
+> for. Two crystals, no rate control, **110–123 ppm** apart on the takes measured here, so the
+> FIFO's 0.33 ms of slack is gone every **10.4 s** like a metronome and a run of ~60 frames is
+> dropped — by design, because the tee is forbidden from stalling the codec. A millisecond, well
+> inside tolerance, and every one of them a step in a sustained tone, which is to say a click. Ten
+> were audible in a take the counter had passed. None of it reaches the jacks: `dry` feeds the DAC
+> whatever the FIFO does, so this is an artefact of *recording* and not of playing. [`scripts/declick.py`](scripts/declick.py) bridges each one with an LPC
 > continuation of the 40 ms before it, cross-faded over 5 ms, and `demo_video.sh` runs it before the
 > mux; it also hands back about 4 dB of headroom the clicks had been occupying as the loudest
 > samples in the take.

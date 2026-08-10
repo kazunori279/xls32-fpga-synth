@@ -264,8 +264,22 @@ class CoreTop(Elaboratable):
         #
         # The tee must never backpressure `pmod0.i_cal`: a host that is not recording would
         # otherwise stall the codec. So it takes a copy only when the FIFO has room and silently
-        # drops otherwise. Rates match by construction (both sides are 48 kHz off the same
-        # mclk), so in a live capture the FIFO only ever absorbs jitter.
+        # drops otherwise.
+        #
+        # Its two sides are *not* the same 48 kHz, and this comment used to claim they were. The
+        # write side is one entry per codec frame, off `mclk` and so off the SI5351's `clk0`, which
+        # the motherboard's 25 MHz crystal sets. The read side is `usbif.i.ready`, which the host
+        # paces from its own USB SOF -- 6 frames per 125 us microframe, and there is no feedback
+        # endpoint on an asynchronous IN (docs/TILIQUA_USB_DROPOUTS.md:158). Two crystals, no rate
+        # control, and 16 entries between them: measured on two takes the pair sit 110-123 ppm
+        # apart, which eats the FIFO's ~0.33 ms of slack every ~10.4 s and then drops a run of
+        # ~60 frames until the next burst clears it. In a *live* capture that is 0.011 % and no
+        # one cares; in a recording each run is a step in a sustained tone, which is a click, and
+        # `scripts/declick.py` bridges them off this counter.
+        #
+        # None of it reaches the jacks. `dry` goes to the codec whatever the FIFO does -- that is
+        # what "must never backpressure" buys, and it means the drops are an artefact of recording
+        # and not of playing.
         #
         # Channels 2 and 3 do not carry audio. Together they carry one 31-bit counter of `audio`
         # clock cycles, sampled at the instant the frame was teed -- ch2 the low 15 bits, ch3 the

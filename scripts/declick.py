@@ -2,17 +2,19 @@
 """Conceal the step discontinuities a USB capture leaves behind, without changing its length.
 
 `scripts/rec_audio.py` counts the frames a capture loses and refuses a take over 0.1 %. What it
-cannot do is make the loss zero: the board's 48 kHz and the host's are two free-running clocks, so
-the host periodically discards a buffer to stay in step. On a Mac mini capturing the Tiliqua they
-land on a grid: over a 122 s take, **9.66 to 10.39 s** apart, and twice at exactly double that --
-which is the arithmetic agreeing with itself, because the counter scored the same take at 12 events
-and this finds 10. About a millisecond each time, 0.011 % of the audio, which is nothing, except
-that each one is a *step* in a sustained tone and a step is a click. Ten of them were plainly
-audible in a take the counter had already passed.
+cannot do is make the loss zero: the tee that feeds the USB capture is a 16-deep FIFO written off
+the board's audio clock and read off the host's, with no rate control between them, and it is
+required to drop rather than stall the codec (`boards/tiliqua/gateware/top.py:310`). Nothing here
+reaches the jacks -- `out0`/`out1` get every sample -- but the recording does not. The drops land on
+a grid: over a 122 s take, **9.66 to 10.39 s** apart, and twice at exactly double that -- which is
+the arithmetic agreeing with itself, because the counter scored the same take at 12 events and this
+finds 10. About a millisecond each time, 0.011 % of the audio, which is nothing, except that each
+one is a *step* in a sustained tone and a step is a click. Ten of them were plainly audible in a
+take the counter had already passed.
 
 **Where** they are is not guessed at. The Tiliqua's tee is four channels and two of them are that
-counter, so a recording made through `rec_audio.py` says which sample the host dropped a buffer
-after; this repairs those and nothing else. It used to look for the steps in the waveform instead,
+counter, so a recording made through `rec_audio.py` says which sample the tee dropped a run after;
+this repairs those and nothing else. It used to look for the steps in the waveform instead,
 and that is a worse question than it sounds: a MIDI CC is 7 bits, so a knob dragged across a filter
 sweep moves the sound in 1/128 jumps at the pointer's ~50 Hz, and a burst of small steps 20 ms apart
 is the same shape as a dropped buffer. On a take where the panel was played while the demo ran, the
@@ -71,8 +73,8 @@ def counter_seams(path):
     """Sample indices where the board says frames went missing, or None if it cannot say.
 
     This is the whole answer when the take came off the Tiliqua's tee: ch2/3 carry a 12.288 MHz
-    counter, so the recording knows exactly which sample the host dropped a buffer after. Nothing
-    has to be inferred and nothing else gets touched.
+    counter, so the recording knows exactly which sample the tee stopped writing after. Nothing has
+    to be inferred and nothing else gets touched.
     """
     a, _ = sf.read(path, dtype="int16", always_2d=True)
     res = counter_loss(a)
