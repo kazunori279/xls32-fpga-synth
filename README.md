@@ -523,6 +523,15 @@ Those numbers are one camera on one rack — yours will differ, and they change 
 camera or the case moves, so preview again rather than reusing them. Keep the crop landscape:
 `CAM_W` fixes the PIP's *width*, so a portrait rectangle scales up into a very tall corner.
 
+The screen grab is the whole desktop unless you trim that too — `CROP=w:h:x:y`, in the same
+capture pixels. Ask the browser for its own geometry instead of measuring off a screenshot; in the
+panel's console, `[screenX, screenY + (outerHeight - innerHeight), innerWidth, innerHeight]` is the
+content rectangle (multiply all four by `devicePixelRatio` on a HiDPI display). **Bring the window
+to the front before recording**: the numbers describe where Chrome *is*, not what is on top of it,
+so anything overlapping it lands in the frame. Cropping also enlarges the PIP for free — the same
+`CAM_W=480` is 19 % of a 2560-wide desktop but 39 % of a 1240-wide window, so re-check the corner
+before reaching for a bigger `CAM_W`.
+
 When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
 Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
 `DUR` is a clip length, not a song: the shortest demo (*Goldberg Aria*) runs 50 s and the longest
