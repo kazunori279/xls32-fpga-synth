@@ -13,17 +13,20 @@ those three; git history keeps the original.)*
 
 ## Unverified — things believed to work that have not been watched working
 
-1. **No demo video has been recorded with the fixed capture path.** The M32 take was published with
+1. **The re-recorded demo video has not been watched end to end.** The M32 take was published with
    67 % of its audio missing and has been deleted from YouTube; `scripts/demo_video.sh` was then
    rebuilt around `scripts/rec_audio.py`, which records through PortAudio and verifies each take
    against the board's 12.288 MHz counter (see
    [DEVELOPMENT_tiliqua.md → M32](../DEVELOPMENT_tiliqua.md#what-is-left--m32-and-the-risk-register)).
-   The new path has been run end to end once, as a 10 s take with Chrome holding the device and
-   playing — the condition that produced the 67 % — and the counter scored it at **0.001 %**, with
-   an ffmpeg capture of the same device minutes later scoring 10.6 %. What has *not* been done is a
-   full-length take: nobody has watched a 125 s recording for A/V drift, and `SCREEN_LATENCY` /
-   `CAM_OFFSET` are start-up times measured on one machine, not a closed loop. The README's hero is
-   back on the Basys 3 video until that take exists.
+   A full-length retake has since been made under the condition that produced the 67 % — Chrome
+   holding the device and playing — and the counter scored it at **0.011 %** (652 frames of
+   5,902,732, in 12 events); an ffmpeg capture of the same device scored 10.6 %. It was trimmed to
+   one pass of *Prelude in C* against the measured 110.531 s loop period, and three frames were
+   pulled at 30 s, 60 s and 110 s to confirm the panel and the lit tiles. What has *not* happened is
+   a human watching all 111 s of it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up
+   times measured on one machine, not a closed loop, and nothing in the pipeline would catch a slow
+   slide between the panel and the sound. The README's hero stays on the Basys 3 video until it has
+   been watched.
 2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
@@ -36,10 +39,23 @@ those three; git history keeps the original.)*
   took `stress_fx_tail`'s late-window level from +206 to +82.3, but not to zero, and
   `stress_silence_recovery` still settles at exactly **+115** — one unique sample value across the
   whole window, so a DC rail rather than a decaying tail. That case runs with `revwet == 0`, which
-  puts the tank out of the path entirely: something *else* is holding a constant. Basys 3 returns
+  puts the tank out of the path entirely: something *else* is holding a constant. Nor is it the
+  pulse-duty offset below — that one is signal-dependent and this window has no signal in it. Basys 3 returns
   tail RMS 0 for the same case, so it is Tiliqua-side. Candidates not eliminated: the `>> 1` floors
   in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path. At ~−49 dBFS it fails
   no checker, which is exactly why it is written down here rather than fixed in passing.
+- **The USB tee carries the pulse wave's DC, and nothing removes it.** A pulse at anything but
+  50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 — about 78 % — so every
+  sounding voice contributes an offset that tracks its own envelope. Measured on a full take of
+  *Prelude in C* off the UAC2 input: mean **+0.286**, with **89.6 % of the energy below 5 Hz**,
+  which leaves the audible band at −25.9 dBFS and spends the headroom on something no one can hear.
+  This is *not* the DC rail above — it is signal-dependent, it is arithmetically expected, and the
+  same signature is present in the July take, so it predates the capture rewrite. It also does not
+  reach anyone's ears: `out0`/`out1` are AC-coupled and remove it. The digital tee is a tap taken
+  before that point, so anything recording from USB has to high-pass for itself, which
+  `scripts/demo_video.sh` now does at 20 Hz. What has not been checked, for want of the hardware,
+  is whether the offset costs any headroom *inside* the engine before the output stage — if it
+  does, loud four-part passages are clipping asymmetrically and no test would say so.
 - **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
   the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
   the 48 kHz coefficient set as the difference.

@@ -505,9 +505,13 @@ appears (a pair of AirPods waking up is enough). Which device it should be depen
 - **Tiliqua — point it at the board.** The UAC2 interface enumerates as an input (`Tiliqua XLS32`,
   4ch @ 48 kHz): the synth's output *before* the host touches it, with nothing to install and one
   fewer resampling stage than a loopback. Only ch0/1 are audio — ch2/3 carry the gray-coded clock
-  counter, and they sit near full scale — so the script drops them (`AFILTER`, on by default; it is
-  the identity on a stereo input). It reads them first, though: the counter says exactly how many
-  frames the capture lost, and the take is rejected if that is more than 0.1 %.
+  counter, and they sit near full scale — so the script drops them (`AFILTER`, on by default). It
+  reads them first, though: the counter says exactly how many frames the capture lost, and the take
+  is rejected if that is more than 0.1 %. `AFILTER` also high-passes at 20 Hz, which is not
+  cosmetic: a pulse wave off 50 % duty carries DC, the demo patches run about 78 %, and the tee taps
+  the signal *before* the AC coupling that `out0`/`out1` have. On a full take of *Prelude in C*,
+  89.6 % of the captured energy sat below 5 Hz and the audible band was 26 dB down. Expect to want a
+  few dB of make-up gain afterwards.
 - **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
   Multi-Output Device so you can still hear the demo.

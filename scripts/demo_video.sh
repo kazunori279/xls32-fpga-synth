@@ -92,7 +92,16 @@ CAM_OFFSET="${CAM_OFFSET:-0.39}"          # webcam start-up minus the screen's; 
 # channels sit near full scale. Chrome escapes this by asking for 4 and being handed 2; a capture
 # gets all four, and without this the counter is encoded into the AAC track and folds into the mix
 # on any downmix. On a 2ch loopback input this is the identity. AFILTER=anull disables it.
-AFILTER="${AFILTER:-pan=stereo|c0=c0|c1=c1}"
+#
+# Then a 20 Hz high-pass, which is not cosmetic. A pulse wave at anything but 50 % duty has a DC
+# component -- the Bach patch runs PULSE W 100 of 128, so about 78 % -- and nothing in the digital
+# path removes it, so every sounding voice adds an offset proportional to its envelope. Measured on
+# a full take of *Prelude in C*: DC +0.30, and **98.7 % of the energy below 5 Hz**, leaving the
+# audible band 26 dB down with the headroom spent on something no one can hear. It is not a bug:
+# analogue outputs AC-couple this away, and out0/out1 do. The USB tee is a tap *before* that, so
+# the capture has to do it instead. Expect to want ~+4.5 dB of make-up gain afterwards; that is
+# left manual, since the right number depends on the take.
+AFILTER="${AFILTER:-pan=stereo|c0=c0|c1=c1,highpass=f=20:poles=2}"
 WARMUP="${WARMUP:-2}"             # let the camera/screen stream settle before the demo starts
 
 # Picking CAM_CROP blind is guesswork, so offer a still to measure off. `-update 1` overwrites the
