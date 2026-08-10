@@ -1678,8 +1678,10 @@ which is the same accuracy the old WebSocket path had.
 
 The look-ahead costs one thing: `stopDemo` must cancel work already handed downstream. It calls
 `cancelPending()` and then blasts note-offs across 4 channels × 128 notes, exactly as the server
-did — the engine implements no CC123 all-notes-off, and a cancelled look-ahead has certainly
-dropped some note-offs on the floor. Mute is filtered on note-*ons* only, so muting a part
+did — the engine had no CC123 all-notes-off at the time, and a cancelled look-ahead has certainly
+dropped some note-offs on the floor. (M34 added CC120/121/123; `stopDemo` still sweeps, because
+the mode messages are per-part and would also cut a note the player is holding by hand on a part
+the song was not using.) Mute is filtered on note-*ons* only, so muting a part
 mid-note releases what is already sounding instead of stranding it.
 
 ### Proving the Aligner port instead of testing it

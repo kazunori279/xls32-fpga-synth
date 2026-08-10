@@ -80,8 +80,20 @@ Clicking **PART** on the panel takes the jack over and points
 it at that part instead; the panel's footer says which of the two is in force, and it hands the
 jack back the next time it connects.
 
+**Whoever moved last decides.** The panel's override is not permanent: reach for the keyboard's
+own channel knob and the board hands the jack straight back to it. Otherwise one click on the
+panel would outrank the instrument in your hands until the next power cycle. Either way, the
+part being left is sent All Notes Off as the target changes, so a key held across the switch
+does not strand a note on the part you just walked away from — the board does that itself, with
+no host in the loop. (A split or layered keyboard that alternates two channels will keep handing
+the jack back to itself; that just means the panel's override does not stick, which is the
+default behaviour anyway.)
+
 **If a note ever hangs**, hit **PANIC** on the panel — or press <kbd>Esc</kbd>, which does the same
-thing. It sends every note off on all four parts. A USB-MIDI keyboard's own panic button works too.
+thing. It sends All Sound Off to all four parts, then every note off behind it for good measure.
+It clicks — that is All Sound Off doing its job. A keyboard's own panic button works too, on
+**either** input: over USB the browser sees it, and on the TRS jack the engine handles it
+directly — nothing on the host has to be running for that one.
 
 #### Audio out — the jacks, `usb2`, or both
 
@@ -1008,6 +1020,32 @@ CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are 
 `webui/static/spec.json` by `presetgen/build_spec.py`, which is what the browser loads); `host/synth.py` has the matching `set_*` helpers. The map grew
 milestone by milestone — the historical "CC map so far" snapshots live in the M10/M11/M13
 sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified).
+
+### Channel mode messages
+
+These three are not in the table above and not in `synthspec.py`, deliberately — that file
+generates the panel's knobs, and a knob for "all notes off" is not a thing. They are addressed
+to a part like any other CC, and each affects **only** that part:
+
+| CC | | Effect |
+|----|---|--------|
+| 120 | All Sound Off | Every voice on the part off, **this sample** — including any already falling through their release. |
+| 121 | Reset All Controllers | Pitch bend to centre, mod wheel (CC1 vibrato) to zero. Nothing else — the patch is not touched. |
+| 123 | All Notes Off | Every sounding voice on the part into its release. A voice already releasing is left alone. |
+
+**120 clicks and 123 does not**, and that is the whole reason both exist. All Sound Off drops
+thirty-two envelopes in one sample, which is a step discontinuity and sounds like one; it is a
+panic button and a panic button should be instant. All Notes Off is the musical one — a
+sequencer's stop wants it, and it lets the release tail finish.
+
+**There is no sustain pedal. CC64 is ignored.** Not an oversight — one was built, tested and then
+removed, because a pedal needs a per-voice "the key is still down" bit to tell a note you have let
+go of from one you are still holding, and with that bit in place the ECP5 stopped routing at 98.6%
+of its LUTs. [M34](DEVELOPMENT_tiliqua.md) has the numbers.
+
+**CC122 and CC124–127 are ignored too.** Local Control, Omni and Mono/Poly have no meaning for an
+engine with a fixed 32-voice pool and no local keyboard, so they fall through to the CC catch-all
+rather than being silently misinterpreted as something else.
 
 † **One CC the engine never sees.** The Tiliqua shell sniffs it out of the USB stream before the
 engine does, and it is undefined in the MIDI spec: **CC103** picks which part a keyboard on the

@@ -28,6 +28,7 @@ there as a resolved fact, with the code that resolves it.
   - [M30 — SoC + on-screen patch editor, cancelled](#milestone-30--soc--on-screen-patch-editor-cancelled)
   - [What is left — M32, and the risk register](#what-is-left--m32-and-the-risk-register)
   - [M33 — the USB capture path](#milestone-33--the-usb-capture-path-done-hardware-verified)
+  - [M34 — the channel mode messages](#milestone-34--the-channel-mode-messages-and-the-trs-jack-cleaning-up-after-itself)
 - [Friction logs & learnings (Tiliqua)](#friction-logs--learnings-tiliqua)
   - [Toolchain setup](#toolchain-setup)
   - [Repair what the counter names, not what the waveform looks like](#repair-what-the-counter-names-not-what-the-waveform-looks-like)
@@ -60,6 +61,7 @@ graded automatically, everything before it by hand or by simulation.
 | **32 ✅** | **Bitstream archives, ~~CI~~, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/` | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest, verified as the committed file. **CI was cut from the milestone**: Vivado cannot run in Actions, so a two-board matrix has no second half — see [below](#what-is-left--m32-and-the-risk-register) |
 
 | **33 ✅** | **The USB capture path**: the UAC2 IN endpoint sizes its own packets from `adc_fifo_level` instead of echoing the host's nominal rate, and the tee gets a multiplier-free DC blocker | **measured over 120 s on hardware: 0 frames lost in 0 events (was 652 of 5,902,732, in 12), mean +0.00003 (was +0.286), 0.000% of the energy below 5 Hz (was 89.6%).** The design got smaller doing it: 23,773 (97%) → 23,557 (96%) |
+| **34 🚧** | **The channel mode messages, and the TRS jack cleaning up after itself**: CC120/121/123 in the engine, `MidiChanWatch` + `TrsPanicInject` in the arbiter so a target change silences the part it leaves without the host's help | every rung below hardware passes — `tb_panic` 10/10, `test_midi_arb.py` 9/9, `check_panic.py` PASS, Basys 3 Vivado **0 failing endpoints at +0.276 ns** (better than M33's +0.012), ECP5 **routed at 23,729 (97.7%), overused 0** — but only on `--seed 3`, now pinned in `build.sh`. CC64 was in scope and was cut for area; see [the area squeeze](#the-area-squeeze) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1630,6 +1632,230 @@ because those statistics are DC-sensitive and the DC is gone — that is the fix
 regression. And the pulse-duty offset itself is untouched: it is still in the engine and still on
 the jacks, where AC coupling removes it. `docs/TODO.md` keeps that debt open, with a note that USB
 can no longer observe it.
+
+---
+
+## Milestone 34 — the channel mode messages, and the TRS jack cleaning up after itself
+
+**Where it came from.** A bug report from playing: hold a chord, click a different PART, and the
+chord sounds forever. The obvious fix went in on the host — `app.js` sweeps 128 note-offs across
+all four parts whenever it changes something — and it worked, which is exactly what made it worth
+looking at again. It worked for the changes *the browser makes*. It could do nothing at all about
+the ones a keyboard makes on the TRS jack, because those bytes never reach the browser.
+
+Underneath were two separate holes that had been quietly leaning on each other.
+
+### The hole in the engine: 120–127 fell through the floor
+
+`apply_cc` is a `match` on the controller number ending in `_ => p`. CC120, CC121 and CC123 hit
+that arm and vanished. Nobody noticed for eleven milestones because the browser was the only
+thing that ever needed the synth to stop, and the browser had the sweep. Plug a keyboard into the
+jack, press its PANIC button, and the three bytes it sends are read, parsed, matched and
+discarded. There was no way to silence a stuck voice from the instrument itself.
+
+`apply_off` grew two flags rather than gaining a sibling. This matters more than it reads: it is a
+32-iteration `for` over the voice array, and two call sites would let XLS inline a second copy. At
+96% of the ECP5's LUTs there is no room for a second copy of anything. So one loop serves three
+callers:
+
+| | `all` | `hard` | which voices | what it writes |
+|---|---|---|---|---|
+| note-off | 0 | 0 | the part's, playing this note | `RELEASE` |
+| CC123 All Notes Off | 1 | 0 | all of the part's | `RELEASE` |
+| CC120 All Sound Off | 1 | 1 | all of the part's | `OFF` |
+
+Which leaves `hard` as the only difference between the two panics, and that is worth spelling out,
+because the first version did not look like this. It carried a guard — *skip a voice already in
+`RELEASE`* — inherited from the plain note-off path and widened with `|| hard` so that CC120 could
+still reap one. The guard was dead weight in both directions. Writing `RELEASE` over a voice whose
+`env_st` is already `RELEASE` is a bit-for-bit no-op: `env` rides along in `..v`, the release does
+not restart, nothing moves. Thirty-two comparators existed to forbid a write that changed nothing.
+Deleting them makes the table above true as stated and the code shorter than the version that
+lacked the feature.
+
+It also means **CC123 after CC120 reaches nothing 120 missed** — both sweep "this part, not already
+off". `panic()` in `host/synth.py` sends 120 only, for that reason.
+
+**CC120 clicks, and that is the design.** Thirty-two envelopes cut in one sample is a step
+discontinuity; you hear it. It is a panic button. CC123 is the musical one and falls through
+RELEASE. Aliasing them to each other would have been cheaper and would have thrown away the only
+reason to have both.
+
+### The sustain pedal that was built, tested and then taken out
+
+CC64 was in the agreed scope and is not in the build. It worked in simulation; it did not fit on
+the ECP5. The story is in [the area squeeze](#the-area-squeeze) below — the short version is that
+a pedal needs a per-voice `held` bit to tell "you let go of this key, the pedal is holding it" from
+"your finger is still on it", and the routers stopped converging with that bit in place.
+
+Two things are worth keeping from the attempt.
+
+The naming was a trap. `Part` already has `a_sus` and `f_sus`, which are the ADSR sustain **level**.
+A pedal field called `sus` would have sat three lines from them meaning something entirely
+different. It was `ped`. If anyone builds this again: `ped`.
+
+The absence is now asserted, not merely absent. `tb_panic` has a group that depresses CC64, plays a
+note, releases the key, and requires the note to go quiet. That reads backwards until you notice
+what it is for: if someone puts the pedal back without reading this, the test fails and points
+here. A feature removed for a reason should fail loudly when it returns by accident.
+
+### The hole in the gateware: `rechan` rewrites at the output
+
+`MidiArbiter.rechan()` rewrites the channel nibble as a byte *leaves* the arbiter, and
+[ARCHITECTURE_tiliqua.md B3](ARCHITECTURE_tiliqua.md#b3-the-midi-arbiter-and-cc103) explains why it
+has to. The consequence had never been written down: a key held across a target change gets its
+note-on addressed to the old part and its note-off to the new one. The note-off lands where there
+is nothing to release, and the note sounds forever.
+
+This is not fixable on the host under any amount of care, because the host cannot see the bytes.
+The only place that can know a target changed while something was held is the place that changed
+it. `TrsPanicInject` is a third arbiter source that is not an input: it watches the effective
+target and emits `B<leaving> 7B 00` whenever it moves.
+
+Feeding it from `Mux(partsel.o_en, partsel.o_chan, chanwatch.o_chan)` folds both ways of changing
+target into one edge, which is worth more than the gate it saves — two triggers would have been
+two things to keep in step, and the second one would have been forgotten.
+
+### And the panel stopped outranking the instrument
+
+`MidiPartSelect` had no way to be cleared except by the panel that set it. A browser tab closed an
+hour ago could hold the jack pointed at part 3 while the player turned the keyboard's channel knob
+and nothing happened, with no indication anywhere of why. `MidiChanWatch` sniffs the raw TRS bytes
+and clears the override on any change of transmit channel, so whoever moved last decides.
+
+Three details make it work rather than misfire:
+
+- Running status is not a blind spot. A keyboard changing channel must emit a fresh status byte;
+  the running status it had belongs to the channel it is leaving.
+- `b[4:8] != 0xF` excludes System messages. Without it Active Sensing would read as "channel 14"
+  and clear the override every 300 ms.
+- `i_clear` is written *before* the CC103 sniffer, so a panel click landing on the same cycle
+  wins. The panel asking for a part is the later decision whatever order the bytes arrive in.
+
+### Verification, in rungs
+
+Nothing here touched hardware until everything that could be falsified without it had been.
+
+1. **DSLX typecheck**, then engine codegen — catches the structural mistakes in seconds.
+2. **`core/sim/tb_panic.v`** against the generated `engine.v` under iverilog. It measures the
+   *visualiser* tap, not the audio: `viz` carries `{env, part}` per ring slot, so summing over one
+   32-slot pass gives a per-part energy, which the mix cannot give because all four parts are in
+   it. Four groups: CC123 releases, CC120 cuts and the mix stops moving, CC64 is ignored, and
+   CC120 reaps a voice already falling through a two-second release where a note-off would not.
+3. **`test_midi_arb.py`**, 9 Amaranth unit sims — the change detector including running status,
+   the same-cycle tie between `i_clear` and CC103, the injector's three bytes under backpressure
+   and mid-message re-triggering, and the injected CC123 passing through the arbiter *without*
+   being re-addressed.
+4. **`check_panic.py`** over a Verilator run of the whole shell: bytes bit-banged into `midi_rx`,
+   through the UART, three System filters, the byte CDC and the effects. No note-off is ever sent
+   — the chords are ended only by the mode message — so a build that still dropped 120–127 would
+   leave both sustaining to the end of the capture. Measured: CC123 falls over about 70 ms, CC120
+   is gone inside 5.
+5. **Basys 3 static timing**, which is the other board and the other risk. It shares `core/synth.x`
+   and runs it at 100 MHz where Tiliqua runs the engine at 12.29, so `apply_off` sitting one level
+   in front of `process_voice` was the thing most likely to break it. Vivado: **0 failing
+   endpoints, worst slack +0.276 ns** — and that is *better* than the +0.012 ns the board shipped
+   with before this milestone, because deleting the redundant guard (below) took a comparator out
+   of that exact path. A feature landed and the critical path got shorter.
+6. Then Tiliqua place-and-route, then hardware.
+
+### The area squeeze
+
+Every rung above passed. Then nextpnr refused to route, and the rest of this milestone was spent
+finding out by how much.
+
+The first complete build — CC120/121/123, CC64 with its `held` bit, the injector, and `apply_off`
+zeroing `env` on a hard cut — synthesised to **24,213 TRELLIS_COMB of 24,288, 99.7%**. The router
+bottomed out around 2,576 overused nets and then climbed to 6,870. That is not a near miss; the
+placer had nowhere to put anything.
+
+What came out, in the order it came out, each figure measured rather than estimated:
+
+| | TRELLIS_COMB | % | router bottomed at |
+|---|---|---|---|
+| M33, before any of this | 23,557 | 96.0% | routed |
+| everything | 24,213 | 99.7% | 2,576, then climbing |
+| `apply_off` back to one `update()`, `env` clear dropped | 23,961 | 98.6% | 1,113 |
+| CC64 and the `held` bit dropped | 23,789 | 97.9% | 852, then climbing |
+| the "already releasing?" guard dropped | 23,729 | 97.7% | **135**, then climbing |
+
+The last row is the interesting one and the smallest. Sixty cells — a quarter of a percent —
+moved the router's best attempt from 852 overused nets to **135**, a sixfold improvement for a
+change that is barely visible in the total. Congestion at 97% is not linear in area; those 32
+comparators were sitting in the middle of the densest block on the die. It is also the only saving
+here that cost nothing at all, because the logic it deleted had no effect (see
+[above](#the-hole-in-the-engine-120127-fell-through-the-floor)) — the other three rows are all
+features or safety.
+
+The two structural savings are worth separating. Collapsing the two-armed `update()` back to one
+and letting `adsr`'s `OFF` arm zero `env` on the next sample cost **252 cells** to have — a 16-bit
+conditional clear across 32 slots, for one sample of an already-clicky panic button. Dropping the
+pedal cost **172**: the `held` bit itself is only 32 flip-flops, but the `mode: u2` selector and
+the `keep` term it needs turn `apply_off`'s per-voice decision from two AND terms into five.
+
+**And a measurement that reversed the plan.** The retreat line, written before any of this was
+built, ranked `TrsPanicInject` second in line to be cut, on an estimate of ~150 cells for the
+injector plus the third arbiter source. Deleting the pair measured **23,793 — four cells worse than
+keeping it**, i.e. free to within noise. It went straight back in. The whole +232 over baseline is
+in the core; the gateware side of this milestone is, in area terms, not there. An estimate that
+wrong is the argument for measuring before you cut: the plan would have thrown away the only part
+of the feature that the host cannot replicate, and bought nothing.
+
+**Two ways to waste an afternoon with nextpnr, both learned here.** The first: running several
+seeds in parallel. `yowasp-nextpnr-ecp5` is a wasm build, this `top.json` is 54 MB, and four
+concurrent instances exhaust the runtime's memory — three die with `wasm trap: wasm 'unreachable'
+instruction executed` and the survivor reports congestion numbers 4× worse than the same seed run
+alone. An entire four-seed experiment was read as "the seed lottery is unpayable" before the
+crashes were noticed in the logs. **P&R attempts on this design must be sequential.** The second:
+grepping a log file that a new run has not written to yet. The first poll of a fresh run happily
+matched the *previous* run's `TRELLIS_COMB` line and reported no change. Poll on the mtime.
+
+**And a third way, which is trying the knobs in the order they sound plausible.** With the netlist
+at 97.7% the obvious reading is "congestion", so the obvious levers are the ones that trade timing
+for density. Both were wrong, and measurably:
+
+| | best overused | |
+|---|---|---|
+| defaults | **135** | then the ripup cascade explodes |
+| `--router2-alt-weights` | 765 | plateaus there for 200+ iterations, never explodes, never converges |
+| `--no-tmdriv` | 2,779 | timing-driven placement is *helping* the density, not costing it |
+
+`--no-tmdriv` looked like free money: `audio_clk` needs 12.29 MHz and gets 27.98, so the placer is
+optimising a constraint with 2.3× margin. Taking that objective away made it twenty times worse.
+The reason is presumably that criticality is the only thing telling the placer which nets to keep
+short, and without it the long ones sprawl through the middle of the die. Whatever the mechanism,
+the lesson is the same as the `TrsPanicInject` one a paragraph up: on this design, at this
+utilisation, reasoning about the tool is worth less than one run of it.
+
+That leaves the seed lottery on default settings, which is where this ended up — and it paid.
+Seeds were drawn one at a time, under a watchdog that killed a run as soon as it had clearly lost:
+once a run got below 3,000 overused it was killed if the latest figure climbed to eight times its
+own best (the cascade has never come back from that) or if the best stopped improving for six
+minutes. The two-stage rule matters because router2's *first* iteration reports the raw overuse of
+a completely unrouted design — 15,000 to 30,000 here — so a plain absolute threshold kills every
+run on iteration one, which is exactly what the first version of the hunt did.
+
+Seed 2 bottomed at 117, eighteen better than the default's 135, and then diverged like all the
+rest. **Seed 3 routed.** `--seed 3` is now written into `boards/tiliqua/build.sh` alongside
+`--router router2`, for the same reason: not a preference, a requirement. It is also not
+transferable — a seed is a property of one netlist, and the next edit that moves the cell count
+means drawing again. What the ledger says about the ceiling is the reassuring part: 97.7% is high,
+but M31 shipped at 23,773 and routed, so this was a placement problem and not a "delete another
+feature" problem, and the seed hunt is what proved it.
+
+### One thing found and not fixed
+
+`tb_panic` first failed on "50 non-silent samples after All Sound Off", and the diagnosis is worth
+keeping. Each voice's Chamberlin SVF leaks with `low2 = low1 - (low1 >> 7)`, and that expression
+cannot move a value below 128 *at all* — the shift rounds to zero. So every voice that has ever
+sounded latches its filter state at a small constant and holds it forever; a part that has played
+leaves a few hundred counts of DC behind for the rest of the power cycle.
+
+It is inaudible, it predates this milestone, and clearing `flo`/`fbnd` in `apply_off` would cost
+about 38 bits of mux across 32 slots — roughly 1,200 LUTs against 559 free, in a milestone that
+spent its last day trying to give back a tenth of that. So the testbench
+stopped asserting silence and started asserting that the mix **stops moving**, which is what All
+Sound Off actually promises. `docs/TODO.md` carries the debt.
 
 ---
 

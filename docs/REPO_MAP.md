@@ -33,7 +33,8 @@ addition rather than a rewrite.
     `Instance()`s the same generated `engine.v`, plus `usb_iface.py`, `midi_filter.py`,
     `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py` and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
-    census), `check_pitch.py` / `check_midi.py` / `check_loop.py` (the per-milestone exit checks),
+    census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone
+    exit checks),
     `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
 - **`scripts/`** — board-agnostic tools: `spectro.sh` (.wav → PNG), `make_mp4.sh` (.wav →
   spectrogram MP4), `demo_video.sh`, and `check_artefacts.py` — which hashes the sources behind

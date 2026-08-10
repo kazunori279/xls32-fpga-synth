@@ -107,6 +107,16 @@ those three; git history keeps the original.)*
   before the output stage. If it does, loud four-part passages are clipping asymmetrically, no test
   would say so, and the tee's DC blocker will not tell you either — it is downstream of the
   clipping. Confirming that needs an instrumented engine build, not a recording.
+- **Every voice's filter latches a small DC when its envelope dies, and never lets go.** The
+  Chamberlin SVF leaks with `low2 = low1 - (low1 >> 7)`, and that shift rounds to zero for any
+  value under 128 — so the state stops decaying at a small constant instead of reaching it. A part
+  that has ever sounded contributes a few hundred counts of DC for the rest of the power cycle,
+  and thirty-two of them add. Found by M34's `tb_panic`, which expected literal silence after All
+  Sound Off and did not get it; the testbench now asserts that the mix stops *moving*, which is
+  what the message actually promises. Clearing `flo`/`fbnd` in `apply_off` is the obvious fix and
+  costs about 38 bits of mux across 32 slots — roughly 1,200 `TRELLIS_COMB` against a few hundred
+  free. Note this is a *third* DC source, distinct from both of the two above: it is per-voice, it
+  is inside the engine, and it is latched rather than signal-dependent.
 - **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
   the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
   the 48 kHz coefficient set as the difference.

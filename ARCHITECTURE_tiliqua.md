@@ -60,11 +60,11 @@ forced by something in it.
 | [`gateware/usb_iface.py`](boards/tiliqua/gateware/usb_iface.py) | 364 | The SDK's UAC2 device subclassed to carry a USB-MIDI function as well — audio up and MIDI down on one cable — and to pace its own capture endpoint |
 | [`gateware/dc_block.py`](boards/tiliqua/gateware/dc_block.py) | 93 | `TeeDcBlock`: two multiplier-free one-poles that keep the engine's pulse-duty DC out of the USB copy |
 | [`gateware/midi_filter.py`](boards/tiliqua/gateware/midi_filter.py) | 69 | `SysCommonFilter`: the one MIDI filter the SDK does not ship |
-| [`gateware/midi_arb.py`](boards/tiliqua/gateware/midi_arb.py) | 247 | `MidiArbiter` (round-robin, message-atomic) and `MidiPartSelect` (the CC103 sniffer) |
+| [`gateware/midi_arb.py`](boards/tiliqua/gateware/midi_arb.py) | 343 | `MidiArbiter` (round-robin, message-atomic), `MidiPartSelect` (the CC103 sniffer), `MidiChanWatch` and `TrsPanicInject` |
 | [`gateware/fx.py`](boards/tiliqua/gateware/fx.py) | 683 | Chorus, ping-pong echo and 8-comb Freeverb — a structural port of `top.v:159-400` |
 | [`gateware/fx_model.py`](boards/tiliqua/gateware/fx_model.py) | 127 | A bit-exact pure-Python transcription of the same arithmetic, for the unit tests |
 | [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 361 | `VizStore` + `VoiceTiles`: 32 voices drawn as 32 tiles with no framebuffer |
-| [`gateware/sim_xls_core.cpp`](boards/tiliqua/gateware/sim_xls_core.cpp) | 236 | The Verilator harness — bit-bangs the TRS jack and dumps samples |
+| [`gateware/sim_xls_core.cpp`](boards/tiliqua/gateware/sim_xls_core.cpp) | 272 | The Verilator harness — bit-bangs the TRS jack and dumps samples |
 | [`build.sh`](boards/tiliqua/build.sh) | — | codegen (in Docker) → Amaranth → yosys/nextpnr (yowasp) → `top.bit` |
 | [`area.py`](boards/tiliqua/area.py) | 108 | Per-block area census, read out of yosys' `top.json` |
 | [`board.py`](boards/tiliqua/board.py) | 48 | The board descriptor the host and test suite dispatch on |
@@ -134,8 +134,8 @@ video, no SoC — which is the floor any design on this module starts from:
 
 | resource | **XLS32 (shipped)** | vendor reference shell |
 |---|---|---|
-| TRELLIS_COMB | **23,557 of 24,288 (96%)** | 1,768 (7%) |
-| TRELLIS_FF | **13,131 of 24,288 (54%)** | 731 (3%) |
+| TRELLIS_COMB | **23,729 of 24,288 (97%)** | 1,768 (7%) |
+| TRELLIS_FF | **13,178 of 24,288 (54%)** | 731 (3%) |
 | DP16KD | **53 of 56 (94%)** | 0 (0%) |
 | MULT18X18D | **28 of 28 (100%)** | 1 (4%) |
 | EHXPLLL | **2 of 2 (100%)** | 1 (50%) |
@@ -204,6 +204,13 @@ flowchart LR
   subgraph S["sync — 60 MHz"]
     TRS["TRS jack<br/>SerialRx @31250"] --> ARB["MidiArbiter<br/>round-robin"]
     UNP -->|AsyncFIFO d4| ARB
+    TRS -.sniff.-> CW["MidiChanWatch"]
+    UNP -.sniff.-> PS["MidiPartSelect<br/>CC103"]
+    CW -->|o_change clears| PS
+    PS --> INJ["TrsPanicInject<br/>Bn 7B 00"]
+    CW --> INJ
+    INJ --> ARB
+    PS -->|chan/chan_en| ARB
     ARB --> FILT["RT → SysEx → SysCommon"]
     FILT -.sniff.-> FXC["FxControl<br/>CC82/91/93/94/95"]
     RES["dsp.Resample 3/2"] --> FX["StereoFx"]
@@ -620,19 +627,73 @@ channel, anything above (the UI sends 127) turns the override off, and off is th
 `check_midi.py` and every bitstream built before this existed behave identically until something
 asks otherwise.
 
-**The policy around it is host-side, and it has to be.** This register has nothing to read it back
-from and no way to expire, so whoever sets it owns it until the next power cycle. The panel
+**The policy around it was host-side, and mostly still is.** This register has nothing to read it
+back from and no way to expire, so whoever sets it owns it until something clears it. The panel
 therefore treats claiming as a *gesture*: clicking a PART chip claims the jack, a fresh link
 releases it (`app.js` `claimTrs` / `releaseTrs`), and anything else that merely moves the selected
 part only keeps an existing claim in step. Otherwise a board driven from the browser once stays
 pinned to that part for every session after, with the player's channel knob doing nothing and no
 indication anywhere of why — which is what it did until the panel learned to let go.
 
-**Gotcha — where the rewrite happens.** `rechan()` rewrites the channel nibble at the arbiter's
-**output**, not on the way into `run[]`. Done the other way, only the first note after a part change
-would move and the rest would keep playing part 1 from the remembered status — a bug that would
-present as "it works sometimes." At the output, a part change takes effect on the very next message
-even from a keyboard that sent `0x90` an hour ago and has been sending bare pairs ever since.
+**`MidiChanWatch` — the keyboard taking the decision back (M34).** The gesture above still left the
+panel outranking the instrument in the player's hands: a browser tab closed an hour ago could hold
+the jack while the player turned the channel knob and nothing happened. So a second observer sits
+on the raw TRS bytes, ahead of the arbiter, and reports every change of transmit channel:
+
+```python
+with m.If(self.i_midi.valid & b[7] & (b[4:8] != 0xF)):
+    m.d.sync += self.o_chan.eq(b[0:4])
+    with m.If(b[0:4] != self.o_chan):
+        m.d.sync += self.o_change.eq(1)
+```
+
+`o_change` clears `MidiPartSelect`, so whoever moved last decides. Three details carry it:
+
+- **Running status is not a blind spot.** A keyboard that changes channel emits a fresh status
+  byte — the running status it had been using belongs to the old channel and is no longer valid
+  for it to send. There is no case where the channel changes silently.
+- **`b[4:8] != 0xF` excludes System messages.** Without it Active Sensing (`0xFE`) would read as
+  "channel 14" and clear the override roughly 300 ms after the last time anything happened.
+- **`i_clear` is written before the CC103 sniffer** in `MidiPartSelect.elaborate`, so on a cycle
+  where both land the panel wins. A panel click is a later decision than a keyboard's, whatever
+  order the two byte streams happen to arrive in.
+
+Its one false positive is a split or layered keyboard alternating two channels: the override is
+cleared continually and the instrument decides, which is the default behaviour and not a failure.
+
+**`TrsPanicInject` — the board cleaning up after itself (M34).** A third arbiter source, and not an
+input at all: it speaks only when the TRS jack's effective target changes, emitting
+`B<leaving> 7B 00` — All Notes Off for the part being left. Without it a key held across a target
+change strands, for the reason in the next paragraph.
+
+```python
+m.d.comb += panic.i_chan.eq(Mux(partsel.o_en, partsel.o_chan, chanwatch.o_chan))
+wiring.connect(m, panic.o, arb.i[1])       # 0 = TRS, 1 = injector, 2 = USB
+```
+
+`chan_en[1]` stays low: this source addresses its own message and must not be re-addressed to the
+part it is trying to leave. `prev` advances when a send *starts* rather than when it finishes, so a
+second change during a send queues its own CC123 for the channel this one is moving to, instead of
+re-sending the current one and losing the intermediate part. And because the arbiter is
+message-atomic, an injection that arrives mid-message waits its turn rather than splitting one.
+
+Feeding this from `Mux(o_en, ...)` rather than from two separate triggers folds both ways of
+changing target — the panel's click and the keyboard's channel knob — into one edge. At reset both
+inputs are 0, so it does not fire on power-up.
+
+**Gotcha — where the rewrite happens, and what it costs.** `rechan()` rewrites the channel nibble at
+the arbiter's **output**, not on the way into `run[]`. Done the other way, only the first note after
+a part change would move and the rest would keep playing part 1 from the remembered status — a bug
+that would present as "it works sometimes." At the output, a part change takes effect on the very
+next message even from a keyboard that sent `0x90` an hour ago and has been sending bare pairs ever
+since.
+
+The price is structural and is why `TrsPanicInject` exists. Rewriting at the output means a message
+is addressed at the moment it *leaves*, not at the moment the key that caused it went down — so a
+key held across a target change has its note-on addressed to the old part and its note-off to the
+new one. The note-off lands where there is nothing to release and the note sounds forever. No
+amount of care on the host fixes this: the host never sees these bytes. The only place that can
+know a target changed while something was held is the place that changed it.
 
 **Gotcha — the sniffers tie `ready` high.** Both `MidiPartSelect` and `FxControl` observe streams
 they must never stall. `FxControl` in particular watches the *same* bytes the engine parses,
@@ -1162,27 +1223,35 @@ uv run boards/tiliqua/area.py --top 5 --path build/tiliqua/build/xls32-r5/top.js
 **What is being counted, and why it is a proxy.** `top.json` predates packing: there are no
 `TRELLIS_COMB` cells in it at all, only the `LUT4` / `CCU2C` / `PFUMX` / `L6MUX21` primitives nextpnr
 will later pack into slices. One `CCU2C` is two carry halves and so two `TRELLIS_COMB`; the two muxes
-usually fold into a slice that was going to exist anyway, which is why this total runs ~1% over
-nextpnr's figure. **Use nextpnr's total for "does it fit" and this one for "what is it spent on".**
+usually fold into a slice that was going to exist anyway. Those two pull in opposite directions and
+empirically the second wins: the total lands about a percent **under** nextpnr's (23,641 against
+23,729 on the shipped build, 23,225 against 23,557 before it).
+**Use nextpnr's total for "does it fit" and this one for "what is it spent on".**
 
 Hierarchy survives flattening in the cell *names* (`core.xls_engine...`), which is the whole reason
 this works — but not universally: small blocks are sometimes hoisted to top level with their prefix
 dropped, so a block that reads as ~0 has been absorbed, not removed. The unattributed remainder is
 printed rather than hidden for exactly that reason.
 
+The absorbing is not stable between runs either. Two M34 synthesis runs 60 cells apart in total
+reported `serialrx` at 87 and then 61, `arb` at 93 and then 109, and `common_filter` at 0 and then
+30 — the same RTL, redistributed. Read the small rows as "this block is tiny", not as a figure.
+
 **The census of the shipped build**, `--top 14`:
 
 | block | ~COMB | share | | block | ~COMB | share |
 |---|---:|---:|---|---|---:|---:|
-| `core` (the engine) | 16,960 | 69.8% | | `tee_dc` | 108 | 0.4% |
-| `usbif` (luna + UAC2 + MIDI) | 2,372 | 9.8% | | `serialrx` | 62 | 0.3% |
-| `fx` | 1,626 | 6.7% | | `arb` | 60 | 0.2% |
-| `pmod0` | 886 | 3.6% | | `usb_tee` | 29 | 0.1% |
-| `dvi_gen` (TMDS PHY) | 316 | 1.3% | | `viz_store` | 28 | 0.1% |
-| `tiles` | 236 | 1.0% | | *(elsewhere)* | 347 | 1.4% |
-| `reboot` | 137 | 0.6% | | **total** | **23,225** | **95.6%** |
+| `core` (the engine) | 17,225 | 70.9% | | `serialrx` | 61 | 0.3% |
+| `usbif` (luna + UAC2 + MIDI) | 2,364 | 9.7% | | `common_filter` | 30 | 0.1% |
+| `fx` | 1,664 | 6.9% | | `usb_tee` | 29 | 0.1% |
+| `pmod0` | 904 | 3.7% | | `viz_store` | 28 | 0.1% |
+| `dvi_gen` (TMDS PHY) | 326 | 1.3% | | `usb_midi_cdc` | 27 | 0.1% |
+| `tiles` | 236 | 1.0% | | `panic` (`TrsPanicInject`) | 13 | 0.1% |
+| `reboot` | 137 | 0.6% | | `partsel` | 13 | 0.1% |
+| `arb` | 109 | 0.4% | | *(elsewhere)* | 393 | 1.6% |
+| `tee_dc` | 108 | 0.4% | | **total** | **23,641** | **97.3%** |
 
-**One block is 70% of the die and the other thirteen share the rest.** That shape is the whole
+**One block is 71% of the die and the other thirteen share the rest.** That shape is the whole
 budget argument on this board: nothing outside `core` is large enough for trimming it to matter, so
 the only lever with real travel is voice count.
 
@@ -1196,6 +1265,12 @@ LUTs per voice**.
 
 *Up.* The M31 part-select remap cost **+369 TRELLIS_COMB** (23,404 → 23,773) against an estimate of
 ~50. The arbiter gained a 4-bit mux on two output paths and a 15-cell sniffer; 369 is not that.
+
+*Down, and by more than the thing being measured.* M34 estimated `TrsPanicInject` plus the arbiter's
+third source at ~150 cells and drew a retreat line around it. Deleting the pair moved nextpnr's total
+from 23,789 to **23,793** — four cells the *wrong* way. This census does see them, at 13 (`panic`) and
+~+40 (`arb`); post-pack they vanish into a re-synthesis swing larger than themselves. The feature went
+back in. Nothing under ~100 cells can be costed on this design without building it both ways.
 
 *Down.* M29 → shipped, `tee_dc` appearing at 108 was predicted and `core` falling **17,096 → 16,960**
 was not — the engine's RTL did not change. It is **not structural**: the flip-flop counts are
@@ -1307,11 +1382,19 @@ finishes the same netlist in **81 seconds, overused = 0**.
 `get_override("nextpnr_opts")` *replaces* what the caller passed, and the Tiliqua SDK passes
 `--timing-allow-fail` at `build/cli.py:303`. Setting only `--router router2` silently drops it and
 turns the known shortfall from a warning into an error that fails the build *after* it has routed
-successfully. Both flags go in `build.sh` together:
+successfully. All three flags go in `build.sh` together:
 
 ```bash
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2}"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 3}"
 ```
+
+**Gotcha — the seed is load-bearing now.** At M34's 23,729 cells even router2 does not converge on
+the default placement: it bottoms out at 135 overused nets and then the ripup cascade runs away.
+`--seed 3` routes. This is a property of *this* netlist — a seed that wins here says nothing about
+the next one — so any edit that moves the cell count means drawing the lottery again, one run at a
+time (the wasm nextpnr traps if two are in flight). The knobs that sound like the right answer at
+97.7% are not: `--router2-alt-weights` plateaus at 765 and `--no-tmdriv` bottoms at 2,779, i.e.
+timing-driven placement is *helping* the density here, not costing it.
 
 ---
 
