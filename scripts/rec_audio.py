@@ -11,6 +11,13 @@ own 12.288 MHz counter (see `--check` below), over 15 s captures on one Mac mini
       ... and with Chrome holding the device too       ~67 %  lost   (the take that shipped)
     this script (PortAudio, blocksize=0)                0.00-0.02 % lost
 
+Passing the check is not the same as sounding clean, and the gap between the two is smaller than
+it looks. The residual 0.011 % is not random: the board's 48 kHz and the host's are two
+free-running clocks, so a buffer goes every ~10.4 s, about a millisecond of it. That is far under
+the 0.1 % this script rejects at, and every one of them is an audible click, because a millisecond
+cut out of a sustained tone is a step. `scripts/declick.py` bridges them; `scripts/demo_video.sh`
+runs it before the mux. This script counts the damage and does not repair it.
+
 The losses are whole buffers, 512 frames at a time, and they leave no trace a casual check can
 see: the packets that do arrive keep honest wall-clock timestamps, so duration, levels and
 waveform all look normal. `host/transport/usbaudio.py` already carried the matching note --

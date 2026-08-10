@@ -22,8 +22,14 @@ those three; git history keeps the original.)*
    holding the device and playing — and the counter scored it at **0.011 %** (652 frames of
    5,902,732, in 12 events); an ffmpeg capture of the same device scored 10.6 %. It was trimmed to
    one pass of *Prelude in C* against the measured 110.531 s loop period, and three frames were
-   pulled at 30 s, 60 s and 110 s to confirm the panel and the lit tiles. What has *not* happened is
-   a human watching all 111 s of it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up
+   pulled at 30 s, 60 s and 110 s to confirm the panel and the lit tiles. A listener then caught
+   what none of that had: **ten short clicks**. They are that same 0.011 % — the board's 48 kHz and
+   the host's are two free-running clocks, so a buffer goes every 10.4 s, and a millisecond cut out
+   of a sustained tone is a step. `scripts/declick.py` bridges them and `demo_video.sh` now runs it
+   before the mux; the repaired file measures no seam above the music's own transients. It is worth
+   noting how the check was passed and the take still wrong: the counter measures *arrival*, and
+   nothing measured what it sounded like. What has *not* happened is a human watching all 111 s of
+   it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up
    times measured on one machine, not a closed loop, and nothing in the pipeline would catch a slow
    slide between the panel and the sound. The README's hero stays on the Basys 3 video until it has
    been watched.

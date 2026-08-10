@@ -556,6 +556,15 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 > muxed at the end. They start together but their devices do not, so `SCREEN_LATENCY` (0.46 s) trims the
 > audio's head and `CAM_OFFSET` (0.39 s) delays the PIP; both are start-up times measured on one
 > Mac mini, so measure yours if the lips do not match.
+>
+> **And passing that check is not the same as sounding clean.** The 0.011 % the counter still
+> reports is not noise — it is two free-running clocks, the board's 48 kHz against the host's, so a
+> buffer goes every **10.4 s** like a metronome. A millisecond, well inside tolerance, and every one
+> of them a step in a sustained tone, which is to say a click. Ten were audible in a take the
+> counter had passed. [`scripts/declick.py`](scripts/declick.py) bridges each one with an LPC
+> continuation of the 40 ms before it, cross-faded over 5 ms, and `demo_video.sh` runs it before the
+> mux; it also hands back about 4 dB of headroom the clicks had been occupying as the loudest
+> samples in the take.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a

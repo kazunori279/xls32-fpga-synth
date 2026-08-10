@@ -118,6 +118,7 @@ fi
 SCR=/tmp/demo_screen.mkv          # screen video
 CAM=/tmp/demo_cam.mkv             # webcam, cropped and scaled to the PIP
 AUD=/tmp/demo_audio.wav           # the synth, from PortAudio
+AUD_CLEAN=/tmp/demo_audio_clean.wav   # ... with the clock-drift seams bridged
 VID=/tmp/demo_video.mp4
 FIFO=/tmp/demo_rec_ready
 trap 'rm -f "$FIFO"' EXIT
@@ -170,15 +171,23 @@ if ! wait "$RECPID"; then
   exit 1
 fi
 
+# Passing the counter check is not the same as sounding clean. The board's 48 kHz and the host's are
+# two free-running clocks, so the host discards a buffer every ~10.4 s to stay in step -- about a
+# millisecond, 0.011 % of the take, nowhere near the 0.1 % that would fail it. But each one is a
+# step in a sustained tone, and a step is a click: ten of them were plainly audible in a take the
+# counter had passed. This bridges them. Only ch0/1 -- ch2/3 are the counter, and its sawtooth
+# would be read as a seam on every frame.
+uv run scripts/declick.py "$AUD" "$AUD_CLEAN" --channels 0,1
+
 echo "==> muxing (audio trimmed ${SCREEN_LATENCY}s, PIP delayed ${CAM_OFFSET}s) -> $VID"
 ffmpeg -hide_banner -loglevel warning -y \
-  -i "$SCR" -itsoffset "$CAM_OFFSET" -i "$CAM" -ss "$SCREEN_LATENCY" -i "$AUD" \
+  -i "$SCR" -itsoffset "$CAM_OFFSET" -i "$CAM" -ss "$SCREEN_LATENCY" -i "$AUD_CLEAN" \
   -filter_complex "[0:v][1:v]overlay=W-w-24:H-h-24:eof_action=pass[v]" \
   -map "[v]" -map 2:a -af "$AFILTER" -r "${OUT_FPS}" -fps_mode cfr -shortest \
   -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "$VID"
 
 mv "$VID" "$OUT"
-rm -f "$SCR" "$CAM" "$AUD"
+rm -f "$SCR" "$CAM" "$AUD" "$AUD_CLEAN"
 
 # Belt and braces. The recorder's counter check is the real one, but it only exists on a Tiliqua
 # input; on a loopback nothing has verified anything, and a mux mistake can still shorten the
