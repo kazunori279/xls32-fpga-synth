@@ -82,6 +82,41 @@ static std::vector<MidiEvent> script_parts() {
     return s;
 }
 
+// "panic": two identical chords, each stopped by a channel mode message instead of by note-offs
+// -- CC123 on channel 1, CC120 on channel 2. No note-off is ever sent, so an engine that still
+// drops 120-127 in `apply_cc`'s catch-all leaves both chords sustaining to the end of the capture.
+// That is the regression this script exists to catch; the difference in *how* they stop (CC123
+// falls through RELEASE, CC120 cuts) is the second thing check_panic.py grades.
+//
+// The echo and the chorus are switched off first, by their depth gates (CC95/CC94, fx.py:310).
+// XLS_SIM_OUT captures out0, which is the *wet* side of StereoFx, and the echo's delay line is
+// long enough to drop a copy of the chord straight into the window that asks whether the chord
+// stopped. The question here is about the engine, so the effects are taken out of the answer.
+//
+// boards/tiliqua/check_panic.py mirrors these constants to locate its windows. Keep them in step.
+#define PANIC_LEAD_MS 100
+#define PANIC_HOLD_MS 200
+#define PANIC_TAIL_MS 300
+static std::vector<MidiEvent> script_panic() {
+    const uint8_t chord[3] = {60, 64, 67};      // C major, three voices on one part
+    const uint8_t mode[2]  = {123, 120};        // group 0 releases, group 1 is cut dead
+    std::vector<MidiEvent> s;
+    s.push_back({1, 0xB0}); s.push_back({0, 95}); s.push_back({0, 0});   // echo depth 0
+    s.push_back({0, 0xB0}); s.push_back({0, 94}); s.push_back({0, 0});   // chorus depth 0
+    for (int g = 0; g < 2; g++) {
+        uint64_t lead = g == 0 ? PANIC_LEAD_MS : PANIC_TAIL_MS;
+        for (int i = 0; i < 3; i++) {
+            s.push_back({i == 0 ? lead : 0, (uint8_t)(0x90 | g)});
+            s.push_back({0, chord[i]});
+            s.push_back({0, 100});
+        }
+        s.push_back({PANIC_HOLD_MS, (uint8_t)(0xB0 | g)});
+        s.push_back({0, mode[g]});
+        s.push_back({0, 0});
+    }
+    return s;
+}
+
 int main(int argc, char** argv) {
 
     VerilatedContext* contextp = new VerilatedContext;
@@ -102,7 +137,8 @@ int main(int argc, char** argv) {
     const std::string out_path = out_env ? out_env : "out0.txt";
     const std::string midi_name = midi_env ? midi_env : "pitch";
     const std::vector<MidiEvent> midi_script =
-        midi_name == "parts" ? script_parts() : script_pitch();
+        midi_name == "parts" ? script_parts() :
+        midi_name == "panic" ? script_panic() : script_pitch();
     // contextp->time() counts picoseconds below (the loop advances by 1000 ps per step).
     const uint64_t sim_time = sim_ms * 1000000000ULL;
 

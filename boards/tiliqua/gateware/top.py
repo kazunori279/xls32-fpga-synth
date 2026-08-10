@@ -33,7 +33,7 @@ from tiliqua.video import dvi
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dc_block import TeeDcBlock
 from fx import StereoFx
-from midi_arb import MidiArbiter, MidiPartSelect
+from midi_arb import MidiArbiter, MidiChanWatch, MidiPartSelect, TrsPanicInject
 from midi_filter import SysCommonFilter
 from usb_iface import XlsUsbInterface
 from viz import VizStore, VoiceTiles
@@ -161,7 +161,9 @@ class CoreTop(Elaboratable):
         # round-robin, message-atomic, and it expands each source's running status so what reaches
         # the engine is always self-describing. M28 briefly gave it a third source (CvIn); nothing
         # about the arbiter assumed there were exactly three, so removing that one changed a count.
-        n_src = 1 + int(sim.is_hw(platform))
+        # M34 brought a third back, and this one is not an input at all: TrsPanicInject speaks only
+        # when the TRS jack changes which part it plays. Order is TRS, injector, USB.
+        n_src = 1 + 2 * int(sim.is_hw(platform))
         m.submodules.arb = arb = MidiArbiter(n_src)
         wiring.connect(m, arb.o, rt_filter.i)
         wiring.connect(m, serialrx.o, arb.i[0])
@@ -245,13 +247,35 @@ class CoreTop(Elaboratable):
         # --- The TRS keyboard follows the web UI's PART selection ---------------------------
         # Sniffed off the USB side, not the merged stream, so the keyboard cannot retarget itself.
         # Off until the UI says otherwise; source 0 is the TRS jack.
+        #
+        # M34 made the arrangement two-way. `chanwatch` reads the keyboard's own transmit channel
+        # off the raw jack (before `rechan` erases it), and a change there releases the panel's
+        # override: whoever moved last decides, which is the only rule that does not leave one of
+        # the two controls dead. `effective` is therefore the part the jack is really playing --
+        # the override if there is one, the keyboard's channel if not.
         m.submodules.partsel = partsel = MidiPartSelect()
+        m.submodules.chanwatch = chanwatch = MidiChanWatch()
         m.d.comb += [
             partsel.i_midi.payload.eq(usb_src.payload),
             partsel.i_midi.valid.eq(usb_src.valid & usb_src.ready),
+            partsel.i_clear.eq(chanwatch.o_change),
+            # Tapped at the arbiter's handshake, the same way the effects tap the engine's: an
+            # observer with `ready` tied high must not count a byte the consumer has not taken.
+            chanwatch.i_midi.payload.eq(serialrx.o.payload),
+            chanwatch.i_midi.valid.eq(serialrx.o.valid & serialrx.o.ready),
             arb.chan[0].eq(partsel.o_chan),
             arb.chan_en[0].eq(partsel.o_en),
         ]
+
+        # --- ...and the board cleans up after it when it moves ------------------------------
+        # Source 1. Held keys strand on the part being left, because `rechan` rewrites the channel
+        # at the arbiter's *output* -- the note-off arrives addressed to the part the player moved
+        # to. app.js sweeps note-offs to cover the changes it makes itself; it cannot cover the ones
+        # the keyboard makes, so those are covered here. `chan_en[1]` stays low: this source already
+        # addresses its own message and must not be re-addressed to the part it is trying to leave.
+        m.submodules.panic = panic = TrsPanicInject()
+        m.d.comb += panic.i_chan.eq(Mux(partsel.o_en, partsel.o_chan, chanwatch.o_chan))
+        wiring.connect(m, panic.o, arb.i[1])
 
         # Audio up, tapped digitally rather than looped back through a patch cable. Without an
         # SoC the codec's calibration constants are never loaded, which puts 80-120 mV of DC on

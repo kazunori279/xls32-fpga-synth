@@ -216,11 +216,16 @@ class MidiPartSelect(wiring.Component):
 
     Like the other sniffers this ties `ready` high: an observer that can stall the path it observes
     is a deadlock waiting for the one day both sources are busy.
+
+    `i_clear` drops the override again. M34 wires it to MidiChanWatch, so a player who reaches for
+    the keyboard's own channel knob takes the decision back from the panel -- otherwise the panel's
+    last click outranks the instrument in the player's hands for as long as the board is powered.
     """
 
-    i_midi: In(stream.Signature(unsigned(8)))
-    o_chan: Out(4)
-    o_en:   Out(1)
+    i_midi:  In(stream.Signature(unsigned(8)))
+    i_clear: In(1)
+    o_chan:  Out(4)
+    o_en:    Out(1)
 
     def elaborate(self, platform):
         m = Module()
@@ -230,6 +235,11 @@ class MidiPartSelect(wiring.Component):
         st  = Signal(8)
         idx = Signal()
         num = Signal(7)
+
+        # Written before the sniffer below, so a CC103 arriving on the same cycle wins: the panel
+        # asking for a part is a later decision than the keyboard's, whatever order they land in.
+        with m.If(self.i_clear):
+            m.d.sync += self.o_en.eq(0)
 
         # This sits *upstream* of the arbiter's running-status expansion, on the raw USB stream, so
         # latching `st` here is load-bearing rather than defensive: the bridge sends CC103 with no
@@ -243,5 +253,91 @@ class MidiPartSelect(wiring.Component):
                     m.d.sync += num.eq(b)
                 with m.Elif(num == CC_PART):
                     m.d.sync += [self.o_chan.eq(b[0:4]), self.o_en.eq(b < 16)]
+
+        return m
+
+
+class MidiChanWatch(wiring.Component):
+
+    """
+    Which channel is the TRS keyboard speaking on right now?
+
+    Nothing downstream can answer this. The arbiter rewrites the channel nibble at its *output*
+    (see `rechan`), so by the time bytes reach the engine the keyboard's own choice is gone; and
+    when the override is off there is no record of the choice at all. Both of the things M34 adds
+    need one: releasing the panel's override when the player turns the channel knob, and knowing
+    which part to silence when the target moves.
+
+    Running status is not a problem. A keyboard that changes transmit channel emits a fresh status
+    byte -- it has to, the nibble is *in* the status byte -- so every change is visible here even
+    from an instrument that otherwise never resends one. 0xF0-0xFF is excluded because it carries
+    no channel; without that guard Active Sensing would read as channel 14 twice a second.
+
+    The one thing that fools it is a split or layered keyboard alternating two channels. That looks
+    like a change on every note, so the override never sticks and the board falls back to letting
+    the keyboard's channel choose the part -- which is the sane behaviour for a split anyway.
+    """
+
+    i_midi:   In(stream.Signature(unsigned(8)))
+    o_chan:   Out(4)
+    o_change: Out(1)                            # one cycle, when o_chan takes a new value
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += self.i_midi.ready.eq(1)
+        b = self.i_midi.payload
+        m.d.sync += self.o_change.eq(0)
+        with m.If(self.i_midi.valid & b[7] & (b[4:8] != 0xF)):
+            m.d.sync += self.o_chan.eq(b[0:4])
+            with m.If(b[0:4] != self.o_chan):
+                m.d.sync += self.o_change.eq(1)
+        return m
+
+
+class TrsPanicInject(wiring.Component):
+
+    """
+    When the TRS jack starts playing a different part, silence the one it left.
+
+    This is the hardware half of a bug the browser could only paper over. A key held across a PART
+    change gets its note-off re-addressed by `rechan` to the part the player just moved *to*, so the
+    note strands on the part they moved *from* and sounds until the power goes off. app.js sweeps
+    128 note-offs at every part change to cover it, but only for changes it knows about -- and it
+    knows about none of the ones the keyboard makes on its own, because TRS bytes never reach the
+    browser.
+
+    So the board cleans up after itself: feed it the *effective* target (the override when the panel
+    has set one, the keyboard's own channel otherwise) and it emits `Bn 7B 00` -- All Notes Off --
+    addressed to the target being abandoned, as a fourth MIDI source. The arbiter is message-atomic,
+    so this waits for whatever the keyboard is mid-way through rather than interleaving with it.
+
+    One CC123 per change, and both are zero at reset, so it stays quiet until something moves.
+    """
+
+    i_chan: In(4)                               # the part the TRS jack's notes are landing on
+    o:      Out(stream.Signature(unsigned(8)))
+
+    def elaborate(self, platform):
+        m = Module()
+        prev    = Signal(4)
+        leaving = Signal(4)
+        idx     = Signal(2)
+        sending = Signal()
+
+        m.d.comb += [
+            self.o.valid.eq(sending),
+            self.o.payload.eq(Mux(idx == 0, Cat(leaving, C(0xB, 4)),
+                              Mux(idx == 1, C(0x7B, 8), C(0x00, 8)))),
+        ]
+        with m.If(sending):
+            with m.If(self.o.ready):
+                m.d.sync += idx.eq(idx + 1)
+                with m.If(idx == 2):
+                    m.d.sync += sending.eq(0)
+        with m.Elif(self.i_chan != prev):
+            # `prev` advances here rather than when the message finishes: a second change during
+            # a send then queues its own CC123 for the channel this one is moving to, instead of
+            # re-sending this one and losing the intermediate part entirely.
+            m.d.sync += [leaving.eq(prev), prev.eq(self.i_chan), sending.eq(1), idx.eq(0)]
 
         return m

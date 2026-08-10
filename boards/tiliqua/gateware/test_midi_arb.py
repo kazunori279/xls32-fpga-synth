@@ -1,6 +1,11 @@
-# Unit sim for MidiArbiter: three sources talking over each other, and what comes out the far end.
+# Unit sim for the MIDI merge: sources talking over each other, and what comes out the far end.
 #
 #   python boards/tiliqua/gateware/test_midi_arb.py
+#
+# M34 added three more things worth a unit sim, all of them about who the TRS jack is playing:
+# MidiChanWatch (what channel is it on), MidiPartSelect.i_clear (the keyboard taking the decision
+# back from the panel), and TrsPanicInject (the All Notes Off the board sends itself when the
+# answer changes). None of them can be checked on hardware without a keyboard in hand.
 #
 # The bug this guards against is silent. Interleaved bytes do not produce an error anywhere -- the
 # engine parses whatever arrives, latches the wrong running status and plays the wrong thing, or
@@ -15,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from amaranth.sim import Simulator
 
-from midi_arb import CC_PART, MidiArbiter, MidiPartSelect
+from midi_arb import CC_PART, MidiArbiter, MidiChanWatch, MidiPartSelect, TrsPanicInject
 
 DATA_LEN = {0x8: 2, 0x9: 2, 0xA: 2, 0xB: 2, 0xC: 1, 0xD: 1, 0xE: 2}
 COMMON_LEN = {0xF1: 1, 0xF2: 2, 0xF3: 1}                # the rest of 0xF0-0xF7 carry none
@@ -200,9 +205,136 @@ def test_partselect():
     print("  partselect:   CC103 latched under running status, 127 releases   PASS")
 
 
+def test_chanwatch():
+    """The channel the TRS keyboard is actually transmitting on, and when it moves."""
+    dut = MidiChanWatch()
+    seen = []
+
+    async def tb(ctx):
+        # Channel 1 (nibble 0) first, which is also the reset value -- a board that fires a
+        # cleanup at power-on because a keyboard started playing on channel 1 would be a nuisance.
+        # Then a move to channel 3, an Active Sensing byte, a note-off on the same channel, and a
+        # move back. Only the two real moves may pulse.
+        for byte in [0x90, 0x3C, 0x64, 0x92, 0x40, 0x50, 0xFE, 0x82, 0x40, 0x00, 0xB0]:
+            ctx.set(dut.i_midi.payload, byte)
+            ctx.set(dut.i_midi.valid, 1)
+            await ctx.tick()
+            seen.append((ctx.get(dut.o_chan), ctx.get(dut.o_change)))
+
+    sim = Simulator(dut)
+    sim.add_clock(1 / 60e6)
+    sim.add_testbench(tb)
+    sim.run()
+
+    assert [s[1] for s in seen] == [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], seen
+    assert [s[0] for s in seen] == [0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 0], seen
+    print("  chanwatch:    channel tracked, data and real-time ignored        PASS")
+
+
+def test_partselect_clear():
+    """`i_clear` releases the override -- unless the panel speaks on the very same cycle."""
+    dut = MidiPartSelect()
+    out = {}
+
+    async def tb(ctx):
+        async def byte(b, clear=0):
+            ctx.set(dut.i_midi.payload, b)
+            ctx.set(dut.i_midi.valid, 1)
+            ctx.set(dut.i_clear, clear)
+            await ctx.tick()
+            return (ctx.get(dut.o_en), ctx.get(dut.o_chan))
+
+        for b in (0xB0, CC_PART, 0x02):
+            out["set"] = await byte(b)
+        ctx.set(dut.i_midi.valid, 0)
+        ctx.set(dut.i_clear, 1)
+        await ctx.tick()
+        ctx.set(dut.i_clear, 0)
+        out["cleared"] = (ctx.get(dut.o_en), ctx.get(dut.o_chan))
+        # Both at once. The keyboard moving and the panel clicking in the same cycle is not a
+        # scenario anyone will hit deliberately, but the tie has to break somewhere, and it breaks
+        # towards the panel: `i_clear` is written first and the CC overwrites it.
+        for b, c in ((0xB0, 0), (CC_PART, 0), (0x03, 1)):
+            out["tie"] = await byte(b, c)
+
+    sim = Simulator(dut)
+    sim.add_clock(1 / 60e6)
+    sim.add_testbench(tb)
+    sim.run()
+
+    assert out["set"] == (1, 2), out
+    assert out["cleared"][0] == 0, out
+    assert out["tie"] == (1, 3), out
+    print("  partsel clr:  keyboard releases the override, panel wins a tie   PASS")
+
+
+def run_inject(script):
+    """Drive TrsPanicInject with a list of (i_chan, o_ready) pairs, one per clock."""
+    dut = TrsPanicInject()
+    seen = []
+
+    async def tb(ctx):
+        for chan, rdy in script:
+            ctx.set(dut.i_chan, chan)
+            ctx.set(dut.o.ready, rdy)
+            if ctx.get(dut.o.valid) and rdy:
+                seen.append(ctx.get(dut.o.payload))
+            await ctx.tick()
+
+    sim = Simulator(dut)
+    sim.add_clock(1 / 60e6)
+    sim.add_testbench(tb)
+    sim.run()
+    return seen
+
+
+def test_panic_inject():
+    """One All Notes Off per change of target, addressed to the target being left."""
+    # Silent at reset. Both the override and the keyboard's channel start at 0, and a board that
+    # announced itself with a CC123 every time it powered up would be its own bug report.
+    assert run_inject([(0, 1)] * 10) == []
+
+    # The message goes to the part being abandoned. Sending it to the arriving part would silence
+    # the notes the player is about to hear and leave the stuck ones exactly where they were.
+    assert run_inject([(0, 1)] * 3 + [(2, 1)] * 10) == [0xB0, 0x7B, 0x00]
+
+    got = run_inject([(0, 1)] * 3 + [(2, 1)] * 6 + [(3, 1)] * 6 + [(0, 1)] * 8)
+    assert got == [0xB0, 0x7B, 0x00, 0xB2, 0x7B, 0x00, 0xB3, 0x7B, 0x00], got
+
+    # Backpressure. The arbiter withholds `ready` for as long as the keyboard is mid-message, which
+    # at 31250 baud is a third of a millisecond -- tens of thousands of cycles at 60 MHz.
+    assert run_inject([(0, 1)] * 2 + [(2, 0)] * 20 + [(2, 1)] * 8) == [0xB0, 0x7B, 0x00], "stalled"
+
+    # A second change arriving mid-message. The intermediate part must get its own cleanup: it is
+    # the one the notes would be stranded on, and it is the one a naive implementation forgets.
+    got = run_inject([(0, 1)] * 2 + [(1, 1)] + [(2, 1)] * 12)
+    assert got == [0xB0, 0x7B, 0x00, 0xB1, 0x7B, 0x00], got
+    print("  panic inject: one CC123 per move, to the part being left         PASS")
+
+
+def test_panic_through_arbiter():
+    """The injected message reaches the engine whole, and is not re-addressed on the way."""
+    # This is the top.py wiring as a claim: source 0 is the keyboard, re-addressed to part 3;
+    # source 1 is the injector, whose `chan_en` stays low precisely so its CC123 keeps naming the
+    # part it means. If the override applied to both, the cleanup would follow the keyboard to its
+    # new part and silence the wrong one.
+    keys = [0x90, 0x3C, 0x64, 0x3E, 0x64]
+    panic = [0xB0, 0x7B, 0x00]
+    for gap in (0, 1, 3):
+        for stall in (0, 2):
+            got = messages(run([keys, panic], gap=gap, stall=stall, chan=[3, None]))
+            assert (0xB0, 0x7B, 0x00) in got, f"gap={gap} stall={stall}: {got}"
+            assert (0x93, 0x3C, 0x64) in got and (0x93, 0x3E, 0x64) in got, got
+    print("  panic + arb:  survives interleaving, keeps its own channel       PASS")
+
+
 if __name__ == "__main__":
     test_interleave()
     test_fairness()
     test_system()
     test_rechannel()
     test_partselect()
+    test_chanwatch()
+    test_partselect_clear()
+    test_panic_inject()
+    test_panic_through_arbiter()
