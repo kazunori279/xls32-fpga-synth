@@ -189,7 +189,7 @@ clocking, the transport, and where the audio physically comes out.
 | **Sample rate** | 32 kHz (28 kHz on the soft-multiplier backends) | engine 32 kHz, resampled 3/2 → **48 kHz** out |
 | **Host link** | USB UART @ 2 Mbaud (FT2232H channel B) | one USB-C: UAC2 audio up + USB-MIDI down |
 | **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee — a monitoring copy, not a lossless one |
-| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; built, HW-pending) |
+| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; both play on hardware) |
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
 | **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,773 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
@@ -369,11 +369,10 @@ What you should see and hear when it comes up:
   audio up the USB cable is a copy, and it is forbidden from stalling the codec to keep itself fed,
   so it drops ~1 ms every ~10.4 s instead — see [Record a demo video](#record-a-demo-video). The
   jacks are downstream of `dry` and unaffected: this is a recording artefact, not a playing one.
-- **MIDI** — **USB-MIDI over `usb2` is the path that has been played on hardware.** The **TRS
-  MIDI-In jack** is built and arbitrated in gateware alongside it, and the web UI's PART selection
-  is honoured for a TRS keyboard too (CC103, sniffed in gateware) — but that half has only ever
-  passed in simulation; **no cable has been put in the jack yet** ([docs/TODO.md](docs/TODO.md)).
-  If a TRS keyboard is silent, that is the likely reason, not your wiring.
+- **MIDI** — **both inputs play on hardware**: USB-MIDI over `usb2`, and the **TRS MIDI-In jack**,
+  arbitrated together in gateware so you can use either or both. The web UI's PART selection is
+  honoured for a TRS keyboard too (CC103, sniffed in gateware). The jack is **TRS Type A**; a
+  Type B cable will be silent.
 
 > **If it does not work.** In rough order of how often each one bites:
 >

@@ -115,8 +115,10 @@ those three; git history keeps the original.)*
   characterisation had already gone stale before this change. Both figures fail the 60 MHz
   constraint by a wide margin and both run clean; that is the part that has not changed. See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway).
-- **M24's DIN/TRS MIDI passes in simulation and has never had a cable in it.** Same state as when
-  it was written; the hardware exists, the test has not been done.
+- ~~**M24's DIN/TRS MIDI passes in simulation and has never had a cable in it.**~~ **Done — the
+  Tiliqua TRS MIDI-In jack plays on hardware**, alongside USB-MIDI, as the arbiter was written to
+  allow. This was open from M24 to now purely for want of a Type A cable. Basys 3's DIN input is a
+  separate item and is still untested (next).
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not
   hardware-tested — parts on order.
 - ~~**The committed Basys 3 bitstream is stale, and known to be.**~~ **Done — rebuilt and verified

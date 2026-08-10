@@ -19,7 +19,7 @@ there as a resolved fact, with the code that resolves it.
   - [M21 — does it fit on an ECP5?](#milestone-21--does-it-fit-on-an-ecp5-decision-gate-passed)
   - [M22 — narrowing the arithmetic to 18×18](#milestone-22--narrowing-the-arithmetic-to-1818-done)
   - [M23 — hello Tiliqua: the first bitstream](#milestone-23--hello-tiliqua-the-first-bitstream-done-heard-on-hardware)
-  - [M24 — MIDI in over TRS](#milestone-24--midi-in-over-trs-done-in-simulation-hardware-pending)
+  - [M24 — MIDI in over TRS](#milestone-24--midi-in-over-trs-done-hardware-verified)
   - [M25 — the host loop: UAC2 audio up, USB-MIDI down](#milestone-25--the-host-loop-uac2-audio-up-usb-midi-down-done-hardware-verified)
   - [M26 — chorus, ping-pong echo and 8-comb Freeverb](#milestone-26--chorus-ping-pong-echo-and-8-comb-freeverb-on-tiliqua-done)
   - [M27 — preset bank + web UI on Tiliqua](#milestone-27--preset-bank--web-ui-on-tiliqua-done-hardware-verified)
@@ -47,7 +47,7 @@ graded automatically, everything before it by hand or by simulation.
 | **21 ✅** | **ECP5 feasibility spike** (decision gate): engine alone on `LFE5U-25F`, `STAGES` × voice-count sweep | **32 voices × 4 parts fit: 66% LUT / 38% FF / 0 BRAM / 86% DSP at `STAGES=12`. No fallback rung needed** |
 | **22 ✅** | **18×18 arithmetic**: reshape the DSP48-tuned multiplies in `synth.x` for the ECP5's narrower tile | **`MULT18X18D` 24 → 19 (86% → 68%); 3,000 audio samples bit-identical, and Basys 3 got *cheaper* — 78 fewer LUTs, 0.32 ns shorter path, same 26 DSP48** |
 | **23 ✅** | **Hello Tiliqua**: first ECP5 bitstream — engine + AK4619 codec, no SoC, hard-coded A4 | **heard on the module's line-out; `check_pitch.py` ratio 0.667446, 0.117% error** |
-| **24 ◐** | **MIDI in over TRS**: the jack feeds the engine's `u8 midi_in`, RT/SysEx/SysCommon filtered, byte CDC into `audio` | RTL built + both sim checks pass; **hardware pending** (no Type A TRS cable in it yet) |
+| **24 ✅** | **MIDI in over TRS**: the jack feeds the engine's `u8 midi_in`, RT/SysEx/SysCommon filtered, byte CDC into `audio` | RTL built + both sim checks pass; **and, once a Type A cable was finally put in it, a keyboard on the jack plays the module** |
 | **25 ✅** | **The host loop over one USB cable**: UAC2 audio up, USB-MIDI down, `harness.py` onto the `Transport` seam — the suite can see Tiliqua again | **three consecutive `--only basic` runs at 91.0 / 91.0 / 90.8 (A−), all 34 cases identical every run; clock 12.2874–12.2877 MHz; worst gap 0.001%** |
 | **26 ✅** | **Effects on Tiliqua**: chorus, ping-pong echo and 8-comb Freeverb ported from the Basys 3 FSM into `fx.py` — echo on HyperRAM via `dsp.DelayLine`, tank on-chip | **`echo` / `reverb` / `reverb_cathedral` / `stress_fx_tail` all 100.0; basic 99.1 / 99.6 / 99.4 and stress 100.0 ×3, verdicts identical every run; CC82 spans 4.0–512.0 ms at 0.00% error** |
 | **27 ✅** | **Preset bank + web UI on Tiliqua**: `Transport` gains `stream_start`/`stream_stop`, and all four banks are re-fitted against `fx_model.py` after the generator turned out to model a synth that never shipped | **basic 99.4 (33/1/0), integration 99.9 (134/0/0) twice with identical verdicts, stress 100.0 (7/0/0); the preset model identifies 189/268 against a 20% baseline** |
@@ -280,7 +280,7 @@ does not, and that is deferred to M28: flashing writes the module's nine-slot la
 port has never written it. `openFPGALoader -c dirtyJtag` loads SRAM and touches nothing
 persistent, which covers everything M23 needs to prove.
 
-## Milestone 24 — MIDI in over TRS (done in simulation, hardware pending)
+## Milestone 24 — MIDI in over TRS (done, hardware-verified)
 
 M23 got sound out of a jack, but the note was hard-coded: the module was not yet an instrument.
 M24 makes it one. The TRS MIDI-In jack now feeds the engine's `u8 midi_in` ready/valid channel, so
@@ -390,10 +390,14 @@ an arbitrary byte, the whole parser has to exist. If that is right the cost is n
 the price of being a real instrument — but M29's video core has to fit in what is left, so the
 next milestone that adds area should re-measure rather than assume.
 
-**What is not done.** Hardware. The gateware and both automated checks pass, but nothing has been
-played into the physical jack yet. When it is, note the jack is **TRS Type A** with optoisolation
-(`gateware/docs/hardware_design.rst:38`) — a Type B adapter will not work. That step also closes
-M7's long-standing "built, HW-pending" DIN MIDI item, since it is the same DSLX parser being fed.
+**What was not done, for a long time: hardware.** The gateware and both automated checks passed at
+M24, but nothing had been played into the physical jack — for want of a cable, the jack being
+**TRS Type A** with optoisolation (`gateware/docs/hardware_design.rst:38`), so a Type B adapter
+will not do. That has since been closed: a keyboard on the jack plays the module, and plays it
+alongside USB-MIDI, which is what `midi_arb.py` was written for. It does **not** close M7's
+"built, HW-pending" DIN MIDI item after all — the same DSLX parser is being fed, so the parser
+half is now proven, but the Basys 3 DIN Pmod is different hardware in front of it and is still
+untested.
 
 ## Milestone 25 — the host loop: UAC2 audio up, USB-MIDI down (done, hardware-verified)
 
@@ -630,7 +634,7 @@ the reference given.
 | `echo` · `reverb` · `reverb_cathedral` fail on Tiliqua — M23 never ported the effects FSM, so there is nothing to measure | M26's exit criteria, already red in the report |
 | `sync`/`usb` close at 48–50 MHz against a 60 MHz requirement. It enumerates, streams and takes MIDI anyway, but static timing fails, so there is no proof of margin over temperature or across dies | Risk 3b — [ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway) |
 | The loop needs one encoder click to recover after a vendor slot is booted by hand. Recommendation is to program the SI5351 from our own gateware; the flash-slot alternative needs the owner's consent, and no flash write has been made in this port | [ARCHITECTURE_tiliqua.md → A1](ARCHITECTURE_tiliqua.md#a1-clock-domains) |
-| M24's TRS MIDI jack passes in simulation but has never had a cable in it | M24 section; roadmap row 24 ◐ |
+| ~~M24's TRS MIDI jack passes in simulation but has never had a cable in it~~ — **closed**: a keyboard on the jack plays the module | M24 section; roadmap row 24 ✅ |
 | `pitch_a4` (reads an octave low) and `filter_sweep` fail on **Basys 3**, long-standing and unrelated to the port — the Tiliqua sim check proves the engine itself is in tune | M23 section |
 | `cy8cmbr3xxx/touch: n_working_sensors=Ok(0)` on the module, with `CRC OK`. Unrelated to anything built so far, and ~~M28 will depend on touch~~ — M28 shipped without it; touch was one of four sub-features and the exit criterion was CV | [The module — measured baseline](ARCHITECTURE_tiliqua.md#the-module--measured-baseline) |
 
@@ -1553,9 +1557,10 @@ struck through were retired, the rows in bold were hit. Two are still open.
 | 9 | ~~Preset bank mismatches the ported path~~ | **Confirmed, and worse than stated** — the mismatch was never Tiliqua-specific. `engine.py` ran at 28 kHz (a rate no board has) and modelled a 4-comb reverb selected by CC83 modes, against 8 combs and depth gating in the shipped shell, so all 274 presets carried a dead `fx` key and were fitted with a tail they were then played without, *on the Basys 3 too*. **Retired by M27**: generator corrected against `fx_model.py`, banks migrated, `validate_hw.py` clean on all three. Re-fitting the corpora is deferred (they are gone) |
 | 10 | SoC firmware is a project unto itself | **Realised — M30 cancelled, no impact taken.** It was scheduled last and optional precisely so this could happen |
 
-Two rows are open going into M32: **3b** (out-of-spec static timing, watched via the frame-gap rate
-every report prints) and **M24's TRS MIDI**, which passes in simulation and has never had a cable in
-it. Both are in [docs/TODO.md](docs/TODO.md).
+Two rows were open going into M32: **3b** (out-of-spec static timing, watched via the frame-gap rate
+every report prints) and **M24's TRS MIDI**, which passed in simulation and had never had a cable in
+it. TRS has since been closed on hardware; 3b is still open, and is in
+[docs/TODO.md](docs/TODO.md).
 
 ---
 
