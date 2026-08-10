@@ -534,8 +534,10 @@ before reaching for a bigger `CAM_W`.
 
 When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
 Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
-`DUR` is a clip length, not a song: the shortest demo (*Goldberg Aria*) runs 50 s and the longest
-(*Le Cygne*) 134 s, so the 45 s default captures an opening.
+`DUR` is a clip length, not a song, so the 45 s default captures an opening. To catch a whole
+piece, set it past the length — *Goldberg Aria* 50 s, *Winter (Largo)* 98 s, *Prelude in C* 110 s,
+*Le Cygne* 134 s (each is `max(t + duration)` over `demos.json`, in beats, over its BPM) — plus a
+few seconds for the click and the reverb tail. Overshooting is cheap; trim the end afterwards.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a
