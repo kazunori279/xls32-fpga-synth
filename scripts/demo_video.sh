@@ -1,20 +1,36 @@
 #!/usr/bin/env bash
 # Record a demo MP4: the web UI (screen) + the board (webcam, picture-in-picture) + the
-# synth's own audio. All three are captured live with ffmpeg and muxed at the end.
+# synth's own audio. Three captures, run side by side and muxed at the end.
 #
 # The audio used to come from the server (`/api/capture` in LOCAL mode), which no longer exists:
 # since M31 the browser owns the board's link and plays the audio itself. So the sound is captured
 # from an audio *input* device -- digitally, never a room mic. Two ways, depending on the board:
 #
-#   Tiliqua -- point AUD_IDX at the board itself. Its UAC2 interface enumerates as an input
+#   Tiliqua -- point AUD_DEV at the board itself. Its UAC2 interface enumerates as an input
 #     ("Tiliqua XLS32", 4ch @ 48 kHz), which is the synth's own output before the host touches it.
 #     No extra software, and one fewer resampling stage than a loopback. Only ch0/1 are audio:
-#     ch2/3 carry the gray-coded audio-clock counter, which AFILTER drops -- see below. CoreAudio
-#     does allow the second client: a 111 s take came out at mean -12.4 dB / max -1.9 dB while
-#     Chrome held the same device and played the demo.
+#     ch2/3 carry the gray-coded audio-clock counter, which AFILTER drops -- see below.
 #   Basys 3 (or the fallback) -- a **loopback device**, capturing what the browser plays. BlackHole
 #     2ch is free (`brew install blackhole-2ch`); make it the Mac's output, or better, build a
 #     Multi-Output Device in Audio MIDI Setup so you can still hear the demo while it records.
+#
+# WHY THE SOUND IS NOT CAPTURED BY FFMPEG. On macOS, ffmpeg's avfoundation input drops audio in
+# whole 512-frame buffers and reports nothing. Measured against the board's own 12.288 MHz counter
+# (`scripts/rec_audio.py --check`), 12-15 s captures on one Mac mini:
+#
+#     ffmpeg -f avfoundation -i ":N" ................ 10-21 % of frames lost, ~10 events/s
+#       ... with a second avfoundation input in the      ~90 % lost
+#           same process (a screen or camera grab)
+#       ... and Chrome holding the device as well ...    ~67 % lost   (the take that shipped)
+#     scripts/rec_audio.py (PortAudio, blocksize=0) ... 0.00-0.02 % lost
+#
+# None of it is visible without the counter: the packets that arrive keep honest wall-clock
+# timestamps, so duration, levels and waveform all look right while two thirds of the samples are
+# missing. A 125 s take of *Prelude in C* went out that way and only a listener caught it. So the
+# sound now comes from `rec_audio.py`, which checks itself, and ffmpeg captures only pictures --
+# the screen and the camera in **separate processes**, because two avfoundation inputs in one
+# process starve each other whatever they are (it is the input count, not the pixel rate: dropping
+# the webcam to 640x480@30 changes nothing).
 #
 # Prereqs: the UI is open in Chrome with a board connected and POWER pressed -- either the hosted
 # panel at https://kazunori279.github.io/xls32-fpga-synth/ (nothing to run) or a local copy served
@@ -23,13 +39,16 @@
 #
 # Usage:
 #   scripts/demo_video.sh [out.mp4]
-# Env overrides (see `ffmpeg -f avfoundation -list_devices true -i ""` for indices):
-#   SCREEN_IDX=2  CAM_IDX=0  AUD_IDX=1  DUR=45  CAM_W=480  AV_OFFSET=0  AFILTER=…
-#   AUD_IDX          avfoundation index of the audio INPUT — the Tiliqua itself, or a loopback
-#                    (BlackHole 2ch etc.). Required; the list_devices output above names it.
-#                    Note the indices are per-machine and per-session: with a Tiliqua plugged in
-#                    and no webcam, screen 0 is video 0 and the board is audio 0, so the defaults
-#                    below (SCREEN_IDX=2, CAM_IDX=0) are both wrong. Always check the list first.
+# Env overrides (see `ffmpeg -f avfoundation -list_devices true -i ""` for the video indices):
+#   SCREEN_IDX=2  CAM_IDX=0  AUD_DEV=Tiliqua  DUR=45  CAM_W=480  AFILTER=…
+#   AUD_DEV          the audio INPUT -- a substring of its name, or a PortAudio index. The board
+#                    itself ("Tiliqua"), or a loopback ("BlackHole"). Names, not indices, because
+#                    the indices renumber whenever a device appears: plugging in a pair of AirPods
+#                    mid-session moved the board from 1 to 0 while this script was being written.
+#                    `uv run scripts/rec_audio.py --device nope --secs 0 --out /dev/null` lists them.
+#   SCREEN_IDX/CAM_IDX  avfoundation *video* indices, which renumber the same way -- with a
+#                    Tiliqua plugged in and no webcam, screen 0 is video 0, so the defaults below
+#                    are both wrong. Always check the list first.
 #   CROP=w:h:x:y      crop the screen grab to just the browser window (drop the rest of the
 #                     desktop). Get the geometry from the browser: window.screenX/screenY +
 #                     (outerHeight-innerHeight) for the content top, innerWidth/innerHeight
@@ -40,6 +59,14 @@
 #                     Coordinates are in CAM_SIZE pixels. Empty = the whole frame.
 #   CAM_PREVIEW=path  grab a still from the webcam (CAM_CROP applied, if set) and exit without
 #                     recording. This is how you find the rectangle: preview, measure, re-run.
+#   SCREEN_LATENCY=0.46 CAM_OFFSET=0.39   the three captures start together but their devices do
+#                     not. The recorder says when its first buffer landed, so the audio's zero is
+#                     known exactly; the two ffmpeg captures need their device start-up measured.
+#                     Here the screen delivers its first frame 0.46 s after launch and the webcam
+#                     0.85 s, so the audio's first 0.46 s is trimmed and the PIP is delayed by the
+#                     0.39 s difference. Measure yours (repeatable to ~10 ms) with
+#                       time ffmpeg -f avfoundation -i "<idx>:none" -frames:v 1 -f null -
+#                     for each device. Both default to 0 having no effect other than a skew.
 #   CAM_SIZE=1280x720 CAM_FPS=60  capture the webcam at a real 60fps (must be a mode the
 #                     device supports — list them with an invalid -video_size). OUT_FPS=60
 #                     keeps that smoothness in the muxed file.
@@ -49,7 +76,7 @@ cd "$(dirname "$0")/.."
 OUT="${1:-demo.mp4}"
 SCREEN_IDX="${SCREEN_IDX:-2}"     # avfoundation "Capture screen 0"
 CAM_IDX="${CAM_IDX:-0}"           # avfoundation "Logitech StreamCam"
-AUD_IDX="${AUD_IDX:-}"            # avfoundation loopback input (BlackHole 2ch)
+AUD_DEV="${AUD_DEV:-Tiliqua}"     # audio input, by name substring (see above)
 DUR="${DUR:-45}"                  # seconds to record (covers ~1–2 loops of a demo song)
 CAM_W="${CAM_W:-480}"             # webcam PIP width (px), bottom-right corner
 CAM_SIZE="${CAM_SIZE:-1280x720}"  # webcam capture resolution (must be a supported mode)
@@ -57,17 +84,15 @@ CAM_FPS="${CAM_FPS:-60}"          # webcam capture frame rate (StreamCam does 60
 OUT_FPS="${OUT_FPS:-60}"          # output frame rate (60 to preserve the webcam's smoothness)
 CROP="${CROP:-}"                  # w:h:x:y to crop the screen to the browser window (empty = full)
 CAM_CROP="${CAM_CROP:-}"          # w:h:x:y to crop the webcam to just the board (empty = full frame)
+SCREEN_LATENCY="${SCREEN_LATENCY:-0.46}"  # screen device start-up; trimmed off the audio
+CAM_OFFSET="${CAM_OFFSET:-0.39}"          # webcam start-up minus the screen's; delays the PIP
 # Take the first two channels and nothing else. The Tiliqua's UAC2 input is 4 channels: ch0/1 are
-# the audio, ch2/3 are the 31-bit gray-coded audio-clock counter check_loop.py measures the board's
-# real clock with -- and bit 15 of ch2 is forced high as a never-zero dropout marker, so those two
-# channels sit near full scale. avfoundation hands ffmpeg whatever the device offers (4), unlike
-# Chrome, which asks for 4 and is given 2; without this the counter is encoded into the AAC track
-# and folds into the mix on any downmix. On a 2ch loopback input this is the identity. AFILTER=anull
-# disables it.
+# the audio, ch2/3 are the 31-bit gray-coded audio-clock counter the recorder checks itself
+# against -- and bit 15 of ch2 is forced high as a never-zero dropout marker, so those two
+# channels sit near full scale. Chrome escapes this by asking for 4 and being handed 2; a capture
+# gets all four, and without this the counter is encoded into the AAC track and folds into the mix
+# on any downmix. On a 2ch loopback input this is the identity. AFILTER=anull disables it.
 AFILTER="${AFILTER:-pan=stereo|c0=c0|c1=c1}"
-# Audio and video now start together on the same ffmpeg invocation, so the old 1.3 s server-capture
-# skew is gone. Left as a knob because avfoundation warm-up still differs per machine.
-AV_OFFSET="${AV_OFFSET:-0}"
 WARMUP="${WARMUP:-2}"             # let the camera/screen stream settle before the demo starts
 
 # Picking CAM_CROP blind is guesswork, so offer a still to measure off. `-update 1` overwrites the
@@ -81,12 +106,12 @@ if [ -n "${CAM_PREVIEW:-}" ]; then
   exit 0
 fi
 
-if [ -z "$AUD_IDX" ]; then
-  echo "set AUD_IDX to the loopback input's index:  ffmpeg -f avfoundation -list_devices true -i ''" >&2
-  exit 2
-fi
-
+SCR=/tmp/demo_screen.mkv          # screen video
+CAM=/tmp/demo_cam.mkv             # webcam, cropped and scaled to the PIP
+AUD=/tmp/demo_audio.wav           # the synth, from PortAudio
 VID=/tmp/demo_video.mp4
+FIFO=/tmp/demo_rec_ready
+trap 'rm -f "$FIFO"' EXIT
 
 # Keep the webcam's full frame rate. overlay emits output frames at its main (first) input's
 # cadence, so the SCREEN must be a genuine OUT_FPS grid phase-locked with the output — otherwise
@@ -99,24 +124,65 @@ VID=/tmp/demo_video.mp4
 # thrown away are never scaled.
 CROPF=""; [ -n "$CROP" ] && CROPF="crop=${CROP},"
 CAMF="";  [ -n "$CAM_CROP" ] && CAMF="crop=${CAM_CROP},"
-FILTER="[0:v]${CROPF}fps=${OUT_FPS}[scr];[1:v]${CAMF}scale=${CAM_W}:-1[cam];[scr][cam]overlay=W-w-24:H-h-24[v]"
 
-echo "==> recording ${DUR}s of screen[$SCREEN_IDX]${CROP:+ (crop $CROP)} + webcam[$CAM_IDX] @${CAM_SIZE}/${CAM_FPS}fps${CAM_CROP:+ (crop $CAM_CROP)} + audio[$AUD_IDX] -> $VID"
+echo "==> recording ${DUR}s of screen[$SCREEN_IDX]${CROP:+ (crop $CROP)} + webcam[$CAM_IDX] @${CAM_SIZE}/${CAM_FPS}fps${CAM_CROP:+ (crop $CAM_CROP)} + audio[$AUD_DEV]"
+
+# The sound first, and on its own clock. It prints READY when its first buffer lands, which is the
+# zero the video captures are aligned to; it records SCREEN_LATENCY extra so there is something to
+# trim once they catch up. It also exits non-zero if the board's counter says frames went missing.
+rm -f "$FIFO"; mkfifo "$FIFO"
+AUD_SECS=$(awk -v d="$DUR" -v l="$SCREEN_LATENCY" 'BEGIN{printf "%.3f", d + l + 0.5}')
+uv run scripts/rec_audio.py --device "$AUD_DEV" --secs "$AUD_SECS" --out "$AUD" > "$FIFO" &
+RECPID=$!
+read -r _ < "$FIFO"               # blocks until the recorder's first buffer arrives
+
+# The camera, on its own. Cropped and scaled to the PIP here so the intermediate stays small and
+# the overlay pass has nothing left to resize. ultrafast/crf 14 is a scratch file, not the output.
+ffmpeg -hide_banner -loglevel warning -y \
+  -f avfoundation -pixel_format nv12 -video_size "${CAM_SIZE}" -framerate "${CAM_FPS}" -i "${CAM_IDX}:none" \
+  -t "$DUR" -vf "${CAMF}scale=${CAM_W}:-1" -an \
+  -c:v libx264 -preset ultrafast -crf 14 -pix_fmt yuv420p "$CAM" &
+CAMPID=$!
+
 ffmpeg -hide_banner -loglevel warning -y \
   -f avfoundation -capture_cursor 1 -framerate "${OUT_FPS}" -i "${SCREEN_IDX}:none" \
-  -f avfoundation -pixel_format nv12 -video_size "${CAM_SIZE}" -framerate "${CAM_FPS}" -i "${CAM_IDX}:none" \
-  -f avfoundation -itsoffset "$AV_OFFSET" -i ":${AUD_IDX}" \
-  -t "$DUR" \
-  -filter_complex "$FILTER" \
-  -map "[v]" -map 2:a -af "$AFILTER" -r "${OUT_FPS}" -fps_mode cfr \
-  -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k "$VID" &
-FF=$!
+  -t "$DUR" -vf "${CROPF}fps=${OUT_FPS}" -fps_mode cfr -an \
+  -c:v libx264 -preset ultrafast -crf 14 -pix_fmt yuv420p "$SCR" &
+SCRPID=$!
 
 sleep "$WARMUP"
 echo
 echo "   >>> NOW: in the browser, open DEMO and click the song you want (e.g. Bach) <<<"
 echo
-wait "$FF"
+wait "$CAMPID"
+wait "$SCRPID"
+if ! wait "$RECPID"; then
+  echo "the audio capture failed its own dropout check — see above; nothing was muxed" >&2
+  exit 1
+fi
+
+echo "==> muxing (audio trimmed ${SCREEN_LATENCY}s, PIP delayed ${CAM_OFFSET}s) -> $VID"
+ffmpeg -hide_banner -loglevel warning -y \
+  -i "$SCR" -itsoffset "$CAM_OFFSET" -i "$CAM" -ss "$SCREEN_LATENCY" -i "$AUD" \
+  -filter_complex "[0:v][1:v]overlay=W-w-24:H-h-24:eof_action=pass[v]" \
+  -map "[v]" -map 2:a -af "$AFILTER" -r "${OUT_FPS}" -fps_mode cfr -shortest \
+  -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "$VID"
 
 mv "$VID" "$OUT"
-echo "wrote $OUT"
+rm -f "$SCR" "$CAM" "$AUD"
+
+# Belt and braces. The recorder's counter check is the real one, but it only exists on a Tiliqua
+# input; on a loopback nothing has verified anything, and a mux mistake can still shorten the
+# track. Decoding it and counting what comes out costs a second and catches both.
+VSEC=$(ffprobe -v error -select_streams v -show_entries stream=duration -of default=nw=1:nk=1 "$OUT")
+ffmpeg -v error -y -i "$OUT" -map 0:a -c:a pcm_s16le -f wav /tmp/demo_audio_check.wav
+ASEC=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 /tmp/demo_audio_check.wav)
+rm -f /tmp/demo_audio_check.wav
+echo "wrote $OUT — video ${VSEC}s, audio ${ASEC}s of samples"
+awk -v a="$ASEC" -v v="$VSEC" 'BEGIN {
+  if (v > 0 && a < 0.98 * v) {
+    printf "WARNING: the audio track is only %.1f%% of the video length — samples went missing.\n", 100*a/v > "/dev/stderr"
+    printf "         Do not publish this take; see the note at the top of this script.\n" > "/dev/stderr"
+    exit 1
+  }
+}'

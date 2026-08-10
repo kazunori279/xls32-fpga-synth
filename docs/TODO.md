@@ -13,7 +13,18 @@ those three; git history keeps the original.)*
 
 ## Unverified — things believed to work that have not been watched working
 
-1. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
+1. **No demo video has been recorded with the fixed capture path.** The M32 take was published with
+   67 % of its audio missing and has been deleted from YouTube; `scripts/demo_video.sh` was then
+   rebuilt around `scripts/rec_audio.py`, which records through PortAudio and verifies each take
+   against the board's 12.288 MHz counter (see
+   [DEVELOPMENT_tiliqua.md → M32](../DEVELOPMENT_tiliqua.md#what-is-left--m32-and-the-risk-register)).
+   The new path has been run end to end once, as a 10 s take with Chrome holding the device and
+   playing — the condition that produced the 67 % — and the counter scored it at **0.001 %**, with
+   an ffmpeg capture of the same device minutes later scoring 10.6 %. What has *not* been done is a
+   full-length take: nobody has watched a 125 s recording for A/V drift, and `SCREEN_LATENCY` /
+   `CAM_OFFSET` are start-up times measured on one machine, not a closed loop. The README's hero is
+   back on the Basys 3 video until that take exists.
+2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
    re-check that exists because of the M28a rail bug has only ever been exercised in Python.

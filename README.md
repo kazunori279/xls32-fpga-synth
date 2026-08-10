@@ -494,18 +494,20 @@ mic:
 
 ```bash
 # UI open + board connected; grant Terminal Screen-Recording, Camera and Microphone perms once.
-# find your device indices with:  ffmpeg -f avfoundation -list_devices true -i ""
-AUD_IDX=1 scripts/demo_video.sh demo.mp4            # records ~45s
-SCREEN_IDX=2 CAM_IDX=0 AUD_IDX=1 DUR=60 scripts/demo_video.sh bach.mp4
+# find your screen/camera indices with:  ffmpeg -f avfoundation -list_devices true -i ""
+scripts/demo_video.sh demo.mp4                      # records ~45s
+SCREEN_IDX=2 CAM_IDX=0 AUD_DEV=Tiliqua DUR=60 scripts/demo_video.sh bach.mp4
 ```
 
-`AUD_IDX` is that input, and which one it is depends on the board:
+`AUD_DEV` is that input — named, not numbered, because the indices renumber whenever a device
+appears (a pair of AirPods waking up is enough). Which device it should be depends on the board:
 
 - **Tiliqua — point it at the board.** The UAC2 interface enumerates as an input (`Tiliqua XLS32`,
   4ch @ 48 kHz): the synth's output *before* the host touches it, with nothing to install and one
   fewer resampling stage than a loopback. Only ch0/1 are audio — ch2/3 carry the gray-coded clock
-  counter `check_loop.py` reads the board's real rate from, and they sit near full scale — so the
-  script drops them (`AFILTER`, on by default; it is the identity on a stereo input).
+  counter, and they sit near full scale — so the script drops them (`AFILTER`, on by default; it is
+  the identity on a stereo input). It reads them first, though: the counter says exactly how many
+  frames the capture lost, and the take is rejected if that is more than 0.1 %.
 - **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
   Multi-Output Device so you can still hear the demo.
@@ -533,11 +535,23 @@ so anything overlapping it lands in the frame. Cropping also enlarges the PIP fo
 before reaching for a bigger `CAM_W`.
 
 When the script prints **NOW**, open **DEMO** in the browser and click the song (e.g. *Bach ·
-Prelude in C*). Screen, camera and audio are one ffmpeg capture (`AV_OFFSET` tunes any A/V drift).
-`DUR` is a clip length, not a song, so the 45 s default captures an opening. To catch a whole
+Prelude in C*). `DUR` is a clip length, not a song, so the 45 s default captures an opening. To catch a whole
 piece, set it past the length — *Goldberg Aria* 50 s, *Winter (Largo)* 98 s, *Prelude in C* 110 s,
 *Le Cygne* 134 s (each is `max(t + duration)` over `demos.json`, in beats, over its BPM) — plus a
 few seconds for the click and the reverb tail. Overshooting is cheap; trim the end afterwards.
+
+> **Why it is three captures and not one.** On macOS, ffmpeg's avfoundation input sheds audio in
+> whole 512-frame buffers and reports nothing — and it gets worse the more inputs the process has.
+> Measured against the board's own 12.288 MHz counter, one ffmpeg capturing sound alone lost
+> **10–21 %** of frames; add a second avfoundation input (a screen or a camera grab) and it lost
+> **~90 %**. None of it is visible without the counter: the packets that arrive keep honest
+> timestamps, so duration, levels and waveform all look right. A 125 s take of *Prelude in C* was
+> published missing two thirds of its samples, and only a listener caught it. So the sound is
+> captured by [`scripts/rec_audio.py`](scripts/rec_audio.py) through PortAudio (**under 0.02 %**
+> lost, and it checks itself), the screen and the camera get an ffmpeg each, and the three are
+> muxed at the end. They start together but their devices do not, so `SCREEN_LATENCY` (0.46 s) trims the
+> audio's head and `CAM_OFFSET` (0.39 s) delays the PIP; both are start-up times measured on one
+> Mac mini, so measure yours if the lips do not match.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a

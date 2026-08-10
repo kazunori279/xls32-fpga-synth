@@ -1436,12 +1436,14 @@ to the one the 175-case suite had just graded at 99.8/100 — same `sha256`, `37
 deterministic enough that the archive in `boards/tiliqua/firmware/` is the artefact that was
 measured, not a rebuild of it.
 
-**The demo recorder was finally run, and it found four things.** `scripts/demo_video.sh` had been
+**The demo recorder was finally run, and it found five things — the fifth only after the take
+had been published.** `scripts/demo_video.sh` had been
 rewritten for the post-M31 audio path — the browser owns the link now, so the sound has to come off
 an audio *input* rather than the deleted `/api/capture` — and then left unexecuted, which
 [docs/TODO.md](docs/TODO.md) recorded as its first unverified item. Running it produced
 a 111 s take of *Prelude in C* and closed the item, but only after four defects the rewrite had not
-been able to see. **(1)** The Tiliqua's UAC2 input is **4 channels**, not 2: ch2/3 are the
+been able to see — and the take it produced turned out to be unusable for a fifth reason none of
+the four checks could see. **(1)** The Tiliqua's UAC2 input is **4 channels**, not 2: ch2/3 are the
 gray-coded audio-clock counter, near full scale because bit 15 of ch2 is forced high as a
 dropout marker. Chrome escapes this by asking for 4 and being handed 2; avfoundation hands ffmpeg
 all four, so the counter was being encoded into the AAC track and would fold into the mix on any
@@ -1455,9 +1457,46 @@ clip with no hint of how long a song is — each demo's length is `max(t + durat
 overshoots has an exact bar-boundary cut point. Bach's is 110.53 s, and the recording's second pass
 began at 115.58 s against a first note at 5.05 s: the same number, measured two ways.
 
-The take itself answers the one question the rewrite could not: **CoreAudio allows the second
-client.** ffmpeg captured the board at mean −12.4 dB / max −1.9 dB while Chrome held the same
-device and played the demo, so the loopback fallback is a fallback and not the path.
+**(5) — found after the take was published — two thirds of its audio was missing.** The take was
+checked at the time and passed: ffmpeg captured the board at mean −12.4 dB / max −1.9 dB while
+Chrome held the same device, which was read as *CoreAudio allows the second client* and written up
+here as a settled result. It measured the wrong thing. **Level cannot detect absent samples.** The
+packets that do arrive keep honest wall-clock timestamps, so the container duration, the levels and
+the waveform were all exactly what a good 125 s take looks like; the file held **40.75 s of audio**
+(1911 AAC frames), a steady 32.6 % of what it should have, in 1633 gaps over 30 ms. Nothing in the
+pipeline said so. A listener did.
+
+What makes it measurable is on the board already: ch2/3 are a 31-bit counter clocked at 12.288 MHz,
+so consecutive frames must differ by **exactly 256 ticks** and any larger delta is missing frames,
+counted exactly. Over 12–15 s captures:
+
+| capture path | frames lost |
+|---|---|
+| `ffmpeg -f avfoundation -i ":N"`, audio alone | 10.7–21.1 %, ~10 events/s |
+| … plus a second avfoundation input in the same process | ~90 % |
+| … and Chrome holding the device as well | **67 %** — the take that shipped |
+| PortAudio, `blocksize=0` | **0.000-0.015 %** |
+
+It is not the board: the counter advanced 184,319,488 ticks in 15 s, which is 12.288 MHz to the
+digit — no drift, no USB-side loss. It is not Chrome either; navigating the panel to `about:blank`
+still left 10.7 %. It is not load, either, since dropping the webcam from 720p60 to 640×480@30
+changed nothing — what matters is the *number of avfoundation inputs in one process*, whatever they
+are. ffmpeg sheds whole 512-frame buffers and reports nothing. `host/transport/usbaudio.py` had
+carried the other half of the answer since M28 — `blocksize=0, # PortAudio picks; forcing 1024
+loses 86% of frames` — and it is the same failure seen from the host side: a fixed block size is
+what kills this device, and ffmpeg's is fixed.
+
+So the sound no longer comes from ffmpeg. `scripts/rec_audio.py` records it through PortAudio and
+**checks itself against the counter**, failing the take above 0.1 % rather than leaving it to a
+listener; `demo_video.sh` waits for its `READY` before starting two *separate* ffmpeg processes for
+the screen and the camera, and muxes the three. One detail cost an hour and is worth the line:
+asking PortAudio for `int16` puts a dithered conversion in the path, and ±1 LSB is nothing to the
+audio but fatal to ch3 — which carries counter bits 15..30, so it is ±32768 ticks, and the check
+read 91 % loss on a clean capture. Take `int32` and round down.
+
+The original question stands unanswered, and is now moot: whether CoreAudio really gives a second
+client an intact stream was never tested, only assumed from a level reading. The recorder does not
+need to know — it verifies each take instead of trusting the path.
 
 **CI was cut from the milestone.** It was written into M32 as "CI that builds both boards", and the
 second board is the problem: Basys 3 needs Vivado, which wants a licence and about 100 GB, and no
