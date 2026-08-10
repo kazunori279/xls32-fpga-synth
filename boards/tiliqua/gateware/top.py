@@ -31,6 +31,7 @@ from tiliqua.platform import RebootProvider
 from tiliqua.video import dvi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dc_block import TeeDcBlock
 from fx import StereoFx
 from midi_arb import MidiArbiter, MidiPartSelect
 from midi_filter import SysCommonFilter
@@ -321,10 +322,24 @@ class CoreTop(Elaboratable):
         ctr_s = Signal(31)
         m.d.comb += [ctr_s[i].eq(gray_s[i:].xor()) for i in range(31)]
 
+        # The tee is DC-blocked; the jacks are not. The engine's pulse wave carries the duty
+        # cycle's DC offset, which the AC-coupled jacks discard for free and a digital copy does
+        # not -- see the header of dc_block.py for the measurement and for why the filter is
+        # built without a multiplier.
+        #
+        # Audio channels only. Blocking DC on ch2/ch3 would filter the frame counter the host
+        # measures loss with, destroying the instrument that says whether any of this worked.
+        m.submodules.tee_dc = tee_dc = TeeDcBlock()
+        m.d.comb += [
+            tee_dc.i[0].eq(dry.payload[0]),
+            tee_dc.i[1].eq(dry.payload[1]),
+            tee_dc.en.eq(dry.valid & dry.ready),        # one update per accepted frame
+        ]
+
         m.submodules.usb_tee = usb_tee = SyncFIFO(width=64, depth=16)
         m.d.comb += [
-            usb_tee.w_data.eq(Cat(dry.payload[0].as_value(),
-                                  dry.payload[1].as_value(),
+            usb_tee.w_data.eq(Cat(tee_dc.o[0].as_value(),
+                                  tee_dc.o[1].as_value(),
                                   ctr_s[0:15], C(1, 1),         # ch2: low bits + alive marker
                                   ctr_s[15:31])),               # ch3: high bits
             usb_tee.w_en.eq(dry.valid & dry.ready),
