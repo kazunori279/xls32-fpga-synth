@@ -54,11 +54,11 @@ those three; git history keeps the original.)*
    ever had — they are start-up times measured on one machine, not a closed loop, so nothing in the
    pipeline would catch a slow slide between the panel and the sound on a different one.
 
-   Two things are still open, and neither is about the take. The **README's hero is still the
-   Basys 3 video**, because swapping it wants a YouTube upload that has not been authorised. And
-   the acceptance was a listening judgement, not a measurement: there is still no check that says
-   whether a declick landed on a dropout or on a knob, which only matters now for takes made before
-   the counter fix.
+   It is now the README's hero, published as
+   [`sWc6g7cgsd4`](https://youtu.be/sWc6g7cgsd4). One thing is still open, and it is not about the
+   take. The acceptance was a listening judgement, not a measurement: there is still no check that
+   says whether a declick landed on a dropout or on a knob, which only matters now for takes made
+   before the counter fix.
 2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte

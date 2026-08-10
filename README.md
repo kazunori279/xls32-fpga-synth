@@ -18,9 +18,9 @@ build → measure → revise loop out.
 USB — oscillators, filter, envelopes, LFO, unison, cross-mod, and effects, plus a 4-part
 multitimbral selector, preset browser, and demo player.*
 
-[![Watch the XLS32 demo video](https://img.youtube.com/vi/2ROr9M_ZlVY/hqdefault.jpg)](https://youtu.be/2ROr9M_ZlVY)
+[![Watch the XLS32 demo video](https://img.youtube.com/vi/sWc6g7cgsd4/hqdefault.jpg)](https://youtu.be/sWc6g7cgsd4)
 
-*▶️ **[Demo video](https://youtu.be/2ROr9M_ZlVY)** — the web UI driving the Basys 3 board live, with the synth's own audio (click to watch on YouTube).*
+*▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube).*
 
 ### Hear it
 
