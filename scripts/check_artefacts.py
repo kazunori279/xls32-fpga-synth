@@ -255,9 +255,21 @@ def git(*args):
 
 def head_commit():
     """Short HEAD, with a trailing '-' if the tree is dirty -- the convention the Tiliqua
-    bootloader manifest already uses for its `tag` field."""
+    bootloader manifest already uses for its `tag` field.
+
+    The files `--update` is itself about to write do not count as dirt. This is the only caller,
+    and at the moment it runs, the artefact just copied in and this script's own state file are
+    both necessarily uncommitted -- so counting them made the '-' fire on every correct run, which
+    is a marker that means nothing. What it is for is the *other* case: recording an artefact
+    against sources that have been edited since it was built.
+    """
     h = git("rev-parse", "--short", "HEAD") or "unknown"
-    return h + ("-" if git("status", "--porcelain") else "")
+    expected = {STATE.relative_to(ROOT).as_posix()}
+    expected |= {spec["artefact"] for spec in ARTEFACTS.values()}
+    # ' M path' / '?? path', and 'R  old -> new' for a rename; the path is what follows the flags.
+    dirt = [ln[3:].split(" -> ")[-1].strip('"')
+            for ln in (git("status", "--porcelain") or "").splitlines() if ln]
+    return h + ("-" if set(dirt) - expected else "")
 
 
 def _at(commit, src):
