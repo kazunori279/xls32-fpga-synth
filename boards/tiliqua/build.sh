@@ -77,7 +77,14 @@ export XLS_ENGINE_V="$WORK/engine.v"
 # wholesale, so `--timing-allow-fail` has to be repeated here. Dropping it turns the known `clk`
 # shortfall (39.92 MHz against a 60 MHz constraint, unmet since M25 and so far harmless -- the
 # engine runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2}"
+#
+# `--seed 3` is not a preference either. At M34's 23,729 TRELLIS_COMB (97.7%) the default seed
+# bottoms out at 135 overused nets and then the ripup cascade runs away; seed 2 bottoms at 117 and
+# does the same. Seed 3 routes. The placer knobs were measured and are worse -- `--router2-alt-
+# weights` plateaus at 765, `--no-tmdriv` at 2,779 -- so this is the seed lottery, won, and written
+# down. If the netlist changes size the lottery has to be drawn again -- one seed at a time, the
+# wasm nextpnr cannot take two. See DEVELOPMENT_tiliqua.md M34 "The area squeeze".
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 3}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then
