@@ -214,7 +214,7 @@ function setPlay(ch, on) {   // the LED = this part's demo mute
   else {
     playSet.delete(ch);
     for (const [n, chans] of activeNotes) if (chans.includes(ch)) sendMidi([0x80 | ch, n, 0]);  // release held on this part
-    for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);   // and whatever the demo is holding there
+    sweepPart(ch);                                               // and whatever the demo is holding there
   }
   refreshPartUI();
 }
@@ -225,8 +225,17 @@ function setPart(ch, layer = false) {   // click = this part alone · ⇧-click 
   else { next = new Set(selSet); if (next.has(ch) && next.size > 1) next.delete(ch); else next.add(ch); }
   if (!sameSet(next, selSet))                     // the layer moved: release first, or notes strand on the
     for (const n of Array.from(activeNotes.keys())) noteOff(n);   // parts that just left it
+  // The same hazard on the TRS jack, and this page cannot fix it the same way: those notes never
+  // reach the browser, and the gateware rewrites the channel at the arbiter's *output*, so a key
+  // held across this click gets its note-off addressed to the part we are moving to and sticks on
+  // the part we are leaving. Sweep whatever the jack might be sounding instead -- one part if we
+  // already own it, all of them if we are taking it over from a channel we never knew. Skipped
+  // while a demo runs: the sweep would cut the song's own notes, and stopDemo clears everything.
+  const stale = trsFollow ? [lastPartCC] : [...Array(NPARTS).keys()];
   selSet = next;
   focusPart(next.has(ch) ? ch : [...next][0]);    // knobs follow the clicked part (or what's left of the layer)
+  const arriving = noteChans()[0] & 0x0f;
+  if (!demoPlaying) for (const p of stale) if (p >= 0 && p !== arriving) sweepPart(p);
   claimTrs();                                     // an explicit part gesture: the TRS jack follows it too
 }
 function focusPart(ch) {                          // the PRIMARY part: the one the knobs edit
@@ -437,6 +446,7 @@ document.addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   if (typingInField(e.target)) return;
   const code = e.code;
+  if (code === 'Escape') { allSoundOff(); e.preventDefault(); return; }   // the same thing PANIC does
   if (code === OCT_DOWN) { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
   if (code === OCT_UP) { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }
   if (code in KMAP && !held.has(code)) { const note = 12 * (baseOct + 1) + KMAP[code]; held.set(code, note); noteOn(note); e.preventDefault(); }
@@ -456,6 +466,13 @@ function panic() {                                  // release everything still 
   held.clear();
   endDrag();
 }
+// `panic` only knows the notes this page started. Notes from the Tiliqua's TRS jack never pass
+// through the browser at all, and the engine implements no CC123 all-notes-off, so the only thing
+// that can silence one is an explicit note-off for that exact note and part. Hence the sweep: 128
+// note-offs is cheap and certain, and it is what stopDemo and syncBoard already do.
+function sweepPart(ch) { for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]); }
+function sweepAllParts() { for (let ch = 0; ch < NPARTS; ch++) sweepPart(ch); }
+function allSoundOff() { panic(); sweepAllParts(); }
 document.addEventListener('pointermove', (e) => { if (activeDrag) activeDrag.move(e); });
 document.addEventListener('pointerup', endDrag);           // a release ANYWHERE ends the drag
 document.addEventListener('pointercancel', endDrag);       // gesture/scroll steals the pointer
@@ -514,11 +531,15 @@ function bindMidiInput(inp) {
   midiPorts.push(inp.name || 'MIDI');
   inp.onmidimessage = (e) => {
     const d = Array.from(e.data);                  // re-address voice messages to the selected part
-    if (d[0] >= 0x80 && d[0] < 0xf0) { const st = d[0] & 0xf0; for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
+    const st = d[0] & 0xf0;
+    // Notes go through noteOn/noteOff rather than straight out. They used to be forwarded raw,
+    // which meant `activeNotes` never knew they were held -- so a part change re-addressed the
+    // note-off to the part you had just switched to and left the original sounding forever.
+    if (st === 0x90 && d[2] > 0) noteOn(d[1], d[2]);
+    else if (st === 0x80 || st === 0x90) noteOff(d[1]);       // vel-0 note-on is a note-off
+    else if (st === 0xB0 && (d[1] === 120 || d[1] === 123)) allSoundOff();   // the keyboard's own panic
+    else if (d[0] >= 0x80 && d[0] < 0xf0) { for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
     else sendMidi(d);
-    const [st, d1] = e.data;                       // reflect notes on the on-screen keys
-    if ((st & 0xf0) === 0x90 && e.data[2] > 0) highlightKey(d1, true);
-    else if ((st & 0xf0) === 0x80 || ((st & 0xf0) === 0x90)) highlightKey(d1, false);
   };
 }
 async function initWebMidi() {
@@ -598,7 +619,7 @@ async function startAudio() {
 // Everything the board needs told after a fresh link: it may have been power-cycled since the
 // page loaded, and it keeps no state we can read back.
 function syncBoard() {
-  for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
+  sweepAllParts();
   syncAllParts();
   releaseTrs();               // a fresh link cannot know what the player is doing with the TRS
                               // jack, so hand it back rather than seize it -- otherwise a board
@@ -755,7 +776,7 @@ function stopDemo() {
   if (link) link.cancelPending();               // drop whatever was scheduled but not yet sent
   // Explicit note-offs, all 4 parts, all 128 notes: the engine implements no CC123 all-notes-off,
   // and a cancelled look-ahead has certainly dropped some note-offs on the floor.
-  for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
+  sweepAllParts();
   document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
   const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
 }
@@ -874,6 +895,7 @@ async function boot() {
   initMasterVol();
   document.getElementById('power').addEventListener('click', togglePower);
   document.getElementById('save').addEventListener('click', saveUser);
+  document.getElementById('panic').addEventListener('click', allSoundOff);
   document.getElementById('init').addEventListener('click', () => {
     applyValues(spec.defaults, powered); setBar('—', 'Init'); curIndex = -1;
     document.querySelectorAll('#blist .bitem.on').forEach((el) => el.classList.remove('on'));

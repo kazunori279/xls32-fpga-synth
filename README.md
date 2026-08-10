@@ -80,6 +80,9 @@ Clicking **PART** on the panel takes the jack over and points
 it at that part instead; the panel's footer says which of the two is in force, and it hands the
 jack back the next time it connects.
 
+**If a note ever hangs**, hit **PANIC** on the panel — or press <kbd>Esc</kbd>, which does the same
+thing. It sends every note off on all four parts. A USB-MIDI keyboard's own panic button works too.
+
 #### Audio out — the jacks, `usb2`, or both
 
 - **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. Eurorack

@@ -204,7 +204,9 @@ body{
   border:1px solid #000;border-radius:0 0 3px 3px;z-index:2;cursor:pointer}
 .bkey.down{background:linear-gradient(#b6301f,#7c1a12)}
 
-.foot{display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#6d6455;letter-spacing:.5px}
+/* `gap` and not just space-between: the spans have grown enough that on a narrow window the last
+   two run together into one unreadable "...channelrunning@48000". */
+.foot{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:10px;color:#6d6455;letter-spacing:.5px}
 /* which MIDI ports are OPEN and which part they play — dim when a port is bound, amber when none
    is, because "no port" is the state that gets mistaken for the PART chips not working */
 .foot .midiin{white-space:nowrap;color:#c8a24a}
