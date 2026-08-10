@@ -113,17 +113,18 @@ region, and so the cheapest to rebuild from the SDK if it is ever wanted back.
 **The shell costs almost nothing.** The vendor's `dsp-mirror` reference core — PLL, I²C,
 eurorack-pmod codec interface, no video, no SoC — places at:
 
-| | used | available |
-|---|---:|---|
-| TRELLIS_COMB | 1,768 | 24,288 (7%) |
-| TRELLIS_FF | 731 | 24,288 (3%) |
-| DP16KD | 0 | 56 (0%) |
-| MULT18X18D | 1 | 28 (3%) |
-| EHXPLLL | 1 | 2 |
+| resource | used | on the part | share |
+|---|---:|---:|---:|
+| TRELLIS_COMB | 1,768 | 24,288 | 7% |
+| TRELLIS_FF | 731 | 24,288 | 3% |
+| DP16KD | 0 | 56 | 0% |
+| MULT18X18D | 1 | 28 | 4% |
+| EHXPLLL | 1 | 2 | 50% |
 
-So XLS32 gets essentially all 56 BRAM tiles and 27 of 28 multipliers to spend. It spends them:
-the shipped build is **23,773 / 24,288 TRELLIS_COMB (97%)** and **28 / 28 MULT18X18D**
-([Part E](#part-e--constraints-area-and-timing)).
+The one row that is not almost nothing is the PLL, and it is not fabric: XLS32 needs the second one
+anyway, for video. So XLS32 gets essentially all 56 BRAM tiles and 27 of 28 multipliers to spend, and
+it spends them: the shipped build is **23,557 / 24,288 TRELLIS_COMB (96%)** and **28 / 28
+MULT18X18D** ([Part E](#part-e--constraints-area-and-timing)).
 
 **The screen.** The panel's own EDID resolves to
 `DVIModeline { h_active: 720, v_active: 720, pixel_clk_mhz: 39.07, rotate: Left }`, and the
@@ -1081,8 +1082,9 @@ clock rather than a divided one — [A1](#a1-clock-domains).)
 | M25, engine + USB | 86% | 48.7–55.3 MHz across sixteen seeds |
 | M26, + effects | 97% | **43.40 MHz** |
 | M29, + video | 96% | 44.71 MHz |
-| shipped (M31) | 97% | 42.51 MHz |
+| M31 | 97% | 42.51 MHz |
 | + comb magnitude truncation | 98% | 39.92 MHz |
+| shipped (M33) | 96% | 39.42 MHz |
 
 **The failing path used to be entirely inside luna** — about twenty LUT levels from an interpacket
 timer through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
