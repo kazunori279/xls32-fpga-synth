@@ -20,13 +20,23 @@ big-picture overview [README §5](README.md#5-architecture--design).
 
 ## Contents
 
+**Where to start**, if you are not reading straight through. Porting the engine to some third board:
+[Conventions](#conventions--the-ecp5-seam), then [Part A](#part-a--the-amaranth-shell) — that pair is
+the whole seam. Recording from the board, or trusting what comes back:
+[B1](#b1-the-uac2-device-and-a-midi-function-bolted-to-it) and
+[B4](#b4-the-capture-tee--dc-and-pacing). Changing the DSP:
+[Part C](#part-c--effects-on-the-ecp5), and [C4](#c4-the-bit-exact-model) before you change any
+arithmetic. **Adding anything at all to this design: read
+[Part E](#part-e--constraints-area-and-timing) first** — the die is 96% full and all 28 multipliers
+are gone, so the question is never whether the idea works but what it displaces.
+
 - [Conventions — the ECP5 seam](#conventions--the-ecp5-seam) — source-file map; what is identical to Basys 3 and what is not
-- [The module — measured baseline](#the-module--measured-baseline) — what the hardware actually reports
+- [The module — measured baseline](#the-module--measured-baseline) — what the hardware actually reports, and what XLS32 uses of it
 - [End-to-end timing](#end-to-end-timing-usb-midi-in--pipeline--uac2-out) — USB MIDI in → pipeline → UAC2 out
 - [Part A — The Amaranth shell](#part-a--the-amaranth-shell)
   - [A1 Clock domains](#a1-clock-domains) · [A2 The engine as an Amaranth submodule](#a2-the-engine-as-an-amaranth-submodule) · [A3 The rate is set by the pull](#a3-the-rate-is-set-by-the-pull) · [A4 The codec and the eurorack jacks](#a4-the-codec-and-the-eurorack-jacks)
 - [Part B — USB and MIDI](#part-b--usb-and-midi)
-  - [B1 The UAC2 device, and a MIDI function bolted to it](#b1-the-uac2-device-and-a-midi-function-bolted-to-it) · [B2 The TRS jack and the System-message filters](#b2-the-trs-jack-and-the-system-message-filters) · [B3 The MIDI arbiter and CC103](#b3-the-midi-arbiter-and-cc103)
+  - [B1 The UAC2 device, and a MIDI function bolted to it](#b1-the-uac2-device-and-a-midi-function-bolted-to-it) · [B2 The TRS jack and the System-message filters](#b2-the-trs-jack-and-the-system-message-filters) · [B3 The MIDI arbiter and CC103](#b3-the-midi-arbiter-and-cc103) · [B4 The capture tee — DC and pacing](#b4-the-capture-tee--dc-and-pacing)
 - [Part C — Effects on the ECP5](#part-c--effects-on-the-ecp5)
   - [C1 The ported FSM](#c1-the-ported-fsm) · [C2 Echo — from PSRAM to block RAM](#c2-echo--from-psram-to-block-ram) · [C3 The Freeverb tank, at half length](#c3-the-freeverb-tank-at-half-length) · [C4 The bit-exact model](#c4-the-bit-exact-model)
 - [Part D — The beam-raced visualiser](#part-d--the-beam-raced-visualiser)
@@ -110,21 +120,28 @@ region, and so the cheapest to rebuild from the SDK if it is ever wanted back.
 **28 MULT18X18D** (18×18) · **56 DP16KD** (16 Kb of data each, ≈896 Kb) · 2 EHXPLLL. Off-chip:
 32 MB HyperRAM (APS256XXN), unused since M29 ([D3](#d3-what-deleting-psram-bought)).
 
-**The shell costs almost nothing.** The vendor's `dsp-mirror` reference core — PLL, I²C,
-eurorack-pmod codec interface, no video, no SoC — places at:
+**What XLS32 uses, and what was on the die before it.** Both columns are nextpnr's own post-pack
+figures — the ones that decide whether a bitstream places. The left column is the shipped build. The
+right is the vendor's `dsp-mirror` reference core — PLL, I²C, eurorack-pmod codec interface, no
+video, no SoC — which is the floor any design on this module starts from:
 
-| resource | the shell uses |
-|---|---|
-| TRELLIS_COMB | 1,768 of 24,288 (7%) |
-| TRELLIS_FF | 731 of 24,288 (3%) |
-| DP16KD | 0 of 56 (0%) |
-| MULT18X18D | 1 of 28 (4%) |
-| EHXPLLL | 1 of 2 (50%) |
+| resource | **XLS32 (shipped)** | vendor reference shell |
+|---|---|---|
+| TRELLIS_COMB | **23,557 of 24,288 (96%)** | 1,768 (7%) |
+| TRELLIS_FF | **13,131 of 24,288 (54%)** | 731 (3%) |
+| DP16KD | **53 of 56 (94%)** | 0 (0%) |
+| MULT18X18D | **28 of 28 (100%)** | 1 (4%) |
+| EHXPLLL | **2 of 2 (100%)** | 1 (50%) |
+| TRELLIS_IO | **86 of 197 (43%)** | — |
 
-The one row that is not almost nothing is the PLL, and it is not fabric: XLS32 needs the second one
-anyway, for video. So XLS32 gets essentially all 56 BRAM tiles and 27 of 28 multipliers to spend, and
-it spends them: the shipped build is **23,557 / 24,288 TRELLIS_COMB (96%)** and **28 / 28
-MULT18X18D** ([Part E](#part-e--constraints-area-and-timing)).
+The right column is the good news: the only row where the shell is not almost nothing is the PLL, and
+that is not fabric — XLS32 needs the second one anyway, for video. So essentially all 56 BRAM tiles
+and 27 of 28 multipliers were there to spend, and the left column is what spending them looks like.
+Three of the five fabric resources are at or above 94%.
+
+For **what the 23,557 is spent on**, block by block, see [E2](#e2-the-area-census); for **how it got
+to 96%** over the milestones, and what that occupancy costs in timing, see
+[E4](#e4-the-timing-shortfall-that-runs-anyway).
 
 **The screen.** The panel's own EDID resolves to
 `DVIModeline { h_active: 720, v_active: 720, pixel_clk_mhz: 39.07, rotate: Left }`, and the
