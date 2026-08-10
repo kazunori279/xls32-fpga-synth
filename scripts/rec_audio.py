@@ -26,9 +26,11 @@ Two things follow. The loss is an artefact of *recording*, not of playing: `dry`
 whatever the tee does, so `out0`/`out1` never had a click in them. And the quantum is the FIFO's,
 not the host's -- ~60 frames, not the 512-frame buffers ffmpeg loses, which is how the two failure
 modes tell themselves apart. Neither leaves a trace a casual check can see: the packets that do
-arrive keep honest wall-clock timestamps, so duration, levels and waveform all look normal. `host/transport/usbaudio.py` already carried the matching note --
-"blocksize=0, PortAudio picks; forcing 1024 loses 86% of frames" -- which is the same failure
-from the other side: it is the fixed block size that kills it, and ffmpeg's is fixed.
+arrive keep honest wall-clock timestamps, so duration, levels and waveform all look normal.
+
+`host/transport/usbaudio.py` already carried the matching note -- "blocksize=0, PortAudio picks;
+forcing 1024 loses 86% of frames" -- which is the ffmpeg failure from the other side: it is the
+fixed block size that kills it, and ffmpeg's is fixed.
 
 Usage:
     uv run scripts/rec_audio.py --secs 45 --out /tmp/demo_audio.wav
@@ -91,10 +93,10 @@ def _median3(x):
 def counter_loss(a):
     """(lost_frames, expected_frames, events, positions) from the board's counter, or None.
 
-    `positions` are sample indices: frames went missing between index i and i+1. `scripts/declick.py`
-    repairs exactly those, which is the whole reason they are returned -- a detector that has to
-    *infer* where a buffer went from the waveform cannot tell a dropped millisecond from a MIDI CC
-    arriving, and on a take where the panel was played while the demo ran it chased 40 knob moves.
+    `positions` are sample indices: frames went missing between index i and i+1. That is the whole
+    reason they are returned -- `scripts/declick.py` repairs exactly those, and a detector that has
+    to *infer* where the gap was from the waveform cannot tell a dropped millisecond from a MIDI CC
+    arriving; on a take where the panel was played while the demo ran it chased 40 knob moves.
     """
     if a.ndim < 2 or a.shape[1] < 4 or np.mean((a[:, 2].astype(np.uint16) & ALIVE_BIT) != 0) < 0.99:
         return None                                   # not a Tiliqua tee; nothing to check against

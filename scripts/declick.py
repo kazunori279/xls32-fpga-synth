@@ -210,7 +210,8 @@ def main():
     chans = ([int(c) for c in args.channels.split(",")] if args.channels
              else list(range(x.shape[1])))
     if any(c < 0 or c >= x.shape[1] for c in chans):
-        sys.exit(f"{args.infile} has {x.shape[1]} channels; --channels {args.channels} is out of range")
+        sys.exit(f"{args.infile} has {x.shape[1]} channels; "
+                 f"--channels {args.channels} is out of range")
     if not args.outfile and not args.dry_run:
         sys.exit("outfile is required unless --dry-run is given")
 
