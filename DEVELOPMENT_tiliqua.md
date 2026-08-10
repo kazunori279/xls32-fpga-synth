@@ -1810,6 +1810,12 @@ crashes were noticed in the logs. **P&R attempts on this design must be sequenti
 grepping a log file that a new run has not written to yet. The first poll of a fresh run happily
 matched the *previous* run's `TRELLIS_COMB` line and reported no change. Poll on the mtime.
 
+And a small one that produces plausible wrong numbers rather than obviously wrong ones: nextpnr
+prints the whole max-frequency table **twice**, once after placement and once after routing, and
+`grep | tail` will hand you whichever it feels like. The post-placement estimate on this build says
+`audio_clk` 27.02 MHz; the real, post-route figure is 23.08. Both PASS, so nothing catches it — the
+only tell is that the second table is the one that comes after `Info: Routing complete.`
+
 **And a third way, which is trying the knobs in the order they sound plausible.** With the netlist
 at 97.7% the obvious reading is "congestion", so the obvious levers are the ones that trade timing
 for density. Both were wrong, and measurably:
@@ -1820,8 +1826,8 @@ for density. Both were wrong, and measurably:
 | `--router2-alt-weights` | 765 | plateaus there for 200+ iterations, never explodes, never converges |
 | `--no-tmdriv` | 2,779 | timing-driven placement is *helping* the density, not costing it |
 
-`--no-tmdriv` looked like free money: `audio_clk` needs 12.29 MHz and gets 27.98, so the placer is
-optimising a constraint with 2.3× margin. Taking that objective away made it twenty times worse.
+`--no-tmdriv` looked like free money: `audio_clk` needs 12.29 MHz and gets 23.08 post-route, so the
+placer is optimising a constraint with 1.9× margin. Taking that objective away made it twenty times worse.
 The reason is presumably that criticality is the only thing telling the placer which nets to keep
 short, and without it the long ones sprawl through the middle of the die. Whatever the mechanism,
 the lesson is the same as the `TrsPanicInject` one a paragraph up: on this design, at this
