@@ -620,6 +620,14 @@ channel, anything above (the UI sends 127) turns the override off, and off is th
 `check_midi.py` and every bitstream built before this existed behave identically until something
 asks otherwise.
 
+**The policy around it is host-side, and it has to be.** This register has nothing to read it back
+from and no way to expire, so whoever sets it owns it until the next power cycle. The panel
+therefore treats claiming as a *gesture*: clicking a PART chip claims the jack, a fresh link
+releases it (`app.js` `claimTrs` / `releaseTrs`), and anything else that merely moves the selected
+part only keeps an existing claim in step. Otherwise a board driven from the browser once stays
+pinned to that part for every session after, with the player's channel knob doing nothing and no
+indication anywhere of why — which is what it did until the panel learned to let go.
+
 **Gotcha — where the rewrite happens.** `rechan()` rewrites the channel nibble at the arbiter's
 **output**, not on the way into `run[]`. Done the other way, only the first note after a part change
 would move and the rest would keep playing part 1 from the remembered status — a bug that would

@@ -181,20 +181,32 @@ function refreshPartUI() {
     chip.querySelector('.partled').classList.toggle('on', playSet.has(ch));
   });
   renderMidiIn();                     // the footer names the part a hardware keyboard now plays
-  sendPartSelect();
+  if (trsFollow) sendPartSelect();    // keep an existing claim in step; never make one here
 }
 // A keyboard on the Tiliqua's TRS jack sends on its own channel and reaches the FPGA without
 // passing through any of this, so the PART chips cannot re-address it the way they do the
 // on-screen keys. The gateware does it instead (midi_arb.py MidiPartSelect) and CC103 is how it
 // is told which part. Only the primary part: the TRS stream is one stream, so layering it across
 // parts would mean the arbiter replicating messages, which it does not do.
+//
+// *When* the panel claims the jack matters, because the board keeps that state until it is told
+// otherwise or power-cycled -- there is nothing to read back and nothing that expires. So claiming
+// is a gesture and not a side effect: a click on a PART chip is the player saying "play this one",
+// and that is the only thing that claims. Everything else that moves `activeCh` -- a demo
+// starting, a preset restoring a part -- only keeps an existing claim in step, so it cannot take
+// the jack away from someone who is choosing parts with their keyboard's channel knob instead.
+// A fresh link hands it back (`syncBoard`), which is also the board's own reset default.
+const TRS_RELEASE = 127;            // CC103 >= 16 = override off, the keyboard's channel decides
 let lastPartCC = -1;
+let trsFollow = false;              // has this panel claimed the TRS jack?
 function sendPartSelect(force = false) {
   const ch = noteChans()[0] & 0x0f;
   if (ch === lastPartCC && !force) return;      // refreshPartUI runs on plenty that is not a part change
   lastPartCC = ch;
   sendMidi([0xB0 | ch, 103, ch]);
 }
+function claimTrs()   { trsFollow = true;  sendPartSelect(true); renderMidiIn(); }
+function releaseTrs() { trsFollow = false; lastPartCC = -1; sendMidi([0xB0, 103, TRS_RELEASE]); renderMidiIn(); }
 // The mute set is read live by the sequencer (see demoTick), so toggling an LED mid-song takes
 // effect on the next note without anything having to be told about it.
 function setPlay(ch, on) {   // the LED = this part's demo mute
@@ -215,6 +227,7 @@ function setPart(ch, layer = false) {   // click = this part alone · ⇧-click 
     for (const n of Array.from(activeNotes.keys())) noteOff(n);   // parts that just left it
   selSet = next;
   focusPart(next.has(ch) ? ch : [...next][0]);    // knobs follow the clicked part (or what's left of the layer)
+  claimTrs();                                     // an explicit part gesture: the TRS jack follows it too
 }
 function focusPart(ch) {                          // the PRIMARY part: the one the knobs edit
   activeCh = ch;
@@ -480,9 +493,19 @@ function setupWheels() {
 // bound, the chips look like they are being ignored when in fact nothing ever arrived to route.
 let midiPorts = [];              // Web-MIDI inputs bound in this tab
 function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); }
+// Two different inputs, and the footer has to keep them apart. `midiPorts` are the *host's* MIDI
+// devices; this page re-addresses their notes to the selected parts before forwarding them, so
+// they always land on `partsLabel()`. The Tiliqua's TRS jack never passes through here at all --
+// the gateware routes it, and the one thing the panel knows is whether it has claimed it. Say
+// which, because it is the state a player cannot otherwise see and it survives closing this page.
+function trsLabel() {
+  return trsFollow ? 'TRS jack → P' + ((noteChans()[0] & 0x0f) + 1) + ', following PART'
+                   : 'TRS jack → its own MIDI channel';
+}
 function renderMidiIn() {
   const el = document.getElementById('midiin'); if (!el) return;
-  el.textContent = 'MIDI in: ' + (midiPorts.length ? midiPorts.join(', ') : 'none') + ' → ' + partsLabel();
+  el.textContent = 'MIDI in: ' + (midiPorts.length ? midiPorts.join(', ') : 'none') + ' → ' + partsLabel()
+                 + (link && link.kind === 'tiliqua' ? ' · ' + trsLabel() : '');
   el.classList.toggle('none', !midiPorts.length);
 }
 function bindMidiInput(inp) {
@@ -577,7 +600,10 @@ async function startAudio() {
 function syncBoard() {
   for (let ch = 0; ch < NPARTS; ch++) for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]);
   syncAllParts();
-  sendPartSelect(true);       // forced: the board's part-select default is off
+  releaseTrs();               // a fresh link cannot know what the player is doing with the TRS
+                              // jack, so hand it back rather than seize it -- otherwise a board
+                              // driven from the panel once stays pinned to that part until it is
+                              // power-cycled. The first PART click claims it again.
 }
 function currentAll() { const v = {}; spec.controls.forEach((c) => v[c.id] = values[c.id]); return v; }
 function setStatus(on) {

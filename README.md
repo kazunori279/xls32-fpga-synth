@@ -58,24 +58,41 @@ Once slot 6 is written the module never asks again.
 
 ### 2 · Play it — no computer at all
 
-**Two inputs, and they work at the same time.** Move the cable to **`usb2`** and plug in a
-**USB-MIDI keyboard** — or skip USB altogether and run a keyboard into the module's **TRS MIDI-In
-jack**, which needs no host of any kind. The two are merged in gateware a whole message at a time,
-so a hardware keyboard on the jack and the browser panel on `usb2` can play together. Either way
-that is the entire setup: 32 voices across 4 parts, on MIDI channels 1–4.
+32 voices across 4 parts, on MIDI channels 1–4. There are two ways in and two ways out, and in
+both cases you can use either one or both at once.
 
-**The jack is TRS Type A** — a Type B cable will be silent — so a DIN-MIDI keyboard or a sequencer
-reaches it through the adapter most of them ship with. Its bytes arrive already addressed to a
-channel, past everything, so a keyboard set to channel 1 plays part 1 — and if the browser panel is
-also connected, its **PART** chips retarget the jack to match.
+#### MIDI in — `usb2`, the TRS jack, or both
 
-**`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. If you
-fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
+- **`usb2`** — move the cable there and plug in a **USB-MIDI keyboard**, or connect a computer or
+  Android tablet and drive it from [the panel](#3--control-it--the-panel-or-anything-that-speaks-midi-cc).
+- **The TRS MIDI-In jack** — a keyboard straight into the module, **no host of any kind**. It is
+  **TRS Type A** (a Type B cable will be silent), so a DIN-MIDI keyboard or a sequencer reaches it
+  through the adapter most of them ship with.
 
-> **`usb2` is a second output, not just a monitor.** The module sends its sound back up the same
-> cable it takes MIDI on, as a 4-channel 48 kHz UAC2 input the host sees as `Tiliqua XLS32` — the
-> synth's own samples, before anything analogue, with nothing to install. Record from it or the
-> jacks; both are production quality. See [Record a demo video](#record-a-demo-video).
+The two are merged in gateware a whole message at a time, so a keyboard on the jack and the panel
+on `usb2` can play at once without corrupting each other.
+
+**Which part the TRS jack plays.** Its bytes arrive already addressed to a channel — past every
+piece of software involved — so the keyboard's own transmit channel picks the part: channel 1 plays
+part 1, up to channel 4 for part 4. Channels above that wrap back around rather than going quiet
+(channel 5 is part 1 again), so a keyboard left on channel 10 plays part 2, not nothing.
+Clicking **PART** on the panel takes the jack over and points
+it at that part instead; the panel's footer says which of the two is in force, and it hands the
+jack back the next time it connects.
+
+#### Audio out — the jacks, `usb2`, or both
+
+- **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. Eurorack
+  line level, so go through a mixer, an interface or an output module.
+- **`usb2` is a second output, not just a monitor.** The module sends its sound back up the same
+  cable it takes MIDI on, as a 4-channel 48 kHz UAC2 input the host sees as `Tiliqua XLS32` — the
+  synth's own samples, before anything analogue, with nothing to install. See [Record a demo
+  video](#record-a-demo-video).
+
+Both are production quality; record from whichever suits the rest of your signal chain.
+
+If you fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the
+pitch.
 
 ### 3 · Control it — the panel, or anything that speaks MIDI CC
 
@@ -378,9 +395,10 @@ What you should see and hear when it comes up:
   [`demo_video.sh`](scripts/demo_video.sh) do it for you. See
   [Record a demo video](#record-a-demo-video).
 - **MIDI** — **both inputs play on hardware**: USB-MIDI over `usb2`, and the **TRS MIDI-In jack**,
-  arbitrated together in gateware so you can use either or both. The web UI's PART selection is
-  honoured for a TRS keyboard too (CC103, sniffed in gateware). The jack is **TRS Type A**; a
-  Type B cable will be silent.
+  arbitrated together in gateware so you can use either or both. The jack is **TRS Type A**; a
+  Type B cable will be silent. By default a TRS keyboard's own channel picks the part; clicking
+  **PART** in the web UI takes the jack over instead (CC103, sniffed in gateware), and the UI hands
+  it back on every fresh connection, so the override never outlives the session that set it.
 
 > **If it does not work.** In rough order of how often each one bites:
 >
@@ -993,7 +1011,10 @@ engine does, and it is undefined in the MIDI spec: **CC103** picks which part a 
 **TRS jack** plays. It exists
 because TRS is the one input that arrives already addressed to a channel — the browser and the host
 bridge both re-address their keys before sending, but a hardware keyboard's bytes reach the FPGA
-untouched, so the part chips are honoured in gateware (`midi_arb.py`) or not at all. CC82's shorter
+untouched, so the part chips are honoured in gateware (`midi_arb.py`) or not at all. Values 0–15
+select a channel and anything above releases the jack back to its own; the panel claims it when you
+click **PART** and releases it on every fresh link, because the override is a gateware register
+with nothing to read it back from and no way to expire. CC82's shorter
 ceiling on Tiliqua is M29's: the echo line moved from PSRAM into block RAM to make room for the
 screen.
 
