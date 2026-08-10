@@ -129,19 +129,34 @@ those three; git history keeps the original.)*
   came back at 439.9 / 554.2 / 659.2 / 830.6 Hz, inside 0.05 % of nominal, peaking at 30,000 of
   32,768 without clipping, and ten interleaved flashes scored it level with the blob it replaces
   (13 of 15 notes against 12). Both boards now ship the engine the repo documents.
-- **`host/analyze.py --serial` grades every bitstream the same.** It opens the port at 115200 and
-  reads 8-bit mono against a 4 kHz assumption; the transport is 2 Mbaud, 16-bit, stereo-interleaved
-  (`host/transport/uart.py`, `SR = 32000`). So it returns period 24 and peak-to-peak 128
-  *identically* on the 2026-07-13 blob and the 2026-08-10 rebuild — it discriminates nothing, and
-  its verdict on both is `CHECK`. It could not even reach that verdict since `abf12b9`
-  (2026-08-01), which swapped the `glob` port-finder for `transport.uart.find_port` and dropped
-  `time` out of the import beside `glob`, leaving a certain `NameError`: for 112 commits
-  `boards/basys3/scripts/verify.sh` crashed before it measured anything. The import is fixed and
-  `verify.sh` now calls `host/play.py`, which was right all along. What is left is the serial path
-  itself — documented as stale rather than repaired, and the honest options are to port it onto
-  `transport/uart.py` or to delete it. The stdin mode is unaffected and is what README §3's
-  iverilog run pipes into. This is item 1's lesson from the other end: a check that passes nothing
-  gets read by nobody, and a broken verifier is indistinguishable from an absent one.
+- ~~**`host/analyze.py --serial` grades every bitstream the same.**~~ **The whole file was deleted
+  2026-08-10** — the flag was the half of it that had been noticed. What `--serial` did, for the
+  record: it opened the port at 115200 and read 8-bit mono against a 4 kHz assumption, while the
+  transport had moved to 2 Mbaud, 16-bit, stereo-interleaved (`host/transport/uart.py`,
+  `SR = 32000`). It returned period 24 and peak-to-peak 128 *identically* on the 2026-07-13 blob
+  and the 2026-08-10 rebuild — discriminating nothing, with a verdict of `CHECK` on both. It could
+  not even reach that verdict after `abf12b9` (2026-08-01), which swapped the `glob` port-finder
+  for `transport.uart.find_port` and dropped `time` out of the import beside `glob`, leaving a
+  certain `NameError`: for 112 commits `boards/basys3/scripts/verify.sh` crashed before it measured
+  anything. That import was fixed and `verify.sh` moved to `host/play.py`, which was right all
+  along.
+
+  **The stdin mode was assumed healthy and was not.** Removing `--serial` meant running the one
+  path left — README §3's `iverilog … | grep '^S ' | analyze.py` — and it returns `CHECK` too,
+  at HEAD and before the edit alike. Three assumptions in it had all expired: it masks each sample
+  with `& 0xFF` and thresholds at 128, but `core/sim/tb.v:41` has emitted 16-bit unsigned samples
+  (midpoint 32768) for a long time; it expects a period of 9.1 samples from 4 kHz when the engine
+  runs at 32 kHz; and it looks for silence to prove the envelope falls, when tb.v sends four
+  note-ons and no note-off, so there is no silence to find. It reported `period 3.0, envelope
+  min=112, CHECK (freq BAD, envelope BAD)` — the same verdict on every simulation, for the same
+  reason `--serial` gave the same verdict on every bitstream. Porting it was pointless:
+  `host/analyze_fft.py` already reads the same stdin at full precision, already uses `synth.SR`,
+  and its `CHORD` is already tb.v's four notes. On the same capture it prints `PASS: 4/4 chord
+  tones` in 0.13 s. README §3 now pipes there, and `analyze.py` is gone.
+
+  This is item 1's lesson from the other end: a check that passes nothing gets read by nobody, and
+  a broken verifier is indistinguishable from an absent one. The sharper half is that the fix for
+  one broken mode is worth nothing until the modes you left alone are run once.
 - ~~**`host/play.py` is not repeatable on wide intervals, and the noise reads as a regression.**~~
   **Done — fixed and verified 2026-08-10.** The fault was in the capture, not the analysis.
   `read_bytes` lost bytes: **6 of 8 captures lost frame phase** mid-buffer (marker score

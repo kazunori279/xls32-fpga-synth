@@ -43,9 +43,11 @@ addition rather than a rewrite.
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
   suite, the web UI, the presetgen hardware tools, and since 2026-08-10 `play.py` and
   `record_wav.py`, whose own capture loop was dropping bytes — it paused after flushing,
-  which is enough to make the link discard a partial frame), `analyze.py`
-  (envelope/pitch checks on a simulation's stdout; its `--serial` mode is stale, see
-  [TODO](TODO.md)), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
+  which is enough to make the link discard a partial frame),
+  `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak
+  check — reads a simulation on stdin or a board with `--serial`, and since 2026-08-10 it is what
+  README §3's iverilog run pipes into; the `analyze.py` that used to sit here graded every
+  bitstream and every simulation the same and was deleted), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over

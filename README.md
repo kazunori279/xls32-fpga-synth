@@ -752,9 +752,11 @@ to grade a misclocked board — which is the only automated defence against the 
 
 ### Simulate · record · spectrograms
 
-Simulate the bare engine with no board at all:
+Simulate the bare engine with no board at all. `core/sim/tb.v` sends one four-note chord
+(A4 · C#5 · E5 · G#5) and prints 3000 samples; `analyze_fft.py` transforms them and checks that
+all four pitches came out where they were asked for:
 ```bash
-iverilog -g2012 -o /tmp/s.vvp core/sim/tb.v build/engine.v && vvp /tmp/s.vvp | grep '^S ' | uv run host/analyze.py
+iverilog -g2012 -o /tmp/s.vvp core/sim/tb.v build/engine.v && vvp /tmp/s.vvp | grep '^S ' | uv run host/analyze_fft.py
 ```
 
 Record from a connected board (`$XLS32_BOARD` picks the transport) and listen:
