@@ -113,13 +113,13 @@ region, and so the cheapest to rebuild from the SDK if it is ever wanted back.
 **The shell costs almost nothing.** The vendor's `dsp-mirror` reference core — PLL, I²C,
 eurorack-pmod codec interface, no video, no SoC — places at:
 
-| resource | used | on the part | share |
-|---|---:|---:|---:|
-| TRELLIS_COMB | 1,768 | 24,288 | 7% |
-| TRELLIS_FF | 731 | 24,288 | 3% |
-| DP16KD | 0 | 56 | 0% |
-| MULT18X18D | 1 | 28 | 4% |
-| EHXPLLL | 1 | 2 | 50% |
+| resource | the shell uses |
+|---|---|
+| TRELLIS_COMB | 1,768 of 24,288 (7%) |
+| TRELLIS_FF | 731 of 24,288 (3%) |
+| DP16KD | 0 of 56 (0%) |
+| MULT18X18D | 1 of 28 (4%) |
+| EHXPLLL | 1 of 2 (50%) |
 
 The one row that is not almost nothing is the PLL, and it is not fabric: XLS32 needs the second one
 anyway, for video. So XLS32 gets essentially all 56 BRAM tiles and 27 of 28 multipliers to spend, and
