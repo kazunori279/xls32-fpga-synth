@@ -266,10 +266,16 @@ def head_commit():
     h = git("rev-parse", "--short", "HEAD") or "unknown"
     expected = {STATE.relative_to(ROOT).as_posix()}
     expected |= {spec["artefact"] for spec in ARTEFACTS.values()}
-    # ' M path' / '?? path', and 'R  old -> new' for a rename; the path is what follows the flags.
-    dirt = [ln[3:].split(" -> ")[-1].strip('"')
-            for ln in (git("status", "--porcelain") or "").splitlines() if ln]
-    return h + ("-" if set(dirt) - expected else "")
+    # Lines are 'XY path', or 'R  old -> new' for a rename. Not sliced at a fixed offset: `git()`
+    # strips the whole output, which eats the leading space of the *first* line only, so ln[3:]
+    # silently ate a character of one path and nothing else -- the kind of off-by-one that reads
+    # as a mystery rather than a bug. Split on the flags instead.
+    dirt = set()
+    for ln in (git("status", "--porcelain") or "").splitlines():
+        parts = ln.strip().split(maxsplit=1)
+        if len(parts) == 2:
+            dirt.add(parts[1].split(" -> ")[-1].strip('"'))
+    return h + ("-" if dirt - expected else "")
 
 
 def _at(commit, src):
