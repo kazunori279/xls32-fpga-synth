@@ -20,6 +20,9 @@
 #   - `USBDevice.add_endpoint()` (luna/gateware/usb/usb2/device.py:161) only appends to a list.
 #     Amaranth resolves `m.submodules.usb` on read, so `elaborate()` can call `super().elaborate()`
 #     and add the bulk endpoint to the returned module before the fragment is ever built.
+#   - That same list is how M32 reaches the parent's capture endpoint to re-drive its packet size.
+#     Within one module and one domain a later `m.d.comb +=` wins outright, so the override does
+#     not have to be threaded through the parent -- see `pace_capture_endpoint` below.
 #
 # EP 1 OUT / 1 IN / 2 IN and interfaces 0/1/2 belong to the audio function; the MIDI function
 # takes EP 3 OUT and interfaces 3/4, behind its own Interface Association Descriptor.
@@ -31,7 +34,7 @@ from amaranth import *
 from amaranth.lib import stream, wiring
 from amaranth.lib.wiring import In, Out
 
-from luna.usb2 import USBStreamOutEndpoint
+from luna.usb2 import USBIsochronousStreamInEndpoint, USBStreamOutEndpoint
 from usb_protocol.emitters import DeviceDescriptorCollection
 from usb_protocol.emitters.descriptors import midi1, standard, uac2
 from usb_protocol.types import USBDirection
@@ -252,8 +255,97 @@ class XlsUsbInterface(USB2AudioInterface):
         midiOutEndpointClass.add_associated_jack(self.IN_JACK)
         c.add_subordinate_descriptor(midiOutEndpointClass)
 
+    # EP 2 IN is the parent's capture endpoint. Its packet size is one frame of every channel,
+    # and USB Audio sends 32-bit samples even where the descriptor says 24
+    # (usb_audio/channels_to_usb_stream.py:102), so a frame is four bytes per channel.
+    CAPTURE_ENDPOINT = 2
+    BYTES_PER_SAMPLE = 4
+    # How far the buffer may sit from its target before the packet size moves. See
+    # `pace_capture_endpoint` for why this is a dead zone and not a Schmitt trigger.
+    PACE_BAND = 2
+
+    def capture_endpoint(self, m):
+        """ The parent's EP 2 IN, fished back out of the device it was added to. """
+
+        for ep in m.submodules.usb._endpoints:
+            if (isinstance(ep, USBIsochronousStreamInEndpoint)
+                    and ep._endpoint_number == self.CAPTURE_ENDPOINT):
+                return ep
+        raise RuntimeError(
+            "EP 2 IN is not where USB2AudioInterface.elaborate() left it. The rate control in "
+            "pace_capture_endpoint() would silently do nothing, and USB captures would go back "
+            "to dropping a run of frames every ten seconds -- fix this lookup, do not delete it.")
+
+    def pace_capture_endpoint(self, m):
+        """
+        Drive the capture packet size from the device's own buffer level.
+
+        The SDK computes that size from a counter only the *playback* stream updates
+        (usb_audio/__init__.py:316-329), so with nothing playing it stays at its reset value of
+        `24 * nr_channels`. At 48 kHz / 4 channels that is 96 bytes = 6 frames per microframe =
+        exactly 48,000 frames/s -- the host's nominal rate, which is not the rate this board
+        runs at. Measured over two takes the audio clock is 110-123 ppm fast, so the codec makes
+        about 5.5 frames/s more than the host collects. The 48 frames of elasticity between them
+        (`usb_tee` 16 + `adc_fifo` 16 + `out_fifo` 16) soak that up for roughly ten seconds and
+        then the tee drops a run of ~60 frames: 0.011 % of a capture, a step in every sustained
+        tone, once per 10.4 s. Enlarging any of those FIFOs buys more seconds and fixes nothing,
+        because the rates still differ.
+
+        A UAC2 asynchronous IN endpoint states its rate by varying how many samples it sends;
+        the absence of a feedback endpoint on capture is the design, not an omission. So: one
+        frame under nominal while the buffer is draining, one over while it is filling, nominal
+        in between. The average lands on whatever the board actually produces. There is no ppm
+        constant here and nothing to recalibrate if the crystal is ever replaced.
+
+        Two things make the crude version of this safe.
+
+        Aim at the middle. `bytes_in_frame` is latched once per microframe at SOF
+        (luna .../endpoints/isochronous_stream_in.py:102), and over a microframe the level
+        sawtooths by one packet's worth of frames as the host drains and the codec refills.
+        Where in that sawtooth SOF falls depends on where the host schedules its IN token, which
+        is the host's business and not observable from in here. Targeting the centre of the FIFO
+        makes the answer irrelevant: a full swing either side of the midpoint still fits.
+
+        Bias to overrun. The endpoint may only ask for the extra frame once the level is above
+        `target + PACE_BAND`, which cannot happen unless `out_fifo` downstream is already full,
+        so the extra frame is always in hand. That matters because underrunning is the worse
+        failure: `ChannelsToUSBStream`'s FILL state pads short frames with zeroes, and a
+        zero-padded frame is exactly what `rec_audio.py` counts as a dropout -- the fix would
+        report itself as the bug.
+
+        The cost is latency. Holding the midpoint keeps ~24 frames buffered, so the USB copy
+        lags the jacks by about half a millisecond. The jacks are what anyone plays through.
+        """
+
+        nominal = self.fs // 8000                       # frames per 125 us microframe
+        frame_bytes = self.BYTES_PER_SAMPLE * self.nr_channels
+        # `AudioToChannels` is built with this depth in __init__ (usb_audio/__init__.py:420).
+        target = (16 * (self.fs // 48000)) // 2
+        assert (nominal + 1) * frame_bytes <= self.max_packet_size, \
+            "one frame over nominal must still fit a single packet"
+
+        # A dead zone rather than hysteresis: the two thresholds are distinct, so the decision
+        # cannot chatter between the outer states, and chatter across one threshold costs a
+        # single frame of correction that the next microframe undoes. A Schmitt trigger would
+        # only earn its keep if one wrong decision were expensive, and here it is one frame.
+        pace = Signal(range(0, 3073), init=nominal * frame_bytes)
+        level = self.dbg.adc_fifo_level
+        with m.If(level < target - self.PACE_BAND):
+            m.d.usb += pace.eq((nominal - 1) * frame_bytes)
+        with m.Elif(level > target + self.PACE_BAND):
+            m.d.usb += pace.eq((nominal + 1) * frame_bytes)
+        with m.Else():
+            m.d.usb += pace.eq(nominal * frame_bytes)
+
+        # Overrides the parent's `ep2_in.bytes_in_frame.eq(audio_in_frame_bytes)`: same module,
+        # same domain, later statement. `pace` is registered, so nothing long-combinational
+        # lands on a signal the endpoint samples at SOF.
+        m.d.comb += self.capture_endpoint(m).bytes_in_frame.eq(pace)
+
     def elaborate(self, platform):
         m = super().elaborate(platform)
+
+        self.pace_capture_endpoint(m)
 
         ep3_out = USBStreamOutEndpoint(
             endpoint_number=self.MIDI_ENDPOINT,
