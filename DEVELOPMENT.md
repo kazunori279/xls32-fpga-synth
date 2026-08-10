@@ -1694,6 +1694,17 @@ a 3-byte initial offset and a 1-byte slip partway through, fed to both implement
 identical 1024-byte chunks. **47,996 bytes out of each, byte-identical, no divergence.** That is
 a stronger statement than any capture, and it took less time.
 
+> **It was not a stronger statement, and this is the correction (2026-08-10).** Two ports agreeing
+> is not two ports working: the test had no oracle, only each other. Both sides scored `self.buf`
+> for the periodic re-lock, and `feed` emits every whole frame it holds, so `buf` is 0–3 bytes at
+> the check and the guard asking for 4100 of them could never pass at a 1024-byte chunk. The
+> re-lock was dead in both languages, the 1-byte slip was never healed by either, and the two
+> produced byte-identical *broken* output — which is exactly what the test was built to accept. It
+> also never reached the repo, so nothing re-ran it. Replaced by `webui/check_aligner.py` and
+> `webui/aligner_check.html`, which use a real 49 kB board capture with a real odd (+3) shift in it
+> and assert the *outcome* as well as the agreement: the phase must be healed, at five chunk sizes,
+> or the check fails. See `docs/TODO.md` item 2.
+
 ### Two traps worth writing down
 
 **The identity string has to be the whole thing.** `TILIQUA_MATCH` is `'tiliqua xls32'`, the full

@@ -103,18 +103,29 @@ class TiliquaTransport {
 // ---------- Basys 3: Web Serial ----------
 
 // Align the continuous stereo stream to its 4-byte frame boundary and hand back whole frames.
-// A verbatim port of `Aligner` in host/transport/uart.py:241 -- same evidence, same thresholds,
-// same re-lock interval. The board stamps a 1-bit channel marker in each sample's LSB (L=0, R=1),
-// so the offset whose de-interleaved samples read 0,1,0,1,... fixes byte alignment and L/R order
-// with one piece of evidence. Re-locking is not belt-and-braces: the frame phase demonstrably
-// shifts mid-stream on this link (the M28a rail bug), and a stream locked once and never
-// re-checked decodes every byte after the shift as uniform full-scale noise.
+// A port of `Aligner` in host/transport/uart.py -- same evidence, same thresholds, same re-lock
+// interval. The board stamps a 1-bit channel marker in each sample's LSB (L=0, R=1), so the offset
+// whose de-interleaved samples read 0,1,0,1,... fixes byte alignment and L/R order with one piece
+// of evidence. Re-locking is not belt-and-braces: the frame phase demonstrably shifts mid-stream
+// on this link (the M28a rail bug), and a stream locked once and never re-checked decodes every
+// byte after the shift as uniform full-scale noise.
+//
+// "A port" used to be a claim and nothing more. `webui/check_aligner.py` and `aligner_check.html`
+// now run both sides over the same capture of real board bytes -- one with a genuine mid-stream
+// phase shift in it -- and compare the SHA-256 of the aligned output, so the two agree byte for
+// byte or the check fails.
 class Aligner {
-  constructor() { this.buf = new Uint8Array(0); this.locked = false; this.since = 0; }
+  constructor() {
+    this.buf = new Uint8Array(0);
+    this.locked = false;
+    this.since = 0;
+    this.tail = new Uint8Array(0);                  // rolling copy of what went out, to re-score
+    this.skip = 0;                                  // bytes still owed to a phase step
+  }
 
-  _score(off) {
+  _score(off, b) {
     // fraction of samples whose LSB marker mismatches the expected L,R,L,R (0,1,0,1) pattern
-    const b = this.buf, end = Math.min(off + 4000, b.length - 1);
+    const end = Math.min(off + 4000, b.length - 1);
     let n = 0, bad = 0;
     for (let i = off, k = 0; i < end; i += 2, k++) {
       if (((b[i] | (b[i + 1] << 8)) & 1) !== (k & 1)) bad++;
@@ -123,34 +134,60 @@ class Aligner {
     return n < 4 ? 1e12 : bad / n;
   }
 
-  _best() {
-    let best = 0, bs = this._score(0);
-    for (let o = 1; o < 4; o++) { const s = this._score(o); if (s < bs) { bs = s; best = o; } }
+  _best(b) {                                        // first minimum wins, as Python's min() does
+    let best = 0, bs = this._score(0, b);
+    for (let o = 1; o < 4; o++) { const s = this._score(o, b); if (s < bs) { bs = s; best = o; } }
     return best;
   }
 
+  // The newest 2 kB of the stream, frame-aligned at index 0, for the re-lock to score. `tail` is
+  // what has gone out and `buf` what has not; both begin on a frame boundary and they are
+  // contiguous, so joined they are one view of the stream at the phase in force. Taking the END of
+  // it is what makes the heal quick -- a window anchored at the front is still mostly pre-shift
+  // bytes and votes to stay where it is.
+  _window() {
+    const w = new Uint8Array(this.tail.length + this.buf.length);
+    w.set(this.tail); w.set(this.buf, this.tail.length);
+    return w.length > 2048 ? w.subarray((w.length - 2048) & ~3) : w;
+  }
+
   feed(data) {
+    if (this.skip) {                                // a step the last check could not fully take
+      const k = Math.min(this.skip, data.length);
+      data = data.subarray(k); this.skip -= k;
+    }
     const merged = new Uint8Array(this.buf.length + data.length);
     merged.set(this.buf); merged.set(data, this.buf.length);
     this.buf = merged;
     if (!this.locked) {
       if (this.buf.length < 4096) return null;      // too little to score four phases honestly
-      const best = this._best();
+      const best = this._best(this.buf);
       if (best) this.buf = this.buf.subarray(best);
       this.locked = true;
     }
     this.since += data.length;
-    if (this.since >= 8192 && this.buf.length >= 4100) {
-      this.since = 0;
-      // Only move on strong evidence. A marginal win is noise, and stepping the phase costs a
-      // frame every time; halving the score is the same bar the Python uses.
-      const best = this._best();
-      if (best !== 0 && this._score(best) < this._score(0) * 0.5) this.buf = this.buf.subarray(best);
+    if (this.since >= 4096) {                       // periodic re-lock (heals a byte drop)
+      const w = this._window();
+      if (w.length >= 512) {        // 128 samples; below that the four scores are not separated
+        this.since = 0;
+        // Only move on strong evidence. A window straddling the shift scores badly at every
+        // offset, and stepping on that would cost a frame and land nowhere; halving the score is
+        // a bar only a window wholly past the shift clears.
+        const s0 = this._score(0, w), best = this._best(w);
+        if (best !== 0 && this._score(best, w) < s0 * 0.5) {
+          const k = Math.min(best, this.buf.length);
+          this.buf = this.buf.subarray(k); this.skip = best - k;
+          this.tail = new Uint8Array(0);            // scored, and stale: next check wants post-step
+        }
+      }
     }
     const n = this.buf.length & ~3;                 // whole 4-byte stereo frames only
     if (n < 4) return null;
     const out = this.buf.slice(0, n);
     this.buf = this.buf.subarray(n);
+    const t = new Uint8Array(this.tail.length + out.length);
+    t.set(this.tail); t.set(out, this.tail.length);
+    this.tail = t.length > 2048 ? t.slice(t.length - 2048) : t;
     return out;
   }
 }

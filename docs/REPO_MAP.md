@@ -62,6 +62,11 @@ addition rather than a rewrite.
   carries tone edits over by song name). The matched preset banks live here as
   `presets_*.json`. See the [Web UI](../DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](../DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
+  `check_aligner.py` + `aligner_check.html` are the one thing here with a pass/fail: they run the
+  Python and JS frame aligners over the same capture of real board bytes — `testdata/`, and it has
+  a genuine mid-stream phase shift in it — and compare the SHA-256 of the aligned output, so
+  "the JS is a port of the Python" is checkable rather than asserted. `cd webui &&
+  python3 -m http.server 8123`, then open `/aligner_check.html`.
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
   model of the engine (`engine.py`), a multi-resolution spectrogram loss (`loss.py`), the
   CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board

@@ -1,0 +1,52 @@
+{
+  "fixture": {
+    "name": "basys3_phase_shift.bin",
+    "bytes": 49152,
+    "sha256": "c78eb2fe69ddf7668fa54a59b168ddb541785d1346b46d0ac6e80d8e2b7918f8",
+    "shift_at": 16384,
+    "phase_before": 2,
+    "phase_after": 1
+  },
+  "runs": [
+    {
+      "chunk": 510,
+      "bytes_out": 49144,
+      "dropped": 5,
+      "heal_at": 17408,
+      "bad_windows": 3,
+      "sha256": "709e49fc5ad3be3dbd737ae803b3277484a037d7776a2c73a728d0afdaa7a530"
+    },
+    {
+      "chunk": 1020,
+      "bytes_out": 49144,
+      "dropped": 5,
+      "heal_at": 18432,
+      "bad_windows": 5,
+      "sha256": "84711210afdf0adb75ad19eb72c3f1c7861c8216afd5aa15f4ae9ae3f1da0278"
+    },
+    {
+      "chunk": 2048,
+      "bytes_out": 49144,
+      "dropped": 5,
+      "heal_at": 16384,
+      "bad_windows": 1,
+      "sha256": "eae422d5f7a3fa865e82ad3f42a15e81de2d21437619e5fbfa02eb94450e996a"
+    },
+    {
+      "chunk": 4096,
+      "bytes_out": 49144,
+      "dropped": 5,
+      "heal_at": 16384,
+      "bad_windows": 1,
+      "sha256": "eae422d5f7a3fa865e82ad3f42a15e81de2d21437619e5fbfa02eb94450e996a"
+    },
+    {
+      "chunk": 8192,
+      "bytes_out": 49144,
+      "dropped": 5,
+      "heal_at": 16384,
+      "bad_windows": 1,
+      "sha256": "eae422d5f7a3fa865e82ad3f42a15e81de2d21437619e5fbfa02eb94450e996a"
+    }
+  ]
+}

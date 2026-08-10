@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Aligner check — JS vs Python</title>
+<!--
+  The browser half of the Aligner check. `static/transport.js` claims to be a port of `Aligner` in
+  `host/transport/uart.py`; this is what makes the claim testable. Both sides run the same capture
+  of real Basys 3 bytes -- one with a genuine mid-stream frame-phase shift in it -- through their
+  own Aligner and hash the aligned output. Equal SHA-256 or the check fails; there is no per-field
+  agreement to maintain and drift cannot hide in a derived measure.
+
+  Run it:  cd webui && python3 -m http.server 8123
+           open http://localhost:8123/aligner_check.html
+  Record the reference first with `python3 webui/check_aligner.py --record`.
+
+  localhost is a secure context, which `crypto.subtle` needs. Nothing here touches Web Serial or
+  the board -- that part cannot be automated, because choosing a port is a user gesture behind a
+  Chrome permission prompt, and this check does not pretend otherwise. What it does cover is the
+  code that runs on every byte after the port is open.
+-->
+<style>
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         margin: 2rem; max-width: 60rem }
+  h1 { font-size: 1.1rem } table { border-collapse: collapse; margin: 1rem 0 }
+  th, td { padding: .25rem .8rem .25rem 0; text-align: left; border-bottom: 1px solid #ddd }
+  .pass { color: #0a0 } .fail { color: #c00; font-weight: bold }
+  #verdict { font-size: 1.2rem; margin: 1rem 0 } pre { color: #666; white-space: pre-wrap }
+</style>
+<h1>Aligner check — <code>webui/static/transport.js</code>
+  vs <code>host/transport/uart.py</code></h1>
+<div id="verdict">running…</div>
+<div id="fixture"></div>
+<table id="rows"><thead><tr>
+  <th>chunk</th><th>bytes out</th><th>dropped</th><th>healed after</th><th>sha256</th><th></th>
+</tr></thead><tbody></tbody></table>
+<pre id="notes"></pre>
+
+<script src="static/transport.js"></script>
+<script>
+// `Aligner` reached through the export and not by name: transport.js is a classic script, so its
+// `class Aligner` is already a binding in this same global scope and re-declaring it is an error.
+
+// Same measure as `_marker_score` in host/transport/uart.py, on a window of the aligned output.
+function markerScore(b, off, limit) {
+  const end = Math.min(off + limit, b.length - 1), n = (end - off) >> 1;
+  if (n < 4) return 1.0;
+  let bad = 0;
+  for (let k = 0; k < n; k++) if (((b[off + 2*k] | (b[off + 2*k + 1] << 8)) & 1) !== (k & 1)) bad++;
+  return bad / n;
+}
+
+async function sha256(bytes) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...d].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+// Mirror of `run()` in check_aligner.py, field for field.
+async function run(raw, chunk) {
+  const a = new window.XLS32.Aligner(), parts = [];
+  let total = 0;
+  for (let i = 0; i < raw.length; i += chunk) {
+    const out = a.feed(raw.subarray(i, Math.min(i + chunk, raw.length)));
+    if (out) { parts.push(out); total += out.length; }
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  let heal = 0, nbad = 0;
+  for (let i = 0; i < out.length - 512; i += 512) {
+    if (markerScore(out, i, 512) > 0.05) { heal = i + 512; nbad++; }
+  }
+  return { chunk, bytes_out: total, dropped: raw.length - total - a.buf.length,
+           heal_at: heal, bad_windows: nbad, sha256: await sha256(out) };
+}
+
+(async () => {
+  const verdict = document.getElementById('verdict');
+  try {
+    const [raw, want] = await Promise.all([
+      fetch('testdata/basys3_phase_shift.bin').then((r) => r.arrayBuffer())
+        .then((b) => new Uint8Array(b)),
+      fetch('testdata/expected.json').then((r) => r.json()),
+    ]);
+    const fx = want.fixture;
+    if (await sha256(raw) !== fx.sha256) throw new Error('fixture is not the recorded one');
+    document.getElementById('fixture').textContent =
+      `${fx.name}: ${fx.bytes} B, phase ${fx.phase_before} → ${fx.phase_after}`
+      + ` at byte ${fx.shift_at}`;
+
+    const tbody = document.querySelector('#rows tbody');
+    let ok = true;
+    const runs = [];
+    for (const w of want.runs) {
+      const r = await run(raw, w.chunk);
+      runs.push(r);
+      const same = Object.keys(w).every((k) => r[k] === w[k]);
+      ok = ok && same;
+      const late = r.heal_at ? r.heal_at - fx.shift_at : 0;
+      const td = (t) => { const e = document.createElement('td'); e.textContent = t; return e; };
+      const tr = document.createElement('tr');
+      tr.append(td(r.chunk), td(r.bytes_out), td(r.dropped),
+                td(`${late} B (${Math.round(late / 128)} ms)`), td(r.sha256.slice(0, 16)));
+      const mark = td(same ? 'same as Python' : `DIFFERS — Python said ${JSON.stringify(w)}`);
+      mark.className = same ? 'pass' : 'fail';
+      tr.append(mark);
+      tbody.append(tr);
+    }
+    const fired = runs.some((r) => r.dropped >= 4);
+    if (!fired) { ok = false; document.getElementById('notes').textContent =
+      'the re-lock never fired at any chunk size — it is dead code again'; }
+    verdict.textContent = ok ? 'PASS — byte-for-byte identical to the Python reference'
+                             : 'FAIL — see the rows below';
+    verdict.className = ok ? 'pass' : 'fail';
+    window.RESULT = { ok, runs };
+  } catch (e) {
+    verdict.textContent = `FAIL — ${e.message}`;
+    verdict.className = 'fail';
+    window.RESULT = { ok: false, error: e.message };
+  }
+})();
+</script>

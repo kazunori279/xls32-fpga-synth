@@ -173,10 +173,10 @@ def marker_integrity(raw, win=8000):
     """Does the frame phase hold for the WHOLE capture, or only where frame_align looked?
 
     frame_align picks one byte offset from the first 8000 bytes and keeps it for the entire buffer.
-    Its continuous sibling `Aligner` re-locks every 8192 bytes, with the comment "a mid-stream byte
-    drop self-heals within ~0.1 s" -- so the failure mode is known to exist, and the bracketed path
-    has no defence against it. A byte lost after the lock window shifts every following frame: the
-    "L" channel is then reassembled from (Lhi, Rlo) byte pairs, whose high halves are the *previous*
+    Its continuous sibling `Aligner` re-locks every 4096 bytes and heals a real drop within 0-2 kB
+    -- so the failure mode is known to exist, and the bracketed path has no defence against it. A
+    byte lost after the lock window shifts every following frame: the "L" channel is then
+    reassembled from (Lhi, Rlo) byte pairs, whose high halves are the *previous*
     sample's low byte -- uniform noise at full scale. That decodes as peak ~1.0 with a large
     fraction of half-scale sample-to-sample jumps, which is exactly what validate_hw.py's RAIL test
     looks for and exactly what a diverging filter would also look like. Indistinguishable from the
@@ -279,17 +279,49 @@ class Aligner:
         self.buf = bytearray()
         self.locked = False
         self.since = 0
+        self.tail = bytearray()       # rolling copy of what went out, to re-score against
+        self.skip = 0                 # bytes still owed to a phase step
 
-    def _score(self, off):
+    def _score(self, off, b=None):
         # fraction of samples whose LSB marker mismatches the expected L,R,L,R (0,1,0,1) pattern
-        b = self.buf; end = min(off + 4000, len(b) - 1)
+        b = self.buf if b is None else b
+        end = min(off + 4000, len(b) - 1)
         vals = [b[i] | (b[i + 1] << 8) for i in range(off, end, 2)]
         if len(vals) < 4:
             return 1e12
         bad = sum(1 for k, v in enumerate(vals) if (v & 1) != (k & 1))
         return bad / len(vals)
 
+    def _window(self):
+        """The newest 2 kB of the stream, frame-aligned at index 0, for the re-lock to score.
+
+        `tail` is what has gone out and `buf` what has not; both begin on a frame boundary and they
+        are contiguous, so joined they are one view of the stream at the phase in force. Taking the
+        **end** of it is what makes the heal quick: a window anchored at the front is still mostly
+        pre-shift bytes and votes to stay where it is."""
+        w = self.tail + self.buf
+        return w[(len(w) - 2048) & ~3:] if len(w) > 2048 else w
+
     def feed(self, data: bytes) -> bytes:
+        """One chunk in, whole aligned frames out.
+
+        The re-lock scores `_window()`, mostly `self.tail` -- the bytes most recently *emitted* --
+        and not the front of `self.buf`, which it used to and which is the reason it had never once
+        fired outside a test. `feed` emits every whole frame it holds, so `buf` is 0-3 bytes when
+        the check runs, and the guard asking for 4100 of them could only pass if a single chunk
+        carried that many. It never does: measured on this board, `os.read` returns 510-1020 bytes
+        and Web Serial's reader is no different. Fed the same 49 kB capture with a real +3-byte
+        shift a third of the way in, the old code re-locked at chunk 8192 and at no smaller size,
+        and left **3187 of the 6144 samples after the shift** jumping over threshold -- the M28a
+        rail bug, uncorrected, for as long as the stream ran. That is what the periodic re-check
+        exists to stop. It now heals in 0-2 kB, 0-16 ms, across chunk 510 to 8192.
+
+        Scoring what already went out costs no latency, which holding bytes back to score would. A
+        step is then owed rather than taken: `buf` rarely has `best` bytes to give, so the
+        remainder comes off the front of the next chunk."""
+        if self.skip:
+            k = min(self.skip, len(data))
+            data = data[k:]; self.skip -= k
         self.buf += data
         if not self.locked:
             if len(self.buf) < 4096:
@@ -299,15 +331,26 @@ class Aligner:
                 del self.buf[:best]
             self.locked = True
         self.since += len(data)
-        if self.since >= 8192 and len(self.buf) >= 4100:   # periodic re-lock (heals a byte drop)
-            self.since = 0
-            best = min(range(4), key=self._score)
-            if best != 0 and self._score(best) < self._score(0) * 0.5:
-                del self.buf[:best]
+        if self.since >= 4096:        # periodic re-lock (heals a byte drop)
+            w = self._window()
+            if len(w) >= 512:         # 128 samples; below that the four scores are not separated
+                self.since = 0
+                s0 = self._score(0, w)
+                best = min(range(4), key=lambda o: self._score(o, w))
+                # Only move on strong evidence. A window straddling the shift scores badly at every
+                # offset, and stepping on that would cost a frame and land nowhere; halving the
+                # score is a bar only a window that is wholly past the shift clears.
+                if best != 0 and self._score(best, w) < s0 * 0.5:
+                    k = min(best, len(self.buf))
+                    del self.buf[:k]; self.skip = best - k
+                    del self.tail[:]  # scored, and stale now: the next check wants post-step bytes
         n = len(self.buf) & ~3        # whole 4-byte stereo frames only
         if n < 4:
             return b""
         out = bytes(self.buf[:n]); del self.buf[:n]
+        self.tail += out
+        if len(self.tail) > 2048:     # only ever scored, and _window wants the newest 2 kB
+            del self.tail[:len(self.tail) - 2048]
         return out
 
 

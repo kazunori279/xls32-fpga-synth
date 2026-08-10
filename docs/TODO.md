@@ -59,10 +59,20 @@ those three; git history keeps the original.)*
    take. The acceptance was a listening judgement, not a measurement: there is still no check that
    says whether a declick landed on a dropout or on a knob, which only matters now for takes made
    before the counter fix.
-2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
-   measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
-   the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
-   re-check that exists because of the M28a rail bug has only ever been exercised in Python.
+2. ~~**The Aligner's mid-stream re-lock has not been demonstrated in the browser.**~~ **Done
+   2026-08-10, and it found the re-lock was dead.** Writing the demonstration is what exposed it:
+   the check scored `self.buf`, which `feed` empties of whole frames every call, so the guard
+   asking for 4100 bytes there could only pass if one chunk carried that many, and real chunks are
+   510–1020 bytes on both readers. So it had **never fired in either language** —
+   the claim that "the JS port is byte-equivalent under test" was also empty, since no test
+   compared them. Both are fixed: the check now scores the newest 2 kB of the stream (what has been
+   emitted plus what has not, which are contiguous) every 4096 bytes fed, and
+   `webui/check_aligner.py` + `webui/aligner_check.html` run Python and JS over the same 49 kB
+   capture — a real odd (+3) phase shift at byte 16384 — and compare the SHA-256 of the aligned
+   output at five chunk sizes. Browser verdict: PASS, identical at all five, healing 0–2 kB
+   (0–16 ms) after the shift; with the re-lock disabled the same page fails with 64 bad windows a
+   run, so the check has teeth. What it does **not** cover is live Web Serial: choosing a port is a
+   permission prompt behind a user gesture and cannot be driven headlessly.
 
 ## Known debt — recorded, not scheduled
 
