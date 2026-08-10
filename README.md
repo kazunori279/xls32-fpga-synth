@@ -29,9 +29,17 @@ which is why "what do I need?" has no one answer. **Flashing** happens once and 
 **Playing** needs no computer at all. **The panel** is optional, and is the only part that rules
 any device out. **No toolchain, no terminal, no clone of this repo** at any point.
 
-**The hardware, whichever route you take:** a **Tiliqua R5** in a powered Eurorack case, a **USB-C
+**The hardware, whichever route you take:** a
+**[Tiliqua R5](https://apf.audio/modules/current/tiliqua/)** in a powered Eurorack case, a **USB-C
 cable**, and something to listen on — `out0`/`out1` are Eurorack line level, hotter than a
 headphone jack expects, so go through a mixer, an audio interface or a Eurorack output module.
+
+**A display is optional.** The picture is feedback, not control: everything plays, and every
+parameter responds, with the DVI output unplugged. What you give up is the 32 tiles, one per voice.
+Any digital display takes the 720×720p60 signal; apf.audio's own
+**[Tiliqua Screen](https://apf.audio/modules/current/tiliquascreen/)** is the 4-inch round one made
+for it, and locks onto the signal at once rather than spending seconds re-locking each time you
+switch bitstreams.
 
 ### 1 · Flash it — once, from Chrome
 
@@ -53,8 +61,8 @@ Once slot 6 is written the module never asks again.
 Move the cable to **`usb2`** and plug in a **USB-MIDI keyboard**. That is the entire setup: 32
 voices across 4 parts, on MIDI channels 1–4.
 
-**`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. The screen
-shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
+**`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. If you
+fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
 
 > **The jacks are the output; the USB audio is a monitoring tap.** The module also sends its sound
 > back up the `usb2` cable, which is the easy way to record it — but that copy drops about a
