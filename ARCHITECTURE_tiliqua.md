@@ -55,13 +55,14 @@ forced by something in it.
 
 | File | lines | What's in it |
 |------|------:|--------------|
-| [`gateware/top.py`](boards/tiliqua/gateware/top.py) | 388 | The Amaranth top: clock domains, the codec, the MIDI chain, the effects, the video block, and the USB tee. The counterpart of `boards/basys3/rtl/top.v` |
-| [`gateware/xls_core.py`](boards/tiliqua/gateware/xls_core.py) | 248 | `Instance()`s the generated `xls_engine`, crosses two clock domains around it, plays the boot patch, and resamples 32 → 48 kHz |
-| [`gateware/usb_iface.py`](boards/tiliqua/gateware/usb_iface.py) | 272 | The SDK's UAC2 device subclassed to carry a USB-MIDI function as well — audio up and MIDI down on one cable |
+| [`gateware/top.py`](boards/tiliqua/gateware/top.py) | 417 | The Amaranth top: clock domains, the codec, the MIDI chain, the effects, the video block, and the USB tee. The counterpart of `boards/basys3/rtl/top.v` |
+| [`gateware/xls_core.py`](boards/tiliqua/gateware/xls_core.py) | 254 | `Instance()`s the generated `xls_engine`, crosses two clock domains around it, plays the boot patch, and resamples 32 → 48 kHz |
+| [`gateware/usb_iface.py`](boards/tiliqua/gateware/usb_iface.py) | 364 | The SDK's UAC2 device subclassed to carry a USB-MIDI function as well — audio up and MIDI down on one cable — and to pace its own capture endpoint |
+| [`gateware/dc_block.py`](boards/tiliqua/gateware/dc_block.py) | 93 | `TeeDcBlock`: two multiplier-free one-poles that keep the engine's pulse-duty DC out of the USB copy |
 | [`gateware/midi_filter.py`](boards/tiliqua/gateware/midi_filter.py) | 69 | `SysCommonFilter`: the one MIDI filter the SDK does not ship |
 | [`gateware/midi_arb.py`](boards/tiliqua/gateware/midi_arb.py) | 247 | `MidiArbiter` (round-robin, message-atomic) and `MidiPartSelect` (the CC103 sniffer) |
-| [`gateware/fx.py`](boards/tiliqua/gateware/fx.py) | 654 | Chorus, ping-pong echo and 8-comb Freeverb — a structural port of `top.v:159-400` |
-| [`gateware/fx_model.py`](boards/tiliqua/gateware/fx_model.py) | 124 | A bit-exact pure-Python transcription of the same arithmetic, for the unit tests |
+| [`gateware/fx.py`](boards/tiliqua/gateware/fx.py) | 683 | Chorus, ping-pong echo and 8-comb Freeverb — a structural port of `top.v:159-400` |
+| [`gateware/fx_model.py`](boards/tiliqua/gateware/fx_model.py) | 127 | A bit-exact pure-Python transcription of the same arithmetic, for the unit tests |
 | [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 361 | `VizStore` + `VoiceTiles`: 32 voices drawn as 32 tiles with no framebuffer |
 | [`gateware/sim_xls_core.cpp`](boards/tiliqua/gateware/sim_xls_core.cpp) | 236 | The Verilator harness — bit-bangs the TRS jack and dumps samples |
 | [`build.sh`](boards/tiliqua/build.sh) | — | codegen (in Docker) → Amaranth → yosys/nextpnr (yowasp) → `top.bit` |
@@ -73,6 +74,12 @@ Supporting, on the host side: [`check_pitch.py`](boards/tiliqua/check_pitch.py) 
 [`check_loop.py`](boards/tiliqua/check_loop.py) (hardware — isolates a broken transport from a
 broken synth before the full suite runs), and
 [`host/transport/usbaudio.py`](host/transport/usbaudio.py).
+
+Beside the gateware, four Amaranth-sim test benches run standalone (`python
+boards/tiliqua/gateware/test_fx.py`) and are the fastest way to see any of these blocks move:
+`test_fx.py` (232 lines, sample-for-sample against `fx_model.py`), `test_viz.py` (341),
+`test_midi_arb.py` (208) and `test_dcblock.py` (213). What they cannot cover is anything behind
+`sim.is_hw(platform)`, which is all of USB — see [B4](#b4-the-capture-tee--dc-and-pacing).
 
 **What is identical to Basys 3, and what is not.** The rows that say *identical* are why the
 port is a shell port and not a rewrite:
@@ -976,11 +983,12 @@ is computed in the cycle before it is sent, from the beam position and a 32-byte
   every frame — "the audio must not glitch" would become a bandwidth argument to be won. With no
   framebuffer there is no second PSRAM client and nothing to argue about. (M29 then went further and
   deleted PSRAM entirely; see [D3](#d3-what-deleting-psram-bought).)
-- 32 tiles × 8 bits of brightness is **32 bytes**. A framebuffer for the same information is 1.5 MB,
-  and every one of those bytes would be a copy of one of these 32.
+- 32 tiles × 15 bits of brightness and note is **60 bytes**. A framebuffer for the same information
+  is 1.5 MB, and every one of those bytes would be a copy of one of these 60.
 
-**The crossing is one dual-port BRAM.** `VizStore` is written from `audio` (12.288 MHz, one byte per
-voice per scan) and read from `dvi` (39.07 MHz, one byte per pixel). No FIFO, no handshake, no
+**The crossing is one dual-port BRAM.** `VizStore` is `Memory(shape=unsigned(15), depth=32)` —
+brightness and note packed into one word per voice — written from `audio` (12.288 MHz, one word per
+voice per scan) and read from `dvi` (39.07 MHz, one word per pixel). No FIFO, no handshake, no
 synchroniser, because neither side needs to know what the other is doing: the reader wants the most
 recent value and does not care which scan it came from, and a byte read mid-write yields one of the
 two values, both of which were true within the last 2.7 ms. An `AsyncFIFO` here would be machinery
@@ -1154,20 +1162,21 @@ this works — but not universally: small blocks are sometimes hoisted to top le
 dropped, so a block that reads as ~0 has been absorbed, not removed. The unattributed remainder is
 printed rather than hidden for exactly that reason.
 
-**The census at M29**, the last full one taken:
+**The census of the shipped build**, `--top 14`:
 
-| block | ~COMB | share |
-|---|---:|---:|
-| `core` (the engine) | 17,096 | 70.4% |
-| `usbif` (luna + UAC2 + MIDI) | 2,371 | 9.8% |
-| `fx` | 1,603 | 6.6% |
-| `pmod0` | 876 | 3.6% |
-| `dvi_gen` (TMDS PHY) | 325 | 1.3% |
-| `tiles` | 225 | 0.9% |
-| `reboot` | 137 | 0.6% |
-| `arb` | 65 | 0.3% |
-| `serialrx` | 58 | 0.2% |
-| `common_filter` | 40 | 0.2% |
+| block | ~COMB | share | | block | ~COMB | share |
+|---|---:|---:|---|---|---:|---:|
+| `core` (the engine) | 16,960 | 69.8% | | `tee_dc` | 108 | 0.4% |
+| `usbif` (luna + UAC2 + MIDI) | 2,372 | 9.8% | | `serialrx` | 62 | 0.3% |
+| `fx` | 1,626 | 6.7% | | `arb` | 60 | 0.2% |
+| `pmod0` | 886 | 3.6% | | `usb_tee` | 29 | 0.1% |
+| `dvi_gen` (TMDS PHY) | 316 | 1.3% | | `viz_store` | 28 | 0.1% |
+| `tiles` | 236 | 1.0% | | *(elsewhere)* | 347 | 1.4% |
+| `reboot` | 137 | 0.6% | | **total** | **23,225** | **95.6%** |
+
+**One block is 70% of the die and the other thirteen share the rest.** That shape is the whole
+budget argument on this board: nothing outside `core` is large enough for trimming it to matter, so
+the only lever with real travel is voice count.
 
 **The engine has no soft area.** XLS unrolls the voice loop: `____state_0_tuple_element_*` are
 32-entry arrays read at all 32 constant indices every cycle, so they are a flat register file, not an
@@ -1175,10 +1184,21 @@ inferrable memory. That is why 3 of 56 DP16KD were in use while 11,225 flip-flop
 no BRAM or LUT-RAM win hiding in there; engine area is proportional to voice count, at roughly **440
 LUTs per voice**.
 
-**Gotcha — one number is unattributed.** The M31 part-select remap cost **+369 TRELLIS_COMB**
-(23,404 → 23,773) against an estimate of ~50. The arbiter gained a 4-bit mux on two output paths and
-a 15-cell sniffer; 369 is not that. Left alone deliberately — the design places and it runs — but a
-sevenfold miss is a hole in the area model, not a rounding error.
+**Gotcha — the model misses in both directions, and neither miss is understood.**
+
+*Up.* The M31 part-select remap cost **+369 TRELLIS_COMB** (23,404 → 23,773) against an estimate of
+~50. The arbiter gained a 4-bit mux on two output paths and a 15-cell sniffer; 369 is not that.
+
+*Down.* M29 → shipped, `tee_dc` appearing at 108 was predicted and `core` falling **17,096 → 16,960**
+was not — the engine's RTL did not change. It is **not structural**: the flip-flop counts are
+identical block for block (`core` 9,363 → 9,363, and the whole-design delta 13,150 → 13,138 is
+exactly `tee_dc`'s own 64 → 52). It is **not re-attribution** either: `(elsewhere)` moved 298 → 403,
+which `--top 14` folding eight named rows in accounts for. What is left is an abc/yosys re-synthesis
+swing in combinational logic alone, and nextpnr's own figure moved by only −216 of it.
+
+Both are left alone deliberately — the design places and it runs. But a sevenfold miss upward and a
+few hundred cells drifting downward on unchanged RTL are the same hole seen from two sides: **this
+census tells you where the area is, not what an edit will cost.** Estimate from it, then measure.
 
 ## E3 Multipliers: 28 of 28
 
@@ -1193,7 +1213,9 @@ is at 97% to relieve one that nothing is waiting on. Revisit when something actu
 multiplier.
 
 **Gotcha.** `MULT18X18D` at 28/28 means **any new inferred multiply pushes the design into soft
-multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with ~515 free. The brightness fold in
+multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with 731 TRELLIS_COMB free — and that
+figure has been as low as ~515, at the 98% of [E4](#e4-the-timing-shortfall-that-runs-anyway)'s
+second-to-last row. The brightness fold in
 `tile_rgb` is written the way it is — reusing `v` and `v - fv` for the `255` and `255-f` cases
 instead of scaling them properly — to save two multipliers for a difference no panel can show. That
 is the standing style for anything added here.
@@ -1232,8 +1254,8 @@ above report the endpoints inside the effects block:
 
 | build | critical path | Fmax |
 |---|---|---|
-| shipped (M31) | `fx.nlp_r[12]` → `fx.acc[16]` — comb damping into the 8-comb running sum | 42.51 MHz |
-| + magnitude truncation | `fx.rsize[0]` → `fx.mul_g[22]` — the RVG room-size mux into the feedback multiply | 39.92 MHz |
+| M31, shipped at the time | `fx.nlp_r[12]` → `fx.acc[16]` — comb damping into the 8-comb running sum | 42.51 MHz |
+| M32 onward, incl. the shipped build | `fx.rsize[0]` → `fx.mul_g[22]` — the RVG room-size mux into the feedback multiply | 39.92 MHz |
 
 This was found by rebuilding M31's netlist unmodified for a like-for-like comparison, so it is a
 property of the shipped design and not of the change beside it: **`fx` overtook luna somewhere
