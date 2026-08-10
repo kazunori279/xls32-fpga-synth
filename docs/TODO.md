@@ -218,13 +218,26 @@ those three; git history keeps the original.)*
   edits as well as commits. Both artefacts now have a real recorded provenance: the Basys 3 entry's
   honest `null` became the seven source hashes the 2026-08-10 build was made from.
 
-  Three gaps remain in the check itself. It covers no **Tiliqua SDK** checkout (outside this repo,
-  unhashable from here). **Nothing runs it automatically** — no hook, no CI step, so it only helps
-  someone who thinks to run it. And it **hashes whole files, so a comment cries stale**: the Tiliqua
-  archive is reported stale today against `afda87e`, which edited nothing in `gateware/top.py` but a
-  docstring. Its own module comment names this failure — "a source set that is too wide … cries
-  stale over a comment in a test harness, and then nobody reads the output" — and firing on the
-  first artefact anyone checks is how that ends. The archive is not actually behind.
+  ~~It **hashes whole files, so a comment cries stale**.~~ **Fixed 2026-08-10.** The Tiliqua
+  archive was reported stale against `afda87e`, which edited nothing in `gateware/top.py` but a
+  docstring — the script's own module comment had already named the failure ("a source set that is
+  too wide … cries stale over a comment in a test harness, and then nobody reads the output"),
+  and it was firing on the first artefact anyone checked. Sources are now hashed after a
+  `normalize` pass: `.py` through `tokenize` minus comments and docstrings, `.v`/`.x` through a
+  scanner that skips `//` and `/* */` while respecting string literals. `.sh`/`.tcl`/`.xdc` keep
+  their raw bytes deliberately — a naive `#` strip there risks a false *clean*, which is the one
+  failure mode worse than the one being fixed. Both records were migrated by re-hashing the
+  content at their own recorded commits (`git show <built_from_commit>:<src>`), **not** by
+  `--update`, which would have stamped today's date onto a build from two days ago and turned a
+  true provenance claim into a false one; the raw digests at those commits matched the old records
+  first, so the migration is checkable. The stale explanation no longer names commits the hash
+  cannot see, and `--self-test` deletes all 2877 code lines of all 18 tracked sources one at a
+  time and asserts every one of them moves the hash — 0 blind, with the blindness deliberately
+  reintroduced once to confirm the test fails when it should.
+
+  Two gaps remain in the check itself. It covers no **Tiliqua SDK** checkout (outside this repo,
+  unhashable from here). And **nothing runs it automatically** — no hook, no CI step, so it only
+  helps someone who thinks to run it.
 
   **Building on push was considered and cancelled**, not deferred: Vivado needs a licence and
   ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one board of

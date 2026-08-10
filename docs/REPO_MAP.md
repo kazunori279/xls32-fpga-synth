@@ -37,7 +37,10 @@ addition rather than a rewrite.
     `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
 - **`scripts/`** — board-agnostic tools: `spectro.sh` (.wav → PNG), `make_mp4.sh` (.wav →
   spectrogram MP4), `demo_video.sh`, and `check_artefacts.py` — which hashes the sources behind
-  each committed bitstream into `artefact_hashes.json` and tells you when one has drifted.
+  each committed bitstream into `artefact_hashes.json` and tells you when one has drifted. It
+  hashes them with the comments stripped, so editing prose does not report a good bitstream as
+  stale; `--self-test` deletes every code line in the tree one at a time to prove the stripping
+  is not also blind to real edits.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
   (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
