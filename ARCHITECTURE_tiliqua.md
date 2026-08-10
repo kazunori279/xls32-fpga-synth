@@ -202,7 +202,8 @@ flowchart LR
     RES["dsp.Resample 3/2"] --> FX["StereoFx"]
     FXC --> FX
     FX --> CAL["pmod0.i_cal"]
-    FX --> TEE["SyncFIFO 64×16"]
+    FX --> DCB["TeeDcBlock"]
+    DCB --> TEE["usb_tee<br/>SyncFIFO 64×16"]
   end
   subgraph A["audio — 12.288 MHz"]
     ROM["boot-CC ROM"] --> ENG["xls_engine<br/>224 cycles/sample"]
@@ -215,6 +216,8 @@ flowchart LR
   ENG -->|AsyncFIFO d8| RES
   CAL --> AK["AK4619 → 4 jacks"]
   TEE --> USBIN["UAC2 IN, 4ch"]
+  USBIN -.->|adc_fifo_level| PACE["packet size<br/>80/96/112 B"]
+  PACE -.-> USBIN
   VIZ --> STORE
 ```
 
@@ -400,7 +403,13 @@ Three details in that counter are load-bearing
 
 **Gotcha.** The tee must never back-pressure `pmod0.i_cal`, or a host that is not recording would
 stall the codec. `usb_tee` takes a copy only when the FIFO has room and silently drops otherwise.
-Rates match by construction, so in a live capture the FIFO only ever absorbs jitter.
+
+**Gotcha — the *host's* rate is a different question, and it does not match by construction.**
+Everything above is about the two rates *inside* the board, which the shared mclk makes exact. The
+host is outside it and collects at its own nominal 48,000 fps, which this board beats by 110–123 ppm.
+Nothing makes those agree for free; what makes them agree is the capture endpoint varying its packet
+size ([B4](#b4-the-capture-tee--dc-and-pacing)). Given that, the tee FIFO only ever absorbs jitter —
+without it, the FIFO absorbs a real surplus until it cannot, once every ten seconds.
 
 ## A4 The codec and the eurorack jacks
 
@@ -425,6 +434,12 @@ be allowed to back up.
 `dry` is a deliberate single name for the signal on its way out. Everything downstream — the codec,
 the USB tee — reads it through that name, which is what kept the two M28 variants differing in one
 place rather than four, and it is still the one place to intercept the signal.
+
+**The two branches off `dry` are not identical.** The codec gets it untouched; the tee gets it
+through a DC blocker, because the jacks are AC-coupled and a digital copy is not
+([B4](#b4-the-capture-tee--dc-and-pacing)). That asymmetry is the point: everything that makes the
+USB copy usable lives on the tee, so `out0`/`out1` and the engine keep bit-exact parity with
+`fx_model.py` and the Basys 3.
 
 **The LEDs.** All eight are left in the pmod's automatic mode, showing the four input levels on 0–3
 and the four output levels on 4–7. M28 drove them as an envelope comet off `viz_out`; M29's screen
@@ -496,6 +511,11 @@ the TRS jack uses ([B2](#b2-the-trs-jack-and-the-system-message-filters)).
 | ~forward)`), so a stalled consumer can never wedge the packet counter halfway through a packet.
 And `usbif.o.ready` is tied high in `top.py`: nothing consumes host-to-device audio, but the stream
 still has to be drained, because macOS opens the output direction whenever it opens the input one.
+
+**The one thing this class overrides in the audio direction** is the capture endpoint's packet size,
+which the parent leaves pinned at the host's nominal rate. That is
+[B4](#b4-the-capture-tee--dc-and-pacing), and it is the difference between a capture you can grade
+and one that steps every ten seconds.
 
 ## B2 The TRS jack and the System-message filters
 
@@ -604,6 +624,104 @@ they must never stall. `FxControl` in particular watches the *same* bytes the en
 gated on `common_filter.o.valid & common_filter.o.ready`, so the effects and the engine see exactly
 the same stream on exactly the same cycles. An observer that can stall the path it observes is a
 deadlock waiting for the one day both sources are busy.
+
+## B4 The capture tee — DC and pacing
+
+**What it does.** Sends the host a copy of what the jacks are playing, at the rate the *board*
+produces it, with the engine's DC offset removed. Two mechanisms, both of them on the tee and
+neither of them anywhere near `out0`/`out1`:
+
+```mermaid
+flowchart LR
+  DRY["dry (fx.o)"] --> CAL["pmod0.i_cal → AK4619"]
+  DRY --> DCB["TeeDcBlock<br/>x − OnePole(x), ×2"]
+  CTR["audio counter<br/>gray → sync"] --> TEE
+  DCB -->|ch0, ch1| TEE["usb_tee<br/>SyncFIFO 64×16"]
+  TEE --> EP["EP 2 IN<br/>UAC2 capture"]
+  EP -.->|adc_fifo_level| PACE["packet size<br/>80 / 96 / 112 B"]
+  PACE -.-> EP
+```
+
+The counter on channels 2 and 3 is [A3](#a3-the-rate-is-set-by-the-pull)'s; it goes into the same
+FIFO word and is deliberately **not** filtered.
+
+**Why the tee needs a DC blocker and the jacks do not.** A pulse wave at duty `d` sits at a mean of
+`2d − 1`, and the engine emits it that way. The eurorack jacks are AC-coupled, so out0/out1 have
+never cared. The tee is a direct digital copy and cares a great deal: measured over a 110 s capture
+the mean was **+0.286** with **89.6% of the energy below 5 Hz**, which pushes everything audible down
+to −25.9 dBFS and, in a DAW, pins the waveform against the top of the window.
+
+**The filter is `x − lowpass(x)`, and the lowpass has no multiplier.** `dsp.OnePole` is
+`state += (input − state) >> shift`, which is a shift and two adders. That is not a stylistic
+preference: `MULT18X18D` is **28 of 28** on this bitstream ([E3](#e3-multipliers-28-of-28)), which
+also rules out the SDK's `dsp.filters.DCBlock` — the obvious choice — because it wants a MAC.
+`DEFAULT_SHIFT = 10` puts the corner near 7.5 Hz, below the lowest note the engine can play and well
+above the drift it has to remove.
+
+**`extra_bits` is matched to `shift`, and the reason is not the one it looks like.** It looks like a
+dead-band guard — narrow the accumulator too far and `(inp − state) >> shift` quantises to zero and
+the filter stops updating. Measured, that does not happen: at 10, 12 and 16 the DC residual on a 0.5
+step is an identical 1 LSB. What the extra bits buy is only tracking noise, 1.081 LSB at 10 against
+0.632 at 16 — both near −90 dBFS. `OnePole` sizes its state `SQ(1, 15 + extra_bits)` with two adders
+across it, so each bit is four bits of carry chain per channel, and 16 cost 132 TRELLIS_COMB against
+a device that had 515 free at the time. Buying an inaudible 4 dB for 24 cells at 98% utilisation is
+not a trade worth making.
+
+**Why the packet size has to move.** The SDK computes the capture packet size from a counter that
+only the *playback* stream updates, so with nothing playing it sits at its reset value of
+`24 * nr_channels`. At 48 kHz / 4 channels that is 96 bytes — 6 frames per microframe, **exactly
+48,000 frames/s, the host's nominal rate**. It is not this board's rate: the audio clock measures
+110–123 ppm fast, so the codec makes about 5.5 frames/s more than the host collects. The 48 frames of
+elasticity between them (`usb_tee` 16 + `adc_fifo` 16 + `out_fifo` 16) soak that up for roughly ten
+seconds and then the tee drops a run of ~60 frames — 0.011% of a capture, a step in every sustained
+tone, once per 10.4 s. **Enlarging any of those FIFOs buys more seconds and fixes nothing**, because
+the surplus is a rate and only a rate can absorb it.
+
+A UAC2 asynchronous IN endpoint states its rate by varying how many samples it sends. **The absence
+of a feedback endpoint on capture is the design, not an omission.** So `pace_capture_endpoint()`
+re-drives `bytes_in_frame` from `dbg.adc_fifo_level`: one frame under nominal while the buffer
+drains, one over while it fills, nominal in between. 80 / 96 / 112 bytes, all inside the 128-byte
+`max_packet_size`. The average lands on whatever the board actually produces — there is no ppm
+constant here and nothing to recalibrate if the crystal is ever replaced.
+
+**A dead zone, not a Schmitt trigger.** The two thresholds are `target ± PACE_BAND`, distinct, so the
+decision cannot chatter between the outer states; chatter across one threshold costs a single frame
+that the next microframe undoes. Hysteresis would only earn its keep if one wrong decision were
+expensive, and here it is one frame.
+
+**Aimed at the middle, biased to overrun.** `bytes_in_frame` is latched once per microframe at SOF,
+and over a microframe the level sawtooths by a packet's worth of frames as the host drains and the
+codec refills. Where SOF falls in that sawtooth depends on when the host schedules its IN token,
+which is not observable from inside the FPGA — targeting the centre of the FIFO makes the answer
+irrelevant, because a full swing either side still fits. The bias is deliberate: the extra frame can
+only be asked for once the level is above `target + PACE_BAND`, which cannot happen unless
+`out_fifo` is already full, so the extra frame is always in hand. Underrunning is the worse failure —
+`ChannelsToUSBStream`'s FILL state pads short frames with zeroes, and a zero-padded frame is exactly
+what `rec_audio.py` counts as a dropout, so **the fix would report itself as the bug.**
+
+Measured over 120 s: counter loss 0.011% → **0.000%**, loss events 12 → **0**, ch0/ch1 mean +0.286 →
+**+0.00003**, energy below 5 Hz 89.6% → **0.000%**, zero-padded frames 0 → 0.
+
+**Gotcha — the tee must never back-pressure.** `TeeDcBlock`'s `en` is a strobe, not a handshake:
+there is no `ready` to wire and nothing on this path can stall the codec. `usb_tee` takes a copy only
+when the FIFO has room and silently drops otherwise. A tee that can stall the codec would be a worse
+bug than either of the two this section is about, because it would reach the jacks.
+
+**Gotcha — the subtraction saturates.** `x` reaches full scale while `lowpass(x)` can be a third of
+it, so the difference leaves `ASQ`'s range regularly. Wrapping would be an audible click per
+occurrence — precisely the artefact the pacing removes.
+
+**Gotcha — none of this can be simulated.** Everything USB sits behind `sim.is_hw(platform)` and the
+Verilator harness has no ULPI, so the pacing has no sim coverage at all and its only evidence is the
+hardware measurement above. The DC blocker does: `test_dcblock.py`. And 120 seconds measured clean is
+not a proof about ten minutes — the tee is still permitted to drop, it simply no longer has a
+standing reason to.
+
+**Gotcha — the endpoint is fished back out by number.** `capture_endpoint()` walks
+`m.submodules.usb._endpoints` looking for endpoint 2, and raises if it is not there rather than
+returning `None`. If the SDK ever moves it, the pacing would otherwise drive nothing and captures
+would quietly go back to dropping a run of frames every ten seconds — a silent regression with a
+ten-second period is the hardest kind to attribute.
 
 ---
 
