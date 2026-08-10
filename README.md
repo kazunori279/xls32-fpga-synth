@@ -565,6 +565,15 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 > continuation of the 40 ms before it, cross-faded over 5 ms, and `demo_video.sh` runs it before the
 > mux; it also hands back about 4 dB of headroom the clicks had been occupying as the loudest
 > samples in the take.
+>
+> It repairs the samples the **counter** names, and that distinction was bought the hard way. The
+> first version looked for the steps in the waveform, which cannot tell a dropped buffer from a
+> knob: MIDI CC is 7 bits, so a dragged control moves the sound in 1/128 jumps at the pointer's
+> ~50 Hz, and a burst of small steps 20 ms apart has exactly the shape it was hunting. On a take
+> recorded while someone played the panel it found 50 seams, of which about 12 were the clock, and
+> rebuilt the performance along with them — the bridge lands ~0.18 from what was really there, so
+> against a 0.0078 knob step the cure ran twenty times the disease. ch2/3 already know where the
+> gaps are; nothing has to be inferred.
 
 > **GUI alternative — [OBS](https://obsproject.com/):** add three sources — *macOS Screen Capture*
 > (grabs the web UI **and** desktop audio in one), a *Video Capture Device* (the webcam) sized as a

@@ -83,7 +83,13 @@ def _median3(x):
 
 
 def counter_loss(a):
-    """(lost_frames, expected_frames, events) from the board's counter, or None."""
+    """(lost_frames, expected_frames, events, positions) from the board's counter, or None.
+
+    `positions` are sample indices: frames went missing between index i and i+1. `scripts/declick.py`
+    repairs exactly those, which is the whole reason they are returned -- a detector that has to
+    *infer* where a buffer went from the waveform cannot tell a dropped millisecond from a MIDI CC
+    arriving, and on a take where the panel was played while the demo ran it chased 40 knob moves.
+    """
     if a.ndim < 2 or a.shape[1] < 4 or np.mean((a[:, 2].astype(np.uint16) & ALIVE_BIT) != 0) < 0.99:
         return None                                   # not a Tiliqua tee; nothing to check against
     lo = (a[:, 2].astype(np.uint16) & (ALIVE_BIT - 1)).astype(np.int64)
@@ -99,10 +105,11 @@ def counter_loss(a):
     # ch2's 128-frame wrap disagree at a few boundaries), which leaves deltas a handful of ticks
     # either side of 256. Those are noise in the arithmetic, not audio -- a frame that never
     # arrived costs a clean multiple of 256. Rounding scores them 0 and keeps the count honest.
-    gaps = np.round(delta[delta < 1 << 30] / TICKS_PER_FRAME).astype(np.int64) - 1
-    gaps = gaps[gaps > 0]
-    lost = int(gaps.sum())
-    return lost, len(a) + lost, len(gaps)
+    idx = np.flatnonzero(delta < 1 << 30)
+    gaps = np.round(delta[idx] / TICKS_PER_FRAME).astype(np.int64) - 1
+    keep = gaps > 0
+    lost = int(gaps[keep].sum())
+    return lost, len(a) + lost, int(keep.sum()), idx[keep]
 
 
 def main():
@@ -127,7 +134,7 @@ def main():
         res = counter_loss(a)
         if res is None:
             sys.exit(f"{args.check}: no board counter on these channels — nothing to check")
-        lost, expected, events = res
+        lost, expected, events, _ = res
         pct = 100.0 * lost / expected if expected else 0.0
         print(f"{args.check}: {lost} frames lost of {expected} ({pct:.3f}%) in {events} events "
               f"— {lost / sr:.2f}s of audio missing")
@@ -180,7 +187,7 @@ def main():
     if res is None:
         print("no board counter on this input — sample loss NOT verified", file=sys.stderr)
         return
-    lost, expected, events = res
+    lost, expected, events, _ = res
     pct = 100.0 * lost / expected if expected else 0.0
     print(f"counter check: {lost} frames lost of {expected} ({pct:.3f}%) in {events} events",
           file=sys.stderr)

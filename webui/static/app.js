@@ -739,6 +739,11 @@ async function playDemo(idx) {
   stopDemo();
   const song = demos.songs[idx]; if (!song) return;
   demoIdx = idx;
+  // Get out of the way. This browser is a full-screen overlay (position:fixed, inset:0, plus a
+  // scrim), and the moment a song is playing the panel behind it is the thing worth looking at --
+  // the four PART chips light up, and every knob is live on whichever part is focused. Closing it
+  // costs nothing: the header button has already flipped to `■ DEMO` and stops the song from there.
+  const dbox = document.getElementById('demobox'); if (dbox) dbox.classList.add('hidden');
   // the song's shared effect state (mode + reverb/room/chorus/delay); default any it omits (old songs)
   const fxState = {};
   EFFECT_IDS.forEach((id) => { fxState[id] = (song[id] != null) ? song[id] : spec.defaults[id]; });

@@ -99,9 +99,14 @@ CAM_OFFSET="${CAM_OFFSET:-0.39}"          # webcam start-up minus the screen's; 
 # a full take of *Prelude in C*: DC +0.30, and **98.7 % of the energy below 5 Hz**, leaving the
 # audible band 26 dB down with the headroom spent on something no one can hear. It is not a bug:
 # analogue outputs AC-couple this away, and out0/out1 do. The USB tee is a tap *before* that, so
-# the capture has to do it instead. Expect to want ~+4.5 dB of make-up gain afterwards; that is
-# left manual, since the right number depends on the take.
+# the capture has to do it instead. It costs level -- the take that shipped came off the tee at
+# -4.9 dBFS once the DC and the clicks were out of it -- which is what TARGET_PEAK below buys back.
 AFILTER="${AFILTER:-pan=stereo|c0=c0|c1=c1,highpass=f=20:poles=2}"
+# Normalise the muxed audio to this peak, in dBFS. Measured after AFILTER and after the head trim,
+# on the take itself, so it is the peak that actually reaches the file -- a fixed make-up gain
+# cannot be right when the performance includes turning REVERB and CUTOFF up. Set empty to disable.
+TARGET_PEAK="${TARGET_PEAK:--1.0}"
+MAX_GAIN=24                       # ceiling, in dB: a near-silent take must not be amplified to hiss
 WARMUP="${WARMUP:-2}"             # let the camera/screen stream settle before the demo starts
 
 # Picking CAM_CROP blind is guesswork, so offer a still to measure off. `-update 1` overwrites the
@@ -175,19 +180,50 @@ fi
 # two free-running clocks, so the host discards a buffer every ~10.4 s to stay in step -- about a
 # millisecond, 0.011 % of the take, nowhere near the 0.1 % that would fail it. But each one is a
 # step in a sustained tone, and a step is a click: ten of them were plainly audible in a take the
-# counter had passed. This bridges them. Only ch0/1 -- ch2/3 are the counter, and its sawtooth
-# would be read as a seam on every frame.
+# counter had passed. This bridges them, at the samples ch2/3 say they happened at -- so it repairs
+# what the clock did and leaves the performance alone, which matters the moment anyone touches a
+# knob while the demo runs. `--channels 0,1` is what gets rebuilt; ch2/3 stay as recorded, because
+# they are the evidence.
 uv run scripts/declick.py "$AUD" "$AUD_CLEAN" --channels 0,1
+
+# Make-up gain, measured rather than assumed. AFILTER throws away the DC that most of the tee's
+# energy is in, so what is left is quiet; how quiet depends on the take, and on a take where
+# someone is turning REVERB and CUTOFF it depends on the performance. So measure the peak of
+# exactly what will be muxed -- same filter chain, same head trim -- and scale it to TARGET_PEAK.
+# volumedetect prints max_volume on stderr and produces no output file, hence -f null.
+MUXFILTER="$AFILTER"
+if [ -n "$TARGET_PEAK" ]; then
+  MAXVOL=$(ffmpeg -hide_banner -nostats -ss "$SCREEN_LATENCY" -i "$AUD_CLEAN" \
+             -af "${AFILTER},volumedetect" -f null - 2>&1 |
+           sed -n 's/.*max_volume: \(-*[0-9.]*\) dB.*/\1/p' | tail -1)
+  if [ -z "$MAXVOL" ]; then
+    echo "   (could not measure the peak — leaving the level alone)" >&2
+  else
+    GAIN=$(awk -v t="$TARGET_PEAK" -v m="$MAXVOL" -v c="$MAX_GAIN" \
+               'BEGIN{g=t-m; if (g>c) g=c; printf "%.2f", g}')
+    echo "==> peak ${MAXVOL} dBFS -> ${TARGET_PEAK} dBFS (${GAIN} dB make-up)"
+    MUXFILTER="${AFILTER},volume=${GAIN}dB"
+  fi
+fi
 
 echo "==> muxing (audio trimmed ${SCREEN_LATENCY}s, PIP delayed ${CAM_OFFSET}s) -> $VID"
 ffmpeg -hide_banner -loglevel warning -y \
   -i "$SCR" -itsoffset "$CAM_OFFSET" -i "$CAM" -ss "$SCREEN_LATENCY" -i "$AUD_CLEAN" \
   -filter_complex "[0:v][1:v]overlay=W-w-24:H-h-24:eof_action=pass[v]" \
-  -map "[v]" -map 2:a -af "$AFILTER" -r "${OUT_FPS}" -fps_mode cfr -shortest \
+  -map "[v]" -map 2:a -af "$MUXFILTER" -r "${OUT_FPS}" -fps_mode cfr -shortest \
   -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "$VID"
 
 mv "$VID" "$OUT"
-rm -f "$SCR" "$CAM" "$AUD" "$AUD_CLEAN"
+# The screen and camera grabs are large and reproducible from nothing; delete them. $AUD is neither.
+# It is the only four-channel copy of the take -- the counter lives on ch2/3 and the mux throws them
+# away -- so it is the only thing that can re-score the recording or re-run the declicker at a
+# different setting. A take that deletes it can only be fixed by playing the whole piece again, which
+# is how one two-and-a-half-minute performance was lost.
+# Parked beside the video rather than left in /tmp, where the next take would overwrite it.
+RAW="${OUT%.*}-raw.wav"
+rm -f "$SCR" "$CAM" "$AUD_CLEAN"
+mv "$AUD" "$RAW"
+echo "   (kept the 4-channel capture as $RAW — delete it once the take is accepted)"
 
 # Belt and braces. The recorder's counter check is the real one, but it only exists on a Tiliqua
 # input; on a loopback nothing has verified anything, and a mux mistake can still shorten the

@@ -10,6 +10,17 @@ and this finds 10. About a millisecond each time, 0.011 % of the audio, which is
 that each one is a *step* in a sustained tone and a step is a click. Ten of them were plainly
 audible in a take the counter had already passed.
 
+**Where** they are is not guessed at. The Tiliqua's tee is four channels and two of them are that
+counter, so a recording made through `rec_audio.py` says which sample the host dropped a buffer
+after; this repairs those and nothing else. It used to look for the steps in the waveform instead,
+and that is a worse question than it sounds: a MIDI CC is 7 bits, so a knob dragged across a filter
+sweep moves the sound in 1/128 jumps at the pointer's ~50 Hz, and a burst of small steps 20 ms apart
+is the same shape as a dropped buffer. On a take where the panel was played while the demo ran, the
+waveform detector found 50 seams and only ~12 were the clock -- it spent the other 38 rebuilding the
+performance, and the bridge is not free: measured on this material it lands about 0.18 away from
+what was really there, so on a 0.0078 knob step the cure ran twenty times the disease. The counter
+does not have an opinion about any of that. `--heuristic` keeps the old path for takes without one.
+
 The excision is what it is; this hides the seam. For each step the waveform is continued across it
 by an AR model fitted to the 40 ms before it, then cross-faded into the material that follows over
 5 ms. The result is the same number of samples in and out -- important, because the audio is being
@@ -26,11 +37,16 @@ Usage:
 
 import argparse
 import sys
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-# A seam is a sample-to-sample jump far outside what the music itself does *there*. The ratio is
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from rec_audio import counter_loss                                       # noqa: E402
+
+# Only used when the take has no counter on it. A seam is a sample-to-sample jump far outside what
+# the music itself does *there*. The ratio is
 # taken against a local median of |diff| rather than a global one, because a global figure is set
 # by whatever dominates the take: the raw USB tee carries the pulse wave's DC and most of its
 # energy below 5 Hz, which is smooth, so the global median collapses and ordinary note attacks
@@ -49,6 +65,18 @@ LPC_ORDER = 48
 # repair up by a few samples costs nothing and puts the whole disturbance inside the fade. Measured:
 # without this the residual peak lands at -1 to -3 samples, i.e. just outside what was rebuilt.
 GUARD = 8
+
+
+def counter_seams(path):
+    """Sample indices where the board says frames went missing, or None if it cannot say.
+
+    This is the whole answer when the take came off the Tiliqua's tee: ch2/3 carry a 12.288 MHz
+    counter, so the recording knows exactly which sample the host dropped a buffer after. Nothing
+    has to be inferred and nothing else gets touched.
+    """
+    a, _ = sf.read(path, dtype="int16", always_2d=True)
+    res = counter_loss(a)
+    return None if res is None else [int(i) for i in res[3]]
 
 
 def find_seams(mono, sr, thresh=THRESH_RATIO):
@@ -164,8 +192,11 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("infile")
     ap.add_argument("outfile", nargs="?")
+    ap.add_argument("--heuristic", action="store_true",
+                    help="find the seams in the waveform even if the take has a counter on it")
     ap.add_argument("--thresh", type=float, default=THRESH_RATIO,
-                    help=f"detection threshold, |diff| over its local median (default {THRESH_RATIO})")
+                    help=f"threshold for --heuristic, |diff| over its local median "
+                         f"(default {THRESH_RATIO})")
     ap.add_argument("--channels", help="comma-separated channels to detect on and repair "
                                        "(default: all). The Tiliqua's capture is 4ch -- pass 0,1 "
                                        "to leave the counter on ch2/3 alone, and out of the "
@@ -178,24 +209,24 @@ def main():
              else list(range(x.shape[1])))
     if any(c < 0 or c >= x.shape[1] for c in chans):
         sys.exit(f"{args.infile} has {x.shape[1]} channels; --channels {args.channels} is out of range")
-    seams = find_seams(x[:, chans].mean(axis=1), sr, args.thresh)
-    print(f"{args.infile}: {len(x) / sr:.3f}s, {len(seams)} seam(s)", file=sys.stderr)
-    for i in seams:
-        print(f"  {i / sr:8.3f}s  step {abs(x[i + 1] - x[i]).max():.4f}", file=sys.stderr)
-    if args.dry_run:
-        return
-    if not args.outfile:
+    if not args.outfile and not args.dry_run:
         sys.exit("outfile is required unless --dry-run is given")
 
+    sub = x[:, chans]
+    seams, how = counter_seams(args.infile), "the board's counter"
+    if seams is None or args.heuristic:
+        seams, how = find_seams(sub.mean(axis=1), sr, args.thresh), "the waveform"
+    print(f"{args.infile}: {len(x) / sr:.3f}s, {len(seams)} seam(s) from {how}", file=sys.stderr)
+    for i in seams:
+        print(f"  {i / sr:8.3f}s  step {np.abs(sub[i + 1] - sub[i]).max():.4f}", file=sys.stderr)
+    if args.dry_run:
+        return
+
     out = x.copy()
-    out[:, chans], done, skipped = repair(x[:, chans], sr, seams)
-    left = find_seams(out[:, chans].mean(axis=1), sr, args.thresh)
+    out[:, chans], done, skipped = repair(sub, sr, seams)
     sf.write(args.outfile, out, sr, subtype="FLOAT")
     print(f"wrote {args.outfile} — bridged {len(done)}"
-          + (f", skipped {len(skipped)} (no usable fit)" if skipped else "")
-          + f", {len(left)} still detectable", file=sys.stderr)
-    for i in left:
-        print(f"  still there: {i / sr:8.3f}s", file=sys.stderr)
+          + (f", skipped {len(skipped)} (no usable fit)" if skipped else ""), file=sys.stderr)
 
 
 if __name__ == "__main__":

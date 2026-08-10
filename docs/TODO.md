@@ -28,11 +28,24 @@ those three; git history keeps the original.)*
    of a sustained tone is a step. `scripts/declick.py` bridges them and `demo_video.sh` now runs it
    before the mux; the repaired file measures no seam above the music's own transients. It is worth
    noting how the check was passed and the take still wrong: the counter measures *arrival*, and
-   nothing measured what it sounded like. What has *not* happened is a human watching all 111 s of
-   it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up
-   times measured on one machine, not a closed loop, and nothing in the pipeline would catch a slow
-   slide between the panel and the sound. The README's hero stays on the Basys 3 video until it has
-   been watched.
+   nothing measured what it sounded like.
+
+   A further take — the one that plays the panel *while* the demo runs, which is the point of the
+   video — found the second half of that lesson. The declicker looked for its seams in the waveform,
+   and a 7-bit CC dragged at the pointer's ~50 Hz is a burst of 1/128 steps 20 ms apart, which is
+   the shape it was hunting: it found 50, bridged 49, and only ~12 were the clock. It now repairs
+   the samples the board's counter names and nothing else (`counter_loss` returns positions;
+   `--heuristic` keeps the old path for takes without a counter). `demo_video.sh` also no longer
+   deletes the four-channel capture, which is what made that take unrepeatable — the mux keeps only
+   ch0/1, so once the raw is gone the only way to re-run anything is to play the piece again.
+
+   `media/m32-demo-v4.mp4` is that take, trimmed to one loop, and it is **the file waiting to be
+   watched**: it was declicked by the old detector, so roughly 37 of its bridges landed on knob
+   moves rather than dropouts, and whether that is audible during the filter sweeps is exactly the
+   question no measurement here has settled. What has *also* not happened is a human watching all
+   111 s of it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up times measured on one
+   machine, not a closed loop, and nothing in the pipeline would catch a slow slide between the
+   panel and the sound. The README's hero stays on the Basys 3 video until it has been watched.
 2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
