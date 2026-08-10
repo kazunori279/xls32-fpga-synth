@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Do the channel mode messages and the sustain pedal actually do what they claim?
+// Do the channel mode messages actually do what they claim?
 //
 // The engine used to parse 0x9n/0x8n/0xBn/0xEn and nothing else, so CC120/121/123 fell through
 // `apply_cc`'s `_ => p` and vanished. That was fine until the TRS jack: a keyboard's panic button
@@ -139,33 +139,36 @@ module tb_panic;
                      pp_dead, pp_play);
         end
 
-        // --- CC64 sustain pedal: a note-off under the pedal is deferred --------------------------
-        $display("\nCC64 sustain pedal (part 2)");
+        // --- CC64 is ignored, and that is deliberate ---------------------------------------------
+        // M34 built a sustain pedal and then removed it again -- the ECP5 would not route with
+        // the per-voice `held` bit it needs. This asserts the absence: a note-off under a
+        // depressed pedal releases like any other, it is not deferred. If someone puts the pedal
+        // back, this test fails and points at the doc that says why it was taken out.
+        $display("\nCC64 is ignored (part 2)");
         cc(2'd2, 8'd64, 8'd127);
         note_on(2'd2, 8'd60);
         wait_samples(W);
+        expect_loud("the note sounds", 2);
         note_off(2'd2, 8'd60);
         wait_samples(W);
-        expect_loud("key released under the pedal, still ringing", 2);
-        cc(2'd2, 8'd64, 8'd0);
-        wait_samples(W);
-        expect_quiet("pedal up releases it", 2);
+        expect_quiet("note-off releases it anyway -- no pedal to defer it", 2);
 
-        // --- the `held` bit: a key still down must survive the pedal coming up -------------------
-        // This is the whole reason Voice carries `held`. Without it the pedal-up sweep would
-        // release every voice on the part, cutting notes out from under the player's fingers.
-        $display("\nCC64 pedal up while the key is still down (part 3)");
-        cc(2'd3, 8'd64, 8'd127);
+        // --- CC120 reaps a voice that is already releasing, CC123 does not -----------------------
+        // The `rel_ok` term. A plain note-off must not re-trigger a release on a voice already in
+        // one; All Sound Off must cut it regardless. A slow release (CC23=127, ~2 s) makes the
+        // window wide enough to see.
+        $display("\nCC120 cuts a voice mid-release (part 3)");
+        cc(2'd3, 8'd23, 8'd127);
         note_on(2'd3, 8'd62);
         wait_samples(W);
-        cc(2'd3, 8'd64, 8'd0);
-        wait_samples(W);
-        expect_loud("pedal up, finger down -- the note stays", 3);
         note_off(2'd3, 8'd62);
         wait_samples(W);
-        expect_quiet("and lifting the finger ends it", 3);
+        expect_loud("still falling through a two-second release", 3);
+        cc(2'd3, 8'd120, 8'd0);
+        wait_samples(2);
+        expect_quiet("All Sound Off takes it anyway", 3);
 
-        $display("\n%0s", fails == 0 ? "PASS: channel mode messages and the pedal behave"
+        $display("\n%0s", fails == 0 ? "PASS: the channel mode messages behave"
                                      : "FAIL: see above");
         $finish;
     end

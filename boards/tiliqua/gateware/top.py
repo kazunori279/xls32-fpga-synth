@@ -162,7 +162,9 @@ class CoreTop(Elaboratable):
         # the engine is always self-describing. M28 briefly gave it a third source (CvIn); nothing
         # about the arbiter assumed there were exactly three, so removing that one changed a count.
         # M34 brought a third back, and this one is not an input at all: TrsPanicInject speaks only
-        # when the TRS jack changes which part it plays. Order is TRS, injector, USB.
+        # when the TRS jack changes which part it plays. Order is TRS, injector, USB. Measured at
+        # **4 TRELLIS_COMB** for the source and the injector together -- deleting the pair to buy
+        # room during the M34 area squeeze bought nothing, which is why it is still here.
         n_src = 1 + 2 * int(sim.is_hw(platform))
         m.submodules.arb = arb = MidiArbiter(n_src)
         wiring.connect(m, arb.o, rt_filter.i)

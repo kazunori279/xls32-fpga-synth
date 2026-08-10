@@ -51,19 +51,20 @@ def set_vib(d):           return cc(1, (d & 3) << 5)               # CC1 mod whe
 def set_porta(t):         return cc(5, (t & 3) << 5)               # CC5 portamento 0=off 1=fast 2=med 3=slow
 # --- channel mode messages (M34). These take `ch` because they are aimed at one part; the CC
 # setters above do not, since a test that wants part 2's cutoff says cc(74, v, 2) and means it.
-def sustain(on, ch=0):    return cc(64, 127 if on else 0, ch)      # CC64 pedal; a note-off under it is deferred
 def all_sound_off(ch=0):  return cc(120, 0, ch)                    # CC120: envelopes to zero NOW. It clicks.
 def all_notes_off(ch=0):  return cc(123, 0, ch)                    # CC123: release every note the part holds
 def reset_controllers(ch=0): return cc(121, 0, ch)                 # CC121: pitch bend and mod wheel back to centre
+# There is no sustain(). CC64 reaches the engine and is ignored: the pedal needs a per-voice
+# "the key is still down" bit, and M34 could not fit one. See M34 in DEVELOPMENT_tiliqua.md.
 def panic(nparts=4):
     """Every part silent, whatever state it was left in.
 
-    CC120 before CC123 because 120 cuts and 123 releases -- 120 first is what makes this instant,
-    and the 123 behind it reaps voices that were *already* in their release, which 120 alone
-    leaves running. The pedal goes up first of all, or it defers everything after it.
+    CC120 alone, and 120 rather than 123, because All Sound Off is the only one of the two that
+    reaps a voice already falling through its release. 123 after it would reach exactly the same
+    voices -- both sweep "this part, not already OFF" -- so it would be a second copy of a job
+    already done, not a safety net.
     """
-    return b"".join(sustain(False, ch) + all_sound_off(ch) + all_notes_off(ch)
-                    for ch in range(nparts))
+    return b"".join(all_sound_off(ch) for ch in range(nparts))
 # set_fx() lived here until M27. It sent CC83, an effect-*mode* selector (0 dry, 1 chorus, 2 echo,
 # 3 both, 4 reverb) that the shell stopped reading when effects went depth-gated: `top.v:210-211`
 # gates on the depth knobs, and `fxmode` is written and never read. It was deleted rather than left

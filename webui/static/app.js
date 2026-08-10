@@ -468,7 +468,7 @@ function panic() {                                  // release everything still 
 }
 // `panic` only knows the notes this page started. Notes from the Tiliqua's TRS jack never pass
 // through the browser at all, so the only thing that can silence one is a message addressed to
-// the engine itself. Since M34 that is CC123 All Notes Off, three bytes per part.
+// the engine itself. Since M34 that is a channel mode message, three bytes per part.
 //
 // The 128-note sweep stays anyway, and not out of superstition: a board flashed with a
 // pre-M34 bitstream drops 120-127 in `apply_cc`'s catch-all, and PANIC going quietly useless
@@ -476,17 +476,14 @@ function panic() {                                  // release everything still 
 // cost nothing next to a button a player presses when something has already gone wrong.
 function sweepPart(ch) { for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]); }
 function sweepAllParts() { for (let ch = 0; ch < NPARTS; ch++) sweepPart(ch); }
-// CC120 before CC123, on purpose. 120 cuts the envelope dead and 123 lets it fall through the
-// release, so sending 120 first is what makes PANIC instant; the 123 behind it reaps anything
-// that was already releasing, which 120 alone leaves running. CC64 too: a sustain pedal stuck
-// down would defer every note-off the sweep sends and undo the whole gesture.
+// CC120, not CC123. All Sound Off cuts the envelope dead where All Notes Off lets it fall through
+// the release, and -- the part that decides it -- 120 is the only one of the two that reaps a
+// voice already *in* its release. Both sweep the same set otherwise ("this part, not already
+// off"), so sending 123 as well would repeat a finished job rather than catch anything. PANIC
+// clicks. That is what a panic button is for; the musical stop is the note-off sweep below.
 function allSoundOff() {
   panic();
-  for (let ch = 0; ch < NPARTS; ch++) {
-    sendMidi([0xB0 | ch, 64, 0]);           // pedal up first, or it defers everything below
-    sendMidi([0xB0 | ch, 120, 0]);
-    sendMidi([0xB0 | ch, 123, 0]);
-  }
+  for (let ch = 0; ch < NPARTS; ch++) sendMidi([0xB0 | ch, 120, 0]);
   sweepAllParts();
 }
 document.addEventListener('pointermove', (e) => { if (activeDrag) activeDrag.move(e); });
@@ -799,8 +796,8 @@ function stopDemo() {
   if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
   if (link) link.cancelPending();               // drop whatever was scheduled but not yet sent
   // A cancelled look-ahead has certainly dropped some note-offs on the floor. The sweep rather
-  // than `allSoundOff` on purpose: stopping a song should not also clear a sustain pedal or cut
-  // a note the player is holding by hand on a part the song was not using.
+  // than `allSoundOff` on purpose: stopping a song should not cut a note the player is holding by
+  // hand on a part the song was not using, and `allSoundOff` sends CC120, which clicks.
   sweepAllParts();
   document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
   const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
