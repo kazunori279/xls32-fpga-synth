@@ -303,12 +303,11 @@ Notes:
 The committed bitstream is the Vivado/DSP48 build: 32 kHz, `STAGES=48`. To regenerate it see
 [§3 · Basys 3](#a--basys-3--build-flash-verify), then `cp build/top.bit boards/basys3/firmware/top.bit`.
 
-> **This one is behind the sources.** `top.bit` is byte-for-byte the July 13 initial-release
-> build; `core/synth.x` and `rtl/top.v` have moved on since (M22's 18×18 narrowing, M29). It
-> plays — it is a complete engine, just an older one — but it is not what the repo describes.
-> Rebuilding it needs Vivado, which is why it has drifted. `uv run --no-project python
-> scripts/check_artefacts.py` reports exactly this, and the Tiliqua archive beside it is
-> current.
+> **Rebuilt and verified 2026-08-10.** This blob finally matches the sources — what shipped before
+> it was the July 13 release build, from before M22's 18×18 narrowing and M29. It closed timing
+> with **zero failing endpoints** (100 MHz, worst slack +0.012 ns) and then played: A major 7 came
+> back at 439.9 / 554.2 / 659.2 / 830.6 Hz, inside 0.05 % of nominal. `uv run --no-project python
+> scripts/check_artefacts.py` holds its provenance and will say so when it drifts again.
 
 Then jump to [Run the web UI](#run-the-web-ui) to play it.
 
@@ -686,7 +685,7 @@ this repo — create/start it before running `remote_build.sh`.
 **Flash & verify:**
 ```bash
 openFPGALoader -b basys3 build/top.bit    # flash over JTAG (FT2232 channel A)
-boards/basys3/scripts/verify.sh           # flash + read UART, check sine period + ADSR envelope
+boards/basys3/scripts/verify.sh           # flash, then play a chord and FFT-check the pitches
 uv run host/play.py                       # send MIDI note-ons, FFT-verify the pitches (default Amaj7)
 uv run host/play.py 60 64 67              # C major
 uv run host/play.py --wave saw 69         # A4 sawtooth — FFT shows the harmonic stack

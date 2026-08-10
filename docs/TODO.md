@@ -109,20 +109,62 @@ those three; git history keeps the original.)*
   it was written; the hardware exists, the test has not been done.
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not
   hardware-tested — parts on order.
-- **The committed Basys 3 bitstream is stale, and known to be.** `boards/basys3/firmware/top.bit`
-  is byte-for-byte the 2026-07-13 initial-release blob (`refactor(M20)` only moved it); `core/synth.x`
-  has changed twice since (M22's 18×18 narrowing, M29), as have `rtl/top.v` and
-  `rtl/build_vivado.tcl`. It plays, but it is an older engine than the one documented. Refreshing it
-  needs Vivado on x86 (`boards/basys3/scripts/remote_build.sh`) — which is exactly why it drifted.
-  The Tiliqua archive beside it is current.
+- ~~**The committed Basys 3 bitstream is stale, and known to be.**~~ **Done — rebuilt and verified
+  2026-08-10.** `boards/basys3/firmware/top.bit` had been byte-for-byte the 2026-07-13
+  initial-release blob for four months, an engine from before M22's 18×18 narrowing and M29,
+  because refreshing it needs Vivado on x86 (`boards/basys3/scripts/remote_build.sh`) — which is
+  exactly why it drifted. Rebuilt from `5cf8f83`: **0 failing endpoints** at 100 MHz, worst slack
+  +0.012 ns, 26/90 DSP48E1, 32.5/50 BRAM, 50.4 % of the LUTs. Then flashed, because static timing
+  is not a listening test and this project has walked into that gap twice (item 1 above): A major 7
+  came back at 439.9 / 554.2 / 659.2 / 830.6 Hz, inside 0.05 % of nominal, peaking at 30,000 of
+  32,768 without clipping, and ten interleaved flashes scored it level with the blob it replaces
+  (13 of 15 notes against 12). Both boards now ship the engine the repo documents.
+- **`host/analyze.py --serial` grades every bitstream the same.** It opens the port at 115200 and
+  reads 8-bit mono against a 4 kHz assumption; the transport is 2 Mbaud, 16-bit, stereo-interleaved
+  (`host/transport/uart.py`, `SR = 32000`). So it returns period 24 and peak-to-peak 128
+  *identically* on the 2026-07-13 blob and the 2026-08-10 rebuild — it discriminates nothing, and
+  its verdict on both is `CHECK`. It could not even reach that verdict since `abf12b9`
+  (2026-08-01), which swapped the `glob` port-finder for `transport.uart.find_port` and dropped
+  `time` out of the import beside `glob`, leaving a certain `NameError`: for 112 commits
+  `boards/basys3/scripts/verify.sh` crashed before it measured anything. The import is fixed and
+  `verify.sh` now calls `host/play.py`, which was right all along. What is left is the serial path
+  itself — documented as stale rather than repaired, and the honest options are to port it onto
+  `transport/uart.py` or to delete it. The stdin mode is unaffected and is what README §3's
+  iverilog run pipes into. This is item 1's lesson from the other end: a check that passes nothing
+  gets read by nobody, and a broken verifier is indistinguishable from an absent one.
+- **`host/play.py` is not repeatable on wide intervals, and the noise reads as a regression.** A
+  C2/C4/C6 spread on one unchanged bitstream, fresh flash before each run, scored 1 of 3, 2 of 3
+  and 3 of 3. A close chord (A major 7) is stable at 4 of 4, so it is the octave spread that breaks
+  it. Two things compound. A failing run's peak list carries a ~68 Hz fundamental and fifty-odd
+  partials the three notes cannot account for — the stale audio at the front of a take that
+  `DEVELOPMENT.md` already records, since the port re-enumerates on close and a capture can begin
+  inside the *previous* take. And `pick_window` chooses the **loudest** 2048 samples, which is the
+  worst possible tie-breaker when the leftovers are louder than the notes under test. On top of
+  that, 2048 samples at 32 kHz is a 15.6 Hz bin, while the tolerance allowed for C2 is
+  `max(10, 3 %)` = 10 Hz: the low note is asked to be located more precisely than the transform can
+  resolve, so whether it lands is partly luck even on a clean capture.
+
+  This is worth more than its size, because it does not look like noise. Comparing the 2026-08-10
+  rebuild against the July blob in blocks — three runs of one, then three of the other —
+  returned **9 of 9 against 4 of 9**, exactly what a real low-end regression from M22's 18×18
+  narrowing would look like, and the temptation is to go and find it in the arithmetic. Interleaved
+  over ten flashes the same comparison is **12 of 15 against 13 of 15**: nothing. An earlier single
+  run of each had said the opposite again. Anyone A/B-ing two bitstreams with this tool has to
+  alternate and repeat, and the tool should say so — or discard the first few hundred ms and stop
+  manufacturing the effect.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted
-  edits as well as commits. Two gaps remain in the check itself: it covers no **Tiliqua SDK**
-  checkout (outside this repo, unhashable from here), and **nothing runs it automatically** — no
-  hook, no CI step, so it only helps someone who thinks to run it. Once the Basys 3 bitstream is
-  rebuilt it will have a real recorded provenance; today its record is an honest `null`, because
-  its sources predate the M20 tree split and no truthful hash can be reconstructed for them.
+  edits as well as commits. Both artefacts now have a real recorded provenance: the Basys 3 entry's
+  honest `null` became the seven source hashes the 2026-08-10 build was made from.
+
+  Three gaps remain in the check itself. It covers no **Tiliqua SDK** checkout (outside this repo,
+  unhashable from here). **Nothing runs it automatically** — no hook, no CI step, so it only helps
+  someone who thinks to run it. And it **hashes whole files, so a comment cries stale**: the Tiliqua
+  archive is reported stale today against `afda87e`, which edited nothing in `gateware/top.py` but a
+  docstring. Its own module comment names this failure — "a source set that is too wide … cries
+  stale over a comment in a test harness, and then nobody reads the output" — and firing on the
+  first artefact anyone checks is how that ends. The archive is not actually behind.
 
   **Building on push was considered and cancelled**, not deferred: Vivado needs a licence and
   ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one board of

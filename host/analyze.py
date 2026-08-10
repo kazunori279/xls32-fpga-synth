@@ -8,6 +8,14 @@ Two modes:
 
 Expected @ 4 kHz sample rate, A4 440 Hz: sine period ~9.1 samples; envelope
 peak-to-peak swings high (note-on) and near-zero (silence) with the auto-gate.
+
+**`--serial` is stale and reports CHECK on hardware that plays perfectly.** Those numbers are
+from the 4 kHz 8-bit era; the Basys 3 transport is now 2 Mbaud, 16-bit, stereo-interleaved
+(`host/transport/uart.py`, `SR = 32000`), and read as 8-bit mono at 115200 it yields a period of
+24 and a peak-to-peak pinned at 128 -- identically on the 2026-07-13 blob and the 2026-08-10
+rebuild, so it discriminates nothing. Use `host/play.py` (FFT against the notes it asked for) or
+`host/record_wav.py`; `boards/basys3/scripts/verify.sh` calls the former. The stdin mode below is
+unaffected and is what the iverilog run in README 3 pipes into.
 """
 import sys, statistics
 
@@ -25,7 +33,7 @@ def read_stdin():
     return vals
 
 def read_serial(dev, secs):
-    import os, termios
+    import os, termios, time
     if not dev:
         from transport.uart import find_port
         dev = find_port()

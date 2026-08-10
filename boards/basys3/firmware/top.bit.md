@@ -23,14 +23,36 @@ See the repo README §2 "Basys 3 — flash and go" for the full walkthrough. The
 
 ## What it was built from
 
-**This bitstream is behind the sources.** It is byte-for-byte the blob from the 2026-07-13 initial
-public release (`a38cffe`); the `refactor(M20)` commit only moved it into this directory. Since then
-`core/synth.x` has changed twice (M22's 18×18 narrowing, M29) and so have `rtl/top.v` and
-`rtl/build_vivado.tcl`. It plays — it is a complete engine, just an older one — but it is not the
-engine the rest of the repo documents.
+Rebuilt **2026-08-10** from the tree at `5cf8f83` — Vivado 2024.2, `STAGES=48`, `WCT=48`, through
+`boards/basys3/scripts/remote_build.sh` with `BACKEND=vivado`. For the first time since the M20 tree
+split, the shipped bitstream and `core/synth.x` are the same engine. What it replaced was
+byte-for-byte the 2026-07-13 initial-release blob (`a38cffe`), built before M22's 18×18 narrowing
+and before M29; it stayed that way because refreshing it needs Vivado on an x86 machine, which no
+hosted runner can provide.
 
-It has stayed behind because refreshing it needs Vivado on an x86 machine (see
-`boards/basys3/scripts/remote_build.sh`), which no hosted runner can provide.
+The build closed timing on the `xc7a35t` at 100 MHz:
+
+| | |
+|---|---|
+| Worst setup slack | **+0.012 ns** (MET) — **0** failing endpoints |
+| Slice LUTs        | 10,480 / 20,800 (50.4 %) |
+| Slice registers   | 17,830 / 41,600 (42.9 %) |
+| Block RAM         | 32.5 / 50 tiles (65.0 %) |
+| DSP48E1           | 26 / 90 (28.9 %) |
+
+**Then it was flashed and played**, because timing closure says the netlist meets its constraints
+and nothing about what the synth sounds like, and on this project the two have come apart before.
+`boards/basys3/scripts/verify.sh` flashes over JTAG and plays a chord, checking each note by FFT
+against the frequency it asked for. On a 6-second capture (`host/record_wav.py`) A major 7 returned
+**439.9 / 554.2 / 659.2 / 830.6 Hz** against a nominal 440.0 / 554.4 / 659.3 / 830.6 — inside
+0.05 % — at a peak of 30,000 of 32,768 with no clipping.
+
+It was also run head to head against the blob it replaces, ten flashes alternating between the two,
+on a C2/C4/C6 spread wide enough to stress the octave shifts: **12 of 15 notes for July, 13 of 15
+for this one** — indistinguishable, and both flaky, which is a property of the test and not of
+either bitstream (see [docs/TODO.md](../../../docs/TODO.md)). Interleaving was not fussiness: run in
+blocks, the same comparison had said 9 of 9 for July against 4 of 9 for the rebuild — a convincing
+regression that does not exist — and a single run of each, earlier, had said exactly the opposite.
 
 To see the drift, and to re-record provenance after a rebuild:
 

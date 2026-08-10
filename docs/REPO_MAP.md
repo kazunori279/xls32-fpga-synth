@@ -27,7 +27,7 @@ addition rather than a rewrite.
   - **`boards/basys3/`** — `board.py` (descriptor: 32 kHz, UART transport), `rtl/` (`top.v`
     Verilog shell, `basys3.xdc`, `build_vivado.tcl`), `scripts/` (`build.sh` local
     [Docker](https://www.docker.com/); `remote_build.sh` + `vmbuild*.sh` native x86 GCE build; `verify.sh` flash +
-    UART check), `firmware/` (the committed prebuilt `top.bit`).
+    pitch check), `firmware/` (the committed prebuilt `top.bit`).
   - **`boards/tiliqua/`** — `board.py` (descriptor: 48 kHz, UAC2 + USB-MIDI transport),
     `gateware/` (`top.py` + `xls_core.py`, an [Amaranth](https://amaranth-lang.org/) shell that
     `Instance()`s the same generated `engine.v`, plus `usb_iface.py`, `midi_filter.py`,
@@ -42,7 +42,8 @@ addition rather than a rewrite.
   (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
   suite, the web UI and the presetgen hardware tools), `analyze.py`
-  (envelope/pitch checks), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
+  (envelope/pitch checks on a simulation's stdout; its `--serial` mode is stale, see
+  [TODO](TODO.md)), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over
@@ -84,9 +85,9 @@ the publish step.
 The workflow **deploys, it does not build**. No XLS codegen, no yosys, no Vivado: a green run
 says the page is up, not that the bitstreams under `boards/*/firmware/` still match their
 sources. That second question is answered separately and on demand, by
-[`scripts/check_artefacts.py`](../scripts/check_artefacts.py) — which today reports the Basys 3
-bitstream as behind its sources. See [`docs/TODO.md`](TODO.md) for that, and for why building on
-push was cancelled.
+[`scripts/check_artefacts.py`](../scripts/check_artefacts.py) — which since the 2026-08-10 Basys 3
+rebuild has real source hashes for both boards, but still has to be run by hand. See
+[`docs/TODO.md`](TODO.md) for that, and for why building on push was cancelled.
 
 [`docs/slides/publish_gist.py`](slides/publish_gist.py) is the **legacy** path: it PATCHes
 the [public gist](https://gist.github.com/kazunori279/36e7232e247738f36460c5d1a97191ab) the

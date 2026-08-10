@@ -1,16 +1,23 @@
 {
   "basys3": {
     "artefact": "boards/basys3/firmware/top.bit",
-    "artefact_sha256": "e1f84880580c1561f600652c87cc08ae9943121896551d20165240f1f3ec8d74",
-    "built_from_commit": "a38cffe",
-    "built_on": "2026-07-13",
-    "note": "This blob is byte-identical to the one in the initial public release; 60287a1 only moved it. It predates the M20 tree split, so the sources it was built from do not exist under today's paths and no honest hash can be recorded for them retroactively. Rebuild (README 3, Basys 3) and run --update to give it a real record. Sources have changed in these commits since:",
+    "artefact_sha256": "1156ec1ab9c74f0dea20e025ba8965b473c051315251e98671b8b47e1b219cb8",
+    "built_from_commit": "5cf8f83",
+    "built_on": "2026-08-10",
     "params": {
       "STAGES": "48",
       "WCT": "48",
       "backend": "vivado"
     },
-    "sources": null
+    "sources": {
+      "boards/basys3/rtl/basys3.xdc": "3ab705a911d903228756cd43a665d5d52109fde291c4a22b72b3314e26e8c8bd",
+      "boards/basys3/rtl/build_vivado.tcl": "e5414e3169c1aa3944827151a566042f170631e21dcd44a43d18ae5faa4beeeb",
+      "boards/basys3/rtl/top.v": "cff971f40e2dc6b2e67976a952d14d9751d2a65ae2e57cceb40cebe80f84bcb0",
+      "boards/basys3/scripts/vmbuild_vivado.sh": "b7f860eb5d8be0cfc974817253bd9dc1b0ee0e9acfccb4ae85d515020d0a6cbe",
+      "core/codegen.sh": "1b225060370115699164c0bca82c7a694fb99a8e8edf0054059ffd0a02d217a0",
+      "core/fix_verilog.py": "bd2ab3b9b3899ce9215f6f4015fc63df2cb2c63ca9e2edeeebb706145097be65",
+      "core/synth.x": "f92a4cc9d87157a138b85af8c91d8887cabc7f1927a67b6f4ec90f4adde21c7c"
+    }
   },
   "tiliqua": {
     "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
