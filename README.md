@@ -58,8 +58,16 @@ Once slot 6 is written the module never asks again.
 
 ### 2 · Play it — no computer at all
 
-Move the cable to **`usb2`** and plug in a **USB-MIDI keyboard**. That is the entire setup: 32
-voices across 4 parts, on MIDI channels 1–4.
+**Two inputs, and they work at the same time.** Move the cable to **`usb2`** and plug in a
+**USB-MIDI keyboard** — or skip USB altogether and run a keyboard into the module's **TRS MIDI-In
+jack**, which needs no host of any kind. The two are merged in gateware a whole message at a time,
+so a hardware keyboard on the jack and the browser panel on `usb2` can play together. Either way
+that is the entire setup: 32 voices across 4 parts, on MIDI channels 1–4.
+
+**The jack is TRS Type A** — a Type B cable will be silent — so a DIN-MIDI keyboard or a sequencer
+reaches it through the adapter most of them ship with. Its bytes arrive already addressed to a
+channel, past everything, so a keyboard set to channel 1 plays part 1 — and if the browser panel is
+also connected, its **PART** chips retarget the jack to match.
 
 **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. If you
 fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
@@ -89,7 +97,7 @@ MIDI channel per part.
 | **Mac, Windows or Linux computer + Chrome** | ✅ | ✅ | ✅ |
 | **Android tablet or phone + Chrome** | ✅ | ✅ | ✅ — audio path untested |
 | **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
-| **A USB-MIDI keyboard, no host at all** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
+| **A keyboard alone — USB-MIDI, or DIN/TRS into the jack** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
 | **Same computer, but Firefox or Safari** | ✗ | ✗ | ✗ |
 
 The crosses are all the same cross: **Firefox and Safari ship neither Web MIDI nor Web Serial**,
