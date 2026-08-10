@@ -9,9 +9,9 @@
 #   Tiliqua -- point AUD_IDX at the board itself. Its UAC2 interface enumerates as an input
 #     ("Tiliqua XLS32", 4ch @ 48 kHz), which is the synth's own output before the host touches it.
 #     No extra software, and one fewer resampling stage than a loopback. Only ch0/1 are audio:
-#     ch2/3 carry the gray-coded audio-clock counter, which AFILTER drops -- see below. Untested
-#     alongside a browser streaming the same device; if CoreAudio refuses the second client, fall
-#     back to the loopback.
+#     ch2/3 carry the gray-coded audio-clock counter, which AFILTER drops -- see below. CoreAudio
+#     does allow the second client: a 111 s take came out at mean -12.4 dB / max -1.9 dB while
+#     Chrome held the same device and played the demo.
 #   Basys 3 (or the fallback) -- a **loopback device**, capturing what the browser plays. BlackHole
 #     2ch is free (`brew install blackhole-2ch`); make it the Mac's output, or better, build a
 #     Multi-Output Device in Audio MIDI Setup so you can still hear the demo while it records.

@@ -1436,6 +1436,29 @@ to the one the 175-case suite had just graded at 99.8/100 — same `sha256`, `37
 deterministic enough that the archive in `boards/tiliqua/firmware/` is the artefact that was
 measured, not a rebuild of it.
 
+**The demo recorder was finally run, and it found four things.** `scripts/demo_video.sh` had been
+rewritten for the post-M31 audio path — the browser owns the link now, so the sound has to come off
+an audio *input* rather than the deleted `/api/capture` — and then left unexecuted, which
+[docs/TODO.md](docs/TODO.md) recorded as its first unverified item. Running it produced
+a 111 s take of *Prelude in C* and closed the item, but only after four defects the rewrite had not
+been able to see. **(1)** The Tiliqua's UAC2 input is **4 channels**, not 2: ch2/3 are the
+gray-coded audio-clock counter, near full scale because bit 15 of ch2 is forced high as a
+dropout marker. Chrome escapes this by asking for 4 and being handed 2; avfoundation hands ffmpeg
+all four, so the counter was being encoded into the AAC track and would fold into the mix on any
+downmix. `AFILTER=pan=stereo|c0=c0|c1=c1` drops them, and is the identity on a stereo loopback.
+**(2)** A webcam framed on a Eurorack module is mostly rack, so `CAM_CROP` now trims it before
+`CAM_W` is spent scaling it, with `CAM_PREVIEW` to grab a still to measure off. **(3)** The screen
+grab was the whole 2560-wide desktop; `CROP` takes it to the browser's content rectangle, which
+also takes the same 480 px PIP from 19 % of the frame to 39 %. **(4)** `DUR` defaulted to a 45 s
+clip with no hint of how long a song is — each demo's length is `max(t + duration)` over
+`demos.json` in beats, over its BPM, and the player loops at `bars × 4 × beatMs`, so a take that
+overshoots has an exact bar-boundary cut point. Bach's is 110.53 s, and the recording's second pass
+began at 115.58 s against a first note at 5.05 s: the same number, measured two ways.
+
+The take itself answers the one question the rewrite could not: **CoreAudio allows the second
+client.** ffmpeg captured the board at mean −12.4 dB / max −1.9 dB while Chrome held the same
+device and played the demo, so the loopback fallback is a fallback and not the path.
+
 **CI was cut from the milestone.** It was written into M32 as "CI that builds both boards", and the
 second board is the problem: Basys 3 needs Vivado, which wants a licence and about 100 GB, and no
 hosted runner is going to have it. Actions could run the Tiliqua half on its own — yowasp is

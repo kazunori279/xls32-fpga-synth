@@ -13,9 +13,7 @@ those three; git history keeps the original.)*
 
 ## Unverified — things believed to work that have not been watched working
 
-1. **`scripts/demo_video.sh` has never been executed** in its rewritten form (avfoundation loopback
-   capture, `AUD_IDX`, `AV_OFFSET=0`). It was rewritten against the new audio path and left there.
-2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
+1. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
    re-check that exists because of the M28a rail bug has only ever been exercised in Python.
