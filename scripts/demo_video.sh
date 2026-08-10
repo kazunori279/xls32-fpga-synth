@@ -93,14 +93,17 @@ CAM_OFFSET="${CAM_OFFSET:-0.39}"          # webcam start-up minus the screen's; 
 # gets all four, and without this the counter is encoded into the AAC track and folds into the mix
 # on any downmix. On a 2ch loopback input this is the identity. AFILTER=anull disables it.
 #
-# Then a 20 Hz high-pass, which is not cosmetic. A pulse wave at anything but 50 % duty has a DC
-# component -- the Bach patch runs PULSE W 100 of 128, so about 78 % -- and nothing in the digital
-# path removes it, so every sounding voice adds an offset proportional to its envelope. Measured on
+# Then a 20 Hz high-pass, which as of M33 is **redundant and kept anyway**. A pulse wave at
+# anything but 50 % duty has a DC component -- the Bach patch runs PULSE W 100 of 128, so about
+# 78 % -- and every sounding voice used to add an offset proportional to its envelope. Measured on
 # a full take of *Prelude in C*: DC +0.30, and **98.7 % of the energy below 5 Hz**, leaving the
-# audible band 26 dB down with the headroom spent on something no one can hear. It is not a bug:
-# analogue outputs AC-couple this away, and out0/out1 do. The USB tee is a tap *before* that, so
-# the capture has to do it instead. It costs level -- the take that shipped came off the tee at
-# -4.9 dBFS once the DC and the clicks were out of it -- which is what TARGET_PEAK below buys back.
+# audible band 26 dB down with the headroom spent on something no one can hear. It was never a bug:
+# analogue outputs AC-couple this away, and out0/out1 do. The USB tee is a tap *before* that point,
+# so the capture had to do it instead -- until the gateware started doing it, on the tee only
+# (boards/tiliqua/gateware/dc_block.py). The filter stays because footage recorded off an older
+# bitstream still needs it and a second high-pass under an already-flat signal costs nothing.
+# It costs level -- the take that shipped came off the tee at -4.9 dBFS once the DC and the clicks
+# were out of it -- which is what TARGET_PEAK below buys back.
 AFILTER="${AFILTER:-pan=stereo|c0=c0|c1=c1,highpass=f=20:poles=2}"
 # Normalise the muxed audio to this peak, in dBFS. Measured after AFILTER and after the head trim,
 # on the take itself, so it is the peak that actually reaches the file -- a fixed make-up gain

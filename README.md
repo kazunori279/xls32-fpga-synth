@@ -192,7 +192,7 @@ clocking, the transport, and where the audio physically comes out.
 | **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; both play on hardware) |
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
-| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,773 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
+| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,557 / 24,288 TRELLIS_COMB (96%) · 28/28 MULT18X18D · 53/56 DP16KD |
 | **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
 | **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls32-r5.tar.gz` (bitstream archive) |
 
@@ -506,17 +506,24 @@ appears (a pair of AirPods waking up is enough). Which device it should be depen
   fewer resampling stage than a loopback. Only ch0/1 are audio — ch2/3 carry the gray-coded clock
   counter, and they sit near full scale — so the script drops them (`AFILTER`, on by default). It
   reads them first, though: the counter says exactly how many frames the capture lost, and the take
-  is rejected if that is more than 0.1 %. `AFILTER` also high-passes at 20 Hz, which is not
-  cosmetic: a pulse wave off 50 % duty carries DC, the demo patches run about 78 %, and the tee taps
-  the signal *before* the AC coupling that `out0`/`out1` have. On a full take of *Prelude in C*,
-  89.6 % of the captured energy sat below 5 Hz and the audible band was 26 dB down. Expect to want a
-  few dB of make-up gain afterwards.
+  is rejected if that is more than 0.1 %. `AFILTER` also high-passes at 20 Hz, which used to be
+  load-bearing: a pulse wave off 50 % duty carries DC, the demo patches run about 78 %, and the tee
+  taps the signal *before* the AC coupling that `out0`/`out1` have. On a full take of *Prelude in
+  C*, 89.6 % of the captured energy sat below 5 Hz and the audible band was 26 dB down.
 
-  **Convenience, not fidelity.** The tee is a copy that cannot push back on the codec, so it drops
-  rather than stalls, and ~1 ms goes missing every ~10.4 s (below). Everything here — the counter,
-  the 20 Hz high-pass, `declick.py`, the make-up gain — exists to make that copy usable, and it
-  gets close. **A recording that has to be right should come off `out0`/`out1` into an audio
-  interface**, which needs no repair because nothing was ever lost. This route is what a headless
+  **As of M33 the gateware does both jobs itself**, and a take off a current bitstream needs
+  neither the high-pass nor `declick.py`. The tee is DC-blocked on the board
+  ([`dc_block.py`](boards/tiliqua/gateware/dc_block.py), 7.5 Hz) and the UAC2 capture endpoint
+  paces its own packets from the FIFO level rather than reporting the host's nominal rate
+  ([`usb_iface.py`](boards/tiliqua/gateware/usb_iface.py)). Measured over 120 s: **0 frames lost in
+  0 events**, mean **+0.00003**, **0.000 %** of the energy below 5 Hz. The host-side repairs are
+  kept because they still have to work on the takes recorded before this.
+
+  **Convenience, then — and now close to fidelity.** The tee is still a copy that cannot push back
+  on the codec, so it is still *permitted* to drop; what changed is that the rate mismatch which
+  guaranteed it no longer exists. A 120 s measurement is not a proof about ten minutes. **A
+  recording that must be right should still come off `out0`/`out1` into an audio interface**, which
+  cannot lose anything by construction rather than by measurement. This route is what a headless
   build machine can do, which is why the project uses it.
 - **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
@@ -563,8 +570,10 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 > audio's head and `CAM_OFFSET` (0.39 s) delays the PIP; both are start-up times measured on one
 > Mac mini, so measure yours if the lips do not match.
 >
-> **And passing that check is not the same as sounding clean.** The 0.011 % the counter still
-> reports is not noise, and it is not the host either — it is the tee in *this* gateware
+> **And passing that check is not the same as sounding clean.** *(Fixed in M33 — the measurement
+> below is what the board did before the capture endpoint learned to pace itself, and the reasoning
+> is why it now can.)* The 0.011 % the counter reported
+> was not noise, and it was not the host either — it is the tee in *this* gateware
 > ([`top.py`](boards/tiliqua/gateware/top.py), the `usb_tee` FIFO), 16 entries deep, written once
 > per codec frame off the motherboard's clock and read at whatever rate the host's USB SOF asks
 > for. Two crystals, no rate control, **110–123 ppm** apart on the takes measured here, so the

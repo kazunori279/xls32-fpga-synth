@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Conceal the step discontinuities a USB capture leaves behind, without changing its length.
 
+As of M33 this is a repair tool for old takes, not part of the recording path. The tee that feeds
+the USB capture is a 16-deep FIFO written off the board's audio clock and read off the host's, and
+it is required to drop rather than stall the codec (`boards/tiliqua/gateware/top.py:310`); it used
+to have no rate control between the two clocks, and 110-123 ppm of difference ate the FIFO every
+10 s. The UAC2 capture endpoint now paces itself from the FIFO's own level, and a 120 s take
+measures 0 lost frames in 0 events, so a take made on a current bitstream has nothing here to fix.
+Everything below describes the takes made before it, which is what this still exists for.
+
 `scripts/rec_audio.py` counts the frames a capture loses and refuses a take over 0.1 %. What it
-cannot do is make the loss zero: the tee that feeds the USB capture is a 16-deep FIFO written off
-the board's audio clock and read off the host's, with no rate control between them, and it is
-required to drop rather than stall the codec (`boards/tiliqua/gateware/top.py:310`). Nothing here
-reaches the jacks -- `out0`/`out1` get every sample -- but the recording does not. The drops land on
+could not do was make the loss zero. Nothing here
+reaches the jacks -- `out0`/`out1` get every sample -- but the recording did not. The drops land on
 a grid: over a 122 s take, **9.66 to 10.39 s** apart, and twice at exactly double that -- which is
 the arithmetic agreeing with itself, because the counter scored the same take at 12 events and this
 finds 10. About a millisecond each time, 0.011 % of the audio, which is nothing, except that each

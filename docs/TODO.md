@@ -27,11 +27,14 @@ those three; git history keeps the original.)*
    one pass of *Prelude in C* against the measured 110.531 s loop period, and three frames were
    pulled at 30 s, 60 s and 110 s to confirm the panel and the lit tiles. A listener then caught
    what none of that had: **ten short clicks**. They are that same 0.011 % — and they are made on
-   the board, by the `usb_tee` FIFO in this repo's own gateware, which is written off the
+   the board, by the `usb_tee` FIFO in this repo's own gateware, which was written off the
    motherboard's clock and read off the host's with no rate control between them and is required to
    drop rather than stall the codec. 110–123 ppm apart eats its 16 entries every 10.4 s, and a
    millisecond cut out of a sustained tone is a step. (`out0`/`out1` never see it — the tee is a
-   copy that cannot push back on the DAC path.) `scripts/declick.py` bridges them and
+   copy that cannot push back on the DAC path.) **The rate control now exists** — the UAC2 capture
+   endpoint sizes its own IN packets from `adc_fifo_level` instead of reporting the host's nominal
+   48,000 fps, and a 120 s capture measures 0 lost frames in 0 events (M33 below). The rest of this
+   entry is the record of finding that out, and is worth keeping for it. `scripts/declick.py` bridges them and
    `demo_video.sh` now runs it before the mux; the repaired file measures no seam above the music's
    own transients. It is worth
    noting how the check was passed and the take still wrong: the counter measures *arrival*, and
@@ -86,18 +89,24 @@ those three; git history keeps the original.)*
   tail RMS 0 for the same case, so it is Tiliqua-side. Candidates not eliminated: the `>> 1` floors
   in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path. At ~−49 dBFS it fails
   no checker, which is exactly why it is written down here rather than fixed in passing.
-- **The USB tee carries the pulse wave's DC, and nothing removes it.** A pulse at anything but
-  50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 — about 78 % — so every
-  sounding voice contributes an offset that tracks its own envelope. Measured on a full take of
-  *Prelude in C* off the UAC2 input: mean **+0.286**, with **89.6 % of the energy below 5 Hz**,
-  which leaves the audible band at −25.9 dBFS and spends the headroom on something no one can hear.
-  This is *not* the DC rail above — it is signal-dependent, it is arithmetically expected, and the
-  same signature is present in the July take, so it predates the capture rewrite. It also does not
-  reach anyone's ears: `out0`/`out1` are AC-coupled and remove it. The digital tee is a tap taken
-  before that point, so anything recording from USB has to high-pass for itself, which
-  `scripts/demo_video.sh` now does at 20 Hz. What has not been checked, for want of the hardware,
-  is whether the offset costs any headroom *inside* the engine before the output stage — if it
-  does, loud four-part passages are clipping asymmetrically and no test would say so.
+- **The pulse wave's DC is still inside the engine; it is only the USB tee that is clean now.**
+  A pulse at anything but 50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 —
+  about 78 % — so every sounding voice contributes an offset that tracks its own envelope. Measured
+  on a full take of *Prelude in C* off the UAC2 input, before the fix: mean **+0.286**, with
+  **89.6 % of the energy below 5 Hz**, leaving the audible band at −25.9 dBFS. This is *not* the DC
+  rail above — it is signal-dependent and arithmetically expected.
+
+  `boards/tiliqua/gateware/dc_block.py` now high-passes the tee at 7.5 Hz, and a 120 s capture
+  measures mean **+0.00003** with **0.000 %** below 5 Hz, so **the debt is no longer observable
+  over USB**. It is not paid off, only hidden from the one instrument that could see it. The
+  blocker sits on the tee alone, deliberately — putting it in `fx.py` would break bit-exact parity
+  with `fx_model.py` and Basys 3 — so the offset is still there in the engine and on `out0`/`out1`,
+  where the AC coupling removes it before anyone hears it.
+
+  What still has not been checked is whether the offset costs any headroom *inside* the engine
+  before the output stage. If it does, loud four-part passages are clipping asymmetrically, no test
+  would say so, and the tee's DC blocker will not tell you either — it is downstream of the
+  clipping. Confirming that needs an instrumented engine build, not a recording.
 - **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
   the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
   the 48 kHz coefficient set as the difference.

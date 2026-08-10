@@ -86,6 +86,7 @@ ARTEFACTS = {
             "boards/tiliqua/gateware/midi_filter.py",
             "boards/tiliqua/gateware/midi_arb.py",
             "boards/tiliqua/gateware/fx.py",
+            "boards/tiliqua/gateware/dc_block.py",
             "boards/tiliqua/gateware/viz.py",
         ],
     },

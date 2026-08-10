@@ -57,6 +57,8 @@ graded automatically, everything before it by hand or by simulation.
 | **31 ✅** | **Standalone browser UI** — cross-board, so it lives in [DEVELOPMENT.md](DEVELOPMENT.md#milestone-31--deleting-the-python-hop) | |
 | **32 ✅** | **Bitstream archives, ~~CI~~, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/` | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest, verified as the committed file. **CI was cut from the milestone**: Vivado cannot run in Actions, so a two-board matrix has no second half — see [below](#what-is-left--m32-and-the-risk-register) |
 
+| **33 ✅** | **The USB capture path**: the UAC2 IN endpoint sizes its own packets from `adc_fifo_level` instead of echoing the host's nominal rate, and the tee gets a multiplier-free DC blocker | **measured over 120 s on hardware: 0 frames lost in 0 events (was 652 of 5,902,732, in 12), mean +0.00003 (was +0.286), 0.000% of the energy below 5 Hz (was 89.6%).** The design got smaller doing it: 23,773 (97%) → 23,557 (96%) |
+
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
 > [DEVELOPMENT.md](DEVELOPMENT.md). They are numbered in this sequence but are not Tiliqua work.
@@ -1561,6 +1563,71 @@ Two rows were open going into M32: **3b** (out-of-spec static timing, watched vi
 every report prints) and **M24's TRS MIDI**, which passed in simulation and had never had a cable in
 it. TRS has since been closed on hardware; 3b is still open, and is in
 [docs/TODO.md](docs/TODO.md).
+
+---
+
+## Milestone 33 — the USB capture path (done, hardware-verified)
+
+Two separate defects, both only visible to someone recording over USB, both fixed on the tee alone
+so that `out0`/`out1` and the engine keep bit-exact parity with `fx_model.py` and the Basys 3.
+
+**The clicks were a rate mismatch, not a FIFO that was too small.** The vendor UAC2 implementation
+sets the capture packet size from `audio_in_frame_bytes`, a register updated only by the *playback*
+stream. At 48 kHz / 4ch its reset value is 96 bytes — 6 frames per microframe, exactly 48,000 fps,
+the host's nominal rate. The board's audio clock runs 110–123 ppm fast, so ~5.5 frames per second
+had nowhere to go, and the 48 frames of total elasticity (tee 16 + `adc_fifo` 16 + `out_fifo` 16)
+filled every ~10 s. That is the observed period. **A deeper FIFO buys seconds and fixes nothing** —
+the surplus is a rate, and only a rate can absorb it.
+
+UAC2's asynchronous IN conveys the device's rate by varying the packet size the device sends; the
+absence of a feedback endpoint for capture is spec-correct, not an omission. So `usb_iface.py` now
+re-drives `bytes_in_frame` from `adc_fifo_level` with a three-value bang-bang — 80 / 96 / 112 bytes,
+all of which fit the 128-byte `max_packet_size` — aiming at the middle of the FIFO, because SOF's
+phase within the level sawtooth is not observable from inside. It is deliberately biased toward
+overrun: `ChannelsToUSBStream` zero-pads when it runs short, and `rec_audio.py` counts a zero-padded
+frame as a dropout, so underrunning would trade a real artefact for a measured one. The cost is
+about 24 frames buffered, half a millisecond of added USB latency.
+
+**The DC was arithmetic.** `dc_block.py` is `x - OnePole(x)` per channel, multiplier-free because
+`MULT18X18D` is 28 of 28 with nothing spare — which also rules out the SDK's `dsp.filters.DCBlock`,
+the obvious choice, since it wants a MAC.
+
+**Two things measurement contradicted.** The first: `extra_bits` does *not* create a dead band. At
+10, 12 and 16 the DC residual on a 0.5 step is an identical 1 LSB; what the bits actually buy is
+tracking noise, 1.081 LSB against 0.632. The second: that noise is not worth its area. `OnePole`
+sizes its state `SQ(1, 15 + extra_bits)` and puts two adders across it, so `extra_bits=16` cost 132
+`TRELLIS_COMB` — and at 98% utilisation nextpnr's router2 stopped converging, climbing from 671
+overused wires at iteration 31 to 17,865 by 104 on a netlist it had previously closed in 81 s. A
+cell census settled what to cut: 66 CCU2C, 64 FF, **zero LUT4**, so the dynamic `shift` was being
+constant-folded and the whole cost was adder width. At `extra_bits = shift = 10` routing completes
+at iteration 140 with `overused=0`.
+
+**Verification.** The pacing fix cannot be simulated at all — everything USB sits behind
+`sim.is_hw(platform)` and the Verilator harness has no ULPI. Its only evidence is the hardware
+measurement.
+
+| | Before | Target | After (120 s) |
+|---|---|---|---|
+| Counter loss | 0.011% (652 / 5,902,732) | ≤ 0.001% | **0.000% (0 / 5,760,000)** |
+| Loss events | 12 in 110 s | 0 | **0** |
+| Zero-padded frames | 0 | not increased | **0** |
+| ch0/ch1 mean | +0.286 | ≈ 0 | **+0.00003** |
+| Energy below 5 Hz | 89.6% | a few % | **0.000%** |
+
+`check_loop.py` is the compact version of the same result: before the fix it reported the dominant
+frequency of a held A4 as **0.69 Hz** — the DC, winning against the note — and after it reports
+**440.01 Hz, +0.1 cents**, with frame gaps 0.000%.
+
+Post-route: **23,557 / 24,288 TRELLIS_COMB (96%)**, 28/28 `MULT18X18D`, 53/56 `DP16KD`. `sync`
+closes at 39.42 MHz against its nominal 60, which is risk-register row 3b and unchanged in kind.
+
+**What this does not claim.** 120 seconds measured clean is not a proof about ten minutes; the tee
+is still permitted to drop, it simply no longer has a standing reason to. The graded suite's
+`rms` / `peak` / `clip_frac` scores for `stress_fx_tail` and `stress_silence_recovery` will move,
+because those statistics are DC-sensitive and the DC is gone — that is the fix showing up, not a
+regression. And the pulse-duty offset itself is untouched: it is still in the engine and still on
+the jacks, where AC coupling removes it. `docs/TODO.md` keeps that debt open, with a note that USB
+can no longer observe it.
 
 ---
 
