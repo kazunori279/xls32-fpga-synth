@@ -22,9 +22,9 @@
   },
   "tiliqua": {
     "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
-    "artefact_sha256": "5c919f408d0d1567fb2166425f2acfc2783fedb3a0380481cb66f939a1da325f",
-    "built_from_commit": "d5a0819",
-    "built_on": "2026-08-09",
+    "artefact_sha256": "528d30637d32ef78845a2fd5365f4110e1cd0bbd8991dbe52426470df994d415",
+    "built_from_commit": "1b08818",
+    "built_on": "2026-08-10",
     "hash_scheme": "normalized-v1",
     "params": {
       "STAGES": "12",
@@ -33,11 +33,12 @@
     },
     "sources": {
       "boards/tiliqua/build.sh": "f7cddb030c3d5484ac2ab09f05e94b3726611957dd999cc74ef58a9676bf3399",
+      "boards/tiliqua/gateware/dc_block.py": "b9720b2b0e8d4cb349b5babb08da71efd523865dac2ed2fd2d26b17b6eea157d",
       "boards/tiliqua/gateware/fx.py": "2a8f17fee0bc5803247c9df73881b2c5d16c9a91ed9fb035bcd8a4885b28d688",
       "boards/tiliqua/gateware/midi_arb.py": "dd2363829bf0fd1d8bf491f4aabb69df9bdb973101eaf5304414b32b83c4421e",
       "boards/tiliqua/gateware/midi_filter.py": "096d240ab34168bfca191a108ec7a435199199ab6574e4986cc29f9a9455ad49",
-      "boards/tiliqua/gateware/top.py": "62f266b65cee4c801fbbd1c137a75ecdd89f885a8520dcec147e8276b6df0eeb",
-      "boards/tiliqua/gateware/usb_iface.py": "8e8822db0420df3184abf05776215b1f356913fb964edfacd5fba4449412687c",
+      "boards/tiliqua/gateware/top.py": "3e61cd30321fbe6538f892d90136b79b6733e184bfbb131ad4c7889bca378912",
+      "boards/tiliqua/gateware/usb_iface.py": "0d4334f51554ae0e60fef117cb573afb511c19c107cd72005f4411aa3295e6f9",
       "boards/tiliqua/gateware/viz.py": "864e2f3a15c5e43a0cff1fa85fa950ba8fda6d1e6abb4d7118a5aa5614cff980",
       "boards/tiliqua/gateware/xls_core.py": "aef7060b81b471756a54d1a7c43dfae201a509fa629620e2312c05309170d87e",
       "core/codegen.sh": "1b225060370115699164c0bca82c7a694fb99a8e8edf0054059ffd0a02d217a0",
