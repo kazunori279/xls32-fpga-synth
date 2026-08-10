@@ -41,7 +41,8 @@ addition rather than a rewrite.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
   (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded
-  suite, the web UI and the presetgen hardware tools), `analyze.py`
+  suite, the web UI, the presetgen hardware tools, and since 2026-08-10 `play.py` and
+  `record_wav.py`, whose own capture loop was dropping bytes), `analyze.py`
   (envelope/pitch checks on a simulation's stdout; its `--serial` mode is stale, see
   [TODO](TODO.md)), `analyze_fft.py` ([DFT](https://en.wikipedia.org/wiki/Discrete_Fourier_transform) chord-peak check), `play.py` (host sends
   MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and

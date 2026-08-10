@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Play a chord and record the FPGA synth's 16-bit audio to a .wav.
-Usage: record_wav.py [seconds] [out.wav] [--wave sine|saw|square|tri] [note ...]"""
-import os, sys, time, struct, wave, termios
-from transport.uart import open_port, read_bytes, samples_from_bytes
-from synth import to_signed, normalize, note_on, note_off, set_wave, SR
+Usage: record_wav.py [seconds] [out.wav] [--wave sine|saw|square|tri] [note ...]
+
+Captures through `UartTransport`, not `read_bytes` + `samples_from_bytes`: that pair loses
+frame phase on most captures and decodes everything after the break as full-scale hash (see
+`read_bytes` in transport/uart.py). A take that had one was silently a take with a burst of
+noise in it, which is a bad property for the file someone listens to."""
+import sys, time, struct, wave
+from transport.uart import UartTransport
+from synth import normalize, note_on, note_off, set_wave, SR
 
 WAVES = {"sine": 0, "saw": 1, "square": 2, "tri": 3}
 
@@ -18,13 +23,16 @@ def main():
         j = a.index("--wave"); wave_sel = WAVES[a[j+1]]; a = a[:j] + a[j+2:]
     notes = [int(x) for x in a] or [69, 73, 76, 80]
 
-    dev, fd = open_port(rw=True)
-    if wave_sel is not None: os.write(fd, set_wave(wave_sel))
-    for n in notes: os.write(fd, note_on(n, 100))
-    time.sleep(0.1)
-    s = normalize(to_signed(samples_from_bytes(read_bytes(fd, secs))))
-    os.write(fd, b"".join(note_off(n) for n in notes)); termios.tcdrain(fd); time.sleep(0.2)
-    os.close(fd)
+    t = UartTransport().open()
+    if wave_sel is not None: t.send_midi(set_wave(wave_sel))
+    for n in notes: t.send_midi(note_on(n, 100))
+    time.sleep(0.1)                       # attack; it predates record_start and gets trimmed
+    t.record_start(); time.sleep(secs); s = normalize(t.record_stop())
+    t.send_midi(b"".join(note_off(n) for n in notes))
+    align, dev = t.last_align, t.dev
+    t.close()
+    if align and align[0]:
+        print(f"[{dev}] WARNING: frame phase moved {align[0]}x, first at byte {align[1]}")
 
     with wave.open(out, "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)

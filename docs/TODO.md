@@ -132,26 +132,40 @@ those three; git history keeps the original.)*
   `transport/uart.py` or to delete it. The stdin mode is unaffected and is what README §3's
   iverilog run pipes into. This is item 1's lesson from the other end: a check that passes nothing
   gets read by nobody, and a broken verifier is indistinguishable from an absent one.
-- **`host/play.py` is not repeatable on wide intervals, and the noise reads as a regression.** A
-  C2/C4/C6 spread on one unchanged bitstream, fresh flash before each run, scored 1 of 3, 2 of 3
-  and 3 of 3. A close chord (A major 7) is stable at 4 of 4, so it is the octave spread that breaks
-  it. Two things compound. A failing run's peak list carries a ~68 Hz fundamental and fifty-odd
-  partials the three notes cannot account for — the stale audio at the front of a take that
-  `DEVELOPMENT.md` already records, since the port re-enumerates on close and a capture can begin
-  inside the *previous* take. And `pick_window` chooses the **loudest** 2048 samples, which is the
-  worst possible tie-breaker when the leftovers are louder than the notes under test. On top of
-  that, 2048 samples at 32 kHz is a 15.6 Hz bin, while the tolerance allowed for C2 is
-  `max(10, 3 %)` = 10 Hz: the low note is asked to be located more precisely than the transform can
-  resolve, so whether it lands is partly luck even on a clean capture.
+- ~~**`host/play.py` is not repeatable on wide intervals, and the noise reads as a regression.**~~
+  **Done — fixed and verified 2026-08-10.** The fault was in the capture, not the analysis.
+  `read_bytes` loses bytes: **6 of 8 captures lost frame phase** mid-buffer (marker score
+  0.22–0.44 at the break) against **0 of 8** through `Recorder`, measured alternating and with the
+  order swapped every pair. Varying its read size (16 kB / 64 kB) and its idle sleep (1 ms /
+  0.3 ms / none) changed nothing, so the trigger is not the drain rate and is still not pinned
+  down. `samples_from_bytes` then locks byte alignment once, so everything after the break decodes
+  as (Lhi, Rlo) pairs — full-scale hash. The hash is the loudest thing in the buffer, so
+  `pick_window` chose it. That accounts for the whole "~68 Hz fundamental and fifty-odd partials
+  the three notes cannot explain" signature: it was never audio.
 
-  This is worth more than its size, because it does not look like noise. Comparing the 2026-08-10
-  rebuild against the July blob in blocks — three runs of one, then three of the other —
-  returned **9 of 9 against 4 of 9**, exactly what a real low-end regression from M22's 18×18
-  narrowing would look like, and the temptation is to go and find it in the arithmetic. Interleaved
-  over ten flashes the same comparison is **12 of 15 against 13 of 15**: nothing. An earlier single
-  run of each had said the opposite again. Anyone A/B-ing two bitstreams with this tool has to
-  alternate and repeat, and the tool should say so — or discard the first few hundred ms and stop
-  manufacturing the effect.
+  `play.py` and `record_wav.py` now capture through `UartTransport.record_start/record_stop`,
+  which drains with `Recorder`, re-locks the frame phase every 128 bytes, trims the backlog against
+  the wall clock, and reports whether the phase held. Two further changes stop the analysis
+  choosing badly on its own. `pick_window(clean=True)` keeps only windows within 40 % of the
+  loudest and then takes the one with the fewest jumps over `synth.glitches`' threshold. And the
+  DFT window and band come from the notes asked for instead of a fixed 2048 samples over
+  60–3000 Hz — 2048 localises a peak to about 31 Hz while C2 was required to land inside 10, and
+  the 60 Hz floor sat 5 Hz below C2's 65.4 with no room for it to be a local maximum.
+
+  Measured on one unchanged bitstream, C2/C4/C6, interleaved: **old 20 of 33 notes over 11 runs**
+  (1, 2, 0, 3, 3, 3, 1, 3, 1, 1, 2) against **new 30 of 30 over 10** — and the new one returns the
+  *same* peak list every single run, `[65, 261, 1045]` against a nominal 65.4 / 261.6 / 1046.5.
+  All four waveforms now pass the wide spread, where the close chord was all the old one could
+  hold. `record_wav.py` takes come back at exactly the wall-clock length with no jump over
+  threshold, where they used to carry the 157 ms backlog.
+
+  What is left. `read_bytes` is still lossy, and still used by `host/filter_demo.py` — which wants
+  a single-threaded reader on purpose, interleaving writes with 45 ms reads, so it cannot simply
+  move — and by `analyze_fft.py --serial`, sibling of the stale `analyze.py --serial` above.
+  `test/analysis.py` still picks the loudest window, deliberately: the graded suite's published
+  0–100 scores would move and re-running it is a board-day. And the byte loss itself is
+  unexplained, which is the uncomfortable part — nothing rules out the same fault reaching the
+  Tiliqua's UAC2 path in a form nobody has looked for.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted

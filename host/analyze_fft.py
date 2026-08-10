@@ -17,13 +17,26 @@ def read_stdin():
         except ValueError: pass
     return v
 
-def pick_window(s, W=2048):
-    best_i, best_pp = 0, -1
-    for i in range(0, max(1, len(s)-W), 256):
-        seg = s[i:i+W]
-        pp = max(seg) - min(seg)
-        if pp > best_pp: best_pp, best_i = pp, i
-    return s[best_i:best_i+W]
+def pick_window(s, W=2048, clean=False):
+    """The W samples to transform. `clean=False` takes the loudest, which is the wrong
+    tie-breaker whenever the loudest thing in the capture is not the note: a frame-phase shift
+    decodes as full-scale hash and wins every time, and so does the tail of the *previous* take
+    sitting at the front of the buffer. `clean=True` keeps only windows within 40 % of the
+    loudest and then takes the one with the fewest sample-to-sample jumps over `synth.glitches`'
+    threshold -- a tone of any pitch in range has none, misdecoded bytes have thousands.
+
+    The default stays `False` because `test/analysis.py` grades through here and its published
+    0-100 scores would move; `host/play.py` passes `clean=True`. See docs/TODO.md."""
+    step = max(1, W // 8) if clean else 256
+    offs = list(range(0, max(1, len(s)-W), step))
+    pps = [max(s[i:i+W]) - min(s[i:i+W]) for i in offs]
+    if not clean:
+        return s[offs[pps.index(max(pps))]:][:W]
+    from synth import glitches
+    top = max(pps)
+    loud = [i for i, pp in zip(offs, pps) if pp >= 0.6*top] or offs
+    best = min(loud, key=lambda i: (glitches(s[i:i+W]), -(max(s[i:i+W])-min(s[i:i+W]))))
+    return s[best:best+W]
 
 def spectrum(w, fmin=60, fmax=3000, step=4):
     n = len(w); mean = sum(w)/n

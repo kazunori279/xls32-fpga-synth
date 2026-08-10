@@ -57,6 +57,19 @@ def open_port(rw=False, baud=BAUD):
     return dev, fd
 
 def read_bytes(fd, secs):
+    """Drain the port for `secs` from this thread. **It loses bytes.** Measured against
+    `Recorder` on the same board, alternating and with the order swapped every pair: 6 of 8
+    read_bytes captures lost frame phase mid-buffer (marker score 0.22-0.44 at the break),
+    0 of 8 Recorder captures did. Varying the read size (16 kB / 64 kB) and the idle sleep
+    (1 ms / 0.3 ms / none) changed nothing, so the trigger is not the drain rate and is not
+    pinned down; what is certain is that the threaded reader does not do it.
+
+    A lost byte shifts every following frame, and `samples_from_bytes` locks alignment once,
+    so everything after the break decodes as (Lhi, Rlo) pairs -- full-scale hash. Prefer
+    `UartTransport.record_start/record_stop`, which drains through `Recorder`, re-locks the
+    frame phase every 128 bytes and reports whether it held. `host/play.py` and
+    `host/record_wav.py` moved for exactly this reason. `host/filter_demo.py` stays here on
+    purpose -- it interleaves writes with 45 ms reads and wants no concurrent reader."""
     termios.tcflush(fd, termios.TCIFLUSH); time.sleep(0.05); termios.tcflush(fd, termios.TCIFLUSH)
     buf = bytearray(); t0 = time.time()
     while time.time() - t0 < secs:
