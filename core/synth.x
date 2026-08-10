@@ -37,9 +37,12 @@ pub enum Env : u3 { OFF=0, ATTACK=1, DECAY=2, SUSTAIN=3, RELEASE=4 }
 // Ring-state is the F4PGA packing budget, so widths are tight: `inc` isn't stored (it's
 // recomputed from `note`); the filter state flo/fbnd is s19 (it only ever holds the
 // SVF clamp, +-131072); `cinc` is the portamento-glided increment stored as inc>>6 (u26).
+// `held` is the key, not the sound: it stays 1 only while the player is holding the note down.
+// A note-off under a depressed sustain pedal clears it without releasing the voice, which is
+// what lets the pedal-up sweep tell "let go, still ringing" from "still under a finger".
 pub struct Voice { phase: u32, env: u16, env_st: Env, note: u8, vel: u8,
                    flo: s19, fbnd: s19, fenv: u16, fenv_st: Env, subhi: u1, ph2: u32, cinc: u26,
-                   uni: s4, part: u2 }   // uni: unison slot; part: which timbre (MIDI channel 0-3)
+                   uni: s4, part: u2, held: u1 }   // uni: unison slot; part: which timbre (MIDI channel 0-3)
 // One timbre's patch (MULTITIMBRAL: 4 of these, one per MIDI channel 0-3). All sound-shaping
 // Everything is per-part now, including the LFO *oscillator* (lfo_ph/lfo_rate) so each timbre
 // has its own LFO speed & phase (CC76). Only the noise LFSR stays shared (in Eng).
@@ -50,7 +53,9 @@ pub struct Part { wave: u3, cutoff: u16, reso: u16, fdepth: u16,   // wave(70) c
                   lfo_ph: u32, lfo_rate: u32,                       // per-part LFO oscillator (CC76 rate)
                   xmode: u2, xdepth: u16, xratio: u3,               // cross-osc: CC85/86/87
                   a_att: u16, a_dec: u16, a_sus: u16, a_rel: u16,   // amp ADSR (CC20-23)
-                  f_att: u16, f_dec: u16, f_sus: u16, f_rel: u16 }  // filter-env ADSR (CC24-27)
+                  f_att: u16, f_dec: u16, f_sus: u16, f_rel: u16,   // filter-env ADSR (CC24-27)
+                  ped: u1 }                                         // sustain pedal down (CC64)
+                  // `ped`, not `sus`: a_sus/f_sus are the ADSR sustain *level*, a different thing.
 const DEFAULT_PART = Part { cutoff: u16:3000, reso: u16:2200, fdepth: u16:70, pw: u16:64,
                             lfo_rate: u32:670000, vol: u8:127,
                             a_att: ATT_INC, a_dec: DEC_INC, a_sus: SUS_LEVEL, a_rel: REL_INC,
@@ -138,15 +143,35 @@ fn apply_on(voices: Voice[32], note: u8, vel: u8, porta: u1, un: u3, lfsr: u16, 
             let cinc0 = if porta == u1:1 { vs[i].cinc } else { (note_inc(note) >> u32:6) as u26 };
             let slot = ((cnt as s8) * s8:2 - ((un as s8) - s8:1)) as s4;
             let seed = ((lfsr as u32) << u32:16) ^ ((cnt as u32) << u32:29);
-            (update(vs, i, Voice { phase: seed, env: u16:0, env_st: Env::ATTACK, note: note, vel: vel, flo: s19:0, fbnd: s19:0, fenv: u16:0, fenv_st: Env::ATTACK, subhi: u1:0, ph2: seed ^ u32:0x5a5a5a5a, cinc: cinc0, uni: slot, part: part }), cnt + u3:1)
+            (update(vs, i, Voice { phase: seed, env: u16:0, env_st: Env::ATTACK, note: note, vel: vel, flo: s19:0, fbnd: s19:0, fenv: u16:0, fenv_st: Env::ATTACK, subhi: u1:0, ph2: seed ^ u32:0x5a5a5a5a, cinc: cinc0, uni: slot, part: part, held: u1:1 }), cnt + u3:1)
         } else { (vs, cnt) }
     }((voices, u3:0));
     let (vs, _) = res; vs
 }
-fn apply_off(voices: Voice[32], note: u8, part: u2) -> Voice[32] {
+// One note-off, or a whole-part sweep. `mode` picks which of the part's voices are meant:
+//   0 = just this note / 1 = every one of them (CC120, CC123) / 2 = the ones whose key is
+//   already up (the sustain pedal coming back up). `hard` is CC120 All Sound Off, which cuts
+//   the envelope dead instead of letting it fall through RELEASE. `keep` is the pedal being
+//   down, which defers a plain note-off: the finger lifts, the voice keeps sounding.
+// There is deliberately ONE call site. A second would let XLS inline a second copy of this
+// 32-voice loop, and at 96% of the ECP5's LUTs there is no room for that.
+fn apply_off(voices: Voice[32], note: u8, part: u2, mode: u2, hard: u1, keep: u1) -> Voice[32] {
     for (i, vs): (u32, Voice[32]) in u32:0..u32:32 {
         let v = vs[i];
-        if v.note == note && v.part == part && v.env_st != Env::OFF && v.env_st != Env::RELEASE { update(vs, i, Voice { env_st: Env::RELEASE, fenv_st: Env::RELEASE, ..v }) } else { vs }
+        let mine = v.part == part && v.env_st != Env::OFF;
+        let sel = match mode { u2:0 => v.note == note, u2:1 => true, _ => v.held == u1:0 };
+        let hit = mine && sel;
+        let rel_ok = v.env_st != Env::RELEASE || hard;   // only CC120 reaps a voice already releasing
+        let do_rel = hit && rel_ok && !(mode == u2:0 && keep);
+        let held_n = if hit { u1:0 } else { v.held };    // the key is up either way
+        if do_rel {
+            // `hard` zeroes env as well as the state: leaving that to adsr's OFF arm would let
+            // one more sample out, and it frees the slot for reuse in the same instant.
+            update(vs, i, Voice { env_st: if hard { Env::OFF } else { Env::RELEASE },
+                                  fenv_st: if hard { Env::OFF } else { Env::RELEASE },
+                                  env: if hard { u16:0 } else { v.env }, held: held_n, ..v })
+        } else if held_n != v.held { update(vs, i, Voice { held: held_n, ..v }) }
+        else { vs }
     }(voices)
 }
 // Apply one CC to a single part's patch (per-part CC routing). The effects (83/91) are global
@@ -167,6 +192,9 @@ fn apply_cc(p: Part, evn: u8, evv: u8) -> Part {
         u8:78 => Part { detsel: evv[5:7], ..p },
         u8:1  => Part { vibsel: evv[5:7], ..p },
         u8:5  => Part { portsel: evv[5:7], ..p },
+        u8:64 => Part { ped: (evv >= u8:64) as u1, ..p },           // sustain pedal, MIDI's 64 threshold
+        u8:121 => Part { bend: s16:0, vibsel: u2:0, ..p },          // Reset All Controllers: bend + mod
+
         u8:92 => Part { trdep: evv, ..p },                          // tremolo depth (continuous 0..127)
         u8:7  => Part { vol: evv, ..p },                            // CC7 per-part output volume
         u8:80 => Part { unison: evv[5:7], ..p },
@@ -339,10 +367,22 @@ proc engine {
         // --- note on/off route to the event's part; each voice is tagged with its part ---
         let porta = if ep.portsel == u2:0 { u1:0 } else { u1:1 };  // glide from prev pitch on note-on
         let uni_n = (ep.unison as u3) + u3:1;                       // 1/2/3/4 voices per note
-        let voices1 = if evk == u3:1 { apply_on(st.voices, evn, evv, porta, uni_n, st.lfsr, ch) }
-                      else if evk == u3:2 { apply_off(st.voices, evn, ch) } else { st.voices };
-        // --- CC / pitch-bend route to the event's part (CC76 LFO rate handled per-part in apply_cc) ---
         let is_cc = evk == u3:3;
+        // Channel mode messages and the pedal all end up in apply_off, just with a different
+        // idea of who they mean. 123 All Notes Off releases the part; 120 All Sound Off does it
+        // without a tail (so it clicks -- that is the point of a panic button); the pedal coming
+        // up releases the notes the player has already let go of. No extra call site, no second
+        // copy of the loop. `pedal_up` needs no "was it down?" guard: if it was already up those
+        // voices are in RELEASE and rel_ok drops them.
+        let is_mode  = is_cc && ((evn == u8:120) || (evn == u8:123));
+        let hard     = is_cc && (evn == u8:120);
+        let pedal_up = is_cc && (evn == u8:64) && (evv < u8:64);
+        let off_mode = if is_mode { u2:1 } else if pedal_up { u2:2 } else { u2:0 };
+        let do_off   = (evk == u3:2) || is_mode || pedal_up;
+        let voices1 = if evk == u3:1 { apply_on(st.voices, evn, evv, porta, uni_n, st.lfsr, ch) }
+                      else if do_off { apply_off(st.voices, evn, ch, off_mode, hard, ep.ped) }
+                      else { st.voices };
+        // --- CC / pitch-bend route to the event's part (CC76 LFO rate handled per-part in apply_cc) ---
         // pitch bend (0xE0): 14-bit (msb=evv, lsb=evn), center 8192 -> Q12 offset ~+-2 semitones
         let bend_v = (((((evv as s32) << u32:7) | (evn as s32)) - s32:8192) >> u32:4) as s16;
         let ep1 = if is_cc { apply_cc(ep, evn, evv) }
