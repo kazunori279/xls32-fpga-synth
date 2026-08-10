@@ -20,24 +20,7 @@ multitimbral selector, preset browser, and demo player.*
 
 [![Watch the XLS32 demo video](https://img.youtube.com/vi/sWc6g7cgsd4/hqdefault.jpg)](https://youtu.be/sWc6g7cgsd4)
 
-*▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube).*
-
-### Hear it
-
-Two of the built-in 4-part demo songs, played by the board and recorded off its own audio output
-over USB — no room mic, no software instruments, every note is the FPGA's logic. The picture is a
-scrolling spectrogram of that same signal.
-
-[![Bach · Prelude in C, played by the FPGA](https://img.youtube.com/vi/wpsqDLXTggE/hqdefault.jpg)](https://youtu.be/wpsqDLXTggE)
-
-*▶️ **[Bach · Prelude in C](https://youtu.be/wpsqDLXTggE)** — 4 parts, 1:51 (click to listen on YouTube).*
-
-[![Saint-Saëns · Le Cygne, played by the FPGA](https://img.youtube.com/vi/tL7N2eV9pn8/hqdefault.jpg)](https://youtu.be/tL7N2eV9pn8)
-
-*▶️ **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)** — 4 parts, 2:18 (click to listen on YouTube).*
-
-*(Both MP4s also live in [`docs/assets/`](docs/assets/); they were captured from the web UI's demo
-player and rendered with [`make_mp4.sh`](scripts/make_mp4.sh).)*
+*▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube). For sound alone: **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)**, 4 parts, 2:18, recorded off a Basys 3 over USB — no room mic, no software instruments, and the picture is a spectrogram of that same signal.*
 
 ## ▶ Quick start — play it
 
