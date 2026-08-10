@@ -467,12 +467,28 @@ function panic() {                                  // release everything still 
   endDrag();
 }
 // `panic` only knows the notes this page started. Notes from the Tiliqua's TRS jack never pass
-// through the browser at all, and the engine implements no CC123 all-notes-off, so the only thing
-// that can silence one is an explicit note-off for that exact note and part. Hence the sweep: 128
-// note-offs is cheap and certain, and it is what stopDemo and syncBoard already do.
+// through the browser at all, so the only thing that can silence one is a message addressed to
+// the engine itself. Since M34 that is CC123 All Notes Off, three bytes per part.
+//
+// The 128-note sweep stays anyway, and not out of superstition: a board flashed with a
+// pre-M34 bitstream drops 120-127 in `apply_cc`'s catch-all, and PANIC going quietly useless
+// against last month's firmware is exactly the kind of failure nobody reports. 512 note-offs
+// cost nothing next to a button a player presses when something has already gone wrong.
 function sweepPart(ch) { for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]); }
 function sweepAllParts() { for (let ch = 0; ch < NPARTS; ch++) sweepPart(ch); }
-function allSoundOff() { panic(); sweepAllParts(); }
+// CC120 before CC123, on purpose. 120 cuts the envelope dead and 123 lets it fall through the
+// release, so sending 120 first is what makes PANIC instant; the 123 behind it reaps anything
+// that was already releasing, which 120 alone leaves running. CC64 too: a sustain pedal stuck
+// down would defer every note-off the sweep sends and undo the whole gesture.
+function allSoundOff() {
+  panic();
+  for (let ch = 0; ch < NPARTS; ch++) {
+    sendMidi([0xB0 | ch, 64, 0]);           // pedal up first, or it defers everything below
+    sendMidi([0xB0 | ch, 120, 0]);
+    sendMidi([0xB0 | ch, 123, 0]);
+  }
+  sweepAllParts();
+}
 document.addEventListener('pointermove', (e) => { if (activeDrag) activeDrag.move(e); });
 document.addEventListener('pointerup', endDrag);           // a release ANYWHERE ends the drag
 document.addEventListener('pointercancel', endDrag);       // gesture/scroll steals the pointer
@@ -515,8 +531,13 @@ function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); 
 // they always land on `partsLabel()`. The Tiliqua's TRS jack never passes through here at all --
 // the gateware routes it, and the one thing the panel knows is whether it has claimed it. Say
 // which, because it is the state a player cannot otherwise see and it survives closing this page.
+//
+// "claimed", not "following PART". Since M34 the claim is not the last word: MidiChanWatch drops
+// it the moment the keyboard sends on a channel it was not sending on before, so a player who
+// reaches for the channel knob takes the decision back and this label goes stale until the next
+// render. Saying what the panel *asked for* is a claim the panel can actually stand behind.
 function trsLabel() {
-  return trsFollow ? 'TRS jack → P' + ((noteChans()[0] & 0x0f) + 1) + ', following PART'
+  return trsFollow ? 'TRS jack → P' + ((noteChans()[0] & 0x0f) + 1) + ', until the keyboard changes channel'
                    : 'TRS jack → its own MIDI channel';
 }
 function renderMidiIn() {
@@ -537,7 +558,10 @@ function bindMidiInput(inp) {
     // note-off to the part you had just switched to and left the original sounding forever.
     if (st === 0x90 && d[2] > 0) noteOn(d[1], d[2]);
     else if (st === 0x80 || st === 0x90) noteOff(d[1]);       // vel-0 note-on is a note-off
-    else if (st === 0xB0 && (d[1] === 120 || d[1] === 123)) allSoundOff();   // the keyboard's own panic
+    // The keyboard's own panic button. `allSoundOff` is called rather than forwarding the CC,
+    // because a message on one channel would silence one part and leave the other three -- and
+    // the page's own `activeNotes` would still believe it was holding notes that no longer sound.
+    else if (st === 0xB0 && (d[1] === 120 || d[1] === 123)) allSoundOff();
     else if (d[0] >= 0x80 && d[0] < 0xf0) { for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
     else sendMidi(d);
   };
@@ -774,8 +798,9 @@ function stopDemo() {
   demoPlaying = false; demoIdx = -1;
   if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
   if (link) link.cancelPending();               // drop whatever was scheduled but not yet sent
-  // Explicit note-offs, all 4 parts, all 128 notes: the engine implements no CC123 all-notes-off,
-  // and a cancelled look-ahead has certainly dropped some note-offs on the floor.
+  // A cancelled look-ahead has certainly dropped some note-offs on the floor. The sweep rather
+  // than `allSoundOff` on purpose: stopping a song should not also clear a sustain pedal or cut
+  // a note the player is holding by hand on a part the song was not using.
   sweepAllParts();
   document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
   const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
