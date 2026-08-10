@@ -73,6 +73,13 @@ voices across 4 parts, on MIDI channels 1–4.
 **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. The screen
 shows 32 tiles, one per voice: brightness is the envelope, hue is the pitch.
 
+> **The jacks are the output; the USB audio is a monitoring tap.** The module also sends its sound
+> back up the `usb2` cable, which is the easy way to record it — but that copy drops about a
+> millisecond every ten seconds, by design, and each drop is an audible click. The jacks never do:
+> they get every sample whatever USB is doing. **Record anything that matters from `out0`/`out1`.**
+> Why, and how the recording is repaired if you use USB anyway: [Record a demo
+> video](#record-a-demo-video).
+
 ### 3 · Control it — the panel, or anything that speaks MIDI CC
 
 **The panel** is the full experience: every parameter, a preset browser, and four demo songs the
@@ -190,7 +197,7 @@ clocking, the transport, and where the audio physically comes out.
 | **Pipeline depth** | `STAGES=48` → **768 cycles/sample** | `STAGES=12` → **224 cycles/sample** |
 | **Sample rate** | 32 kHz (28 kHz on the soft-multiplier backends) | engine 32 kHz, resampled 3/2 → **48 kHz** out |
 | **Host link** | USB UART @ 2 Mbaud (FT2232H channel B) | one USB-C: UAC2 audio up + USB-MIDI down |
-| **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee |
+| **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee — a monitoring copy, not a lossless one |
 | **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; built, HW-pending) |
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
@@ -368,7 +375,10 @@ What you should see and hear when it comes up:
 - **The jacks** — `out0`/`out1` are the stereo effects pair, and the only two that make sound;
   `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
   show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
-  dark by design.
+  dark by design. **They are also the only lossless output.** The UAC2 tee that carries the same
+  audio up the USB cable is a copy, and it is forbidden from stalling the codec to keep itself fed,
+  so it drops ~1 ms every ~10.4 s instead — see [Record a demo video](#record-a-demo-video). The
+  jacks are downstream of `dry` and unaffected: this is a recording artefact, not a playing one.
 - **MIDI** — **USB-MIDI over `usb2` is the path that has been played on hardware.** The **TRS
   MIDI-In jack** is built and arbitrated in gateware alongside it, and the web UI's PART selection
   is honoured for a TRS keyboard too (CC103, sniffed in gateware) — but that half has only ever
@@ -512,6 +522,13 @@ appears (a pair of AirPods waking up is enough). Which device it should be depen
   the signal *before* the AC coupling that `out0`/`out1` have. On a full take of *Prelude in C*,
   89.6 % of the captured energy sat below 5 Hz and the audible band was 26 dB down. Expect to want a
   few dB of make-up gain afterwards.
+
+  **Convenience, not fidelity.** The tee is a copy that cannot push back on the codec, so it drops
+  rather than stalls, and ~1 ms goes missing every ~10.4 s (below). Everything here — the counter,
+  the 20 Hz high-pass, `declick.py`, the make-up gain — exists to make that copy usable, and it
+  gets close. **A recording that has to be right should come off `out0`/`out1` into an audio
+  interface**, which needs no repair because nothing was ever lost. This route is what a headless
+  build machine can do, which is why the project uses it.
 - **Basys 3, or as a fallback** — a **loopback** device, capturing what the browser plays:
   [BlackHole](https://existential.audio/blackhole/) (`brew install blackhole-2ch`) routed through a
   Multi-Output Device so you can still hear the demo.
