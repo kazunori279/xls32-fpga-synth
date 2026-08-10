@@ -13,7 +13,10 @@ those three; git history keeps the original.)*
 
 ## Unverified — things believed to work that have not been watched working
 
-1. **The re-recorded demo video has not been watched end to end.** The M32 take was published with
+1. ~~**The re-recorded demo video has not been watched end to end.**~~ **Done — watched and
+   accepted 2026-08-10.** Kept here for the trail, because two rounds of this were passed by
+   measurement and failed by a listener, and the next take will be tempted by the same shortcut.
+   What is left of it is at the bottom of the item. The M32 take was published with
    67 % of its audio missing and has been deleted from YouTube; `scripts/demo_video.sh` was then
    rebuilt around `scripts/rec_audio.py`, which records through PortAudio and verifies each take
    against the board's 12.288 MHz counter (see
@@ -28,8 +31,9 @@ those three; git history keeps the original.)*
    motherboard's clock and read off the host's with no rate control between them and is required to
    drop rather than stall the codec. 110–123 ppm apart eats its 16 entries every 10.4 s, and a
    millisecond cut out of a sustained tone is a step. (`out0`/`out1` never see it — the tee is a
-   copy that cannot push back on the DAC path.) `scripts/declick.py` bridges them and `demo_video.sh` now runs it
-   before the mux; the repaired file measures no seam above the music's own transients. It is worth
+   copy that cannot push back on the DAC path.) `scripts/declick.py` bridges them and
+   `demo_video.sh` now runs it before the mux; the repaired file measures no seam above the music's
+   own transients. It is worth
    noting how the check was passed and the take still wrong: the counter measures *arrival*, and
    nothing measured what it sounded like.
 
@@ -42,13 +46,19 @@ those three; git history keeps the original.)*
    deletes the four-channel capture, which is what made that take unrepeatable — the mux keeps only
    ch0/1, so once the raw is gone the only way to re-run anything is to play the piece again.
 
-   `media/m32-demo-v4.mp4` is that take, trimmed to one loop, and it is **the file waiting to be
-   watched**: it was declicked by the old detector, so roughly 37 of its bridges landed on knob
-   moves rather than dropouts, and whether that is audible during the filter sweeps is exactly the
-   question no measurement here has settled. What has *also* not happened is a human watching all
-   111 s of it for A/V drift: `SCREEN_LATENCY` / `CAM_OFFSET` are start-up times measured on one
-   machine, not a closed loop, and nothing in the pipeline would catch a slow slide between the
-   panel and the sound. The README's hero stays on the Basys 3 video until it has been watched.
+   `media/m32-demo-v4.mp4` — that take, trimmed to one loop — **has now been watched end to end and
+   accepted**, which retires the oldest item on this list. It answered the question the measurements
+   could not: it was declicked by the *old* detector, so roughly 37 of its 49 bridges landed on knob
+   moves rather than dropouts, and none of that is audible during the filter sweeps. A human also
+   saw no A/V drift across the 111 s, which is the only check `SCREEN_LATENCY` / `CAM_OFFSET` have
+   ever had — they are start-up times measured on one machine, not a closed loop, so nothing in the
+   pipeline would catch a slow slide between the panel and the sound on a different one.
+
+   Two things are still open, and neither is about the take. The **README's hero is still the
+   Basys 3 video**, because swapping it wants a YouTube upload that has not been authorised. And
+   the acceptance was a listening judgement, not a measurement: there is still no check that says
+   whether a declick landed on a dropout or on a knob, which only matters now for takes made before
+   the counter fix.
 2. **The Aligner's mid-stream re-lock has not been demonstrated in the browser.** Initial lock was
    measured live (three-note chord: peak 0.33, rms 0.080, zero sample-to-sample jumps > 0.4) and
    the JS port is byte-equivalent to `host/transport/uart.py` under test — but the 8192-byte
