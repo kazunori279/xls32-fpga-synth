@@ -5,8 +5,8 @@ roll off above a cutoff edge that sweeps upward.
 Usage: filter_demo.py [out.wav] [note] [reso]
 """
 import os, sys, time, struct, wave
-from transport.uart import open_port, read_bytes, samples_from_bytes
-from synth import to_signed, normalize, note_on, note_off, set_wave, set_cutoff, set_reso, SR
+from transport.uart import open_port, read_bytes, frame_align
+from synth import normalize, note_on, note_off, set_wave, set_cutoff, set_reso, SR
 
 def main():
     a = sys.argv[1:]
@@ -24,13 +24,19 @@ def main():
 
     # single-threaded sweep: set each cutoff, then capture its slice (so the writes
     # aren't starved by a concurrent reader -> the rising filter edge is visible)
-    buf = bytearray()
+    slices = []
     for cutn in range(5, 128, 2):                    # sweep cutoff 5 -> 127
         os.write(fd, set_cutoff(cutn))
-        buf.extend(read_bytes(fd, 0.045))
+        slices.append(read_bytes(fd, 0.045))
     os.write(fd, note_off(note)); time.sleep(0.1); os.close(fd)
 
-    s = normalize(to_signed(samples_from_bytes(bytes(buf))))
+    # Decode each slice on its own. Every slice starts after a tcflush that cut the stream
+    # mid-frame, so the 62 of them do not share a byte alignment -- measured, 20-25 phase changes
+    # across the concatenation. Aligning the whole buffer once (`samples_from_bytes`) therefore
+    # got it right for some slices and produced full-scale hash for the rest, a coin flip between
+    # 0 and 44k jumps over threshold on otherwise identical captures. `frame_align` over the whole
+    # buffer re-locks every 128 bytes and so leaves ~19-53; per slice it leaves 0-2.
+    s = normalize([x for sl in slices for x in frame_align(sl)])
     with wave.open(out, "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes(b"".join(struct.pack('<h', max(-32768, min(32767, x))) for x in s))

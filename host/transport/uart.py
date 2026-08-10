@@ -57,20 +57,31 @@ def open_port(rw=False, baud=BAUD):
     return dev, fd
 
 def read_bytes(fd, secs):
-    """Drain the port for `secs` from this thread. **It loses bytes.** Measured against
-    `Recorder` on the same board, alternating and with the order swapped every pair: 6 of 8
-    read_bytes captures lost frame phase mid-buffer (marker score 0.22-0.44 at the break),
-    0 of 8 Recorder captures did. Varying the read size (16 kB / 64 kB) and the idle sleep
-    (1 ms / 0.3 ms / none) changed nothing, so the trigger is not the drain rate and is not
-    pinned down; what is certain is that the threaded reader does not do it.
+    """Drain the port for `secs` from this thread, starting immediately.
 
-    A lost byte shifts every following frame, and `samples_from_bytes` locks alignment once,
-    so everything after the break decodes as (Lhi, Rlo) pairs -- full-scale hash. Prefer
-    `UartTransport.record_start/record_stop`, which drains through `Recorder`, re-locks the
-    frame phase every 128 bytes and reports whether it held. `host/play.py` and
-    `host/record_wav.py` moved for exactly this reason. `host/filter_demo.py` stays here on
-    purpose -- it interleaves writes with 45 ms reads and wants no concurrent reader."""
-    termios.tcflush(fd, termios.TCIFLUSH); time.sleep(0.05); termios.tcflush(fd, termios.TCIFLUSH)
+    **Never put a pause between the flush and the first read.** A pause is what made this
+    function lose bytes, and it took three rounds to find because the first comparison was
+    confounded: this flushed twice with a 50 ms sleep between, `Recorder` flushed once and read
+    at once, so "the threaded reader is clean and this one is not" was really "no pause is clean
+    and a pause is not". Crossing the two factors separates them -- with the pause it breaks in
+    both threading modes, without it in neither -- and sweeping the pause gives a dose response:
+    0 ms 0/4, 2 ms 0/4, 5 ms 2/4, 10 ms 3/4, 20 ms 3/4, 50 ms 4/4. Over every arm measured,
+    no pause 0/24 -- 18 in those arms and 6 more through this function after the change,
+    alternated against `Recorder`'s own 0 of 6 -- and pause >= 5 ms 20/26. Disabling the GC
+    changed nothing, and the longest stall in the loop was 7.6 ms, far too little to account for
+    the ~6 kB that goes missing.
+
+    Nobody reading for 5 ms at 2 Mbaud is ~1.3 kB with nowhere to go, and something between the
+    FT2232 and the tty then drops a chunk that is not a whole number of frames. The break lands
+    at the seam between the start-up backlog and the live stream, ~20 kB in, and shifts every
+    frame after it -- which `samples_from_bytes`, locking alignment once, decodes as full-scale
+    hash for the rest of the take.
+
+    `UartTransport.record_start/record_stop` is still the better path where it fits: it re-locks
+    the frame phase every 128 bytes, trims the backlog against the wall clock, and reports whether
+    the phase held. `host/filter_demo.py` stays here on purpose -- it interleaves writes with
+    45 ms reads and wants no concurrent reader."""
+    termios.tcflush(fd, termios.TCIFLUSH)     # and read at once -- see above, this is load-bearing
     buf = bytearray(); t0 = time.time()
     while time.time() - t0 < secs:
         try:

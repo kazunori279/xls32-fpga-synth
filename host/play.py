@@ -6,8 +6,11 @@ The capture goes through `UartTransport.record_start/record_stop`, not through `
 `samples_from_bytes` as it used to. That is not tidying -- the old pair is where the flakiness
 was, and it is two separate faults compounding:
 
-  * `read_bytes` **loses bytes**: 6 of 8 captures lost frame phase mid-buffer, against 0 of 8
-    through `Recorder`, measured alternating and with the order swapped every pair.
+  * `read_bytes` **lost bytes**, on 6 of 8 captures. It slept 50 ms between two flushes before
+    reading, and any pause between the flush and the first read makes something below the tty
+    discard a chunk that is not a whole number of frames. Fixed since, in `transport/uart.py`,
+    which has the dose response; this tool does not go back because `record_stop` also trims the
+    start-up backlog against the wall clock and says whether the phase held.
   * `samples_from_bytes` locks byte alignment **once**, from a smoothness score over samples
     [200:1200], so everything after the break decodes as (Lhi, Rlo) pairs -- uniform full-scale
     hash, the M28a signature. `frame_align` re-locks every 128 bytes, so a break costs about one

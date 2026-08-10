@@ -4,7 +4,7 @@
   analyze_fft.py --serial [sec]       # read from the UART (hardware)
 """
 import sys, math, statistics
-from transport.uart import open_port, read_bytes, samples_from_bytes
+from transport.uart import open_port, read_bytes, frame_align
 from synth import SR
 
 def read_stdin():
@@ -65,7 +65,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--serial":
         secs = float(sys.argv[2]) if len(sys.argv) > 2 else 4.0
         dev, fd = open_port(); import os
-        s = samples_from_bytes(read_bytes(fd, secs)); os.close(fd)
+        s = frame_align(read_bytes(fd, secs)); os.close(fd)   # re-locks; see uart.py
         print(f"[{dev}] {len(s)} samples")
     else:
         s = read_stdin()

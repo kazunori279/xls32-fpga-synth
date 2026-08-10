@@ -2,10 +2,11 @@
 """Play a chord and record the FPGA synth's 16-bit audio to a .wav.
 Usage: record_wav.py [seconds] [out.wav] [--wave sine|saw|square|tri] [note ...]
 
-Captures through `UartTransport`, not `read_bytes` + `samples_from_bytes`: that pair loses
-frame phase on most captures and decodes everything after the break as full-scale hash (see
-`read_bytes` in transport/uart.py). A take that had one was silently a take with a burst of
-noise in it, which is a bad property for the file someone listens to."""
+Captures through `UartTransport`, not `read_bytes` + `samples_from_bytes`: that pair lost frame
+phase on most captures and decoded everything after the break as full-scale hash, so a take that
+had one was silently a take with a burst of noise in it -- a bad property for the file someone
+listens to. `read_bytes` is fixed now (see its docstring in transport/uart.py), but this stays on
+the transport, which also trims the start-up backlog and reports whether the phase held."""
 import sys, time, struct, wave
 from transport.uart import UartTransport
 from synth import normalize, note_on, note_off, set_wave, SR

@@ -134,11 +134,12 @@ those three; git history keeps the original.)*
   gets read by nobody, and a broken verifier is indistinguishable from an absent one.
 - ~~**`host/play.py` is not repeatable on wide intervals, and the noise reads as a regression.**~~
   **Done — fixed and verified 2026-08-10.** The fault was in the capture, not the analysis.
-  `read_bytes` loses bytes: **6 of 8 captures lost frame phase** mid-buffer (marker score
+  `read_bytes` lost bytes: **6 of 8 captures lost frame phase** mid-buffer (marker score
   0.22–0.44 at the break) against **0 of 8** through `Recorder`, measured alternating and with the
   order swapped every pair. Varying its read size (16 kB / 64 kB) and its idle sleep (1 ms /
-  0.3 ms / none) changed nothing, so the trigger is not the drain rate and is still not pinned
-  down. `samples_from_bytes` then locks byte alignment once, so everything after the break decodes
+  0.3 ms / none) changed nothing. *That comparison was confounded and the conclusion drawn from it
+  — "the threaded reader does not do it" — was wrong; see the trigger below.*
+  `samples_from_bytes` then locks byte alignment once, so everything after the break decodes
   as (Lhi, Rlo) pairs — full-scale hash. The hash is the loudest thing in the buffer, so
   `pick_window` chose it. That accounts for the whole "~68 Hz fundamental and fifty-odd partials
   the three notes cannot explain" signature: it was never audio.
@@ -159,13 +160,33 @@ those three; git history keeps the original.)*
   hold. `record_wav.py` takes come back at exactly the wall-clock length with no jump over
   threshold, where they used to carry the 157 ms backlog.
 
-  What is left. `read_bytes` is still lossy, and still used by `host/filter_demo.py` — which wants
-  a single-threaded reader on purpose, interleaving writes with 45 ms reads, so it cannot simply
-  move — and by `analyze_fft.py --serial`, sibling of the stale `analyze.py --serial` above.
-  `test/analysis.py` still picks the loudest window, deliberately: the graded suite's published
-  0–100 scores would move and re-running it is a board-day. And the byte loss itself is
-  unexplained, which is the uncomfortable part — nothing rules out the same fault reaching the
-  Tiliqua's UAC2 path in a form nobody has looked for.
+  **The trigger, found the same day.** It is not the thread. `read_bytes` flushed twice with a
+  50 ms sleep between; `Recorder` flushed once and read at once — so the first comparison varied
+  two things and credited the wrong one. Crossing them separates them cleanly: with the pause it
+  breaks in **both** threading modes, without it in **neither**. Nor is it the second flush —
+  `flush,flush` back to back is clean, `flush,sleep 50 ms` alone breaks. Sweeping the pause gives
+  a dose response — **0 ms 0/4, 2 ms 0/4, 5 ms 2/4, 10 ms 3/4, 20 ms 3/4, 50 ms 4/4** — and over
+  every arm measured, **no pause 0/24, pause ≥ 5 ms 20/26**. `gc.disable()` changed nothing, and
+  the longest stall in the loop was 7.6 ms, nowhere near the ~6 kB that goes missing. The break
+  always lands at the same place, the seam between the start-up backlog and the live stream about
+  20 kB in. So: nobody reading for 5 ms at 2 Mbaud is ~1.3 kB with nowhere to go, and something
+  between the FT2232 and the tty discards a chunk that is not a whole number of frames. *Which*
+  layer discards is still not identified — only the condition that provokes it.
+
+  `read_bytes` now flushes once and reads immediately: **0 of 6**, alternated against `Recorder`'s
+  0 of 6. That fixes its two remaining callers, both of which turned out to be worse off than the
+  entry above assumed. `analyze_fft.py --serial` is clean, and both decoders now agree on its
+  captures. `host/filter_demo.py` was broken in a *second* way that the pause fix does not touch:
+  it concatenates 62 slices, each starting after its own `tcflush` that cut the stream mid-frame,
+  so the buffer carries **20–25 phase changes** by construction. Aligning it once was a coin flip
+  between 0 and 44 k jumps over threshold on otherwise identical captures — it now decodes each
+  slice on its own with `frame_align`, measured 0–12 against whole-buffer `frame_align`'s 19–53.
+  It also runs in 2.9 s instead of 6.2, since the 50 ms pause was longer than the 45 ms read.
+
+  What is left. `test/analysis.py` still picks the loudest window, deliberately: the graded suite's
+  published 0–100 scores would move and re-running it is a board-day. And the discard mechanism
+  being unidentified is still the uncomfortable part — the Tiliqua's UAC2 path has no equivalent
+  flush-then-pause that anyone has looked for, but nobody has looked.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted
