@@ -32,17 +32,20 @@ from tiliqua.dsp import ASQ
 # above the drift it has to remove. `dsp.OnePole.shift` is unsigned(4), so 15 is the ceiling.
 DEFAULT_SHIFT = 10
 
-# Headroom below the input LSB for the accumulator, six bits more than `shift`.
+# Headroom below the input LSB for the accumulator. Matched to `shift`, which is the floor.
 #
-# The failure this avoids is *not* a dead band, which is what it looks like it should be: at the
-# SDK default of 10 the update `(inp - state) >> shift` quantises to exactly one input LSB, and
-# the DC residual on a 0.5 step settles at 1 LSB either way -- measured, identical for 10, 12 and
-# 16. What the extra bits buy is the noise the filter injects while tracking. On a quiet tone
-# (0.01 full scale) over a small pedestal, the residual after removing the fundamental is
-# 1.081 LSB at extra_bits=10 and 0.632 at 16, with the passband gain unchanged to five figures.
-# Both are near -90 dBFS and neither is audible; six flip-flops per channel is a cheap enough
-# price for the quieter one that there is no reason to take the louder. test_dcblock.py pins it.
-DEFAULT_EXTRA_BITS = 16
+# The failure this avoids is *not* a dead band, which is what it looks like it should be: at this
+# value the update `(inp - state) >> shift` quantises to exactly one input LSB, and the DC residual
+# on a 0.5 step settles at 1 LSB -- measured, identical for 10, 12 and 16. What more bits buy is
+# only the noise the filter injects while tracking: on a quiet tone (0.01 full scale) over a small
+# pedestal, the residual after removing the fundamental is 1.081 LSB here and 0.632 at 16, with the
+# passband gain unchanged to five figures. Both are near -90 dBFS and neither is audible.
+#
+# This was 16 until the price came in. `OnePole` sizes its state `SQ(1, 15 + extra_bits)` and puts
+# two adders across it, so each extra bit is four bits of ECP5 carry chain across the stereo pair
+# -- 132 TRELLIS_COMB at 16 against a device that had 515 free, and place-and-route stopped
+# converging. Buying an inaudible 4 dB with 24 cells at 98% utilisation is not a trade worth making.
+DEFAULT_EXTRA_BITS = DEFAULT_SHIFT
 
 
 class TeeDcBlock(wiring.Component):

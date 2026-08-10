@@ -113,17 +113,21 @@ def test_passband():
           f"{db440:+.2f} dB   PASS")
 
 
+WIDE_EXTRA_BITS = 16                  # the value this file used to ship, kept as the comparison
+
+
 def test_extra_bits():
     """What the accumulator's spare fractional bits actually buy.
 
     The intuitive answer -- that too few of them park the filter in a dead band and leave a
     permanent offset -- is wrong, and this test says so out loud so nobody re-derives it. At the
-    SDK default of 10 the residual is the same 1 LSB as at 16. What changes is the noise the
-    filter injects while tracking, which is why `DEFAULT_EXTRA_BITS` is 16 anyway.
+    shipped value the residual is the same 1 LSB as at 16. What changes is only the noise the
+    filter injects while tracking, and that difference is what `DEFAULT_EXTRA_BITS` gives up to
+    fit: 4 dB at -90 dBFS costs 24 TRELLIS_COMB of carry chain on a device that has no room.
     """
     # No dead band: the DC residual is the same either way, and small enough to be the quantiser.
-    coarse = max(abs(v) for v in run([0.5] * (2 * FS), extra_bits=DEFAULT_SHIFT)[-FS // 10:])
-    fine = max(abs(v) for v in run([0.5] * (2 * FS))[-FS // 10:])
+    coarse = max(abs(v) for v in run([0.5] * (2 * FS))[-FS // 10:])
+    fine = max(abs(v) for v in run([0.5] * (2 * FS), extra_bits=WIDE_EXTRA_BITS)[-FS // 10:])
     assert coarse <= 2 / ASQ_MAX and fine <= 2 / ASQ_MAX, \
         f"DC residual: {coarse * ASQ_MAX:.1f} LSB coarse, {fine * ASQ_MAX:.1f} fine"
     # Including for an offset that starts inside one LSB of the increment, which is the case a
@@ -145,14 +149,16 @@ def test_extra_bits():
                       - b * math.cos(2 * math.pi * f * k / FS) for k in win]
         return math.sqrt(sum(r * r for r in res) / len(res)) * ASQ_MAX, math.hypot(a, b) / amp
 
-    n_coarse, g_coarse = noise(DEFAULT_SHIFT)
-    n_fine, g_fine = noise(DEFAULT_EXTRA_BITS)
+    n_coarse, g_coarse = noise(DEFAULT_EXTRA_BITS)
+    n_fine, g_fine = noise(WIDE_EXTRA_BITS)
     assert n_fine < n_coarse, \
-        f"extra_bits buys nothing: {n_coarse:.3f} LSB at {DEFAULT_SHIFT}, {n_fine:.3f} at " \
-        f"{DEFAULT_EXTRA_BITS} -- if the SDK's OnePole changed, revisit DEFAULT_EXTRA_BITS"
+        f"extra_bits buys nothing: {n_coarse:.3f} LSB at {DEFAULT_EXTRA_BITS}, {n_fine:.3f} at " \
+        f"{WIDE_EXTRA_BITS} -- if the SDK's OnePole changed, revisit DEFAULT_EXTRA_BITS"
+    # What we ship has to stay inaudible on its own terms, not merely be worse than the wide one.
+    assert n_coarse < 2.0, f"shipped extra_bits injects {n_coarse:.3f} LSB, too much to ignore"
     assert abs(g_fine - g_coarse) < 1e-3, "passband gain should not depend on extra_bits"
-    print(f"  extra_bits:   residual 1 LSB either way; noise {n_coarse:.3f} -> {n_fine:.3f} LSB "
-          f"  PASS")
+    print(f"  extra_bits:   residual 1 LSB either way; noise {n_coarse:.3f} LSB shipped vs "
+          f"{n_fine:.3f} at {WIDE_EXTRA_BITS}  PASS")
 
 
 def test_no_wrap():
