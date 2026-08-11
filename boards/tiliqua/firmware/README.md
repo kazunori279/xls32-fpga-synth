@@ -13,6 +13,11 @@ filter, LFO, unison, cross-osc FM/ring-mod, the block-RAM effects (chorus / ping
 8-comb Freeverb), UAC2 audio + USB-MIDI over `usb2`, TRS MIDI in, and the 720×720p60 beam-raced
 visualiser on the DVI output.
 
+Since M34 it also answers the MIDI channel mode messages — CC120 All Sound Off, CC121 Reset All
+Controllers, CC123 All Notes Off — so the panic button on a keyboard in the TRS jack stops the
+instrument with nothing else attached, and pointing the jack at a different part silences the one
+it leaves. There is no sustain pedal: CC64 arrives and is ignored.
+
 ## Flash it
 
 Either way round writes it to a slot. **Slot 6 is what this repo's docs and tooling assume**, but

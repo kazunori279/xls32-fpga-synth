@@ -23,29 +23,36 @@ See the repo README §2 "Basys 3 — flash and go" for the full walkthrough. The
 
 ## What it was built from
 
-Rebuilt **2026-08-10** from the tree at `5cf8f83` — Vivado 2024.2, `STAGES=48`, `WCT=48`, through
-`boards/basys3/scripts/remote_build.sh` with `BACKEND=vivado`. For the first time since the M20 tree
-split, the shipped bitstream and `core/synth.x` are the same engine. What it replaced was
-byte-for-byte the 2026-07-13 initial-release blob (`a38cffe`), built before M22's 18×18 narrowing
-and before M29; it stayed that way because refreshing it needs Vivado on an x86 machine, which no
-hosted runner can provide.
+Rebuilt **2026-08-11** for M34, the channel mode messages — Vivado 2024.2, `STAGES=48`, `WCT=48`,
+through `boards/basys3/scripts/remote_build.sh` with `BACKEND=vivado`. `core/synth.x` is shared with
+the Tiliqua, so CC120 / CC121 / CC123 landed on both boards at once; this is the build that carries
+them here. The previous refresh (2026-08-10, `5cf8f83`) was the first since the M20 tree split to
+put the shipped bitstream and `core/synth.x` back in step, replacing what was byte-for-byte the
+2026-07-13 initial-release blob (`a38cffe`) — built before M22's 18×18 narrowing and before M29, and
+stuck there because refreshing it needs Vivado on an x86 machine, which no hosted runner provides.
 
 The build closed timing on the `xc7a35t` at 100 MHz:
 
 | | |
 |---|---|
-| Worst setup slack | **+0.012 ns** (MET) — **0** failing endpoints |
-| Slice LUTs        | 10,480 / 20,800 (50.4 %) |
-| Slice registers   | 17,830 / 41,600 (42.9 %) |
-| Block RAM         | 32.5 / 50 tiles (65.0 %) |
+| Worst setup slack | **+0.276 ns** (MET) — **0** failing endpoints |
+| Slice LUTs        | 10,541 / 20,800 (50.7 %) |
+| Slice registers   | 18,029 / 41,600 (43.3 %) |
+| Block RAM         | 33 / 50 tiles (66.0 %) |
 | DSP48E1           | 26 / 90 (28.9 %) |
+
+The slack went *up* while the design gained a feature: M34 also deleted an "already releasing?"
+guard in `apply_off` that could never change the outcome, and its 32 comparators were sitting on
+this exact path. +0.012 ns before, +0.276 after.
 
 **Then it was flashed and played**, because timing closure says the netlist meets its constraints
 and nothing about what the synth sounds like, and on this project the two have come apart before.
 `boards/basys3/scripts/verify.sh` flashes over JTAG and plays a chord, checking each note by FFT
-against the frequency it asked for. On a 6-second capture (`host/record_wav.py`) A major 7 returned
-**439.9 / 554.2 / 659.2 / 830.6 Hz** against a nominal 440.0 / 554.4 / 659.3 / 830.6 — inside
-0.05 % — at a peak of 30,000 of 32,768 with no clipping.
+against the frequency it asked for. A major 7 came back at **438 / 554 / 658 / 830 Hz** against a
+nominal 440.0 / 554.4 / 659.3 / 830.6 — 4 of 4 found, every one inside the 7.8 Hz bin the 8192-point
+DFT can resolve. The 2026-08-10 build, measured the same way on a longer 6-second capture
+(`host/record_wav.py`), returned 439.9 / 554.2 / 659.2 / 830.6 at a peak of 30,000 of 32,768 with no
+clipping.
 
 It was also run head to head against the blob it replaces, ten flashes alternating between the two,
 on a C2/C4/C6 spread wide enough to stress the octave shifts: **12 of 15 notes for July, 13 of 15
