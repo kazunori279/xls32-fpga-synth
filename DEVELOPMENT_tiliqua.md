@@ -61,7 +61,7 @@ graded automatically, everything before it by hand or by simulation.
 | **32 ✅** | **Bitstream archives, ~~CI~~, docs**: `manifest.json` metadata, `pdm flash archive` recipes, a prebuilt `.tar.gz` in `boards/tiliqua/firmware/` | **exit criterion met** — `boards/tiliqua/firmware/xls32-r5.tar.gz` flashes to slot 6 from `tiliqua-webflash` in Chrome with no toolchain, and comes up clocked correctly off its own manifest, verified as the committed file. **CI was cut from the milestone**: Vivado cannot run in Actions, so a two-board matrix has no second half — see [below](#what-is-left--m32-and-the-risk-register) |
 
 | **33 ✅** | **The USB capture path**: the UAC2 IN endpoint sizes its own packets from `adc_fifo_level` instead of echoing the host's nominal rate, and the tee gets a multiplier-free DC blocker | **measured over 120 s on hardware: 0 frames lost in 0 events (was 652 of 5,902,732, in 12), mean +0.00003 (was +0.286), 0.000% of the energy below 5 Hz (was 89.6%).** The design got smaller doing it: 23,773 (97%) → 23,557 (96%) |
-| **34 🚧** | **The channel mode messages, and the TRS jack cleaning up after itself**: CC120/121/123 in the engine, `MidiChanWatch` + `TrsPanicInject` in the arbiter so a target change silences the part it leaves without the host's help | every rung below hardware passes — `tb_panic` 10/10, `test_midi_arb.py` 9/9, `check_panic.py` PASS, Basys 3 Vivado **0 failing endpoints at +0.276 ns** (better than M33's +0.012), ECP5 **routed at 23,729 (97.7%), overused 0** — but only on `--seed 3`, now pinned in `build.sh`. CC64 was in scope and was cut for area; see [the area squeeze](#the-area-squeeze) |
+| **34 🚧** | **The channel mode messages, and the TRS jack cleaning up after itself**: CC120/121/123 in the engine, `MidiChanWatch` + `TrsPanicInject` in the arbiter so a target change silences the part it leaves without the host's help | **on hardware, both boards**: `check_panic_hw.py` 14/14 on the module (including the injector reaping the part a target change leaves), Basys 3 `verify.sh` 4/4. Below that, `tb_panic` 10/10, `test_midi_arb.py` 9/9, `check_panic.py` PASS, Vivado **0 failing endpoints at +0.276 ns** (better than M33's +0.012), ECP5 **routed at 23,729 (97.7%), overused 0** — but only on `--seed 3`, now pinned in `build.sh`. Still unverified on hardware: `MidiChanWatch`, which needs a keyboard on the TRS jack changing its own transmit channel. CC64 was in scope and was cut for area; see [the area squeeze](#the-area-squeeze) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1757,7 +1757,36 @@ Nothing here touched hardware until everything that could be falsified without i
    endpoints, worst slack +0.276 ns** — and that is *better* than the +0.012 ns the board shipped
    with before this milestone, because deleting the redundant guard (below) took a comparator out
    of that exact path. A feature landed and the critical path got shorter.
-6. Then Tiliqua place-and-route, then hardware.
+6. Then Tiliqua place-and-route (below), and only then hardware.
+7. **`check_panic_hw.py`** on the module itself: the same four groups over USB-MIDI, judged on the
+   USB audio capture, plus the two things simulation cannot reach — 14 assertions, all passing.
+   Basys 3 got its own pass through `verify.sh`: A major 7 back at 438 / 554 / 658 / 830 Hz,
+   4 of 4 inside the DFT's 7.8 Hz bin.
+
+The last rung is worth its own paragraph, because it can check something no simulation can and it
+tried hard to report a bug that was not there.
+
+**It can catch the wrong bitstream.** CC120 and CC123 are precisely the messages a pre-M34 engine
+drops on the floor, so a module booted from a stale slot fails the first assertion of every group
+rather than passing quietly — which is the failure mode a flash-and-listen test has whenever the
+new feature is a *silence*.
+
+**And it reaches the injector without a keyboard.** `TrsPanicInject` watches the TRS jack's
+effective target, and the panel drives that over USB CC103 — so pointing the target away from a
+part that is holding a chord fires the injector, and the chord releases. The control matters more
+than the positive: moving the target from 1 to 2 while part 0 holds leaves part 0 playing, which
+is the difference between an injector and a panic button. What still needs a human is
+`MidiChanWatch`, since nothing but a keyboard on the TRS jack can change its own transmit channel.
+
+**Do not measure straight after the message.** The first version asserted silence 50 ms after each
+panic and failed one assertion per run, never the same one twice. PortAudio delivers input frames
+with a latency that swings from a few milliseconds to about 200, so a window opened 50 ms after a
+panic can be filled entirely with audio from *before* it. Measured: at +50 ms the same panic read
+0.001 on one trial and 1.96 on the next; at +1.5 s it read silent on 8 of 8. Every assertion now
+comes after a settle, and CC120-versus-CC123 is drawn by holding the release long enough
+(`CC23 = 127`) that "still ringing at +0.6 s" is a fact rather than a race. An hour went into
+proving the engine was innocent, and the tell was there from the first run — a real bug does not
+move to a different assertion each time you look at it.
 
 ### The area squeeze
 

@@ -34,7 +34,8 @@ addition rather than a rewrite.
     `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py` and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone
-    exit checks),
+    exit checks) and `check_panic_hw.py` (the same channel mode messages on the module, over
+    USB-MIDI, judged on the USB audio capture),
     `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
 - **`scripts/`** — board-agnostic tools: `spectro.sh` (.wav → PNG), `make_mp4.sh` (.wav →
   spectrogram MP4), `demo_video.sh`, and `check_artefacts.py` — which hashes the sources behind
