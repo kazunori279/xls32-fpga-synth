@@ -22,150 +22,28 @@ multitimbral selector, preset browser, and demo player.*
 
 *▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube). For sound alone: **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)**, 4 parts, 2:18, recorded off a Basys 3 over USB — no room mic, no software instruments, and the picture is a spectrogram of that same signal.*
 
-## ▶ Quick start — play it
-
-Getting a **Tiliqua** singing is three separate things, and they ask for different equipment —
-which is why "what do I need?" has no one answer. **Flashing** happens once and wants Chrome.
-**Playing** needs no computer at all. **The panel** is optional, and is the only part that rules
-any device out. **No toolchain, no terminal, no clone of this repo** at any point.
-
-**The hardware, whichever route you take:** a
-**[Tiliqua R5](https://apf.audio/modules/current/tiliqua/)** in a powered Eurorack case, a **USB-C
-cable**, and something to listen on — `out0`/`out1` are Eurorack line level, hotter than a
-headphone jack expects, so go through a mixer, an audio interface or a Eurorack output module.
-
-**A display is optional.** The picture is feedback, not control: everything plays, and every
-parameter responds, with the DVI output unplugged. What you give up is the 32 tiles, one per voice.
-Any digital display takes the 720×720p60 signal; apf.audio's own
-**[Tiliqua Screen](https://apf.audio/modules/current/tiliquascreen/)** is the 4-inch round one made
-for it, and locks onto the signal at once rather than spending seconds re-locking each time you
-switch bitstreams.
-
-### 1 · Flash it — once, from Chrome
-
-1. **Download one file** —
-   **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
-   (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
-   given at boot.
-2. **Write it to the module** — connect USB-C to the module's **`dbg`** port, open
-   **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
-   upload the file, and write it to **slot 6**. Power-cycle the case; the bootloader counts down
-   for five seconds — pick slot 6 from the menu once, and every cold boot after that goes straight
-   there.
-
-This is the **only** step that needs a computer or an Android tablet, so borrow one if you have to.
-Once slot 6 is written the module never asks again.
-
-### 2 · Play it — no computer at all
-
-32 voices across 4 parts, on MIDI channels 1–4. There are two ways in and two ways out, and in
-both cases you can use either one or both at once.
-
-#### MIDI in — `usb2`, the TRS jack, or both
-
-- **`usb2`** — move the cable there and plug in a **USB-MIDI keyboard**, or connect a computer or
-  Android tablet and drive it from [the panel](#3--control-it--the-panel-or-anything-that-speaks-midi-cc).
-- **The TRS MIDI-In jack** — a keyboard straight into the module, **no host of any kind**. It is
-  **TRS Type A** (a Type B cable will be silent), so a DIN-MIDI keyboard or a sequencer reaches it
-  through the adapter most of them ship with.
-
-The two are merged in gateware a whole message at a time, so a keyboard on the jack and the panel
-on `usb2` can play at once without corrupting each other.
-
-**Which part the TRS jack plays.** Its bytes arrive already addressed to a channel — past every
-piece of software involved — so the keyboard's own transmit channel picks the part: channel 1 plays
-part 1, up to channel 4 for part 4. Channels above that wrap back around rather than going quiet
-(channel 5 is part 1 again), so a keyboard left on channel 10 plays part 2, not nothing.
-Clicking **PART** on the panel takes the jack over and points
-it at that part instead; the panel's footer says which of the two is in force, and it hands the
-jack back the next time it connects.
-
-**Whoever moved last decides.** The panel's override is not permanent: reach for the keyboard's
-own channel knob and the board hands the jack straight back to it. Otherwise one click on the
-panel would outrank the instrument in your hands until the next power cycle. Either way, the
-part being left is sent All Notes Off as the target changes, so a key held across the switch
-does not strand a note on the part you just walked away from — the board does that itself, with
-no host in the loop. (A split or layered keyboard that alternates two channels will keep handing
-the jack back to itself; that just means the panel's override does not stick, which is the
-default behaviour anyway.)
-
-**If a note ever hangs**, hit **PANIC** on the panel — or press <kbd>Esc</kbd>, which does the same
-thing. It sends All Sound Off to all four parts, then every note off behind it for good measure.
-It clicks — that is All Sound Off doing its job. A keyboard's own panic button works too, on
-**either** input: over USB the browser sees it, and on the TRS jack the engine handles it
-directly — nothing on the host has to be running for that one.
-
-#### Audio out — the jacks, `usb2`, or both
-
-- **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. Eurorack
-  line level, so go through a mixer, an interface or an output module.
-- **`usb2` is a second output, not just a monitor.** The module sends its sound back up the same
-  cable it takes MIDI on, as a 4-channel 48 kHz UAC2 input the host sees as `Tiliqua XLS32` — the
-  synth's own samples, before anything analogue, with nothing to install. See [Record a demo
-  video](#record-a-demo-video).
-
-Both are production quality; record from whichever suits the rest of your signal chain.
-
-If you fitted a screen, it shows 32 tiles, one per voice: brightness is the envelope, hue is the
-pitch.
-
-### 3 · Control it — the panel, or anything that speaks MIDI CC
-
-**The panel** is the full experience: every parameter, a preset browser, and four demo songs the
-board plays to itself. Connect **`usb2`** to a computer or an Android tablet, open
-**[the panel](https://kazunori279.github.io/xls32-fpga-synth/)** in Chrome, press **POWER**, and
-allow MIDI and audio input when the browser asks.
-
-**Or drive it from anything else that sends MIDI CC.** Every control on that panel is one plain CC
-message — no sysex, no custom protocol — so a hardware controller, a DAW, or a Core MIDI app on an
-iPhone or iPad reaches exactly the same parameters. The full map is
-[`webui/static/spec.json`](webui/static/spec.json) (`wave` is CC70, `detune` CC78, and so on), one
-MIDI channel per part.
-
-### Which host can do what
-
-| Host | 1 · Flash | 2 · Send notes | 3 · The panel |
-|---|:---:|:---:|:---:|
-| **Mac, Windows or Linux computer + Chrome** | ✅ | ✅ | ✅ |
-| **Android tablet or phone + Chrome** | ✅ | ✅ | ✅ — audio path untested |
-| **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
-| **A keyboard alone — USB-MIDI, or DIN/TRS into the jack** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
-| **Same computer, but Firefox or Safari** | ✗ | ✗ | ✗ |
-
-The crosses are all the same cross: **Firefox and Safari ship neither Web MIDI nor Web Serial**,
-and Apple requires every iOS browser to use WebKit, so an iPhone's Chrome is Safari underneath.
-That is a limit of those *browsers*, not of the synth — which only ever speaks standard MIDI, and
-so will talk to almost anything that does.
-
-† Untested with this board. iOS handles class-compliant USB-MIDI and USB audio natively and the
-module draws its power from the Eurorack case rather than from the phone, so it ought to work; no
-one has actually tried it.
-
-**Basys 3 instead?** You need the board, a USB cable, a clone of this repo and
-[`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) — then one command,
-`openFPGALoader -b basys3 -f boards/basys3/firmware/top.bit`, and the same panel over USB.
-Full version in [§2 · A](#a--basys-3--flash-and-go).
-
-*Nothing happening?* [§2 · B](#b--tiliqua--flash-and-go) has the long form and a list of the
-things that usually go wrong. *Want to build it from source?* [§3](#3-builders-guide).
-*Want to know how it works?* [§5](#5-architecture--design).
-
 ## At a glance
 
 - **What it is** — a 32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth: oscillators → per-voice resonant filter → VCA, with 2× ADSR, LFO, unison, cross-osc FM/ring-mod, and stereo effects.
-- **Hardware** — one engine, two boards: a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`, audio over USB) and a [Tiliqua](https://apf.audio/) Eurorack module (Lattice [ECP5](https://www.latticesemi.com/Products/FPGAandCPLD/ECP5) `LFE5U-25F`, analog jacks + a DVI visualiser). The synth is a literal circuit that computes one audio sample per tick — see [The two boards](#the-two-boards).
+- **Hardware** — one engine, two boards: a [Basys 3](https://digilent.com/reference/programmable-logic/basys-3/start) (Xilinx [Artix-7](https://www.amd.com/en/products/adaptive-socs-and-fpgas/fpga/artix-7.html) `xc7a35t`, audio over USB) and a [Tiliqua](https://apf.audio/) Eurorack module (Lattice [ECP5](https://www.latticesemi.com/Products/FPGAandCPLD/ECP5) `LFE5U-25F`, analog jacks + a DVI visualiser). The synth is a literal circuit that computes one audio sample per tick — see [Two boards, one synth](#two-boards-one-synth).
 - **Written in** — [Google XLS (DSLX)](https://google.github.io/xls/) compiled to Verilog, plus a per-board shell (Verilog on Basys 3, [Amaranth](https://amaranth-lang.org/) on Tiliqua) for I/O and the block-RAM effects. No hand-written datapath.
 - **Play it** — **[the panel is live at kazunori279.github.io/xls32-fpga-synth](https://kazunori279.github.io/xls32-fpga-synth/)**: a browser analog-style panel that drives either board over USB with nothing installed (or drive it from Python). MIDI in, 16-bit stereo audio out. **The page needs Chrome** — see [What you need](#what-you-need).
 - **Built by AI** — every line written by [Claude Code](https://www.anthropic.com/claude-code) (Opus 4.8) through [loop engineering](https://addyosmani.com/blog/loop-engineering/): a self-verifying edit → build → measure loop, with 175 scored end-to-end tests over USB, run against both boards.
-- **Start here** — the [Quick start](#-quick-start--play-it) above is the five-minute path; [Getting started](#2-getting-started) is the same thing at length, for either board. Both boards ship a prebuilt bitstream, so neither needs a toolchain. The [Builder's guide](#3-builders-guide) builds from source; [Architecture](#5-architecture--design) is how it works.
+- **Start here** — the [Quick start](#-quick-start--play-it) is the ten-minute path and the [User guide](#2-user-guide) is the same ground at length, for either board. Both boards ship a prebuilt bitstream, so neither needs a toolchain. Everything after that is [Part II](#part-ii--for-developers): the [Builder's guide](#3-builders-guide) builds from source, and [Architecture](#5-architecture--design) is how it works.
 
 ## Contents
 
-1. [Overview](#1-overview) — what it is, and how the two boards differ.
-2. [Getting started](#2-getting-started) — flash a board, run and play the web UI.
-3. [Builder's guide](#3-builders-guide) — build the bitstream for either board, flash, verify, test.
-4. [Background & rationale](#4-background--rationale) — why XLS, why an FPGA, how it was built.
-5. [Architecture & design](#5-architecture--design) — how the synth works today.
+**[Part I · For synth users](#part-i--for-synth-users)** — a board, a cable, and Chrome.
+
+- [**▶ Quick start**](#-quick-start--play-it) — flash it and make a sound, in three steps.
+- [**§1 · Overview — the instrument**](#1-overview--the-instrument) — what it is, what it can do, and which board is which.
+- [**§2 · User guide**](#2-user-guide) — either board at length: flashing, the jacks, the panel, the CC map, and what usually goes wrong.
+
+**[Part II · For developers](#part-ii--for-developers)** — how it is built, and how to build it.
+
+- [**§3 · Builder's guide**](#3-builders-guide) — build the bitstream for either board, flash, verify, test.
+- [**§4 · Background & rationale**](#4-background--rationale) — why XLS, why an FPGA, how it was built.
+- [**§5 · Architecture & design**](#5-architecture--design) — how the synth works today.
 
 Four companion documents go deeper, split the same way the code is — **core + Basys 3** in one
 pair, **Tiliqua** in the other:
@@ -182,20 +60,80 @@ lives in **[`docs/slides/`](docs/slides/)**
 
 ---
 
-# 1. Overview
+# Part I · For synth users
 
-## What it is
+*A board, a cable and Chrome. Everything in this part runs from the bitstream committed in this
+repo and a web page that needs no install — no toolchain, no terminal, and no clone.*
 
-A polyphonic MIDI synthesizer implemented in Google XLS (DSLX). The whole datapath is expressed in
-DSLX and compiled to one generated `engine.v`; a per-board shell handles the I/O and the block-RAM
-effects. Nothing in the engine knows about pins, clock rates or how audio reaches a host, which is
-why the same DSLX runs on an Artix-7 and an ECP5 unchanged.
+## ▶ Quick start — play it
 
-Because the boards are developed remotely, **every feature is checked over USB**: audio is teed out
-as a sample stream and verified on the host by FFT / spectrogram, and MIDI is driven in over the
-same cable. Today it is a **32-voice** [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synth (oscillators → per-voice resonant
-filter → [VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier), envelopes, [LFO](https://en.wikipedia.org/wiki/Low-frequency_oscillation), effects), played headlessly from Python or live from a
-browser **analog-style** front-end.
+Three steps to a **Tiliqua** making sound: flash it once, plug a keyboard in, and — if you want the
+full panel — open a web page. Doing this on a **Basys 3** instead? That route is
+[§2 · A](#a--basys-3--flash-and-go), and it is the one that wants a terminal.
+
+**What you need:** a **[Tiliqua R5](https://apf.audio/modules/current/tiliqua/)** in a powered
+Eurorack case, a **USB-C cable**, and something to listen on — `out0`/`out1` are Eurorack line
+level, so go through a mixer, an audio interface or an output module. A display is optional. A
+computer or an Android tablet running **Chrome** is needed for step 1, and again for step 3 if you
+want the panel.
+
+### 1 · Flash it — once, from Chrome
+
+1. **Download one file** —
+   **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
+   (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
+   given at boot.
+2. **Write it to the module** — connect USB-C to the module's **`dbg`** port, open
+   **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
+   upload the file, and write it to **slot 6**. Power-cycle the case; the bootloader counts down
+   for five seconds — pick slot 6 from the menu once, and every cold boot after that goes straight
+   there.
+
+This is the **only** step that needs a computer at all, so borrow one if you have to. Once slot 6
+is written the module never asks again.
+
+### 2 · Play it — no computer at all
+
+Move the cable to **`usb2`** and plug in a **USB-MIDI keyboard**, or put a keyboard straight into
+the **TRS MIDI-In** jack and leave the computer out of it entirely. It is 32 voices across 4 parts,
+on MIDI channels 1–4, and a TRS keyboard's own transmit channel picks which part it plays.
+
+Sound comes out of **`out0`/`out1`** — the stereo pair; the other two jacks are silent by design —
+and, whenever `usb2` is connected, back up that same cable as a 48 kHz USB audio input at the same
+time. If you fitted a screen, it shows 32 tiles, one per voice.
+
+### 3 · Control it — the panel
+
+Connect **`usb2`** to a computer or an Android tablet, open
+**[the panel](https://kazunori279.github.io/xls32-fpga-synth/)** in Chrome, press **POWER**, and
+allow MIDI and audio input when the browser asks. That is the full instrument: every parameter, a
+preset browser, and four demo songs the board plays to itself.
+
+**Then read the [User guide](#2-user-guide).** Which part the TRS jack plays and how to change it,
+what to do when a note hangs, what each jack and LED means, how to drive the synth from a DAW or a
+hardware controller instead of the panel, and the handful of things that reliably catch people out.
+
+---
+
+## 1. Overview — the instrument
+
+### What it is
+
+A **32-voice polyphonic, 4-part multitimbral [subtractive](https://en.wikipedia.org/wiki/Subtractive_synthesis) synthesizer**: two detuned
+oscillators and a sub per voice, into a resonant multimode filter and a
+[VCA](https://en.wikipedia.org/wiki/Variable-gain_amplifier), with two ADSR envelopes, an
+[LFO](https://en.wikipedia.org/wiki/Low-frequency_oscillation), unison, cross-oscillator FM and
+ring modulation, and a stereo chorus / echo / reverb chain on the end. That is a conventional
+analog-style layout, and it plays like one — a keyboard, a DAW, or the browser panel over MIDI, and
+sound out of the jacks.
+
+What is not conventional is where it runs. There is no CPU and no audio thread: the whole
+instrument is a circuit on an [FPGA](https://en.wikipedia.org/wiki/Field-programmable_gate_array),
+computing one sample per tick, so nothing an operating system does can jitter its timing. The
+circuit is written in [Google XLS (DSLX)](https://google.github.io/xls/) rather than hand-written
+Verilog, and the same engine is compiled unchanged for both boards — which is
+[§4](#4-background--rationale) and [§5](#5-architecture--design), and none of it changes how you
+play the thing.
 
 **Synth spec** — board-independent; everything here is the engine itself.
 
@@ -212,40 +150,38 @@ browser **analog-style** front-end.
 | **Sample format** | 16-bit signed PCM, stereo out |
 | **Verification** | 175 scored end-to-end cases over USB (FFT / spectrogram), on both boards |
 
-## The two boards
+### Two boards, one synth
 
-The engine is the same generated `engine.v` on both. What differs is the **shell** around it — the
-clocking, the transport, and where the audio physically comes out.
+The same instrument ships on two very different pieces of hardware. Both run the identical engine
+with the identical feature set; what differs is how you hear it, how you play it, and what it takes
+to get going.
 
 | | **Basys 3** | **Tiliqua** |
 |---|---|---|
-| **Board / FPGA** | Digilent Basys 3 — Xilinx Artix-7 `xc7a35t` | apf.audio Tiliqua R5 (SoldierCrab R3) — Lattice ECP5 `LFE5U-25F`, a Eurorack module |
-| **Shell** | Verilog — `boards/basys3/rtl/top.v` | Amaranth — `boards/tiliqua/gateware/` |
-| **P&R toolchain** | Vivado (committed build) · F4PGA · openXC7 | yosys + nextpnr-ecp5 (yowasp), via the Tiliqua SDK |
-| **Engine clock** | 100 MHz on a ÷3 clock-enable | 12.288 MHz (SI5351 `clk0` straight in, no FPGA PLL) |
-| **Pipeline depth** | `STAGES=48` → **768 cycles/sample** | `STAGES=12` → **224 cycles/sample** |
-| **Sample rate** | 32 kHz (28 kHz on the soft-multiplier backends) | engine 32 kHz, resampled 3/2 → **48 kHz** out |
-| **Host link** | USB UART @ 2 Mbaud (FT2232H channel B) | one USB-C: UAC2 audio up + USB-MIDI down |
-| **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee — a monitoring copy, not a lossless one |
-| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; both play on hardware) |
-| **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
-| **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
-| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,557 / 24,288 TRELLIS_COMB (96%) · 28/28 MULT18X18D · 53/56 DP16KD |
-| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
-| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls32-r5.tar.gz` (bitstream archive) |
+| **What it is** | an entry-level FPGA development board — Digilent Basys 3, Xilinx Artix-7 `xc7a35t` | a Eurorack module — apf.audio Tiliqua R5, Lattice ECP5 `LFE5U-25F` |
+| **How you hear it** | 16-bit audio back up the USB cable, through the panel or the `host/` tools | Eurorack jacks `out0`/`out1` — **and** the same audio up the USB cable at once |
+| **How you play it** | over USB: the panel, or any MIDI source the host can reach | USB-MIDI, **or a keyboard straight into the TRS MIDI-In jack** with no computer at all |
+| **Sample rate** | 32 kHz | 48 kHz |
+| **You can also watch** | 16 LEDs as a voice-activity comet, and the 7-segment display | a **720×720p60 DVI visualiser** — 32 voices as 32 tiles — plus 8 level LEDs and an encoder |
+| **To flash it** | a clone of this repo and [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) — one command | a Chrome tab, and nothing installed |
+| **Prebuilt bitstream** | ✅ [`boards/basys3/firmware/top.bit`](boards/basys3/firmware/top.bit.md) | ✅ [`boards/tiliqua/firmware/xls32-r5.tar.gz`](boards/tiliqua/firmware/) |
 
-Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
-transport is chosen by `$XLS32_BOARD` (default `basys3`). The per-board shells are documented in
-[ARCHITECTURE.md](ARCHITECTURE.md) (Basys 3) and
-[ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md) (Tiliqua); the directory-by-directory tour of
-the source tree is [docs/REPO_MAP.md](docs/REPO_MAP.md).
+Neither needs an FPGA toolchain — the bitstream is committed for both, and building from source is
+optional ([§3](#3-builders-guide)). **Tiliqua is the gentler start**: flashing it is a web page, and
+once flashed it is a standalone instrument. Basys 3 is the cheaper one, and everything reaches it
+over the single USB cable it is already using for power.
+
+Both boards are driven by the same panel, the same `host/` tools and the same 175-case test suite.
+The engineering differences between the two shells — clocking, transports, area — are
+[§5 · The two boards](#the-two-boards).
 
 ---
 
-# 2. Getting started
+## 2. User guide
 
-Get a board making sound, then play it from the browser. The long form of the
-[Quick start](#-quick-start--play-it) above, with the reasons and the failure modes.
+Everything the [Quick start](#-quick-start--play-it) skipped: the long form for either board, what
+each cable and jack does, how the panel behaves, and the failure modes — with the reasons, so a
+symptom tells you what to change.
 
 Neither board needs an FPGA toolchain: both ship a prebuilt bitstream in the repo — a bare
 `top.bit` for Basys 3, a bitstream archive for Tiliqua. Building from source is
@@ -268,13 +204,27 @@ no mouse-only interactions anywhere, and a layout that folds to a single narrow 
 case, not from the tablet, so a phone or tablet is a genuinely practical host. A 10-inch screen is
 the comfortable size; phone-sized ones fit, but the knobs get tight.
 
-Three limits worth knowing before you rely on it — see
-[Which host can do what](#which-host-can-do-what) for the summary:
+#### Which host can do what
 
-- **iPhone and iPad cannot run the panel.** WebKit ships neither Web MIDI nor Web Serial, and Apple
-  requires every iOS browser to use WebKit, so installing Chrome there changes nothing. They can
-  still *play* the synth: every parameter the panel touches is a plain MIDI CC, which a Core MIDI
-  app sends just as well.
+| Host | Flash a board | Send notes | The panel |
+|---|:---:|:---:|:---:|
+| **Mac, Windows or Linux computer + Chrome** | ✅ | ✅ | ✅ |
+| **Android tablet or phone + Chrome** | ✅ Tiliqua only | ✅ | ✅ — audio path untested |
+| **iPhone / iPad** | ✗ | ✅ via a Core MIDI app † | ✗ — but CC from that app does the same job |
+| **A keyboard alone — USB-MIDI, or DIN/TRS into the jack** | ✗ | ✅ | ✗ — only the knobs the keyboard itself sends |
+| **Same computer, but Firefox or Safari** | ✗ | ✗ | ✗ |
+
+The crosses are all the same cross: **Firefox and Safari ship neither Web MIDI nor Web Serial**,
+and Apple requires every iOS browser to use WebKit, so an iPhone's Chrome is Safari underneath.
+That is a limit of those *browsers*, not of the synth — which only ever speaks standard MIDI, and
+so will talk to almost anything that does.
+
+† Untested with this board. iOS handles class-compliant USB-MIDI and USB audio natively and the
+module draws its power from the Eurorack case rather than from the phone, so it ought to work; no
+one has actually tried it.
+
+Two of those crosses are worth a sentence more before you rely on a particular host:
+
 - **Basys 3 needs a Mac, Windows or Linux machine.** It talks over Web Serial, which only reached
   Android in 2026 on a limited set of devices, and its 2 Mbaud link has never been tried over one.
 - **The Android audio path is untested on hardware.** It should work, but two things could bite:
@@ -341,11 +291,11 @@ Notes:
 The committed bitstream is the Vivado/DSP48 build: 32 kHz, `STAGES=48`. To regenerate it see
 [§3 · Basys 3](#a--basys-3--build-flash-verify), then `cp build/top.bit boards/basys3/firmware/top.bit`.
 
-> **Rebuilt and verified 2026-08-10.** This blob finally matches the sources — what shipped before
-> it was the July 13 release build, from before M22's 18×18 narrowing and M29. It closed timing
-> with **zero failing endpoints** (100 MHz, worst slack +0.012 ns) and then played: A major 7 came
-> back at 439.9 / 554.2 / 659.2 / 830.6 Hz, inside 0.05 % of nominal. `uv run --no-project python
-> scripts/check_artefacts.py` holds its provenance and will say so when it drifts again.
+> **Rebuilt and verified 2026-08-11** for M34, the channel mode messages. It closed timing with
+> **zero failing endpoints** (100 MHz, worst slack +0.276 ns) and then played: A major 7 came back
+> at 438 / 554 / 658 / 830 Hz, all four inside the bin the check can resolve. `uv run --no-project
+> python scripts/check_artefacts.py` holds its provenance and will say so when it drifts again;
+> the full record is [`top.bit.md`](boards/basys3/firmware/top.bit.md).
 
 Then jump to [Run the web UI](#run-the-web-ui) to play it.
 
@@ -410,10 +360,8 @@ What you should see and hear when it comes up:
   [`demo_video.sh`](scripts/demo_video.sh) do it for you. See
   [Record a demo video](#record-a-demo-video).
 - **MIDI** — **both inputs play on hardware**: USB-MIDI over `usb2`, and the **TRS MIDI-In jack**,
-  arbitrated together in gateware so you can use either or both. The jack is **TRS Type A**; a
-  Type B cable will be silent. By default a TRS keyboard's own channel picks the part; clicking
-  **PART** in the web UI takes the jack over instead (CC103, sniffed in gateware), and the UI hands
-  it back on every fresh connection, so the override never outlives the session that set it.
+  arbitrated together in gateware so you can use either or both. Which part each one plays, and
+  how to change it, is [MIDI in, audio out](#midi-in-audio-out-and-the-screen) below.
 
 > **If it does not work.** In rough order of how often each one bites:
 >
@@ -437,6 +385,71 @@ uv run boards/tiliqua/check_loop.py    # one note down over USB-MIDI, recorded b
 ```
 
 Then jump to [Run the web UI](#run-the-web-ui).
+
+### MIDI in, audio out, and the screen
+
+*Tiliqua, mostly. On Basys 3 there is one cable and it carries everything: MIDI down, audio back
+up. The DIN-MIDI input and the I2S output are built and timing-closed but the parts are still on
+order, so USB is the whole story there.*
+
+32 voices across 4 parts, on MIDI channels 1–4. There are two ways in and two ways out, and in
+both cases you can use either one or both at once.
+
+#### MIDI in — `usb2`, the TRS jack, or both
+
+- **`usb2`** — move the cable there and plug in a **USB-MIDI keyboard**, or connect a computer or
+  Android tablet and drive it from [the panel](#run-the-web-ui).
+- **The TRS MIDI-In jack** — a keyboard straight into the module, **no host of any kind**. It is
+  **TRS Type A** (a Type B cable will be silent), so a DIN-MIDI keyboard or a sequencer reaches it
+  through the adapter most of them ship with.
+
+The two are merged in gateware a whole message at a time, so a keyboard on the jack and the panel
+on `usb2` can play at once without corrupting each other.
+
+**Which part the TRS jack plays.** Its bytes arrive already addressed to a channel — past every
+piece of software involved — so the keyboard's own transmit channel picks the part: channel 1 plays
+part 1, up to channel 4 for part 4. Channels above that wrap back around rather than going quiet
+(channel 5 is part 1 again), so a keyboard left on channel 10 plays part 2, not nothing.
+Clicking **PART** on the panel takes the jack over and points
+it at that part instead; the panel's footer says which of the two is in force, and it hands the
+jack back the next time it connects.
+
+**Whoever moved last decides.** The panel's override is not permanent: reach for the keyboard's
+own channel knob and the board hands the jack straight back to it. Otherwise one click on the
+panel would outrank the instrument in your hands until the next power cycle. Either way, the
+part being left is sent All Notes Off as the target changes, so a key held across the switch
+does not strand a note on the part you just walked away from — the board does that itself, with
+no host in the loop. (A split or layered keyboard that alternates two channels will keep handing
+the jack back to itself; that just means the panel's override does not stick, which is the
+default behaviour anyway.)
+
+**If a note ever hangs**, hit **PANIC** on the panel — or press <kbd>Esc</kbd>, which does the same
+thing. It sends All Sound Off to all four parts, then every note off behind it for good measure.
+It clicks — that is All Sound Off doing its job. A keyboard's own panic button works too, on
+**either** input: over USB the browser sees it, and on the TRS jack the engine handles it
+directly — nothing on the host has to be running for that one. The three messages behind those
+buttons, and the ones the synth deliberately ignores, are
+[Channel mode messages](#channel-mode-messages).
+
+#### Audio out — the jacks, `usb2`, or both
+
+- **`out0` and `out1`** are the stereo pair — the other two jacks are silent by design. Eurorack
+  line level, so go through a mixer, an interface or an output module.
+- **`usb2` is a second output, not just a monitor.** The module sends its sound back up the same
+  cable it takes MIDI on, as a 4-channel 48 kHz UAC2 input the host sees as `Tiliqua XLS32` — the
+  synth's own samples, before anything analogue, with nothing to install. See [Record a demo
+  video](#record-a-demo-video).
+
+Both are production quality; record from whichever suits the rest of your signal chain.
+
+#### The screen is optional
+
+The picture is feedback, not control: everything plays, and every parameter responds, with the DVI
+output unplugged. What you give up is the 32 tiles, one per voice — brightness is the envelope, hue
+is the pitch. Any digital display takes the 720×720p60 signal; apf.audio's own
+**[Tiliqua Screen](https://apf.audio/modules/current/tiliquascreen/)** is the 4-inch round one made
+for it, and locks onto the signal at once rather than spending seconds re-locking each time you
+switch bitstreams.
 
 ### Run the web UI
 
@@ -491,7 +504,7 @@ The panel is the same on both boards; it takes the frame rate from the transport
 (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming. See the
 [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) section for the architecture.
 
-### Playing it
+### Playing the panel — keys, parts and layers
 
 **The computer keyboard.** Your laptop's keys are a piano, one octave plus a fourth:
 
@@ -525,6 +538,93 @@ all 4); your keys start on Part 1, so you can play along on top.
 > USB devices directly, so there is nothing left to reach over the network. The old
 > stream-to-any-device mode went away with the server, and with it the certificate dance —
 > `127.0.0.1` needs none.
+
+### Anything else that speaks MIDI CC
+
+The panel is convenient, not privileged. **Every control on it is one plain MIDI CC message** — no
+sysex, no custom protocol — so a hardware controller, a DAW, a sequencer, or a Core MIDI app on an
+iPhone or iPad reaches exactly the same parameters, on one MIDI channel per part. `wave` is CC70,
+`detune` is CC78, filter cutoff is CC74, and the rest is the map below — also machine-readable, at
+[`webui/static/spec.json`](webui/static/spec.json).
+
+That also means a keyboard alone is a complete rig: notes, pitch bend, the mod wheel on CC1, and
+whichever knobs it sends. The panel adds the parameters it does not have, and the presets and demo
+songs — nothing else.
+
+To drive it from Python instead, `host/synth.py` has the matching `set_*` helpers and
+`host/play.py` is the smallest working example; both pick their board from `$XLS32_BOARD`.
+
+### MIDI CC map (current)
+
+Notes, note-offs, pitch bend and control changes — `0x9n` / `0x8n` / `0xE0` / `0xBn` — are the whole
+of what the synth listens to, and the **channel picks the part**: 1, 2, 3 and 4 are parts 1–4, and
+higher channels wrap (channel 5 is part 1 again, because only the low two bits are read). Every
+sound-shaping CC applies **to one part only** — each has its own complete patch, down to its own LFO,
+so CC76 sets the rate for that part and no other. The five shell effects
+(CC82/91/93/94/95) sit after the mix and are the only global ones:
+
+| CC | Parameter | CC | Parameter |
+|----|-----------|----|-----------|
+| 1  | [vibrato](https://en.wikipedia.org/wiki/Vibrato) depth (mod wheel) | 74 | filter cutoff |
+| 5  | [portamento](https://en.wikipedia.org/wiki/Portamento) / glide | 75 | pulse width (PWM) |
+| 7  | volume (per-part output level) | 90 | debug stream select (dev) |
+| 20 | amp attack | 76 | LFO rate |
+| 21 | amp decay | 77 | LFO depth |
+| 22 | amp sustain | 78 | detune (dual osc) |
+| 23 | amp release | 79 | filter-env depth |
+| 24 | filter-env attack | 80 | unison (off/2/3/4) |
+| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms; 4–340 on Tiliqua†) |
+| 26 | filter-env sustain | 83 | *(unused — effects are depth-gated)* |
+| 27 | filter-env release | 91 | reverb size (room/hall/large/cathedral) |
+| 70 | waveform (sine/saw/square/tri/noise) | 92 | tremolo depth |
+| 71 | resonance | 93 | **reverb wet** (8-comb Freeverb send) |
+| 72 | filter mode (LP/HP/BP/notch) | 94 | **chorus depth** |
+| 73 | sub-osc level | 95 | **delay/echo depth** |
+| 85 | cross-osc mode (off/ring/FM/FM+) | 86 | cross-osc depth |
+| 87 | cross-osc ratio (8: 1/1.5/2/3/4/5/7/½) | 0xE0 | pitch bend (±2 st) |
+
+`webui/synthspec.py` is the source of truth for this table (baked to `webui/static/spec.json` by
+`presetgen/build_spec.py`, which is what the browser loads); `host/synth.py` has the matching `set_*`
+helpers. The map grew milestone by milestone, and the historical "CC map so far" snapshots are kept
+in the [M10/M11/M13 sections](DEVELOPMENT.md#development-history-milestones).
+
+#### Channel mode messages
+
+These three are not in the table above and not in `synthspec.py`, deliberately — that file
+generates the panel's knobs, and a knob for "all notes off" is not a thing. They are addressed
+to a part like any other CC, and each affects **only** that part:
+
+| CC | | Effect |
+|----|---|--------|
+| 120 | All Sound Off | Every voice on the part off, **this sample** — including any already falling through their release. |
+| 121 | Reset All Controllers | Pitch bend to centre, mod wheel (CC1 vibrato) to zero. Nothing else — the patch is not touched. |
+| 123 | All Notes Off | Every sounding voice on the part into its release. A voice already releasing is left alone. |
+
+**120 clicks and 123 does not**, and that is the whole reason both exist. All Sound Off drops
+thirty-two envelopes in one sample, which is a step discontinuity and sounds like one; it is a
+panic button and a panic button should be instant. All Notes Off is the musical one — a
+sequencer's stop wants it, and it lets the release tail finish.
+
+**There is no sustain pedal. CC64 is ignored.** Not an oversight — one was built, tested and then
+removed, because a pedal needs a per-voice "the key is still down" bit to tell a note you have let
+go of from one you are still holding, and with that bit in place the ECP5 stopped routing at 98.6%
+of its LUTs. [M34](DEVELOPMENT_tiliqua.md) has the numbers.
+
+**CC122 and CC124–127 are ignored too.** Local Control, Omni and Mono/Poly have no meaning for an
+engine with a fixed 32-voice pool and no local keyboard, so they fall through to the CC catch-all
+rather than being silently misinterpreted as something else.
+
+† **CC82 tops out sooner on Tiliqua** — 340 ms of echo rather than 508. That is M29's doing: the
+delay line moved out of PSRAM and into block RAM to make room for the screen.
+
+**And one CC the engine never sees.** **CC103** picks which part a keyboard in the **TRS jack**
+plays. It is undefined in the MIDI spec, and the Tiliqua shell sniffs it out of the USB stream
+before the engine gets there. It exists because TRS is the one input that arrives already addressed
+to a channel — the browser and the host bridge both re-address their keys before sending, but a
+hardware keyboard's bytes reach the FPGA untouched, so the part can be changed in gateware
+(`midi_arb.py`) or not at all. Values 0–15 select a channel and anything above releases the jack
+back to its own; the panel claims it when you click **PART** and releases it on every fresh link,
+because the override is a gateware register with nothing to read it back from and no way to expire.
 
 ### Record a demo video
 
@@ -607,7 +707,13 @@ few seconds for the click and the reverb tail. Overshooting is cheap; trim the e
 
 ---
 
-# 3. Builder's guide
+# Part II · For developers
+
+*How the instrument is built, and how to build it yourself. **None of this is needed to play the
+synth** — everything from here on assumes a clone of the repo and a willingness to run a
+place-and-route.*
+
+## 3. Builder's guide
 
 Build from the DSLX sources, then flash, verify, simulate, and test. Commands are
 shown from the **project root** (Python tools run under [`uv`](https://docs.astral.sh/uv/)).
@@ -817,12 +923,12 @@ video, each test preceded by a caption card + its spectrogram), and per-test `.w
 
 ---
 
-# 4. Background & rationale
+## 4. Background & rationale
 
 *Why this design — the technologies, the trade-offs, and the build method. It sits down here on
 purpose: none of it is needed to play the synth, or to build it.*
 
-## The technologies
+### The technologies
 
 Three technologies do the heavy lifting; here's what each is and why it's here.
 
@@ -843,7 +949,7 @@ Three technologies do the heavy lifting; here's what each is and why it's here.
   bitstream; on Tiliqua by **yosys + nextpnr-ecp5**. [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) flashes both; the whole
   build is scriptable.
 
-## Why XLS, not hand-written Verilog?
+### Why XLS, not hand-written Verilog?
 
 The DSP here — [DDS](https://en.wikipedia.org/wiki/Direct_digital_synthesis) oscillators, [ADSR](https://en.wikipedia.org/wiki/Envelope_(music)) math, a [state-variable filter](https://en.wikipedia.org/wiki/State_variable_filter), a mixer — is naturally
 expressed as functions over numbers. In DSLX that's a few lines with unit tests that run in
@@ -858,7 +964,7 @@ a hand-placed pipeline, retargeting it to an ECP5 was *recompiling the same sour
 `--pipeline_stages`*, not a rewrite. This project is partly a candid stress test of that trade-off;
 the [friction log](DEVELOPMENT.md#friction-logs--learnings) documents exactly where the seams leak.
 
-## Why an FPGA, not Web Audio?
+### Why an FPGA, not Web Audio?
 
 You *could* synthesize these voices in a few lines of JavaScript with the
 [Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) API. The question is what that costs you. Pushing the DSP into hardware
@@ -882,7 +988,7 @@ buys three concrete things:
   or hardware MIDI directly with no OS/driver round-trip. It's a real instrument, not a
   browser tab.
 
-## Loop engineering with FPGA and AI coding agents
+### Loop engineering with FPGA and AI coding agents
 
 Both boards were brought up *remotely and headlessly* by an AI coding agent — no one
 watching LEDs, listening to a speaker, or pressing buttons. That works because the project is
@@ -912,7 +1018,7 @@ flowchart LR
   CHECK -->|regression| EDIT
 ```
 
-## Design principle
+### Design principle
 
 One clock, one sample rate. Everything is either a **pure function** (the DSP
 math — XLS's sweet spot) or a small **proc** (the stateful/streaming stages). No
@@ -921,7 +1027,7 @@ emits **one audio sample per sample-rate tick**.
 
 ---
 
-# 5. Architecture & design
+## 5. Architecture & design
 
 The consolidated overview of how the shipped synth works. For the **per-block implementation
 deep-dive** — real code, a dataflow diagram, and a timing chart for every block — see
@@ -931,7 +1037,7 @@ milestone-by-milestone rationale lives in
 [DEVELOPMENT.md](DEVELOPMENT.md#development-history-milestones) and
 [DEVELOPMENT_tiliqua.md](DEVELOPMENT_tiliqua.md).
 
-## How it works
+### How it works
 
 The core is a **time-multiplexed pipelined voice engine** (an XLS `proc` in `core/synth.x`):
 32 voices live in a **rotating ring**, so the current voice is always at slot 0 (constant-index —
@@ -960,7 +1066,36 @@ flowchart LR
   end
 ```
 
-## Two shells, one engine
+### The two boards
+
+The engine is the same generated `engine.v` on both. What differs is the **shell** around it — the
+clocking, the transport, and where the audio physically comes out. (The player's-eye version of
+this table is [§1](#two-boards-one-synth).)
+
+| | **Basys 3** | **Tiliqua** |
+|---|---|---|
+| **Board / FPGA** | Digilent Basys 3 — Xilinx Artix-7 `xc7a35t` | apf.audio Tiliqua R5 (SoldierCrab R3) — Lattice ECP5 `LFE5U-25F`, a Eurorack module |
+| **Shell** | Verilog — `boards/basys3/rtl/top.v` | Amaranth — `boards/tiliqua/gateware/` |
+| **P&R toolchain** | Vivado (committed build) · F4PGA · openXC7 | yosys + nextpnr-ecp5 (yowasp), via the Tiliqua SDK |
+| **Engine clock** | 100 MHz on a ÷3 clock-enable | 12.288 MHz (SI5351 `clk0` straight in, no FPGA PLL) |
+| **Pipeline depth** | `STAGES=48` → **768 cycles/sample** | `STAGES=12` → **224 cycles/sample** |
+| **Sample rate** | 32 kHz (28 kHz on the soft-multiplier backends) | engine 32 kHz, resampled 3/2 → **48 kHz** out |
+| **Host link** | USB UART @ 2 Mbaud (FT2232H channel B) | one USB-C: UAC2 audio up + USB-MIDI down |
+| **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee — a monitoring copy, not a lossless one |
+| **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; both play on hardware) |
+| **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
+| **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
+| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,729 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
+| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
+| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls32-r5.tar.gz` (bitstream archive) |
+
+Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
+transport is chosen by `$XLS32_BOARD` (default `basys3`). The per-board shells are documented in
+[ARCHITECTURE.md](ARCHITECTURE.md) (Basys 3) and
+[ARCHITECTURE_tiliqua.md](ARCHITECTURE_tiliqua.md) (Tiliqua); the directory-by-directory tour of
+the source tree is [docs/REPO_MAP.md](docs/REPO_MAP.md).
+
+### Two shells, one engine
 
 The engine is board-independent; the shell is where every board-specific number lives. What each
 shell has to provide is the same list — a clock, a MIDI source, an audio sink, the effects — but
@@ -989,84 +1124,15 @@ the 26 DSP48 slices, and the delay/reverb buffers + ROMs in the 32 block RAMs:
 
 *Rough resource map (schematic — which fabric each block maps to, not exact place-and-route). Block-by-block detail in [ARCHITECTURE.md → Chip floorplan](ARCHITECTURE.md#e5-chip-floorplan-rough-resource-map); the ECP5 census is in [ARCHITECTURE_tiliqua.md → E2](ARCHITECTURE_tiliqua.md#e2-the-area-census).*
 
-## MIDI CC map (current)
-
-The engine parses `0x9n` note-on / `0x8n` note-off / `0xBn` CC / `0xE0` pitch bend. The **channel
-nibble selects the part** (0–3) — see [Multitimbral](#multitimbral--4-parts-done-hardware-verified). Sound-shaping is via
-CC, applied **per part** (each channel has its own patch, including its own LFO oscillator —
-CC76 rate is per-part). Only the shell effects (CC82/91/93/94/95, post-mix) are global:
-
-| CC | Parameter | CC | Parameter |
-|----|-----------|----|-----------|
-| 1  | [vibrato](https://en.wikipedia.org/wiki/Vibrato) depth (mod wheel) | 74 | filter cutoff |
-| 5  | [portamento](https://en.wikipedia.org/wiki/Portamento) / glide | 75 | pulse width (PWM) |
-| 7  | volume (per-part output level) | 90 | debug stream select (dev) |
-| 20 | amp attack | 76 | LFO rate |
-| 21 | amp decay | 77 | LFO depth |
-| 22 | amp sustain | 78 | detune (dual osc) |
-| 23 | amp release | 79 | filter-env depth |
-| 24 | filter-env attack | 80 | unison (off/2/3/4) |
-| 25 | filter-env decay | 82 | **delay/echo time** (~4–508 ms; 4–340 on Tiliqua†) |
-| 26 | filter-env sustain | 83 | *(unused — effects are depth-gated)* |
-| 27 | filter-env release | 91 | reverb size (room/hall/large/cathedral) |
-| 70 | waveform (sine/saw/square/tri/noise) | 92 | tremolo depth |
-| 71 | resonance | 93 | **reverb wet** (8-comb Freeverb send) |
-| 72 | filter mode (LP/HP/BP/notch) | 94 | **chorus depth** |
-| 73 | sub-osc level | 95 | **delay/echo depth** |
-| 85 | cross-osc mode (off/ring/FM/FM+) | 86 | cross-osc depth |
-| 87 | cross-osc ratio (8: 1/1.5/2/3/4/5/7/½) | 0xE0 | pitch bend (±2 st) |
-
-`webui/synthspec.py` is the machine-readable source of truth for this map (baked to
-`webui/static/spec.json` by `presetgen/build_spec.py`, which is what the browser loads); `host/synth.py` has the matching `set_*` helpers. The map grew
-milestone by milestone — the historical "CC map so far" snapshots live in the M10/M11/M13
-sections. ADSR (CC20–27) was added for the [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified).
-
-### Channel mode messages
-
-These three are not in the table above and not in `synthspec.py`, deliberately — that file
-generates the panel's knobs, and a knob for "all notes off" is not a thing. They are addressed
-to a part like any other CC, and each affects **only** that part:
-
-| CC | | Effect |
-|----|---|--------|
-| 120 | All Sound Off | Every voice on the part off, **this sample** — including any already falling through their release. |
-| 121 | Reset All Controllers | Pitch bend to centre, mod wheel (CC1 vibrato) to zero. Nothing else — the patch is not touched. |
-| 123 | All Notes Off | Every sounding voice on the part into its release. A voice already releasing is left alone. |
-
-**120 clicks and 123 does not**, and that is the whole reason both exist. All Sound Off drops
-thirty-two envelopes in one sample, which is a step discontinuity and sounds like one; it is a
-panic button and a panic button should be instant. All Notes Off is the musical one — a
-sequencer's stop wants it, and it lets the release tail finish.
-
-**There is no sustain pedal. CC64 is ignored.** Not an oversight — one was built, tested and then
-removed, because a pedal needs a per-voice "the key is still down" bit to tell a note you have let
-go of from one you are still holding, and with that bit in place the ECP5 stopped routing at 98.6%
-of its LUTs. [M34](DEVELOPMENT_tiliqua.md) has the numbers.
-
-**CC122 and CC124–127 are ignored too.** Local Control, Omni and Mono/Poly have no meaning for an
-engine with a fixed 32-voice pool and no local keyboard, so they fall through to the CC catch-all
-rather than being silently misinterpreted as something else.
-
-† **One CC the engine never sees.** The Tiliqua shell sniffs it out of the USB stream before the
-engine does, and it is undefined in the MIDI spec: **CC103** picks which part a keyboard on the
-**TRS jack** plays. It exists
-because TRS is the one input that arrives already addressed to a channel — the browser and the host
-bridge both re-address their keys before sending, but a hardware keyboard's bytes reach the FPGA
-untouched, so the part chips are honoured in gateware (`midi_arb.py`) or not at all. Values 0–15
-select a channel and anything above releases the jack back to its own; the panel claims it when you
-click **PART** and releases it on every fresh link, because the override is a gateware register
-with nothing to read it back from and no way to expire. CC82's shorter
-ceiling on Tiliqua is M29's: the echo line moved from PSRAM into block RAM to make room for the
-screen.
-
-## Multitimbral — 4 parts (done, hardware-verified)
+### Multitimbral — 4 parts (done, hardware-verified)
 
 The engine is **4-part multitimbral**: MIDI channels 1–4 select one of 4 independent **parts**,
 each with its own patch (a `Part` struct; every voice carries a 2-bit `part` tag). The **32-voice
 pool is shared/dynamic** across parts, and each part has its own LFO, so the 4 timbres wobble at
 independent speeds; only the noise LFSR and the post-mix shell effects are global. Note-off matches
 note **and** part, so one channel can't cut another. The routing and per-voice 4:1 patch mux are in
-[ARCHITECTURE.md → Multitimbral parts](ARCHITECTURE.md#a3-multitimbral-parts).
+[ARCHITECTURE.md → Multitimbral parts](ARCHITECTURE.md#a3-multitimbral-parts); which CC does what,
+and which are addressed per part, is [§2 · MIDI CC map](#midi-cc-map-current).
 
 The web UI has a **Part 1–4 selector**: the selected part is what the on-screen keyboard plays and
 the knobs edit; all 4 play simultaneously from an external controller/DAW on channels 1–4. Verified
@@ -1089,7 +1155,7 @@ doesn't cut another.
 > comfortably under 40 ns with full per-part everything), or reduce the per-part field count (e.g.
 > shared LFO).
 
-## Where to read more
+### Where to read more
 
 | Document | What is in it |
 |---|---|

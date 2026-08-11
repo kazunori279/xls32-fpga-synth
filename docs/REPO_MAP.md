@@ -3,7 +3,7 @@
 A directory-by-directory guide to the source tree — what lives where, and why the split falls
 where it does. This is the companion to the [Builder's guide](../README.md#3-builders-guide);
 **you do not need any of it to flash a board and play the synth**, which is
-[§2 of the README](../README.md#2-getting-started).
+[§2 of the README](../README.md#2-user-guide).
 
 For what the code *does* rather than where it sits, see
 [ARCHITECTURE.md](../ARCHITECTURE.md) (core engine + Basys 3 shell) and
