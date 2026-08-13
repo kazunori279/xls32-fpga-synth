@@ -69,11 +69,16 @@ addition rather than a rewrite.
   carries tone edits over by song name). The matched preset banks live here as
   `presets_*.json`. See the [Web UI](../DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](../DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
-  `check_aligner.py` + `aligner_check.html` are the one thing here with a pass/fail: they run the
+  The page drives **up to four Tiliquas at once** — one USB cable each, the same bitstream on all
+  of them, 16 parts and 128 voices — by treating a part number as a (board, channel) pair;
+  `static/transport.js` finds every board and `static/app.js` does the routing.
+  Two checks here have a pass/fail. `check_aligner.py` + `aligner_check.html` run the
   Python and JS frame aligners over the same capture of real board bytes — `testdata/`, and it has
   a genuine mid-stream phase shift in it — and compare the SHA-256 of the aligned output, so
-  "the JS is a port of the Python" is checkable rather than asserted. `cd webui &&
-  python3 -m http.server 8123`, then open `/aligner_check.html`.
+  "the JS is a port of the Python" is checkable rather than asserted. `route_check.html` drives the
+  real panel in an iframe and hashes the MIDI it emits, against `testdata/route_trace.json`
+  recorded *before* the multi-board work: a single board must not be able to tell that four boards
+  became possible. `cd webui && python3 -m http.server 8123`, then open either.
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
   model of the engine (`engine.py`), a multi-resolution spectrogram loss (`loss.py`), the
   CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board

@@ -534,10 +534,53 @@ each with its own patch. The PART chips at the top right carry two separate cont
 Loading a demo song fills all 4 parts with the song's patches and lights every LED (the song plays
 all 4); your keys start on Part 1, so you can play along on top.
 
+Four parts is one board. Plug in more and the panel scales to
+[16 parts and 128 voices](#several-boards-at-once--16-parts-128-voices) — same chips, one row each.
+
 > **One machine only.** The page must run on the computer the board is plugged into: it opens the
 > USB devices directly, so there is nothing left to reach over the network. The old
 > stream-to-any-device mode went away with the server, and with it the certificate dance —
 > `127.0.0.1` needs none.
+
+### Several boards at once — 16 parts, 128 voices
+
+Plug a second, third or fourth Tiliqua into the same computer and the panel finds them all. Four
+USB cables, **the same bitstream on every board** — nothing to configure, nothing to flash
+differently, no MIDI channel to set. The PART bar grows a row per board, `P1`…`P16`, and the four
+audio streams are summed in the browser, so the whole rig still comes out of the computer's
+speakers with nothing on the desk between them.
+
+```
+PART   BOARD 1 🔊  ●P1  ●P2  ●P3  ●P4
+       BOARD 2 🔊  ●P5  ●P6  ●P7  ●P8
+       BOARD 3 🔊  ●P9  ●P10 ●P11 ●P12
+       BOARD 4 🔊  ●P13 ●P14 ●P15 ●P16
+```
+
+Everything on one board's row behaves as the four parts always have, and the layer crosses boards:
+⇧-click P1 and P13 and one key press sounds both, on two different chips.
+
+- **The board numbers are arbitrary.** All four enumerate under the same name, with no serial
+  number to tell them apart, and the browser cannot ask which USB port a device is on. The order
+  is stable across reloads for an unchanged set of cables, and that is all it is. **🔊 IDENTIFY**
+  plays a short arpeggio on that row's first part — the box you hear is the row you clicked.
+- **The effects are per board.** Reverb, chorus, delay and delay time sit after the mix, in each
+  board's shell — so the panel's global controls send one message to every board and the rig stays
+  in step. Everything else is per part.
+- **Each board keeps its own TRS jack.** Clicking a PART chip points that board's jack at that
+  part and leaves the others alone, so a keyboard plugged into board 3 is not stolen by a click on
+  board 1's row. Two players, two instruments, one panel.
+- **A demo plays on one board** — the board the selected part belongs to. Select a chip on board 3,
+  press ▶ DEMO, and the song fills board 3's four parts while the other twelve stay yours to play
+  over the top.
+- **Plug in before POWER.** Rows follow the bus until the panel opens the boards; after that the
+  status line asks for a POWER off/on, which re-binds everything.
+
+Why USB and not a MIDI chain: no Tiliqua revision has a MIDI **out** or **thru** jack, so the
+boards cannot be daisy-chained, and hanging four of them off one TRS wire with a splitter would
+make them play in unison — the engine reads only the low two bits of the channel
+(`ch = ps[0:2]` in `core/synth.x`), so every board would answer to the same four channels. Four
+cables sidestep all of it, and the gateware never learns that any of this is happening.
 
 ### Anything else that speaks MIDI CC
 
@@ -557,8 +600,10 @@ To drive it from Python instead, `host/synth.py` has the matching `set_*` helper
 ### MIDI CC map (current)
 
 Notes, note-offs, pitch bend and control changes — `0x9n` / `0x8n` / `0xE0` / `0xBn` — are the whole
-of what the synth listens to, and the **channel picks the part**: 1, 2, 3 and 4 are parts 1–4, and
-higher channels wrap (channel 5 is part 1 again, because only the low two bits are read). Every
+of what the synth listens to, and the **channel picks the part, per board**: 1, 2, 3 and 4 are that
+board's parts 1–4, and higher channels wrap (channel 5 is part 1 again, because only the low two
+bits are read). With several boards it is the *cable* that picks the board — see
+[Several boards at once](#several-boards-at-once--16-parts-128-voices). Every
 sound-shaping CC applies **to one part only** — each has its own complete patch, down to its own LFO,
 so CC76 sets the rate for that part and no other. The five shell effects
 (CC82/91/93/94/95) sit after the mix and are the only global ones:

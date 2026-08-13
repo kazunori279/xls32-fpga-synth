@@ -95,6 +95,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **28a ✅** | **The rails were a host decoder bug**: `frame_align()` in `host/transport/uart.py` picked one byte offset from the first 8000 bytes and kept it for a 166 kB capture | **the presets never railed.** Both boards re-graded after the fix; the Tiliqua verdicts were unmoved, which is what proved the fix reached only the board that needed it |
 | **PART ✅** | **The PART chips and a MIDI keyboard**: four independent bugs wearing one costume — three in the browser and the host, one that could only be fixed in gateware (CC103, sniffed off the USB stream) | a hardware keyboard follows the PART buttons; `check_midi.py` unchanged, and the remap costs +369 TRELLIS_COMB (still unexplained) |
 | **31 ✅** | **Deleting the Python hop**: `webui/server.py` removed — the page reaches the board itself with Web MIDI, `getUserMedia` on the Tiliqua UAC2 input, and Web Serial at 2 Mbaud on the Basys 3 | `python3 -m http.server -d webui/static` plays both boards with no Python process anywhere |
+| **BOARDS ◐** | **Four boards, one panel**: 16 parts / 128 voices from four USB cables and the *same* bitstream — the panel routes part `p` to board `p >> 2`, channel `p & 3`, and sums the four UAC2 streams | `webui/route_check.html`: 26 checks, including the single-board stream hashed byte-for-byte against a recording made before the change; **four-board hardware pending** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1803,6 +1804,104 @@ the only URL form other than `localhost` where the transport layer works at all.
 stop needing `publish_gist.py`'s URL rewriting: that script exists solely because a gist has no
 directories, and `/slides/assets/…` is a directory. The workflow builds nothing — it is a `cp`
 followed by an upload, which is worth stating plainly next to M32's cancelled build CI.
+
+## Four boards, one panel — 16 parts, 128 voices (built; four-board hardware pending)
+
+Four parts is not a design limit, it is two bits: `core/synth.x` allocates voices with
+`let ch = ps[0:2]`, so a board answers to four MIDI channels and channel 5 is part 1 again. Wanting
+16 parts therefore looks like a gateware problem, and it is not — **four Tiliquas on four USB
+cables, running the identical bitstream, are 16 parts and 128 voices**, and every line of the
+change is in `webui/`.
+
+### The two chaining designs that do not work, and why that is the good news
+
+The obvious rig is one MIDI cable through all four boards, and it fails twice over.
+
+**There is no MIDI out.** No Tiliqua revision has an out or thru jack — the SDK's `platform.py`
+declares the `midi` resource as `Subsignal("rx", …, dir="i")` on every one of them. Nothing to
+daisy-chain from.
+
+**A splitter makes them play in unison.** Hang four boards off one TRS wire and every board sees
+every message, and `ps[0:2]` means all four answer to the same four channels. What is wanted is a
+per-board channel *window* — board 2 takes channels 5–8 and ignores the rest — which means a
+comparator on the channel nibble, an offset subtract, a way to set the window per board, and
+somewhere to keep it across power cycles (the SPI flash, and a boot-time read of it). All of that
+is real gateware on a device already at **23,729 / 24,288 TRELLIS_COMB (97 %)**, and it ends with
+four *different* bitstreams to build and keep in step on every change.
+
+Four USB cables delete the entire problem. Each board is the only thing on its cable, gets channels
+1–4 as its own four parts, and cannot tell it has neighbours. The rig is a browser-side fiction:
+**16 parts and 128 voices from a bitstream that shipped before the idea existed.**
+
+### One router, and the two places where "part" and "channel" stop being the same word
+
+`webui/static/app.js` had one exit, `sendMidi(bytes)`, with the channel already burnt into the
+status byte by each caller. The change is a router in front of it: part `p` lives on board
+`p >> 2` as that board's channel `p & 3`, `sendPart()` rewrites the low nibble on the way out, and
+no caller ever indexes the board list. Note-on, note-off, bend, mod wheel, the sweeps, PANIC,
+`syncAllParts`, and forwarding from a host MIDI keyboard all fell out of it unchanged in shape.
+
+Two things could not go through it.
+
+**CC103, the TRS part-select**, because its *value* is a part number in the board's own terms — it
+is a protocol, not an address. It goes out explicitly, and only to the focused part's board: a
+keyboard plugged into board 3's jack must not lose it because someone clicked a chip on board 1's
+row. Releasing is the other way round and goes to every board, since a fresh link knows nothing
+about any of them.
+
+**The global (effects) controls**, because they are one setting per *board*, not per part. This is
+the one place the refactor could have quietly changed the single-board byte stream, and the answer
+came from reading `boards/tiliqua/gateware/fx.py:196` — the sniffer matches
+`(b & 0xF0) == 0xB0` and throws the channel away. So the channel a global CC rides on is free, and
+spending that freedom on the focused part's own channel is what makes a one-board rig byte-identical
+to the code before this change. A trace step exists specifically to catch getting it wrong.
+
+### Recording the answer before writing the code
+
+The regression that mattered was not "do four boards work" — it was "**can a single-board player
+tell that this happened**". That question has an exact answer, and only if you take it first:
+`webui/route_check.html` loads the real `static/index.html` in an iframe, replaces the app's MIDI
+exit with a recorder, drives the panel by clicking its actual DOM, and hashes the bytes each step
+emits. Run against the unmodified app it wrote `webui/testdata/route_trace.json`; that file was
+committed on its own, before a line of `app.js` changed, so the provenance is visible in the log
+rather than asserted in a comment.
+
+17 steps hold the single-board contract — notes, chords, per-part and global CCs, bend, part
+clicks, layering, the sweeps, PANIC, the full patch push — and all 17 hash equal after the
+refactor. Nine more cover what is new, and those need staging rather than hardware: a hook installs
+four fake links that discard every byte. It is the only hook in the app, and it exists only because
+`links` and `NBOARDS` are `let` bindings — top-level `function` declarations become properties of
+the global object and can be replaced from the parent frame, but `let` never does.
+
+The demo assertion failed on its first run, and the harness was wrong, not the app: `playDemo`
+opens with `stopDemo`, whose sweep is 128 note-offs **per part across the whole rig** — 2,048
+messages, all of them correct, and the filter was catching note-offs. Filtering note-ons gives "5
+notes on board 2", which is the actual question.
+
+### What the panel shows, and what it cannot know
+
+One board draws exactly what it always drew: four chips, no heading, no board number, the same
+geometry to the pixel (401 × 56, measured against the pre-change build). Rows and IDENTIFY buttons
+appear only when there is something to distinguish.
+
+Which row is which box, the page cannot answer. All four enumerate as `Tiliqua XLS32` with no
+serial number, and the browser cannot ask which USB port a device is on. Board order is
+`MIDIPort.id` order — meaningless, but stable across reloads for an unchanged set of cables, so
+Board 3 stays Board 3. **🔊 IDENTIFY** plays a short arpeggio on that row's first part and lets the
+ear close the loop.
+
+The audio pairing is arbitrary for a deeper reason: `MIDIOutput` comes from CoreMIDI,
+`MediaDeviceInfo` from CoreAudio, and the browser exposes nothing that spans the two. It does not
+matter — every stream is summed into one output, so "my board's stream" and "the next board's" are
+the same sound arriving twice. The only property that has to hold is that the assignment is a
+**bijection**, and the single `find` this replaced broke exactly that: it handed all four transports
+one `deviceId`, capturing one board four times while three played to nobody.
+
+**Still unverified, and it is the risky part.** Four UAC2 inputs free-run on four independent board
+clocks, and Chrome's drift compensation runs four times in parallel into one `AudioContext`. Nothing
+in a browser can prove that stays clean; it needs four boards on a desk. If it does not hold, the
+retreat is monitoring one board through the page and taking the other three out of their own jacks
+— the MIDI side is independent and would be unaffected.
 
 ---
 
