@@ -96,7 +96,24 @@ body{
 /* multitimbral part selector */
 .partbar{display:flex;align-items:center;gap:12px;padding:10px 14px;flex:1 1 auto;
   background:linear-gradient(#2b2721,#1c1915);border-radius:6px}   /* to the right of the patch panel */
-.parts{display:flex;gap:6px}
+/* one .brow per board. With a single board that is one flex row of 4 chips and no heading —
+   byte for byte the layout this had before four boards were a thing. */
+.parts{display:flex;flex-direction:column;gap:5px}
+.brow{display:flex;align-items:center;gap:6px}
+/* Four rows of chips plus the BOARD buttons do not fit the width one row had, so multi mode buys
+   it back: the "PART" caption goes (every row is captioned now), and the chips take one fixed
+   width instead of one per label, which also lines the four columns up. The patch panel stops
+   stretching too — three rows of new height next door would leave its one row in a black void. */
+.topbar.multi .partbar{gap:0}
+.topbar.multi .partbar .plabel{display:none}
+.topbar.multi .presets{align-self:flex-start}
+.parts.multi .partchip{width:54px;padding:0 0 0 8px}
+.parts.multi .brow{gap:5px}
+.parts.multi .bident{margin-right:3px}
+.bident{height:30px;padding:0 9px;border-radius:4px;border:1px solid #000;cursor:pointer;
+  font:inherit;font-size:9px;letter-spacing:1px;font-weight:700;color:#9c9280;white-space:nowrap;
+  background:linear-gradient(#332f28,#221f1a)}
+.bident:hover{color:#e8b24a}
 /* each part = one chip. click = play it alone (+ edit it), shift-click = layer it. led = demo mute.
    full amber = the primary part (knobs edit it); half amber = also in the layer, keys play it too. */
 .partchip{display:inline-flex;align-items:center;gap:7px;height:36px;box-sizing:border-box;

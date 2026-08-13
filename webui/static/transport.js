@@ -21,11 +21,16 @@
 //     label         what to show in the status line
 //     sr            nominal wire rate (48000 / 32000) -- seeds the AudioContext and the worklet
 //     timed         true if sendMidi() honours `when` in hardware rather than by timer
-//     connect()     prompt, open, throw on refusal
+//     board         0-based index among the boards of this kind (Tiliqua: 0..3)
+//     connect()     open, throw on refusal
 //     sendMidi(b, when)   `when` is a performance.now() timestamp; omit for "now"
 //     cancelPending()     drop anything scheduled but not yet sent (demo stop)
-//     attachAudio(ctx)    -> an AudioNode carrying the board's stereo output
+//     attachAudio(ctx)    -> an AudioNode carrying the board's stereo output, or null if this
+//                            board has no capture device to give (see discoverTiliquas)
 //     close()
+//
+// The prompting entry point is the registry's `connectAll()`, and the caller is a click. It hands
+// back a list because four Tiliquas on four USB cables is a supported rig -- 16 parts, 128 voices.
 
 // ---------- Web MIDI, shared ----------
 // One MIDIAccess for the whole page: the transport wants outputs, app.js wants inputs, and asking
@@ -44,26 +49,18 @@ const TILIQUA_MATCH = 'tiliqua xls32';
 const matches = (name) => (name || '').toLowerCase().includes(TILIQUA_MATCH);
 
 class TiliquaTransport {
-  constructor() {
+  // A transport is handed its hardware rather than going to look for it: finding the boards is
+  // `discoverTiliquas()`'s job, below, because with more than one plugged in it is a question
+  // about the *set* and cannot be answered one instance at a time.
+  constructor(out, deviceId, board = 0) {
     this.kind = 'tiliqua'; this.label = 'Tiliqua'; this.sr = 48000; this.timed = true;
-    this.out = null; this.stream = null; this.deviceId = null;
+    this.out = out; this.stream = null; this.deviceId = deviceId; this.board = board;
   }
 
   async connect() {
-    const access = await midiAccess();
-    for (const o of access.outputs.values()) if (matches(o.name)) { this.out = o; break; }
     if (!this.out) throw new Error('no "Tiliqua XLS32" MIDI output — is the bitstream loaded?');
     await this.out.open();
-    // Ask for audio before the picker closes, so both prompts land in the same gesture. Labels
-    // are empty until some mic permission exists, which is why this opens a throwaway default
-    // stream first and only then goes looking for the board by name.
-    const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
-    probe.getTracks().forEach((t) => t.stop());
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const hit = devs.find((d) => d.kind === 'audioinput' && matches(d.label));
-    if (!hit) throw new Error('no "Tiliqua XLS32" audio input — check the OS sound settings');
-    this.deviceId = hit.deviceId;
-    this.label = 'Tiliqua · USB MIDI + UAC2';
+    this.label = 'Tiliqua · USB MIDI + UAC2' + (this.deviceId ? '' : ' (no audio in)');
   }
 
   sendMidi(bytes, when) {
@@ -76,6 +73,7 @@ class TiliquaTransport {
   cancelPending() { if (this.out) { try { this.out.clear(); } catch (e) {} } }
 
   async attachAudio(ctx) {
+    if (!this.deviceId) return null;             // discovery found fewer inputs than outputs
     // Every default-on processing block has to go off explicitly. Voice processing on a synth
     // feed is not a subtle degradation -- AGC alone rides the level of a held pad down to nothing.
     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -98,6 +96,56 @@ class TiliquaTransport {
     if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
     if (this.out) { try { this.out.close(); } catch (e) {} this.out = null; }
   }
+}
+
+// Every Tiliqua on the bus, as connected transports in board order. Four boards on four USB cables
+// is the supported way to play more than four parts: the engine folds MIDI channels onto parts with
+// `ch = ps[0:2]` (core/synth.x), so every board owns channels 1-4 of its own cable, and the panel
+// stacks them into 16 parts. Nothing in the gateware knows this is happening.
+//
+// Board order is `MIDIPort.id` order. The order itself means nothing -- it is not slot order, not
+// cable order, not the order they were plugged in -- but it is *stable* for an unchanged USB
+// topology, so Board 3 is still Board 3 after a reload. Which physical box that is, the panel's
+// IDENTIFY button answers by ear.
+//
+// The audio pairing is arbitrary and cannot be otherwise: `MIDIOutput` comes from CoreMIDI and
+// `MediaDeviceInfo` from CoreAudio, the browser exposes nothing that spans the two, and all four
+// boards enumerate under the same name. It does not matter. Every board's stream is summed into
+// one output, so "my stream" and "the next board's stream" are the same sound arriving twice; the
+// only property that has to hold is that the assignment is a bijection -- which the single `find`
+// this replaced got wrong, handing all four transports one deviceId and capturing one board four
+// times while three played to nobody.
+async function discoverTiliquas() {
+  const access = await midiAccess();
+  const outs = [...access.outputs.values()].filter((o) => matches(o.name))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  if (!outs.length) throw new Error('no "Tiliqua XLS32" MIDI output — is the bitstream loaded?');
+  // Ask for audio before the picker closes, so both prompts land in the same gesture. Labels are
+  // empty until some mic permission exists, which is why this opens a throwaway default stream
+  // first and only then goes looking for the boards by name. One probe covers all of them.
+  const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+  probe.getTracks().forEach((t) => t.stop());
+  const ins = (await navigator.mediaDevices.enumerateDevices())
+    .filter((d) => d.kind === 'audioinput' && matches(d.label))
+    .sort((a, b) => (a.deviceId < b.deviceId ? -1 : a.deviceId > b.deviceId ? 1 : 0));
+  if (!ins.length) throw new Error('no "Tiliqua XLS32" audio input — check the OS sound settings');
+  // Fewer inputs than outputs means something else holds one (another tab, a DAW). That board
+  // still plays -- it is only unheard through the browser -- so it is kept, without a deviceId.
+  const links = outs.map((o, i) => new TiliquaTransport(o, ins[i] ? ins[i].deviceId : null, i));
+  for (const l of links) await l.connect();
+  return links;
+}
+
+// How many boards, without asking for anything. Same contract as `detectTiliqua()` below: this runs
+// at page load, so a prompt here would be the page demanding MIDI access from a passer-by. 0 is
+// what a first visit gets, and the panel draws one board's worth until POWER says otherwise.
+async function countTiliquas() {
+  if (!navigator.requestMIDIAccess) return 0;
+  try {
+    if ((await navigator.permissions.query({ name: 'midi' })).state !== 'granted') return 0;
+  } catch (e) { return 0; }                // no 'midi' permission name here; asking is the only way
+  const access = await midiAccess();       // already granted, so this resolves without a prompt
+  return [...access.outputs.values()].filter((o) => matches(o.name)).length;
 }
 
 // ---------- Basys 3: Web Serial ----------
@@ -356,15 +404,19 @@ async function detectBasys3() {
   return 'unknown';                      // nothing granted -> the picker, then requestPort()
 }
 
+// `connectAll` returns connected transports, plural. Only the Tiliqua can be plural; the Basys 3
+// answers with a list of one so app.js has a single shape to hold. Mixing the two is not offered
+// and could not work: there is one AudioContext and it has one sample rate.
 const TRANSPORTS = {
-  tiliqua: { make: () => new TiliquaTransport(), name: 'Tiliqua',
-             hint: 'USB MIDI out + UAC2 audio in · 48 kHz',
+  tiliqua: { connectAll: discoverTiliquas, name: 'Tiliqua',
+             hint: 'USB MIDI out + UAC2 audio in · 48 kHz · up to 4 boards',
              ok: () => !!navigator.requestMIDIAccess && !!navigator.mediaDevices,
-             detect: detectTiliqua },
-  basys3:  { make: () => new Basys3Transport(), name: 'Basys 3',
+             detect: detectTiliqua, count: countTiliquas },
+  basys3:  { connectAll: async () => { const t = new Basys3Transport(); await t.connect(); return [t]; },
+             name: 'Basys 3',
              hint: 'USB serial, 2 Mbaud · 32 kHz',
              ok: () => !!navigator.serial,
-             detect: detectBasys3 },
+             detect: detectBasys3, count: async () => 0 },
 };
 
 // The whole registry at once: { key: 'yes'|'no'|'unknown' }. Both probes are independent and one
@@ -376,4 +428,4 @@ async function detectBoards() {
   return Object.fromEntries(keys.map((k, i) => [k, states[i]]));
 }
 
-window.XLS32 = { TRANSPORTS, detectBoards, midiAccess, Aligner };
+window.XLS32 = { TRANSPORTS, detectBoards, midiAccess, Aligner, countTiliquas };

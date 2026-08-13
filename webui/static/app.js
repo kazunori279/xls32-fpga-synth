@@ -3,21 +3,29 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v82-standalone';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v85-boards';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
                                   // 32 kHz on both; this is the interface rate the board pushes at.
 let spec = null, link = null, ctx = null, node = null, analyser = null;
+let links = [];                   // every connected board, in board order; `link` is links[0]
+let audioNodes = [];              // one per board that gave us a capture device (see startAudio)
 let powered = false, audioEl = null;
 let masterVol = 64, mvolKnob = null, masterGainNode = null;   // header MASTER OUTPUT volume (final-mix gain)
 const ctlEl = {};                 // id -> {set(v), get()}
-const NPARTS = 4;                 // MULTITIMBRAL: 4 parts on MIDI channels 0-3
-let activeCh = 0;                 // the PRIMARY selected part: the one the knobs edit
+// MULTITIMBRAL, across as many boards as are plugged in. One board is 4 parts on MIDI channels 0-3,
+// because the engine folds the channel down to two bits (`ch = ps[0:2]`, core/synth.x). Four boards
+// on four USB cables are 16 parts and 128 voices, and the only thing that knows it is this file:
+// each board is sent channels 0-3 on its own cable and cannot tell it has neighbours.
+const PPB = 4;                    // parts per board — the engine's two channel bits
+let NBOARDS = 1;                  // set from the transports at POWER, guessed at boot
+let NPARTS = PPB;                 // = NBOARDS * PPB. Part numbers below are always GLOBAL (0..15)
+let activePart = 0;                 // the PRIMARY selected part: the one the knobs edit
 let selSet = new Set([0]);        // every selected part = what live notes play (⇧-click a chip to layer)
 let playSet = new Set([0]);       // parts whose LED is lit = the parts a DEMO sounds (the mute set)
-let partValues = [];              // per-part control state; values -> partValues[activeCh]
-let values = {};                  // id -> current raw value (alias of partValues[activeCh])
+let partValues = [];              // per-part control state; values -> partValues[activePart]
+let values = {};                  // id -> current raw value (alias of partValues[activePart])
 let partPreset = [];              // per-part {cat, name, index} of the last-loaded preset (for the name bar)
 let globalIds = new Set();        // control ids shared by all parts (effects, LFO rate) — see spec.global
 const ccById = {};                // id -> cc number
@@ -28,34 +36,46 @@ let baseOct = 4, curUserSlot = 1;
 
 window.__stats = { ctx: 'off', frames: 0, rms: 0, notes: 0, connected: false };
 
-// ---------- MIDI out (straight to the board) ----------
+// ---------- MIDI out (straight to the boards) ----------
+// Every byte this page emits goes through here, and here is the only place that knows a part
+// number is not a MIDI channel. Part p lives on board `p >> 2` as that board's channel `p & 3`:
+// the caller writes the part into the status byte as if there were one board, and the low nibble
+// is rewritten on the way out. Callers therefore never index `links` themselves.
+//
 // `when` is a performance.now() timestamp and only the sequencer passes one; everything driven by
-// a finger wants the byte gone now. Silently dropped before the board is chosen, which is the
-// same thing the closed WebSocket used to do and is what makes every caller here gate-free.
-function sendMidi(bytes, when) {
-  if (link) link.sendMidi(bytes, when);
+// a finger wants the byte gone now. Silently dropped before a board is chosen, which is the same
+// thing the closed WebSocket used to do and is what makes every caller here gate-free.
+function sendToBoard(b, bytes, when) {
+  const l = links[b];
+  if (l) l.sendMidi(bytes, when);
 }
-function noteChans() { return selSet.size ? [...selSet] : [activeCh]; }   // LIVE notes -> the selected part(s)
+function sendPart(p, bytes, when) {                // p is a GLOBAL part number, 0..NPARTS-1
+  sendToBoard(p >> 2, [(bytes[0] & 0xf0) | (p & 3), ...bytes.slice(1)], when);
+}
+function sendAll(bytes, when) {                    // the same message to every board, verbatim
+  for (let b = 0; b < NBOARDS; b++) sendToBoard(b, bytes, when);
+}
+function noteParts() { return selSet.size ? [...selSet] : [activePart]; }   // LIVE notes -> the selected part(s)
 function noteOn(n, vel = 100) {
   if (n < 0 || n > 127) return;
-  const chans = noteChans(); if (!chans.length) return;
-  for (const ch of chans) sendMidi([0x90 | ch, n, vel]);            // stack it across the layer
-  activeNotes.set(n, chans); highlightKey(n, true);
+  const parts = noteParts(); if (!parts.length) return;
+  for (const p of parts) sendPart(p, [0x90, n, vel]);               // stack it across the layer
+  activeNotes.set(n, parts); highlightKey(n, true);
   window.__stats.notes = activeNotes.size;
 }
 function noteOff(n) {
-  const chans = activeNotes.get(n) || noteChans();                 // off to the SAME parts it started on
+  const parts = activeNotes.get(n) || noteParts();                 // off to the SAME parts it started on
   //                                                                  (the selection may have moved since)
-  for (const ch of chans) sendMidi([0x80 | ch, n, 0]);
+  for (const p of parts) sendPart(p, [0x80, n, 0]);
   activeNotes.delete(n); highlightKey(n, false);
   window.__stats.notes = activeNotes.size;
 }
-function sendCC(cc, val) { sendMidi([0xB0 | activeCh, cc & 0x7f, val & 0x7f]); }   // knob edits -> focused part
-function sendCCch(cc, val, ch) { sendMidi([0xB0 | ch, cc & 0x7f, val & 0x7f]); }   // to a specific part
-function sendPerfCC(cc, val) { for (const ch of noteChans()) sendMidi([0xB0 | ch, cc & 0x7f, val & 0x7f]); }  // mod wheel etc
+function sendCC(cc, val) { sendPart(activePart, [0xB0, cc & 0x7f, val & 0x7f]); }   // knob edits -> focused part
+function sendCCpart(cc, val, p) { sendPart(p, [0xB0, cc & 0x7f, val & 0x7f]); }     // to a specific part
+function sendPerfCC(cc, val) { for (const p of noteParts()) sendPart(p, [0xB0, cc & 0x7f, val & 0x7f]); }  // mod wheel etc
 function sendBend(norm) {
   const b = Math.max(0, Math.min(16383, 8192 + Math.round(norm * 8191)));
-  for (const ch of noteChans()) sendMidi([0xE0 | ch, b & 0x7f, (b >> 7) & 0x7f]);   // bend follows the notes
+  for (const p of noteParts()) sendPart(p, [0xE0, b & 0x7f, (b >> 7) & 0x7f]);   // bend follows the notes
 }
 
 // ---------- control state ----------
@@ -63,7 +83,17 @@ function setValue(id, v, send = true) {
   values[id] = v;
   if (globalIds.has(id)) for (const pv of partValues) pv[id] = v;   // global (fx/LFO rate): keep every part in sync
   if (ctlEl[id]) ctlEl[id].set(v);
-  if (send && id in ccById) sendCC(ccById[id], v);
+  if (!send || !(id in ccById)) return;
+  // A global control is one setting per BOARD, not per part: the effects live in the shell, on the
+  // summed mix, and `fx.py`'s sniffer matches `(b & 0xF0) == 0xB0` -- it never looks at the channel.
+  // So one message per board is right, and the channel it rides on is free. Spending that freedom
+  // on the focused part's own channel is what keeps a single-board rig's byte stream unchanged.
+  if (globalIds.has(id)) {
+    for (let b = 0; b < NBOARDS; b++)
+      sendPart((b << 2) | (activePart & 3), [0xB0, ccById[id] & 0x7f, v & 0x7f]);
+    return;
+  }
+  sendCC(ccById[id], v);
 }
 // ---------- header MASTER OUTPUT volume: scales the FINAL audio (not per-part), so it stays put
 //           across demos/presets. A GainNode on the way to the speakers — it does not touch the
@@ -148,9 +178,9 @@ function buildPanel() {
     panel.append(sec);
   });
   applyValues(spec.defaults, false);   // reflect defaults in the UI (no send yet)
-  // MULTITIMBRAL: each of the 4 parts starts as a copy of the defaults; `values` aliases the active one
+  // MULTITIMBRAL: every part starts as a copy of the defaults; `values` aliases the active one
   partValues = Array.from({ length: NPARTS }, () => ({ ...values }));
-  values = partValues[activeCh];
+  values = partValues[activePart];
   equalizeSegs();
 }
 // give every button group ONE fixed width (= its widest button) so siblings line up in a grid
@@ -175,10 +205,10 @@ function equalizeSegs() {
 // of the layer sits at half amber. Selecting a part also lights its LED, so a part you pull into
 // the layer mid-song is audible.
 function refreshPartUI() {
-  document.querySelectorAll('#parts .partchip').forEach((chip, ch) => {
-    chip.classList.toggle('editing', ch === activeCh);
-    chip.classList.toggle('layered', selSet.has(ch) && ch !== activeCh);
-    chip.querySelector('.partled').classList.toggle('on', playSet.has(ch));
+  document.querySelectorAll('#parts .partchip').forEach((chip, p) => {
+    chip.classList.toggle('editing', p === activePart);
+    chip.classList.toggle('layered', selSet.has(p) && p !== activePart);
+    chip.querySelector('.partled').classList.toggle('on', playSet.has(p));
   });
   renderMidiIn();                     // the footer names the part a hardware keyboard now plays
   if (trsFollow) sendPartSelect();    // keep an existing claim in step; never make one here
@@ -192,37 +222,44 @@ function refreshPartUI() {
 // *When* the panel claims the jack matters, because the board keeps that state until it is told
 // otherwise or power-cycled -- there is nothing to read back and nothing that expires. So claiming
 // is a gesture and not a side effect: a click on a PART chip is the player saying "play this one",
-// and that is the only thing that claims. Everything else that moves `activeCh` -- a demo
+// and that is the only thing that claims. Everything else that moves `activePart` -- a demo
 // starting, a preset restoring a part -- only keeps an existing claim in step, so it cannot take
 // the jack away from someone who is choosing parts with their keyboard's channel knob instead.
 // A fresh link hands it back (`syncBoard`), which is also the board's own reset default.
+//
+// Every board has its own TRS jack, and CC103 is the one message here that is not routed by part:
+// its *value* is a part number in the board's own terms, so it goes out explicitly rather than
+// through `sendPart`. Only the focused part's board is claimed. A keyboard plugged into board 3
+// must not lose its jack because someone clicked a chip belonging to board 1 -- those are two
+// players at two instruments. Releasing is the other way round: `syncBoard` hands back every
+// board's jack, because a fresh link knows nothing about any of them.
 const TRS_RELEASE = 127;            // CC103 >= 16 = override off, the keyboard's channel decides
-let lastPartCC = -1;
+let lastTrsPart = -1;               // GLOBAL part number the claim currently points at
 let trsFollow = false;              // has this panel claimed the TRS jack?
 function sendPartSelect(force = false) {
-  const ch = noteChans()[0] & 0x0f;
-  if (ch === lastPartCC && !force) return;      // refreshPartUI runs on plenty that is not a part change
-  lastPartCC = ch;
-  sendMidi([0xB0 | ch, 103, ch]);
+  const p = noteParts()[0];
+  if (p === lastTrsPart && !force) return;      // refreshPartUI runs on plenty that is not a part change
+  lastTrsPart = p;
+  sendToBoard(p >> 2, [0xB0 | (p & 3), 103, p & 3]);
 }
 function claimTrs()   { trsFollow = true;  sendPartSelect(true); renderMidiIn(); }
-function releaseTrs() { trsFollow = false; lastPartCC = -1; sendMidi([0xB0, 103, TRS_RELEASE]); renderMidiIn(); }
+function releaseTrs() { trsFollow = false; lastTrsPart = -1; sendAll([0xB0, 103, TRS_RELEASE]); renderMidiIn(); }
 // The mute set is read live by the sequencer (see demoTick), so toggling an LED mid-song takes
 // effect on the next note without anything having to be told about it.
-function setPlay(ch, on) {   // the LED = this part's demo mute
-  if (on) playSet.add(ch);
+function setPlay(p, on) {   // the LED = this part's demo mute
+  if (on) playSet.add(p);
   else {
-    playSet.delete(ch);
-    for (const [n, chans] of activeNotes) if (chans.includes(ch)) sendMidi([0x80 | ch, n, 0]);  // release held on this part
-    sweepPart(ch);                                               // and whatever the demo is holding there
+    playSet.delete(p);
+    for (const [n, parts] of activeNotes) if (parts.includes(p)) sendPart(p, [0x80, n, 0]);  // release held on this part
+    sweepPart(p);                                                // and whatever the demo is holding there
   }
   refreshPartUI();
 }
 function sameSet(a, b) { return a.size === b.size && [...a].every((v) => b.has(v)); }
-function setPart(ch, layer = false) {   // click = this part alone · ⇧-click = add it to / drop it from the layer
+function setPart(p, layer = false) {   // click = this part alone · ⇧-click = add it to / drop it from the layer
   let next;
-  if (!layer) next = new Set([ch]);
-  else { next = new Set(selSet); if (next.has(ch) && next.size > 1) next.delete(ch); else next.add(ch); }
+  if (!layer) next = new Set([p]);
+  else { next = new Set(selSet); if (next.has(p) && next.size > 1) next.delete(p); else next.add(p); }
   if (!sameSet(next, selSet))                     // the layer moved: release first, or notes strand on the
     for (const n of Array.from(activeNotes.keys())) noteOff(n);   // parts that just left it
   // The same hazard on the TRS jack, and this page cannot fix it the same way: those notes never
@@ -231,46 +268,94 @@ function setPart(ch, layer = false) {   // click = this part alone · ⇧-click 
   // the part we are leaving. Sweep whatever the jack might be sounding instead -- one part if we
   // already own it, all of them if we are taking it over from a channel we never knew. Skipped
   // while a demo runs: the sweep would cut the song's own notes, and stopDemo clears everything.
-  const stale = trsFollow ? [lastPartCC] : [...Array(NPARTS).keys()];
+  const stale = trsFollow ? [lastTrsPart] : [...Array(NPARTS).keys()];
   selSet = next;
-  focusPart(next.has(ch) ? ch : [...next][0]);    // knobs follow the clicked part (or what's left of the layer)
-  const arriving = noteChans()[0] & 0x0f;
-  if (!demoPlaying) for (const p of stale) if (p >= 0 && p !== arriving) sweepPart(p);
+  focusPart(next.has(p) ? p : [...next][0]);      // knobs follow the clicked part (or what's left of the layer)
+  const arriving = noteParts()[0];
+  if (!demoPlaying) for (const s of stale) if (s >= 0 && s !== arriving) sweepPart(s);
   claimTrs();                                     // an explicit part gesture: the TRS jack follows it too
 }
-function focusPart(ch) {                          // the PRIMARY part: the one the knobs edit
-  activeCh = ch;
-  values = partValues[ch];                        // repoint; panel + knob sends now target this part
+function focusPart(p) {                           // the PRIMARY part: the one the knobs edit
+  activePart = p;
+  values = partValues[p];                         // repoint; panel + knob sends now target this part
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);   // refresh knobs (no send)
   for (const c of selSet) playSet.add(c);         // a part you selected is never left demo-muted
   refreshPartUI();
-  const pp = partPreset[ch];                       // restore this part's patch name + browse position
+  const pp = partPreset[p];                        // restore this part's patch name + browse position
   if (pp) { setBar(pp.cat, pp.name); curIndex = pp.index; }
   else { setBar('—', 'Init'); curIndex = -1; }
   document.querySelectorAll('#blist .bitem').forEach((el, i) => el.classList.toggle('on', i === curIndex));
 }
+// One row of 4 chips per board. With a single board there is no row heading and no board number
+// anywhere: the panel looks exactly as it did when four parts was all there was, which is what the
+// overwhelmingly common rig should get. The headings appear only when there is something to
+// distinguish, and they bring IDENTIFY with them, because four identical boxes on a desk enumerate
+// under one name and nothing on screen can say which is which.
 function buildParts() {
   const box = document.getElementById('parts');
   if (!box) return;
   box.innerHTML = '';
-  for (let ch = 0; ch < NPARTS; ch++) {
-    const chip = document.createElement('button'); chip.className = 'partchip';
-    chip.title = 'click the name = play this part alone (and edit it) · ⇧-click = layer it with the others · click the LED = mute it in a demo';
-    const led = document.createElement('span'); led.className = 'partled';
-    led.title = 'green = a demo sounds this part · click to mute/unmute';
-    const name = document.createElement('span'); name.className = 'partname'; name.textContent = 'Part ' + (ch + 1);
-    chip.append(led, name);
-    chip.addEventListener('click', (e) => setPart(ch, e.shiftKey || e.metaKey || e.ctrlKey));   // ⇧ = layer
-    led.addEventListener('click', (e) => {                     // LED is the MUTE, and only the mute
-      e.stopPropagation(); setPlay(ch, !playSet.has(ch));      // (don't let it bubble up and re-focus/re-enable)
-    });
-    box.append(chip);
+  box.classList.toggle('multi', NBOARDS > 1);
+  box.closest('.topbar')?.classList.toggle('multi', NBOARDS > 1);   // the bar sheds its caption, see style.css
+  for (let b = 0; b < NBOARDS; b++) {
+    const row = document.createElement('div'); row.className = 'brow';
+    if (NBOARDS > 1) {
+      const id = document.createElement('button'); id.className = 'bident';
+      id.textContent = 'BOARD ' + (b + 1) + ' 🔊';
+      id.title = 'play a short arpeggio on this board only — the one you hear is this row';
+      id.addEventListener('click', () => identifyBoard(b));
+      row.append(id);
+    }
+    for (let i = 0; i < PPB; i++) {
+      const p = b * PPB + i;
+      const chip = document.createElement('button'); chip.className = 'partchip';
+      chip.title = 'click the name = play this part alone (and edit it) · ⇧-click = layer it with the others (across boards too) · click the LED = mute it in a demo';
+      const led = document.createElement('span'); led.className = 'partled';
+      led.title = 'green = a demo sounds this part · click to mute/unmute';
+      const name = document.createElement('span'); name.className = 'partname';
+      name.textContent = NBOARDS > 1 ? 'P' + (p + 1) : 'Part ' + (p + 1);
+      chip.append(led, name);
+      chip.addEventListener('click', (e) => setPart(p, e.shiftKey || e.metaKey || e.ctrlKey));  // ⇧ = layer
+      led.addEventListener('click', (e) => {                    // LED is the MUTE, and only the mute
+        e.stopPropagation(); setPlay(p, !playSet.has(p));       // (don't let it bubble up and re-focus/re-enable)
+      });
+      row.append(chip);
+    }
+    box.append(row);
   }
   refreshPartUI();
 }
-function syncAllParts() {   // push every part's full patch to its channel (board <- UI on connect)
-  for (let ch = 0; ch < NPARTS; ch++)
-    spec.controls.forEach((c) => sendCCch(c.cc, partValues[ch][c.id], ch));
+// Grow or shrink the panel to `n` boards. Called at boot from a silent port count and again at
+// POWER from what actually opened, so the two can disagree and the second one wins.
+function rebuildParts(n) {
+  n = Math.max(1, Math.min(4, n | 0));
+  if (n === NBOARDS && partValues.length === n * PPB) return;
+  NBOARDS = n; NPARTS = n * PPB;
+  // A part that appears starts from the defaults, but inherits the global (effects) settings --
+  // those are one setting for the whole rig, and a new row must not claim reverb is off.
+  const fresh = () => { const o = { ...spec.defaults }; globalIds.forEach((id) => (o[id] = values[id])); return o; };
+  while (partValues.length < NPARTS) partValues.push(fresh());
+  partValues.length = NPARTS; partPreset.length = NPARTS;
+  const clamp = (s) => { const t = new Set([...s].filter((p) => p < NPARTS)); return t.size ? t : new Set([0]); };
+  selSet = clamp(selSet); playSet = clamp(playSet);
+  if (activePart >= NPARTS) activePart = 0;
+  values = partValues[activePart];
+  for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);
+  buildParts();
+}
+// Four boxes, one name, no serial number in the descriptor: which row is which board is a question
+// only the ear can answer. A short arpeggio on this board's part 1 answers it.
+async function identifyBoard(b) {
+  if (!powered) { await powerOn(); if (!powered) return; }
+  const p = b * PPB, t0 = performance.now() + 30;
+  [60, 64, 67, 72].forEach((n, i) => {
+    sendPart(p, [0x90, n, 100], t0 + i * 140);
+    sendPart(p, [0x80, n, 0], t0 + i * 140 + 130);
+  });
+}
+function syncAllParts() {   // push every part's full patch to its board (boards <- UI on connect)
+  for (let p = 0; p < NPARTS; p++)
+    spec.controls.forEach((c) => sendCCpart(c.cc, partValues[p][c.id], p));
 }
 
 // ---------- presets (Serum/Vital-style browser: 128 factory by category + 128 user) ----------
@@ -309,7 +394,7 @@ function selectPreset(p, list, idx) {
   if (p.slot) curUserSlot = p.slot;
   applyValues(p.values, powered);
   setBar(p.category, p.name);
-  partPreset[activeCh] = { cat: p.category, name: p.name, index: curIndex };   // remember for this part
+  partPreset[activePart] = { cat: p.category, name: p.name, index: curIndex };   // remember for this part
   document.querySelectorAll('#blist .bitem').forEach((el, i) =>
     el.classList.toggle('on', i === curIndex));
 }
@@ -474,8 +559,8 @@ function panic() {                                  // release everything still 
 // pre-M34 bitstream drops 120-127 in `apply_cc`'s catch-all, and PANIC going quietly useless
 // against last month's firmware is exactly the kind of failure nobody reports. 512 note-offs
 // cost nothing next to a button a player presses when something has already gone wrong.
-function sweepPart(ch) { for (let n = 0; n < 128; n++) sendMidi([0x80 | ch, n, 0]); }
-function sweepAllParts() { for (let ch = 0; ch < NPARTS; ch++) sweepPart(ch); }
+function sweepPart(p) { for (let n = 0; n < 128; n++) sendPart(p, [0x80, n, 0]); }
+function sweepAllParts() { for (let p = 0; p < NPARTS; p++) sweepPart(p); }
 // CC120, not CC123. All Sound Off cuts the envelope dead where All Notes Off lets it fall through
 // the release, and -- the part that decides it -- 120 is the only one of the two that reaps a
 // voice already *in* its release. Both sweep the same set otherwise ("this part, not already
@@ -483,7 +568,7 @@ function sweepAllParts() { for (let ch = 0; ch < NPARTS; ch++) sweepPart(ch); }
 // clicks. That is what a panic button is for; the musical stop is the note-off sweep below.
 function allSoundOff() {
   panic();
-  for (let ch = 0; ch < NPARTS; ch++) sendMidi([0xB0 | ch, 120, 0]);
+  for (let p = 0; p < NPARTS; p++) sendPart(p, [0xB0, 120, 0]);   // every part of every board
   sweepAllParts();
 }
 document.addEventListener('pointermove', (e) => { if (activeDrag) activeDrag.move(e); });
@@ -522,7 +607,7 @@ function setupWheels() {
 // The readout in the footer exists because the failure this routing has is silent: if no port is
 // bound, the chips look like they are being ignored when in fact nothing ever arrived to route.
 let midiPorts = [];              // Web-MIDI inputs bound in this tab
-function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); }
+function partsLabel() { return noteParts().map((c) => 'P' + (c + 1)).join('+'); }
 // Two different inputs, and the footer has to keep them apart. `midiPorts` are the *host's* MIDI
 // devices; this page re-addresses their notes to the selected parts before forwarding them, so
 // they always land on `partsLabel()`. The Tiliqua's TRS jack never passes through here at all --
@@ -534,8 +619,11 @@ function partsLabel() { return noteChans().map((c) => 'P' + (c + 1)).join('+'); 
 // reaches for the channel knob takes the decision back and this label goes stale until the next
 // render. Saying what the panel *asked for* is a claim the panel can actually stand behind.
 function trsLabel() {
-  return trsFollow ? 'TRS jack → P' + ((noteChans()[0] & 0x0f) + 1) + ', until the keyboard changes channel'
-                   : 'TRS jack → its own MIDI channel';
+  // With several boards there are several jacks, and which one was claimed is the whole point.
+  const p = noteParts()[0];
+  const jack = NBOARDS > 1 ? 'TRS jack (Board ' + ((p >> 2) + 1) + ')' : 'TRS jack';
+  return trsFollow ? jack + ' → P' + (p + 1) + ', until the keyboard changes channel'
+                   : jack + ' → its own MIDI channel';
 }
 function renderMidiIn() {
   const el = document.getElementById('midiin'); if (!el) return;
@@ -559,8 +647,8 @@ function bindMidiInput(inp) {
     // because a message on one channel would silence one part and leave the other three -- and
     // the page's own `activeNotes` would still believe it was holding notes that no longer sound.
     else if (st === 0xB0 && (d[1] === 120 || d[1] === 123)) allSoundOff();
-    else if (d[0] >= 0x80 && d[0] < 0xf0) { for (const ch of noteChans()) sendMidi([st | ch, ...d.slice(1)]); }
-    else sendMidi(d);
+    else if (d[0] >= 0x80 && d[0] < 0xf0) { for (const p of noteParts()) sendPart(p, [st, ...d.slice(1)]); }
+    else sendAll(d);        // system messages carry no channel, so every board gets them unchanged
   };
 }
 async function initWebMidi() {
@@ -572,6 +660,7 @@ async function initWebMidi() {
       midiPorts = [];                              // rebuilt from scratch; `__xls32` keeps binds unique
       access.inputs.forEach(bindMidiInput);
       renderMidiIn();
+      countBoards();
     };
     scan();
     // `inputs` used to be walked exactly once, at boot. A keyboard plugged in after the page
@@ -579,6 +668,26 @@ async function initWebMidi() {
     // buttons don't work for MIDI" rather than as "this port was never opened".
     access.onstatechange = scan;
   } catch (e) { /* no Web-MIDI permission */ }
+}
+
+// How many boards to draw, before anything is opened. `countTiliquas` never prompts, so on a first
+// visit it says 0 and the panel draws one board -- which is both the honest guess and the layout
+// that needs no explanation. On every later visit the rows are right from the first paint.
+//
+// Before POWER, the row count follows the bus: unplug a board and its row goes. Afterwards it does
+// not. Re-binding a live rig means re-opening MIDI ports and re-attaching capture streams, and
+// POWER off/on already does exactly that and is already tested; a second, subtly different path
+// that only runs when someone yanks a cable mid-session is not worth having.
+async function countBoards() {
+  let n = 0;
+  try { n = await window.XLS32.countTiliquas(); } catch (e) { return; }
+  if (!n || n === NBOARDS) return;
+  if (links.length) {                             // already bound: say so, do not rebuild under them
+    const el = document.getElementById('statustext');
+    if (el) el.textContent = 'board count changed — POWER off/on to rebind';
+    return;
+  }
+  rebuildParts(n);
 }
 
 // ---------- audio + the board link ----------
@@ -603,14 +712,22 @@ async function startAudio() {
     if (audioEl && audioEl.paused) audioEl.play().catch(() => {});
   };
   ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, resume));
-  // The transport decides what the source is: a MediaStream off the Tiliqua's UAC2 input, or the
-  // resampling worklet fed by the Basys 3's UART. Either way it hands back one AudioNode.
-  node = await link.attachAudio(ctx);
   analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
   // Unity gain node (kept as an easy volume tap). The board output already saturates ≤1.0
   // and per-note levels are conservative (~0.2 peak), so no attenuation is needed.
   masterGainNode = ctx.createGain(); masterGainNode.gain.value = masterVol / 127;   // header VOL drives this
-  node.connect(masterGainNode); masterGainNode.connect(analyser);
+  // The transport decides what each source is: a MediaStream off a Tiliqua's UAC2 input, or the
+  // resampling worklet fed by the Basys 3's UART. Every board's node lands on the same gain, so
+  // four boards are summed here and the whole 16-part rig comes out of the computer's speakers --
+  // no mixer on the desk. Each UAC2 stream free-runs on its own board's clock; the drift between
+  // them is Web Audio's problem, and it is the one part of this that hardware could still refute.
+  audioNodes = [];
+  for (const l of links) {
+    const n = await l.attachAudio(ctx);          // null = that board had no capture device to give
+    if (n) { n.connect(masterGainNode); audioNodes.push(n); }
+  }
+  node = audioNodes[0] || null;
+  masterGainNode.connect(analyser);
   analyser.connect(ctx.destination);              // clean output path (no MediaStream processing)
   // iOS mutes the Web Audio API on the ringer/silent switch even when 'running'. Play a
   // looping *silent* clip: that flips iOS's audio session to 'playback', so ctx.destination
@@ -632,7 +749,9 @@ async function startAudio() {
     window.__stats.rms = Math.sqrt(s / buf.length);
     window.__stats.ctx = ctx.state + '@' + ctx.sampleRate;
     const dbg = document.getElementById('dbg');
-    if (dbg) dbg.textContent = `${ctx.state}@${ctx.sampleRate} · ${link ? link.label : 'no board'}`
+    const boards = links.length > 1 ? `${links.length} boards · audio ${audioNodes.length}/${links.length}`
+                                    : (link ? link.label : 'no board');
+    if (dbg) dbg.textContent = `${ctx.state}@${ctx.sampleRate} · ${boards}`
       + ` · rms ${window.__stats.rms.toFixed(3)}`
       + (audioEl ? ` · el ${audioEl.paused ? 'paused' : 'play'}` : '');
   }, 150);
@@ -688,9 +807,10 @@ function chooseBoard(det) {
 }
 
 async function openBoard(key) {
-  const t = window.XLS32.TRANSPORTS[key].make();
-  await t.connect();
-  link = t; SR = t.sr;
+  const ts = await window.XLS32.TRANSPORTS[key].connectAll();   // plural: up to 4 Tiliquas
+  if (!ts.length) return false;
+  links = ts; link = ts[0]; SR = link.sr;
+  rebuildParts(links.length);
   setStatus(true);
   return true;
 }
@@ -767,7 +887,13 @@ async function powerOn() {
 // the Basys 3 there is no hardware scheduler and it degrades to a timer per event.
 const LOOKAHEAD_MS = 250;        // how far past `now` each tick schedules
 const TICK_MS = 60;              // and how often it does so -- comfortably inside the look-ahead
-let demos = { songs: [] }, demoIdx = -1, demoPlaying = false;
+//
+// A song is written for 4 parts, which is exactly one board, so with several plugged in it has to
+// be told which. It plays on the board the focused part belongs to: start a demo with a chip of
+// board 3 selected and board 3 plays it, leaving the other twelve parts free to play over the top.
+// The song data never learns any of this -- its channels 0-3 are offset into global part numbers
+// as the events are built, and the router takes them from there.
+let demos = { songs: [] }, demoIdx = -1, demoPlaying = false, demoBoard = 0;
 let demoEvents = [], demoLoopMs = 0, demoBase = 0, demoPos = 0, demoTimer = null;
 
 function demoTick() {
@@ -787,14 +913,14 @@ function demoTick() {
     // A muted part swallows its note-ons and still gets its note-offs, so muting mid-note
     // releases what is already sounding instead of stranding it.
     if ((m[0] & 0xF0) === 0x90 && !playSet.has(m[0] & 0x0F)) continue;
-    sendMidi(m, when);
+    sendPart(m[0] & 0x0F, m, when);            // the low nibble is a GLOBAL part, offset at build time
   }
   demoTimer = setTimeout(demoTick, TICK_MS);
 }
 function stopDemo() {
   demoPlaying = false; demoIdx = -1;
   if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
-  if (link) link.cancelPending();               // drop whatever was scheduled but not yet sent
+  for (const l of links) l.cancelPending();     // drop whatever was scheduled but not yet sent
   // A cancelled look-ahead has certainly dropped some note-offs on the floor. The sweep rather
   // than `allSoundOff` on purpose: stopping a song should not cut a note the player is holding by
   // hand on a part the song was not using, and `allSoundOff` sends CC120, which clicks.
@@ -816,27 +942,35 @@ async function playDemo(idx) {
   // the song's shared effect state (mode + reverb/room/chorus/delay); default any it omits (old songs)
   const fxState = {};
   EFFECT_IDS.forEach((id) => { fxState[id] = (song[id] != null) ? song[id] : spec.defaults[id]; });
+  demoBoard = Math.min(activePart >> 2, NBOARDS - 1);   // the song plays on the focused part's board
+  const base = demoBoard * PPB;
   // load the song's 4 part patches + effects into the multitimbral editor so each PART can be tweaked live
-  song.parts.forEach((p, ch) => { if (ch < NPARTS) partValues[ch] = { ...spec.defaults, ...p, ...fxState }; });
-  playSet = new Set([0, 1, 2, 3]);   // a song sounds all 4 parts: light every LED, then click one to mute that part
-  activeCh = 0; selSet = new Set([0]); values = partValues[0];   // the song plays all 4; your keys play part 1
+  song.parts.forEach((p, ch) => { if (ch < PPB) partValues[base + ch] = { ...spec.defaults, ...p, ...fxState }; });
+  playSet = new Set([base, base + 1, base + 2, base + 3]);  // a song sounds all 4: light every LED, then click one to mute that part
+  activePart = base; selSet = new Set([base]); values = partValues[base];  // the song plays all 4; your keys play its part 1
   for (const id in values) if (ctlEl[id]) ctlEl[id].set(values[id]);           // reflect part 1 on the panel
   refreshPartUI();
-  // build the setup MIDI from the CURRENT (customized) state: shared effects + each part's patch
+  // build the setup MIDI from the CURRENT (customized) state: shared effects + each part's patch.
+  // Each entry is [globalPart, message]; the effects are per-board and go to every board, because a
+  // song's reverb should not stop at the edge of the board it happens to be playing on.
   const setup = [];
-  EFFECT_IDS.forEach((id) => { if (id in ccById) setup.push([0xB0, ccById[id], fxState[id] & 0x7f]); });
-  for (let ch = 0; ch < NPARTS; ch++)
-    for (const id in partValues[ch])
-      if ((id in ccById) && !globalIds.has(id)) setup.push([0xB0 | ch, ccById[id], partValues[ch][id] & 0x7f]);
+  EFFECT_IDS.forEach((id) => {
+    if (!(id in ccById)) return;
+    for (let b = 0; b < NBOARDS; b++) setup.push([b * PPB, [0xB0, ccById[id], fxState[id] & 0x7f]]);
+  });
+  for (let ch = 0; ch < PPB; ch++)
+    for (const id in partValues[base + ch])
+      if ((id in ccById) && !globalIds.has(id))
+        setup.push([base + ch, [0xB0, ccById[id], partValues[base + ch][id] & 0x7f]]);
   // build timed note events (ms), sorted so the look-ahead loop can walk them with one cursor
   const beatMs = 60000 / song.bpm, loopMs = song.bars * 4 * beatMs;
   const events = [];
   song.notes.forEach(([t, dur, ch, note, vel]) => {
-    events.push([t * beatMs, [0x90 | ch, note, vel]]);
-    events.push([(t + dur) * beatMs, [0x80 | ch, note, 0]]);
+    events.push([t * beatMs, [0x90 | (base + ch), note, vel]]);
+    events.push([(t + dur) * beatMs, [0x80 | (base + ch), note, 0]]);
   });
   events.sort((a, b) => a[0] - b[0]);
-  for (const m of setup) sendMidi(m);        // untimed: these want to land before the clock starts
+  for (const [p, m] of setup) sendPart(p, m);  // untimed: these want to land before the clock starts
   demoEvents = events; demoLoopMs = loopMs; demoPos = 0;
   // 240 ms of head start, as the Python sequencer had: the setup burst is ~200 CC messages and the
   // first downbeat must not race the patch that shapes it.
@@ -853,11 +987,12 @@ async function saveDemoTones() {
   if (demoIdx < 0 || !demos.songs[demoIdx]) { flash('play a demo first'); return; }
   const song = demos.songs[demoIdx];
   const parts = [];
-  for (let ch = 0; ch < NPARTS; ch++) {
-    const o = {}; spec.controls.forEach((c) => { if (!globalIds.has(c.id)) o[c.id] = partValues[ch][c.id]; });
+  for (let ch = 0; ch < PPB; ch++) {       // the 4 parts of the board the song is playing on
+    const pv = partValues[demoBoard * PPB + ch];
+    const o = {}; spec.controls.forEach((c) => { if (!globalIds.has(c.id)) o[c.id] = pv[c.id]; });
     parts.push(o);
   }
-  const fxState = {}; EFFECT_IDS.forEach((id) => { fxState[id] = partValues[activeCh][id]; });   // full effect state
+  const fxState = {}; EFFECT_IDS.forEach((id) => { fxState[id] = partValues[activePart][id]; });   // full effect state
   song.parts = parts; Object.assign(song, fxState);           // update in memory
   // The server used to patch demos.json in place. With no server the page cannot write into its
   // own directory, so it hands the whole file back and you drop it into webui/static/ yourself.
@@ -923,4 +1058,22 @@ async function boot() {
     document.querySelectorAll('#blist .bitem.on').forEach((el) => el.classList.remove('on'));
   });
 }
+
+// The one thing `webui/route_check.html` cannot do from outside: `links` and `NBOARDS` are `let`
+// bindings and never become properties of the global object, so a four-board panel cannot be
+// staged from the parent frame. Everything else the check needs it takes without help -- the top
+// -level function declarations here are global properties, so it records by replacing
+// `sendToBoard`. This hook exists for the check and is harmless otherwise: it binds no hardware,
+// and the fake links it installs discard every byte handed to them.
+window.__xls32 = {
+  testMode({ boards = 1, powered: pw } = {}) {
+    links = Array.from({ length: boards }, (_, b) => ({
+      kind: 'tiliqua', sr: 48000, board: b, label: 'test board ' + b,
+      sendMidi() {}, cancelPending() {}, attachAudio() { return null; }, close() {},
+    }));
+    link = links[0];
+    rebuildParts(boards);
+    if (pw !== undefined) powered = pw;
+  },
+};
 boot();
