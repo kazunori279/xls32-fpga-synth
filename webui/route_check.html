@@ -1,0 +1,263 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Route check — which board gets the byte</title>
+<!--
+  The panel used to have exactly one board, and every MIDI byte it emitted carried the part in the
+  low nibble of its own status byte. With four boards the part is a number 0-15 and the low nibble
+  is only two bits of it: part 6 means "board 2, engine channel 1". That translation sits in front
+  of every note, every knob, every preset burst and PANIC -- and it is pure logic, so it can be
+  checked without a board on the desk, which matters when checking it properly needs four of them.
+
+  Two things are checked here.
+
+  1. NOTHING MOVED FOR ONE BOARD. The byte stream for a scripted sequence of operations is hashed
+     step by step and compared against `testdata/route_trace.json`, which was RECORDED FROM THE
+     CODE AS IT WAS BEFORE the multi-board work (commit 28e991f). A single-board player must not be
+     able to tell that any of this happened; this is the only thing that can say so.
+
+  2. Four boards go where they should -- part -> (board, channel), globals once per board, PANIC
+     reaching every channel of every board, a demo staying on the board it was started from.
+
+  Run it:  cd webui && python3 -m http.server 8123
+           open http://localhost:8123/route_check.html
+  Re-record (only from a tree whose behaviour you intend to freeze):
+           open http://localhost:8123/route_check.html?record
+           and save the JSON it offers into webui/testdata/route_trace.json, keeping the `_` note
+           at the top of the old one and updating the commit it names
+
+  The page under test is loaded in an iframe and driven through its own DOM and its own top-level
+  functions. Those are reachable because `static/app.js` is a classic script: its function
+  declarations are properties of the frame's global object, so replacing the one function every
+  byte leaves through is enough to record, with nothing added to the app for the test's benefit.
+  Board plurality is the exception -- `links` is a `let` and cannot be reached from out here -- so
+  the app exposes one hook, `__xls32.testMode`, and that hook is also what proves `rebuildParts`
+  survives a board count changing under it.
+-->
+<style>
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         margin: 2rem; max-width: 72rem }
+  h1 { font-size: 1.1rem } h2 { font-size: .95rem; margin: 1.6rem 0 .4rem }
+  table { border-collapse: collapse; margin: .4rem 0 }
+  th, td { padding: .2rem .8rem .2rem 0; text-align: left; border-bottom: 1px solid #ddd;
+           vertical-align: top }
+  .pass { color: #0a0 } .fail { color: #c00; font-weight: bold } .skip { color: #888 }
+  #verdict { font-size: 1.2rem; margin: 1rem 0 }
+  pre { color: #666; white-space: pre-wrap; margin: .2rem 0 }
+  iframe { width: 1100px; height: 700px; border: 1px solid #ccc; transform: scale(.5);
+           transform-origin: 0 0; margin-bottom: -350px }
+  code { background: #f4f4f4; padding: 0 .2em }
+</style>
+<h1>Route check — <code>webui/static/app.js</code> part router</h1>
+<div id="verdict">running…</div>
+<div id="out"></div>
+<h2>the page under test</h2>
+<iframe id="frame" src="static/index.html"></iframe>
+
+<script>
+const REF_URL = 'testdata/route_trace.json';
+const recording = new URLSearchParams(location.search).has('record');
+const out = document.getElementById('out');
+let failures = 0, checks = 0;
+
+// ---------- the recorder ----------
+// One entry per message: the board it was addressed to and the bytes as they went out. For the
+// single-board trace the board is always 0, which is what makes the pre-change recording (whose
+// app had no notion of a board at all) comparable with the post-change one.
+function mkRec() { return { msgs: [], mark: 0 }; }
+const digest = async (s) => {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+};
+const fmt = (msgs) => msgs.map((m) => m.b + ':' + m.d.join(',')).join('\n');
+
+// ---------- driving the page ----------
+function ready(w) {                       // boot() is async (it fetches spec.json + demos.json)
+  return new Promise((resolve, reject) => {
+    const t0 = performance.now();
+    const poll = () => {
+      if (w.document.querySelectorAll('#parts .partchip').length) return resolve();
+      if (performance.now() - t0 > 10000) return reject(new Error('the panel never finished booting'));
+      setTimeout(poll, 25);
+    };
+    poll();
+  });
+}
+const chips = (w) => [...w.document.querySelectorAll('#parts .partchip')];
+function clickChip(w, i, shift) {
+  chips(w)[i].dispatchEvent(new w.MouseEvent('click', { bubbles: true, shiftKey: !!shift }));
+}
+
+// The scripted sequence. Every step is synchronous and touches no timer, so the byte stream is
+// deterministic and a diff points at one operation rather than at "something changed".
+//
+// Deliberately included: the 128-note sweeps. They are most of the bytes and they are exactly the
+// kind of thing a refactor drops silently, which is the failure this trace exists to catch.
+const STEPS = [
+  ['note C4 on part 1',        (w) => { w.noteOn(60, 100); w.noteOff(60); }],
+  ['a chord, then release',    (w) => { [60, 64, 67].forEach((n) => w.noteOn(n, 90));
+                                        [60, 64, 67].forEach((n) => w.noteOff(n)); }],
+  ['per-part CC (cutoff)',     (w) => w.setValue('cutoff', 90, true)],
+  ['global CC (reverb)',       (w) => w.setValue('reverb', 40, true)],
+  ['global CC (delay time)',   (w) => w.setValue('dtime', 77, true)],
+  ['pitch bend',               (w) => { w.sendBend(0.5); w.sendBend(0); }],
+  ['mod wheel',                (w) => w.sendPerfCC(1, 64)],
+  ['click PART 2',             (w) => clickChip(w, 1)],
+  ['edit a knob on part 2',    (w) => w.setValue('cutoff', 20, true)],
+  // A global CC is board-wide, not part-wide: `fx.py:196` matches `(b & 0xF0) == 0xB0` and throws
+  // the channel away. So the channel it goes out on is free -- and spending that freedom on the
+  // focused part's channel is what keeps the single-board stream identical to the one below.
+  ['global CC off part 1',     (w) => w.setValue('room', 2, true)],
+  ['shift-click PART 4',       (w) => clickChip(w, 3, true)],
+  ['note across the layer',    (w) => { w.noteOn(72, 100); w.noteOff(72); }],
+  ['click PART 1 (drop layer)',(w) => clickChip(w, 0)],
+  ['sweep one part',           (w) => w.sweepPart(2)],
+  ['sweep every part',         (w) => w.sweepAllParts()],
+  ['PANIC',                    (w) => w.document.getElementById('panic').click()],
+  ['push every patch',         (w) => w.syncAllParts()],
+];
+
+async function runTrace(w, rec) {
+  const rows = [];
+  for (const [name, fn] of STEPS) {
+    rec.mark = rec.msgs.length;
+    fn(w);
+    const slice = rec.msgs.slice(rec.mark);
+    rows.push({ step: name, n: slice.length, sha: await digest(fmt(slice)) });
+  }
+  return rows;
+}
+
+// ---------- reporting ----------
+function table(title, cols, rows) {
+  const h = document.createElement('h2'); h.textContent = title; out.append(h);
+  const t = document.createElement('table');
+  t.innerHTML = '<thead><tr>' + cols.map((c) => `<th>${c}</th>`).join('') + '</tr></thead>';
+  const tb = document.createElement('tbody');
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = r.map((c) => `<td>${c}</td>`).join('');
+    tb.append(tr);
+  });
+  t.append(tb); out.append(t);
+}
+function verdict(ok, msg) {
+  checks++; if (!ok) failures++;
+  return `<span class="${ok ? 'pass' : 'fail'}">${ok ? 'ok' : 'FAIL'}</span>` + (msg ? ' — ' + msg : '');
+}
+function note(s) { const p = document.createElement('pre'); p.textContent = s; out.append(p); }
+
+// ---------- main ----------
+async function main() {
+  const frame = document.getElementById('frame');
+  const w = frame.contentWindow;
+  await new Promise((r) => (frame.contentDocument.readyState === 'complete'
+    ? r() : frame.addEventListener('load', r, { once: true })));
+  await ready(w);
+
+  const rec = mkRec();
+  // Two shapes of app to record from. Before the multi-board work every byte left through
+  // `sendMidi`; after it, through `sendToBoard`. Patching whichever exists keeps one harness
+  // able to record the reference and then check against it.
+  const multi = typeof w.sendToBoard === 'function';
+  if (multi) w.sendToBoard = (b, d, when) => rec.msgs.push({ b, d: [...d] });
+  else       w.sendMidi    = (d, when)    => rec.msgs.push({ b: 0, d: [...d] });
+  note(multi ? 'app exposes sendToBoard() — multi-board build'
+             : 'app has no sendToBoard() — single-board build (pre-change)');
+
+  // ---- 1 · the single-board trace ----
+  const rows = await runTrace(w, rec);
+  if (recording) {
+    const blob = new Blob([JSON.stringify({ steps: rows }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'route_trace.json';
+    a.textContent = '⬇ download route_trace.json — save it into webui/testdata/';
+    a.style.cssText = 'display:inline-block;margin:1rem 0;font-size:1.1rem';
+    out.append(a);
+    table('recorded (single board)', ['step', 'messages', 'sha256/64'],
+          rows.map((r) => [r.step, r.n, `<code>${r.sha}</code>`]));
+    document.getElementById('verdict').innerHTML =
+      `<span class="pass">recorded</span> — ${rows.length} steps, ` +
+      `${rows.reduce((s, r) => s + r.n, 0)} messages. Nothing was checked.`;
+    return;
+  }
+
+  let ref = null;
+  try { ref = await (await fetch(REF_URL + '?' + Date.now())).json(); }
+  catch (e) { note('no reference at ' + REF_URL + ' — record one first'); }
+  if (ref) {
+    table('1 · single board — byte for byte against the pre-change recording',
+      ['step', 'messages', 'sha256/64', ''],
+      rows.map((r, i) => {
+        const e = ref.steps[i] || {};
+        const ok = e.step === r.step && e.n === r.n && e.sha === r.sha;
+        return [r.step, r.n === e.n ? r.n : `${r.n} <span class="fail">(was ${e.n})</span>`,
+                `<code>${r.sha}</code>`, verdict(ok, ok ? '' : 'differs from ' + (e.sha || '—'))];
+      }));
+  }
+
+  // ---- 2 · four boards ----
+  if (!multi || !w.__xls32 || !w.__xls32.testMode) {
+    const h = document.createElement('h2'); h.textContent = '2 · four boards'; out.append(h);
+    note('skipped — this build has no __xls32.testMode hook');
+  } else {
+    w.__xls32.testMode({ boards: 4, powered: true });
+    await new Promise((r) => setTimeout(r, 50));
+    const rows2 = [];
+    const only = (pred) => rec.msgs.slice(rec.mark).filter(pred);
+    const step = (name, fn, check) => {
+      rec.mark = rec.msgs.length; fn();
+      const got = rec.msgs.slice(rec.mark);
+      const [ok, detail] = check(got);
+      rows2.push([name, got.length, detail, verdict(ok)]);
+    };
+
+    step('16 chips on the panel', () => {}, () =>
+      [chips(w).length === 16, chips(w).length + ' chips']);
+
+    step('part 6 → board 1, ch 1', () => { clickChip(w, 5); rec.mark = rec.msgs.length;
+                                           w.noteOn(60, 100); w.noteOff(60); },
+      (g) => [g.length === 2 && g.every((m) => m.b === 1 && (m.d[0] & 0x0f) === 1),
+              g.map((m) => `b${m.b} ${m.d[0].toString(16)}`).join(' ')]);
+
+    step('part 13 → board 3, ch 0', () => { clickChip(w, 12); rec.mark = rec.msgs.length;
+                                            w.noteOn(60, 100); w.noteOff(60); },
+      (g) => [g.length === 2 && g.every((m) => m.b === 3 && (m.d[0] & 0x0f) === 0),
+              g.map((m) => `b${m.b} ${m.d[0].toString(16)}`).join(' ')]);
+
+    step('layer P1+P13 → both boards', () => { clickChip(w, 0); clickChip(w, 12, true);
+                                               rec.mark = rec.msgs.length;
+                                               w.noteOn(64, 100); w.noteOff(64); },
+      (g) => { const b = new Set(g.map((m) => m.b));
+               return [g.length === 4 && b.has(0) && b.has(3), 'boards ' + [...b].join(',')]; });
+
+    step('global CC → once per board', () => w.setValue('reverb', 55, true),
+      (g) => { const b = g.map((m) => m.b).sort().join(',');
+               return [g.length === 4 && b === '0,1,2,3', 'boards ' + b]; });
+
+    step('per-part CC → one board', () => { clickChip(w, 9); rec.mark = rec.msgs.length;
+                                            w.setValue('cutoff', 33, true); },
+      (g) => [g.length === 1 && g[0].b === 2 && (g[0].d[0] & 0x0f) === 1,
+              g.map((m) => `b${m.b} ch${m.d[0] & 0x0f}`).join(' ')]);
+
+    step('PANIC → every channel of every board', () => w.document.getElementById('panic').click(),
+      (g) => {
+        const seen = new Set(g.map((m) => m.b + ':' + (m.d[0] & 0x0f)));
+        const off = g.filter((m) => (m.d[0] & 0xf0) === 0x80).length;
+        const cc120 = g.filter((m) => (m.d[0] & 0xf0) === 0xb0 && m.d[1] === 120).length;
+        return [seen.size === 16 && cc120 === 16 && off === 16 * 128,
+                `${seen.size}/16 part addresses · ${cc120} CC120 · ${off} note-offs`];
+      });
+
+    table('2 · four boards', ['case', 'messages', 'observed', ''], rows2);
+  }
+
+  const v = document.getElementById('verdict');
+  v.innerHTML = failures
+    ? `<span class="fail">FAIL</span> — ${failures} of ${checks} checks failed`
+    : `<span class="pass">PASS</span> — ${checks} checks`;
+}
+main().catch((e) => {
+  document.getElementById('verdict').innerHTML = '<span class="fail">ERROR</span> — ' + e.message;
+  note(e.stack || String(e));
+});
+</script>

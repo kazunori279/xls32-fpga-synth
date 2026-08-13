@@ -1,0 +1,90 @@
+{
+ "_": "Recorded by route_check.html?record from commit 28e991f -- BEFORE the multi-board work. This is what a single Tiliqua saw, and a single-board player must not be able to tell that the four-board refactor happened. Re-record only when you mean to change that; keep this note and update the commit.",
+ "steps": [
+  {
+   "step": "note C4 on part 1",
+   "n": 2,
+   "sha": "a8f8f3ee8d890d14"
+  },
+  {
+   "step": "a chord, then release",
+   "n": 6,
+   "sha": "2c9585ceee9fca16"
+  },
+  {
+   "step": "per-part CC (cutoff)",
+   "n": 1,
+   "sha": "2d676d5274c9d892"
+  },
+  {
+   "step": "global CC (reverb)",
+   "n": 1,
+   "sha": "2abe1d2db16957aa"
+  },
+  {
+   "step": "global CC (delay time)",
+   "n": 1,
+   "sha": "3468f494d081df2a"
+  },
+  {
+   "step": "pitch bend",
+   "n": 2,
+   "sha": "0f45e9dceb5d74d6"
+  },
+  {
+   "step": "mod wheel",
+   "n": 1,
+   "sha": "b8100d2dcebbd51e"
+  },
+  {
+   "step": "click PART 2",
+   "n": 385,
+   "sha": "a8212066a451d3ae"
+  },
+  {
+   "step": "edit a knob on part 2",
+   "n": 1,
+   "sha": "bbea98ffe2e0bd92"
+  },
+  {
+   "step": "global CC off part 1",
+   "n": 1,
+   "sha": "f4cf88eafdeb3e6d"
+  },
+  {
+   "step": "shift-click PART 4",
+   "n": 1,
+   "sha": "1f24958ffae9d1f3"
+  },
+  {
+   "step": "note across the layer",
+   "n": 4,
+   "sha": "519747459ed27489"
+  },
+  {
+   "step": "click PART 1 (drop layer)",
+   "n": 130,
+   "sha": "1c7e8e90c4aaa1f6"
+  },
+  {
+   "step": "sweep one part",
+   "n": 128,
+   "sha": "b5e2f71e8ae5689c"
+  },
+  {
+   "step": "sweep every part",
+   "n": 512,
+   "sha": "7d6fabf3add3b0ca"
+  },
+  {
+   "step": "PANIC",
+   "n": 516,
+   "sha": "f5f153216dadb992"
+  },
+  {
+   "step": "push every patch",
+   "n": 120,
+   "sha": "9f73940b7a54bb22"
+  }
+ ]
+}
