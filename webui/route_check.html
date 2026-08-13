@@ -248,6 +248,26 @@ async function main() {
                 `${seen.size}/16 part addresses · ${cc120} CC120 · ${off} note-offs`];
       });
 
+    // The demo is the one path that offsets channels rather than passing a part through, so it is
+    // the one place the arithmetic can be wrong in a way nothing else notices.
+    clickChip(w, 9);                                   // focus a part on board 2
+    rec.mark = rec.msgs.length;
+    await w.playDemo(0);
+    await new Promise((r) => setTimeout(r, 120));      // one look-ahead tick
+    const demo = rec.msgs.slice(rec.mark);
+    w.stopDemo();
+    // Note-ONS only. `playDemo` opens with `stopDemo`, whose sweep is 128 note-offs per part across
+    // the whole rig -- correct, and 2,048 messages of noise for this question.
+    const notes = demo.filter((m) => (m.d[0] & 0xf0) === 0x90 && m.d[2] > 0);
+    const nb = new Set(notes.map((m) => m.b));
+    rows2.push(['a 4-part demo stays on its board', demo.length,
+                `${notes.length} notes on board ${[...nb].join(',') || '—'}`,
+                verdict(notes.length > 0 && nb.size === 1 && nb.has(2))]);
+    rows2.push(['…and its effects reach every board', '',
+                (() => { const fx = demo.filter((m) => m.d[1] === 93);
+                         return `CC93 on boards ${[...new Set(fx.map((m) => m.b))].sort().join(',')}`; })(),
+                verdict(new Set(demo.filter((m) => m.d[1] === 93).map((m) => m.b)).size === 4)]);
+
     table('2 · four boards', ['case', 'messages', 'observed', ''], rows2);
   }
 
