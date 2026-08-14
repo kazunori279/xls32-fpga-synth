@@ -95,7 +95,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **28a ✅** | **The rails were a host decoder bug**: `frame_align()` in `host/transport/uart.py` picked one byte offset from the first 8000 bytes and kept it for a 166 kB capture | **the presets never railed.** Both boards re-graded after the fix; the Tiliqua verdicts were unmoved, which is what proved the fix reached only the board that needed it |
 | **PART ✅** | **The PART chips and a MIDI keyboard**: four independent bugs wearing one costume — three in the browser and the host, one that could only be fixed in gateware (CC103, sniffed off the USB stream) | a hardware keyboard follows the PART buttons; `check_midi.py` unchanged, and the remap costs +369 TRELLIS_COMB (still unexplained) |
 | **31 ✅** | **Deleting the Python hop**: `webui/server.py` removed — the page reaches the board itself with Web MIDI, `getUserMedia` on the Tiliqua UAC2 input, and Web Serial at 2 Mbaud on the Basys 3 | `python3 -m http.server -d webui/static` plays both boards with no Python process anywhere |
-| **BOARDS ◐** | **Four boards, one panel**: 16 parts / 128 voices from four USB cables and the *same* bitstream — the panel routes part `p` to board `p >> 2`, channel `p & 3`, and sums the four UAC2 streams | `webui/route_check.html`: 26 checks, including the single-board stream hashed byte-for-byte against a recording made before the change. One board passes on hardware; `webui/audio_check.html` counts dropouts per stream and is **waiting on four boards** |
+| **BOARDS ◐** | **Four boards, one panel**: 16 parts / 128 voices from four USB cables and the *same* bitstream — the panel routes part `p` to board `p >> 2`, channel `p & 3`, and sums the four UAC2 streams | `webui/route_check.html`: 26 checks, including the single-board stream hashed byte-for-byte against a recording made before the change. One board passes on hardware, TRS jack included — a real keyboard on the jack, one part muted so the claim is audible as well as asserted; `webui/audio_check.html` counts dropouts per stream and is **waiting on four boards** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1877,6 +1877,37 @@ The demo assertion failed on its first run, and the harness was wrong, not the a
 opens with `stopDemo`, whose sweep is 128 note-offs **per part across the whole rig** — 2,048
 messages, all of them correct, and the filter was catching note-offs. Filtering note-ons gives "5
 notes on board 2", which is the actual question.
+
+### The one claim that can only be heard
+
+Every other message the panel sends can be checked as bytes. CC103 cannot be checked that way and
+mean anything, because what it does happens to a keyboard the browser never sees: the TRS stream
+reaches the arbiter without passing through any of this, and there is nothing to read back. So it
+was measured on the board, by making two parts differ in nothing but level — P2's volume pushed to
+0, P1's left at 127 — and clicking between them while a keyboard played continuously into the jack,
+with an analyser sampling the summed capture:
+
+| claim | peak rms |
+|---|---|
+| P1, the audible part | 0.063 |
+| P2, the muted part | **0.000** |
+| P1 again | 0.058 |
+| P2 again | **0.000** |
+| released | 0.065 |
+
+The release line is the one worth having. Still claimed to the muted part, `releaseTrs()` put the
+sound back — the jack returned to the keyboard's own channel, and sweeping the parts one audible at
+a time afterwards showed that channel is 1, the arbiter's reset default. The bytes behind each step
+were tapped at `link.sendMidi` rather than assumed: `B1 67 01` for P2, `B0 67 00` for P1, `B0 67 7F`
+to release — the status nibble carrying the part and the value repeating it, which is the shape the
+board-local protocol asks for. Each click emits its CC103 twice (`refreshPartUI` keeps an existing
+claim in step, then `claimTrs` forces it) with the leaving part's 128 note-offs in between; it is
+idempotent, it predates this work, and the golden trace has always recorded it.
+
+The first two attempts measured nothing, and both times the harness was at fault rather than the
+board: the arming loop timed out before the playing started, and then the run ended while the last
+phase was still being measured. Hence the shape above — arm on the first note heard, no deadline,
+and keep the phases inside one unbroken stretch of playing.
 
 ### What the panel shows, and what it cannot know
 
