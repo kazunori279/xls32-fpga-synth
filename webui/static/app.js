@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v86-out';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v87-out';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -128,14 +128,20 @@ function initMasterVol() {
 // one is a way to hear nothing at all. Those entries are marked rather than dropped: it is the
 // browser's device list, and a filter that silently removes a device the player can see in the
 // system panel is harder to understand than a label.
+//
+// **No sound** is the spec's `{type:'none'}` sink, not a gain of zero. The context keeps rendering
+// into it — the meter and the analyser go on reading the same signal — so it silences the room
+// without silencing the panel, and without touching MASTER VOL, which is a mix setting you would
+// have to remember to put back. Useful when the board is going out of its own jacks.
 const SINK_KEY = 'xls32.sink';
+const SINK_NONE = 'none';                           // sentinel: a value no deviceId can collide with
 let sinkId = localStorage.getItem(SINK_KEY) || '';
 const canPickSink = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
 const isBoardOutput = (label) => /tiliqua/i.test(label);
 async function applySink() {
   const sel = document.getElementById('outdev');
   if (!ctx || !canPickSink) return;                 // before POWER there is nothing to move yet
-  try { await ctx.setSinkId(sinkId); if (sel) sel.title = OUT_TITLE; }
+  try { await ctx.setSinkId(sinkId === SINK_NONE ? { type: 'none' } : sinkId); if (sel) sel.title = OUT_TITLE; }
   catch (e) {                                       // device vanished mid-session, or refused
     sinkId = ''; localStorage.removeItem(SINK_KEY);
     try { await ctx.setSinkId(''); } catch (_) {}
@@ -157,6 +163,7 @@ async function refreshOutputs() {
   const add = (id, text) => { const o = document.createElement('option'); o.value = id; o.textContent = text; sel.append(o); };
   sel.innerHTML = '';
   add('', 'System default');
+  add(SINK_NONE, 'No sound');                       // always offered: it needs no device to exist
   devs.forEach((d, i) => {
     if (!d.deviceId || d.deviceId === 'default') return;   // the browser's own 'default' duplicates ours
     const name = d.label || 'Output ' + (i + 1);

@@ -57,9 +57,14 @@ body{
 
 /* presets */
 .topbar{display:flex;align-items:stretch;gap:14px;margin-bottom:14px}
-.presets{display:flex;justify-content:flex-start;align-items:center;gap:16px;flex:0 0 auto;
-  background:linear-gradient(#2b2721,#1c1915);border-radius:6px;padding:10px 14px}
-.plabel{font-size:9px;letter-spacing:3px;color:#9b8f76;margin-bottom:6px}
+/* `#synth` is capped at 1180px, so the top bar has a fixed width to spend and the patch panel wants
+   more of it than is there — PANIC pushed it 51px over, which clipped the last PART chip at every
+   window size. The panel is therefore allowed to shrink (`min-width:0` all the way down to `.pcur`,
+   or a flex item refuses to go below its content), and the patch *name* is what gives: it ellipses,
+   and everything with a fixed job — the caption, the ‹ › steps, the action buttons — does not. */
+.presets{display:flex;justify-content:flex-start;align-items:center;gap:16px;flex:0 1 auto;
+  min-width:0;background:linear-gradient(#2b2721,#1c1915);border-radius:6px;padding:10px 14px}
+.plabel{font-size:9px;letter-spacing:3px;color:#9b8f76;margin-bottom:6px;flex:0 0 auto}
 .prow{display:flex;gap:7px;margin-bottom:6px}
 .pbtn,.seg,.slot{font-family:inherit}
 .slot{min-width:104px;text-align:left;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:11px;
@@ -69,20 +74,24 @@ body{
 .slot .t{font-weight:700;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .slot.active{background:linear-gradient(#e8b24a,#c98a1f);box-shadow:0 0 10px rgba(230,170,60,.6)}
 .slot.empty .t{color:#a89b83;font-style:italic;font-weight:500}
-.pactions{display:flex;flex-direction:row;gap:8px}   /* horizontal -> one-row patch panel (shorter) */
+.pactions{display:flex;flex-direction:row;gap:8px;flex:0 0 auto}   /* horizontal -> one-row patch panel (shorter) */
 .pbtn{padding:8px 12px;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;font-weight:700;
-  background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000}
+  white-space:nowrap;background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000}
 .pbtn.ghost:hover{background:linear-gradient(#5b5548,#332f28)}
 
 /* preset bar */
-.pbar{display:flex;align-items:center;gap:8px}
-.pstep{width:26px;height:36px;border-radius:4px;cursor:pointer;font-size:16px;font-weight:700;
+.pbar{display:flex;align-items:center;gap:8px;min-width:0}
+.pstep{width:26px;height:36px;border-radius:4px;cursor:pointer;font-size:16px;font-weight:700;flex:0 0 auto;
   background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000;font-family:inherit}
 .pstep:hover{background:linear-gradient(#5b5548,#332f28)}
-.pcur{min-width:230px;text-align:left;padding:6px 12px;border-radius:4px;cursor:pointer;
+/* 230px is what this wanted; 176 is what the row can pay for, and the difference is the 51px PANIC
+   costs. It shrinks to the floor and stops there — the flex chain above only decides that the name
+   is what gives, not how far, so a longer name ellipses rather than pushing a chip off the edge. */
+.pcur{flex:0 1 230px;min-width:176px;text-align:left;padding:6px 12px;border-radius:4px;cursor:pointer;
   background:linear-gradient(#efe7d6,#d7cbb3);border:1px solid #000;color:#241f18;
-  display:flex;flex-direction:column;gap:1px;font-family:inherit}
+  display:flex;flex-direction:column;gap:1px;font-family:inherit;overflow:hidden}
 .pcur:hover{background:linear-gradient(#f5eede,#e0d5be)}
+.pcur-cat,.pcur-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pcur-cat{font-size:8px;letter-spacing:2px;color:#8a7f68;text-transform:uppercase}
 .pcur-name{font-weight:700;letter-spacing:.3px;font-size:13px}
 

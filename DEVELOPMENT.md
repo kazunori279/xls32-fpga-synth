@@ -1976,12 +1976,37 @@ is therefore a way to hear nothing. It is labelled **takes no audio** rather tha
 is a device the player can see in the system sound panel, and a name explains more than a
 disappearance does.
 
+**No sound** is in the same menu, and it is the spec's `{type:'none'}` sink rather than a gain of
+zero. The context goes on rendering into it, so the meter keeps reading while the room stays quiet
+— which is what you want when the board is going out of its own jacks — and MASTER VOL is left
+alone, being a mix setting you would have to remember to put back.
+
 Verified on the board by switching sinks live: `ctx.sinkId` follows the picked `deviceId`, a held
 note still measures rms 0.047 through the analyser, a device that is gone falls back to the system
 default with the reason in the tooltip (`NotFoundError`) instead of wedging, and the choice
 survives a reload — restored into the menu before POWER, applied to the context the moment there
-is one. What no automated check can see is that the sound physically moved; the analyser sits
-upstream of the sink by construction, so that last step is an ear's job.
+is one. `No sound` reports `sinkId.type === 'none'` with the context still `running` and the meter
+still at 0.044. What no automated check can see is that the sound physically moved; the analyser
+sits upstream of the sink by construction, so that last step is an ear's job.
+
+### The last PART chip had been clipped since PANIC arrived
+
+Screenshotting the header for the OUT work turned up something the OUT work had not caused: `Part
+4` was cut off at the right edge. `#synth` is capped at 1180px, so this was true at every window
+size — the top bar has a fixed width to spend and the patch panel wanted 51px more of it than was
+there. Hiding the PANIC button put the two edges back to the same pixel (1254 and 1254), which
+dates it precisely: PANIC was added in `51eccd2`, and nothing since had looked at the row's total
+width.
+
+The fix lets the patch *name* be what gives — `min-width:0` down the chain, because a flex item
+will not shrink below its content without it, and `text-overflow:ellipsis` on the label. One
+attempt made it worse in an instructive way: `flex:1 1 230px` on the name box collapsed it to its
+floor of 130px, 79px more than needed, because a flex item that can grow *and* shrink drags its
+container's intrinsic width down with it — the max-content flex fraction goes negative and the
+whole panel reports itself smaller than the sum of its parts, after which the neighbouring PART bar
+grows into the space. `flex:0 1 230px` with a floor of 176px shrinks it by exactly the 51px owed.
+Both layouts were then measured rather than eyeballed: one board leaves the last chip 17px clear,
+and four boards fit all 16 chips with 68px to spare.
 
 ---
 

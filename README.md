@@ -502,8 +502,11 @@ Two constraints come with owning the hardware from a page:
 
 **Where the sound comes out.** The mix lands in whatever your system's default output is, and the
 header's **OUT** menu moves it — headphones, an interface, an HDMI display — without touching the
-system setting. It applies immediately and is remembered across reloads. Two things about that
-list: the device *names* only appear once POWER has opened the board's audio, because a browser
+system setting. It applies immediately and is remembered across reloads. **No sound** is in the
+same menu, for when the board is going out of its own jacks and the laptop should stay quiet: it
+silences the room without silencing the panel, since the level meter reads upstream of the
+output, and without moving MASTER VOL, which is a mix setting you would have to remember to put
+back. Two things about that list: the device *names* only appear once POWER has opened the board's audio, because a browser
 will not name your outputs to a page that holds no media permission; and a Tiliqua appears in it
 as an output too, marked **takes no audio**, because macOS opens both directions of a USB audio
 device together while the gateware consumes nothing in that direction. Picking one is a way to
