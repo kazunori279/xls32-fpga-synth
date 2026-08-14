@@ -72,13 +72,18 @@ addition rather than a rewrite.
   The page drives **up to four Tiliquas at once** — one USB cable each, the same bitstream on all
   of them, 16 parts and 128 voices — by treating a part number as a (board, channel) pair;
   `static/transport.js` finds every board and `static/app.js` does the routing.
-  Two checks here have a pass/fail. `check_aligner.py` + `aligner_check.html` run the
+  Three checks here have a pass/fail. `check_aligner.py` + `aligner_check.html` run the
   Python and JS frame aligners over the same capture of real board bytes — `testdata/`, and it has
   a genuine mid-stream phase shift in it — and compare the SHA-256 of the aligned output, so
   "the JS is a port of the Python" is checkable rather than asserted. `route_check.html` drives the
   real panel in an iframe and hashes the MIDI it emits, against `testdata/route_trace.json`
   recorded *before* the multi-board work: a single board must not be able to tell that four boards
-  became possible. `cd webui && python3 -m http.server 8123`, then open either.
+  became possible. `audio_check.html` is the other half of that question and needs the boards: it
+  opens every one of them through the same `attachAudio()` the panel uses, holds a sine chord on
+  all four parts, and counts dropouts and splices per board from inside an AudioWorklet — the four
+  free-running UAC2 clocks in one AudioContext are the part of the multi-board rig that cannot be
+  reasoned about. It self-tests its own detector offline first, so a green run means the counters
+  were alive. `cd webui && python3 -m http.server 8123`, then open any of them.
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
   model of the engine (`engine.py`), a multi-resolution spectrogram loss (`loss.py`), the
   CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board

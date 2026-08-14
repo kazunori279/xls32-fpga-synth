@@ -95,7 +95,7 @@ roadmap table is the index; the sections that follow are in chronological build 
 | **28a ✅** | **The rails were a host decoder bug**: `frame_align()` in `host/transport/uart.py` picked one byte offset from the first 8000 bytes and kept it for a 166 kB capture | **the presets never railed.** Both boards re-graded after the fix; the Tiliqua verdicts were unmoved, which is what proved the fix reached only the board that needed it |
 | **PART ✅** | **The PART chips and a MIDI keyboard**: four independent bugs wearing one costume — three in the browser and the host, one that could only be fixed in gateware (CC103, sniffed off the USB stream) | a hardware keyboard follows the PART buttons; `check_midi.py` unchanged, and the remap costs +369 TRELLIS_COMB (still unexplained) |
 | **31 ✅** | **Deleting the Python hop**: `webui/server.py` removed — the page reaches the board itself with Web MIDI, `getUserMedia` on the Tiliqua UAC2 input, and Web Serial at 2 Mbaud on the Basys 3 | `python3 -m http.server -d webui/static` plays both boards with no Python process anywhere |
-| **BOARDS ◐** | **Four boards, one panel**: 16 parts / 128 voices from four USB cables and the *same* bitstream — the panel routes part `p` to board `p >> 2`, channel `p & 3`, and sums the four UAC2 streams | `webui/route_check.html`: 26 checks, including the single-board stream hashed byte-for-byte against a recording made before the change; **four-board hardware pending** |
+| **BOARDS ◐** | **Four boards, one panel**: 16 parts / 128 voices from four USB cables and the *same* bitstream — the panel routes part `p` to board `p >> 2`, channel `p & 3`, and sums the four UAC2 streams | `webui/route_check.html`: 26 checks, including the single-board stream hashed byte-for-byte against a recording made before the change. One board passes on hardware; `webui/audio_check.html` counts dropouts per stream and is **waiting on four boards** |
 
 > Milestones 9+ close the gap to a **typical analog synth**; each milestone section below opens
 > with its analog-feature **priority** (impact × ease, ⭐ = priority pick). They interleave freely
@@ -1902,6 +1902,30 @@ clocks, and Chrome's drift compensation runs four times in parallel into one `Au
 in a browser can prove that stays clean; it needs four boards on a desk. If it does not hold, the
 retreat is monitoring one board through the page and taking the other three out of their own jacks
 — the MIDI side is independent and would be unaffected.
+
+What could be built without the boards is the instrument that will answer it, so that the answer is
+a number and not a shrug. `webui/audio_check.html` opens every board through the same
+`attachAudio()` the panel calls, pushes the default patch to all four parts of each, holds a chord,
+and counts — inside an AudioWorklet, which sees every 128-frame block on the audio thread where a
+timer-and-analyser would see snapshots on a main thread a background tab throttles to 1 Hz. Two
+counters per board: blocks that are all-zero (a hole; the chord is held for the whole run, so
+silence is never legitimate) and neighbouring samples more than 0.25 apart (a splice).
+
+Two details are load-bearing, and the first run got both wrong. The test tone is a **sine**, not the
+default saw, because a saw's every period ends in a full-scale vertical edge and the jump counter
+would be measuring the oscillator; and the level is backed off, because four parts at the default
+volume clip, after which the same counter measures the clip (so peak > 0.95 now fails the run
+outright rather than reporting a number that cannot mean anything). The counters are also armed
+*after* the chord is up — the leading silence of a starting capture is not a dropout, and counting
+it failed the first run with 23 holes that were the harness's own doing.
+
+A soak test that can only print zero is indistinguishable from a broken one, so the page renders
+the same worklet offline over a 440 Hz sine with a hole and a splice cut into it, and requires the
+exact counts back (8 zero blocks, 21.3 ms, 4 jumps — two channels × the splice's two edges; the
+hole's own edges sit under the threshold at that phase, which is the point: a dropout is caught by
+the zero counter, not the jump counter). That runs on load, with no hardware and no permissions.
+One board passes it clean — 24 s, rms 0.134, peak 0.379, zero holes, zero splices — and the verdict
+line says so in the same breath as saying that one board is not the question.
 
 ---
 

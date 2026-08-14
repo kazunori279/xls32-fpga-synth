@@ -1,0 +1,296 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Audio soak — every board's UAC2 stream into one context</title>
+<!--
+  The riskiest thing about driving four Tiliquas from one page is not the MIDI, which is pure
+  logic and is checked byte for byte in `route_check.html`. It is the audio: four UAC2 capture
+  streams, each free-running on its own board's crystal, summed in one AudioContext whose clock
+  belongs to none of them. Chrome resamples every one of them to hold the difference, four times
+  over, for as long as the page is open. Nothing about that can be reasoned out from the source --
+  it either holds on a desk with four boards on it, or it does not.
+
+  So this page measures it rather than asking anyone to listen for a few minutes and shrug.
+
+  It uses the real code path -- `TRANSPORTS.tiliqua.connectAll()` and `attachAudio()` straight out
+  of `static/transport.js`, the same two calls `app.js` makes at POWER -- pushes the default patch
+  to all four parts of every board, holds a four-note chord on each, and watches what comes back.
+
+  WHAT IT WATCHES, and why it is a worklet and not a timer: an AudioWorkletProcessor sees every
+  128-frame block, in the audio thread, where a `setInterval` + analyser sees 2048-frame snapshots
+  on a main thread that a background tab throttles to 1 Hz. A dropout is a handful of blocks. Per
+  board it counts:
+
+    zero blocks   a block where every sample of every channel is exactly 0.0. The board is holding
+                  a chord for the whole run, so silence is not a quiet passage -- it is a hole.
+    jumps         |x[n] - x[n-1]| > 0.25 between neighbouring samples. A splice looks like that
+                  from inside the stream; four held sine notes cannot.
+    rms / peak    over the whole run, per board. A board reading 0 is a board that never played,
+                  which is a different failure from a board that stuttered.
+
+  THE TEST TONE IS SINES, AND THAT IS NOT COSMETIC. The default patch is a saw, whose every period
+  ends in a full-scale vertical edge -- run this on the defaults and the jump counter measures the
+  oscillator, not the link. It also drops the level: four parts at the default volume clip the
+  ~2 Vpp the shell pads the stream to, and a clipped signal has corners of its own. So the patch
+  pushed here is the defaults with `wave` forced to sine and the volume backed off, and a peak
+  above 0.95 fails the run rather than being quietly reported -- the jump count cannot be trusted
+  through a clip.
+
+  Counters are armed AFTER the chord is up. The first blocks of any capture are silence, and
+  counting them as a dropout would fail every run.
+
+  PASS needs every board to have delivered audio with no zero blocks and no jumps. The context
+  clock's drift against `performance.now()` is printed too, but it is not a verdict: it says what
+  the output clock did, not what the four input clocks did to each other.
+
+  WHAT IT CANNOT DO IS SUPPLY THE BOARDS. Run it with one and it measures one stream honestly and
+  says so; the four-stream question needs four cables. The count it found is in the verdict line
+  for exactly that reason.
+
+  Run it:  cd webui && python3 -m http.server 8123
+           open http://127.0.0.1:8123/audio_check.html
+-->
+<style>
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         margin: 2rem; max-width: 72rem }
+  h1 { font-size: 1.1rem } h2 { font-size: .95rem; margin: 1.6rem 0 .4rem }
+  table { border-collapse: collapse; margin: .4rem 0 }
+  th, td { padding: .2rem .8rem .2rem 0; text-align: left; border-bottom: 1px solid #ddd;
+           vertical-align: top; font-variant-numeric: tabular-nums }
+  .pass { color: #0a0 } .fail { color: #c00; font-weight: bold } .skip { color: #888 }
+  #verdict { font-size: 1.2rem; margin: 1rem 0 }
+  pre { color: #666; white-space: pre-wrap; margin: .2rem 0 }
+  code { background: #f4f4f4; padding: 0 .2em }
+  label { margin-right: 1.2rem }
+</style>
+<h1>Audio soak — <code>attachAudio()</code>, one context, as many boards as are plugged in</h1>
+<p>
+  <label>minutes <input id="mins" type="number" value="3" min="0.2" max="120" step="0.1" size="4"></label>
+  <label><input id="monitor" type="checkbox" checked> monitor (hear it)</label>
+  <button id="run">RUN</button>
+  <button id="stop" disabled>STOP</button>
+</p>
+<div id="verdict">idle — press RUN. The browser will ask for MIDI and microphone access.</div>
+<div id="tbl"></div>
+<pre id="log"></pre>
+
+<script src="static/transport.js"></script>
+<script>
+// The probe, as a string: one processor per board, instantiated from a Blob so this page stays a
+// single file. `currentTime` and `sampleRate` are globals inside a worklet scope.
+const PROBE_SRC = `
+class Probe extends AudioWorkletProcessor {
+  constructor(opts) {
+    super();
+    this.reset();
+    this.prev = [0, 0]; this.lastPost = 0;
+    this.eager = !!(opts && opts.processorOptions && opts.processorOptions.eager);
+    this.port.onmessage = () => this.reset();   // armed once the chord is up, see run()
+  }
+  reset() {
+    this.blocks = 0; this.zeroBlocks = 0; this.run = 0; this.maxRun = 0;
+    this.n = 0; this.sumsq = 0; this.peak = 0; this.jumps = 0;
+  }
+  process(inputs) {
+    const chans = inputs[0];
+    if (!chans || !chans.length || !chans[0]) return true;   // stream not up yet
+    this.blocks++;
+    let allZero = true;
+    for (let c = 0; c < chans.length; c++) {
+      const d = chans[c];
+      let prev = this.prev[c] || 0;
+      for (let i = 0; i < d.length; i++) {
+        const x = d[i];
+        if (x !== 0) allZero = false;
+        this.sumsq += x * x; this.n++;
+        const a = x < 0 ? -x : x; if (a > this.peak) this.peak = a;
+        const j = x - prev; if (j > 0.25 || j < -0.25) this.jumps++;
+        prev = x;
+      }
+      this.prev[c] = prev;
+    }
+    if (allZero) { this.zeroBlocks++; this.run++; if (this.run > this.maxRun) this.maxRun = this.run; }
+    else this.run = 0;
+    if (this.eager || currentTime - this.lastPost > 0.5) {
+      this.lastPost = currentTime;
+      this.port.postMessage({
+        blocks: this.blocks, zeroBlocks: this.zeroBlocks,
+        maxRunMs: this.maxRun * 128 * 1000 / sampleRate,
+        rms: this.n ? Math.sqrt(this.sumsq / this.n) : 0, peak: this.peak,
+        jumps: this.jumps, secs: this.blocks * 128 / sampleRate,
+      });
+    }
+    return true;
+  }
+}
+registerProcessor('probe', Probe);
+`;
+
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const log = (s) => { $('log').textContent += s + '\n'; };
+const CHORD = [60, 64, 67, 71];          // one note per part, so all four voices of a board sound
+const VELOCITY = 80;                     // with four parts summing, the defaults' 100 clips
+const TONE = { wave: 0, volume: 100 };   // sine, backed off: see the note about jumps at the top
+let stopping = false, boards = [], ctx = null, links = [];
+
+function render() {
+  const rows = boards.map((b, i) => {
+    const s = b.stats;
+    if (!b.node) return `<tr><td>board ${i + 1}<td colspan="6" class="skip">no capture device —
+      discovery found fewer audio inputs than MIDI outputs; this board plays, unheard here`;
+    if (!s) return `<tr><td>board ${i + 1}<td colspan="6" class="skip">waiting for the first block…`;
+    const bad = (c) => c ? 'fail' : 'pass';
+    return `<tr><td>board ${i + 1}
+      <td>${s.secs.toFixed(1)} s<td>${s.rms.toFixed(4)}<td>${s.peak.toFixed(3)}
+      <td class="${bad(s.zeroBlocks)}">${s.zeroBlocks}
+      <td class="${bad(s.zeroBlocks)}">${s.maxRunMs.toFixed(1)} ms
+      <td class="${bad(s.jumps)}">${s.jumps}`;
+  }).join('');
+  $('tbl').innerHTML = `<table><tr><th>board<th>audio<th>rms<th>peak<th>zero blocks
+    <th>longest hole<th>jumps</tr>${rows}</table>`;
+}
+
+async function run() {
+  $('run').disabled = true; $('stop').disabled = false;
+  stopping = false; boards = [];
+  log('---');                            // the detector self-test above stays on screen
+  try {
+    links = await window.XLS32.TRANSPORTS.tiliqua.connectAll();
+    log(`${links.length} board(s): ` + links.map((l) => l.out.name).join(' · '));
+
+    ctx = new AudioContext({ sampleRate: links[0].sr });
+    await ctx.audioWorklet.addModule(URL.createObjectURL(
+      new Blob([PROBE_SRC], { type: 'text/javascript' })));
+    // Two sinks: what you hear, and a silent one that keeps the probes in the graph. A worklet
+    // node with nowhere to go is not guaranteed to be pulled.
+    const monitor = ctx.createGain(); monitor.gain.value = $('monitor').checked ? 0.3 : 0;
+    const silent = ctx.createGain(); silent.gain.value = 0;
+    monitor.connect(ctx.destination); silent.connect(ctx.destination);
+
+    for (const l of links) {
+      const node = await l.attachAudio(ctx);
+      const b = { link: l, node, stats: null };
+      if (node) {
+        const probe = new AudioWorkletNode(ctx, 'probe',
+          { channelCount: 2, channelCountMode: 'explicit', numberOfOutputs: 1 });
+        node.connect(probe); probe.connect(silent); node.connect(monitor);
+        probe.port.onmessage = (e) => { b.stats = e.data; render(); };
+        b.probe = probe;
+      }
+      boards.push(b);
+    }
+    render();
+    log(`audio ${boards.filter((b) => b.node).length}/${links.length} · context ${ctx.sampleRate} Hz`);
+
+    // The engine's power-on state is not the panel's, so push the same defaults `app.js` pushes at
+    // POWER -- otherwise a silent board could mean a missing patch rather than a missing stream.
+    const spec = await (await fetch('static/spec.json')).json();
+    const patch = { ...spec.defaults, ...TONE };
+    for (const l of links) {
+      for (let ch = 0; ch < 4; ch++) {
+        for (const c of spec.controls) l.sendMidi([0xB0 | ch, c.cc, patch[c.id]]);
+      }
+    }
+    await sleep(400);
+    for (const l of links) for (let ch = 0; ch < 4; ch++) l.sendMidi([0x90 | ch, CHORD[ch], VELOCITY]);
+    log('sine chord held on every part of every board');
+
+    // Arm the counters only now: everything before this point is a capture starting up, and its
+    // leading silence is not a dropout.
+    await sleep(800);
+    for (const b of boards) if (b.probe) { b.probe.port.postMessage('arm'); b.stats = null; }
+
+    const t0 = performance.now(), ctx0 = ctx.currentTime;
+    const until = parseFloat($('mins').value) * 60000;
+    while (!stopping && performance.now() - t0 < until) {
+      const left = (until - (performance.now() - t0)) / 1000;
+      $('verdict').textContent = `running — ${left.toFixed(0)} s left, ${links.length} board(s)`;
+      await sleep(500);
+    }
+    const wall = (performance.now() - t0) / 1000, audio = ctx.currentTime - ctx0;
+    const ppm = wall > 0 ? (audio - wall) / wall * 1e6 : 0;
+
+    for (const l of links) {
+      for (let ch = 0; ch < 4; ch++) { l.sendMidi([0x80 | ch, CHORD[ch], 0]); l.sendMidi([0xB0 | ch, 120, 0]); }
+    }
+    await sleep(200);
+    log(`context clock vs wall clock: ${ppm.toFixed(0)} ppm over ${wall.toFixed(0)} s ` +
+        `(the output clock — not a verdict on the inputs)`);
+
+    const bad = [];
+    for (const [i, b] of boards.entries()) {
+      const s = b.stats;
+      if (!b.node) { bad.push(`board ${i + 1} had no capture device`); continue; }
+      if (!s || s.rms < 0.002) { bad.push(`board ${i + 1} never delivered audio (rms ${s ? s.rms.toFixed(5) : 'n/a'})`); continue; }
+      if (s.zeroBlocks) bad.push(`board ${i + 1} dropped out: ${s.zeroBlocks} silent blocks, longest ${s.maxRunMs.toFixed(1)} ms`);
+      // Clipping first: through a clip the jump count is measuring the clip, so saying both would
+      // be saying the same thing twice and the second one would be wrong.
+      if (s.peak > 0.95) bad.push(`board ${i + 1} clipped (peak ${s.peak.toFixed(3)}) — lower VELOCITY/TONE.volume; the jump count means nothing through a clip`);
+      else if (s.jumps) bad.push(`board ${i + 1} had ${s.jumps} discontinuities`);
+    }
+    render();
+    const n = links.length;
+    const caveat = n >= 4 ? '' :
+      ` — but this is ${n} board${n > 1 ? 's' : ''}, and the four-stream question needs four`;
+    $('verdict').innerHTML = bad.length
+      ? `<span class="fail">FAIL</span> — ${bad.join('; ')}`
+      : `<span class="pass">PASS</span> — ${n} stream(s), ${wall.toFixed(0)} s, no holes and no ` +
+        `discontinuities${caveat}`;
+  } catch (e) {
+    $('verdict').innerHTML = `<span class="fail">FAIL</span> — ${e && e.message ? e.message : e}`;
+    console.error(e);
+  } finally {
+    for (const l of links) { try { l.close(); } catch (_) {} }
+    if (ctx) { try { await ctx.close(); } catch (_) {} ctx = null; }
+    $('run').disabled = false; $('stop').disabled = true;
+  }
+}
+
+// ---------- does the detector detect anything? ----------
+// A soak test that can only ever print zero is indistinguishable from a broken one, and this one
+// would print zero all day if `process()` never ran. So before any board is touched, the same
+// worklet is rendered offline over a signal with a hole and a splice deliberately cut into it, and
+// the counts have to come back exact. No hardware, no permissions, ~20 ms.
+const SR = 48000, HOLE_BLOCKS = 8, HOLE_AT = 0.5, SPLICE_AT = 1.5;
+
+async function selftest() {
+  const len = SR * 2;
+  const off = new OfflineAudioContext({ numberOfChannels: 2, length: len, sampleRate: SR });
+  await off.audioWorklet.addModule(URL.createObjectURL(
+    new Blob([PROBE_SRC], { type: 'text/javascript' })));
+  const buf = off.createBuffer(2, len, SR);
+  const h0 = 128 * Math.round(SR * HOLE_AT / 128), hn = 128 * HOLE_BLOCKS;
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = 0.3 * Math.sin(2 * Math.PI * 440 * i / SR);
+    for (let i = h0; i < h0 + hn; i++) d[i] = 0;              // one hole, block-aligned
+    d[Math.round(SR * SPLICE_AT)] = 0.9;                      // one splice, one sample wide
+  }
+  const src = off.createBufferSource(); src.buffer = buf;
+  const probe = new AudioWorkletNode(off, 'probe',
+    { channelCount: 2, channelCountMode: 'explicit', processorOptions: { eager: true } });
+  let last = null;
+  probe.port.onmessage = (e) => { last = e.data; };
+  src.connect(probe); probe.connect(off.destination);
+  src.start();
+  await off.startRendering();
+  await sleep(60);                                   // let the queued port messages land
+  // 4 jumps = 2 channels x (into the splice, out of it). The hole's own edges do NOT count at this
+  // phase -- 0.3 sin() is at -0.15 where the hole starts and -0.06 where it ends, both inside the
+  // 0.25 threshold -- which is worth knowing: a dropout is caught by the zero counter, not this one.
+  const want = { zeroBlocks: HOLE_BLOCKS, maxRunMs: HOLE_BLOCKS * 128 * 1000 / SR, jumps: 4 };
+  const got = last && { zeroBlocks: last.zeroBlocks, maxRunMs: last.maxRunMs, jumps: last.jumps };
+  const ok = got && got.zeroBlocks === want.zeroBlocks &&
+             Math.abs(got.maxRunMs - want.maxRunMs) < 0.01 && got.jumps === want.jumps;
+  log(`detector self-test: ${ok ? 'PASS' : 'FAIL'} — cut a ${want.maxRunMs.toFixed(1)} ms hole and ` +
+      `a one-sample splice into a 440 Hz sine and asked the probe what it saw\n` +
+      `  want ${JSON.stringify(want)}\n  got  ${JSON.stringify(got)}`);
+  if (!ok) $('verdict').innerHTML = `<span class="fail">FAIL</span> — the detector itself is ` +
+    `broken; a green soak run would mean nothing. Fix this before pressing RUN.`;
+  return ok;
+}
+
+$('run').addEventListener('click', run);
+$('stop').addEventListener('click', () => { stopping = true; });
+selftest().catch((e) => log('detector self-test could not run: ' + e.message));
+</script>
