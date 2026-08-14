@@ -500,6 +500,18 @@ Two constraints come with owning the hardware from a page:
 - **The tab holds the board's link.** Close it before running the `host/` tools or the test suite,
   the way you used to stop the server.
 
+**Where the sound comes out.** The mix lands in whatever your system's default output is, and the
+header's **OUT** menu moves it — headphones, an interface, an HDMI display — without touching the
+system setting. It applies immediately and is remembered across reloads. Two things about that
+list: the device *names* only appear once POWER has opened the board's audio, because a browser
+will not name your outputs to a page that holds no media permission; and a Tiliqua appears in it
+as an output too, marked **takes no audio**, because macOS opens both directions of a USB audio
+device together while the gateware consumes nothing in that direction. Picking one is a way to
+hear silence. It is left in the list rather than filtered out — it is a device you can see in the
+system sound panel, and a name explains more than a disappearance does. `OUT` needs
+`AudioContext.setSinkId` (Chrome 110+); where that is missing the menu says so and the system
+sound settings are the way.
+
 The panel is the same on both boards; it takes the frame rate from the transport it opened
 (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming. See the
 [Web UI](DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) section for the architecture.

@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v85-boards';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v86-out';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -113,6 +113,69 @@ function initMasterVol() {
   });
   mvolKnob.addEventListener('dblclick', () => setMasterVolume(127));
   renderMasterVol(masterVol);
+}
+// ---------- header OUT: which speaker the mix lands in ----------
+// A sink choice on the AudioContext, not a rewiring — `analyser → ctx.destination` is untouched
+// and `setSinkId` moves the destination itself. Remembered across reloads, because which box is
+// plugged into the desk is a property of the desk and not of the session.
+//
+// Two things the browser's list cannot say for itself. Output **labels** stay empty strings until
+// the page holds a media permission, and this page is only granted one when POWER opens the UAC2
+// capture — so before the first POWER the entries are numbered, and the list is rebuilt when the
+// names arrive. And every Tiliqua enumerates as an *output* as well as an input, because macOS
+// opens both directions together; nothing in the gateware consumes host-to-device audio
+// (`boards/tiliqua/gateware/top.py:394` drains it to keep the stream from stalling), so choosing
+// one is a way to hear nothing at all. Those entries are marked rather than dropped: it is the
+// browser's device list, and a filter that silently removes a device the player can see in the
+// system panel is harder to understand than a label.
+const SINK_KEY = 'xls32.sink';
+let sinkId = localStorage.getItem(SINK_KEY) || '';
+const canPickSink = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+const isBoardOutput = (label) => /tiliqua/i.test(label);
+async function applySink() {
+  const sel = document.getElementById('outdev');
+  if (!ctx || !canPickSink) return;                 // before POWER there is nothing to move yet
+  try { await ctx.setSinkId(sinkId); if (sel) sel.title = OUT_TITLE; }
+  catch (e) {                                       // device vanished mid-session, or refused
+    sinkId = ''; localStorage.removeItem(SINK_KEY);
+    try { await ctx.setSinkId(''); } catch (_) {}
+    if (sel) { sel.value = ''; sel.title = 'that output refused (' + e.name + ') — back to the system default'; }
+  }
+}
+const OUT_TITLE = 'Where the mix comes out. Applies live, and is remembered across reloads.';
+async function refreshOutputs() {
+  const sel = document.getElementById('outdev'); if (!sel) return;
+  if (!canPickSink) {                               // Firefox/Safari: AudioContext has no sink
+    sel.disabled = true; sel.innerHTML = '<option>this browser picks the output</option>';
+    sel.title = 'Choosing an output needs AudioContext.setSinkId — use the system sound settings.';
+    return;
+  }
+  sel.title = OUT_TITLE;
+  let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput'); }
+  catch (_) { /* no permission yet: "System default" is still the whole truth */ }
+  const add = (id, text) => { const o = document.createElement('option'); o.value = id; o.textContent = text; sel.append(o); };
+  sel.innerHTML = '';
+  add('', 'System default');
+  devs.forEach((d, i) => {
+    if (!d.deviceId || d.deviceId === 'default') return;   // the browser's own 'default' duplicates ours
+    const name = d.label || 'Output ' + (i + 1);
+    add(d.deviceId, isBoardOutput(name) ? name + ' — takes no audio' : name);
+  });
+  if (![...sel.options].some((o) => o.value === sinkId)) {  // remembered device is not on the desk today
+    sinkId = ''; localStorage.removeItem(SINK_KEY);
+  }
+  sel.value = sinkId;
+}
+function initOutputPicker() {
+  const sel = document.getElementById('outdev'); if (!sel) return;
+  sel.addEventListener('change', async () => {
+    sinkId = sel.value;
+    if (sinkId) localStorage.setItem(SINK_KEY, sinkId); else localStorage.removeItem(SINK_KEY);
+    await applySink();
+  });
+  navigator.mediaDevices?.addEventListener('devicechange', refreshOutputs);
+  refreshOutputs();
 }
 function applyValues(vals, send) {
   for (const id in vals) setValue(id, vals[id], send);
@@ -729,6 +792,10 @@ async function startAudio() {
   node = audioNodes[0] || null;
   masterGainNode.connect(analyser);
   analyser.connect(ctx.destination);              // clean output path (no MediaStream processing)
+  await refreshOutputs();                         // the real device names, now that a capture is open
+  await applySink();                              // and the remembered output, now that there is a context
+                                                  // (in that order: a device that is gone is dropped
+                                                  // from the list before it can be asked for)
   // iOS mutes the Web Audio API on the ringer/silent switch even when 'running'. Play a
   // looping *silent* clip: that flips iOS's audio session to 'playback', so ctx.destination
   // sounds through the switch — without routing through a MediaStream (which iOS distorts with
@@ -1049,7 +1116,7 @@ async function boot() {
   demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');
-  initMasterVol();
+  initMasterVol(); initOutputPicker();
   document.getElementById('power').addEventListener('click', togglePower);
   document.getElementById('save').addEventListener('click', saveUser);
   document.getElementById('panic').addEventListener('click', allSoundOff);

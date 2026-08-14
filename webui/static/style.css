@@ -43,6 +43,17 @@ body{
 .mvol{display:flex;flex-direction:row;align-items:center;gap:6px;height:36px}
 .mvol .knob{width:28px;height:28px}
 .mvollabel{font-size:9px;letter-spacing:.5px;color:#b8ac95;font-weight:700}
+/* OUT: the sink picker, dressed as one more header control */
+.outsel{display:flex;align-items:center;gap:6px;height:36px;
+  --caret:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23b8ac95'/%3E%3C/svg%3E")}
+.outlabel{font-size:9px;letter-spacing:.5px;color:#b8ac95;font-weight:700}
+.outdev{height:36px;max-width:190px;padding:0 24px 0 10px;border-radius:4px;cursor:pointer;
+  font-family:inherit;font-size:10px;letter-spacing:.5px;font-weight:700;
+  color:#e9dcc2;border:1px solid #000;box-shadow:0 2px 0 #000;appearance:none;-webkit-appearance:none;
+  background-image:var(--caret),linear-gradient(#4a453c,#2a2621);
+  background-repeat:no-repeat;background-position:right 9px center,0 0;background-size:8px 5px,100% 100%}
+.outdev:hover{background-image:var(--caret),linear-gradient(#5b5548,#332f28)}
+.outdev:disabled{opacity:.45;cursor:not-allowed}
 
 /* presets */
 .topbar{display:flex;align-items:stretch;gap:14px;margin-bottom:14px}

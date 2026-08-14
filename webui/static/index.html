@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v85-boards">
+<link rel="stylesheet" href="style.css?v86-out">
 </head>
 <body>
 <div id="synth">
@@ -19,6 +19,7 @@
       </div>
       <div class="head-right">
         <div class="status" id="status"><span class="dot" id="dot"></span><span id="statustext">off</span></div>
+        <div class="outsel"><label class="outlabel" for="outdev">OUT</label><select id="outdev" class="outdev"></select></div>
         <div id="mvol" class="mvol" title="Master output volume (final mix)"><div class="knob" id="mvolknob"></div><div class="mvollabel">VOL</div></div>
         <button id="power" class="power">POWER</button>
       </div>
@@ -104,7 +105,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v85-boards"></script>
-<script src="app.js?v85-boards"></script>
+<script src="transport.js?v86-out"></script>
+<script src="app.js?v86-out"></script>
 </body>
 </html>

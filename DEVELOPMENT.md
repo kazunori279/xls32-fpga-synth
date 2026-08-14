@@ -1958,6 +1958,31 @@ the zero counter, not the jump counter). That runs on load, with no hardware and
 One board passes it clean — 24 s, rms 0.134, peak 0.379, zero holes, zero splices — and the verdict
 line says so in the same breath as saying that one board is not the question.
 
+### Everything lands in one output, so the panel had better say which
+
+Summing four boards into a single `AudioContext` makes "which speaker" a question the page had
+been able to duck. The header grew an **OUT** menu: `AudioContext.setSinkId`, which moves
+`ctx.destination` itself, so `masterGain → analyser → destination` is untouched and the meter keeps
+reading the same signal wherever the sound goes. The choice is stored in `localStorage`, because
+which box is plugged into the desk is a property of the desk and not of the session.
+
+Two things the browser will not tell you straight. Output **labels** are empty strings until the
+page holds a media permission, and this page is granted one only when POWER opens the UAC2
+capture — so the list is rebuilt when the capture starts and the names arrive. And every Tiliqua
+appears as an *output* as well as an input, because macOS opens both directions of a USB audio
+device together; nothing in the gateware consumes host-to-device audio, which
+`boards/tiliqua/gateware/top.py:394` drains solely to keep the stream from stalling. Selecting one
+is therefore a way to hear nothing. It is labelled **takes no audio** rather than filtered out: it
+is a device the player can see in the system sound panel, and a name explains more than a
+disappearance does.
+
+Verified on the board by switching sinks live: `ctx.sinkId` follows the picked `deviceId`, a held
+note still measures rms 0.047 through the analyser, a device that is gone falls back to the system
+default with the reason in the tooltip (`NotFoundError`) instead of wedging, and the choice
+survives a reload — restored into the menu before POWER, applied to the context the moment there
+is one. What no automated check can see is that the sound physically moved; the analyser sits
+upstream of the sink by construction, so that last step is an ear's job.
+
 ---
 
 # Friction logs & learnings
