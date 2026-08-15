@@ -33,12 +33,10 @@ from name_audit import note_of                                             # noq
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.abspath(os.path.join(HERE, "..", "webui", "ab"))
-PER_CAT = int(sys.argv[1]) if len(sys.argv) > 1 else 3
-SOURCE = sys.argv[2] if len(sys.argv) > 2 else "soundfont"
-# The two banks under test, by their $LOSS name. Left is the incumbent.
-BANKS = [("stft", f"presets_{SOURCE}_stft.json"), ("clapstft", f"presets_{SOURCE}_clapstft.json")]
 CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 SEED = int(os.environ.get("SEED", 20260816))
+# argv is read inside main(), not here: build_previews.py imports write_wav from this module and
+# would otherwise inherit this file's idea of what argv[1] means.
 
 
 def write_wav(path, x, sr):
@@ -57,16 +55,21 @@ def write_wav(path, x, sr):
 
 def main():
     import importlib
-    ns = importlib.import_module(SOURCE)
+    per_cat = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    source = sys.argv[2] if len(sys.argv) > 2 else "soundfont"
+    # The two banks under test, by their $LOSS name. Left is the incumbent.
+    banks_in = [("stft", f"presets_{source}_stft.json"),
+                ("clapstft", f"presets_{source}_clapstft.json")]
+    ns = importlib.import_module(source)
     os.makedirs(OUT, exist_ok=True)
     engine.render(engine._DEFAULTS, gate_s=search.GATE_S, tail_s=search.TAIL_S)
 
     webui = os.path.abspath(os.path.join(HERE, "..", "webui"))
     banks = {}
-    for tag, fn in BANKS:
+    for tag, fn in banks_in:
         d = json.load(open(os.path.join(webui, fn)))
         banks[tag] = {p["name"]: p for p in d["presets"]}
-    shared = [n for n in banks[BANKS[0][0]] if n in banks[BANKS[1][0]]]
+    shared = [n for n in banks[banks_in[0][0]] if n in banks[banks_in[1][0]]]
     targets = {name: path for _, name, path, _ in ns.list_targets(per_cat=16) if name in shared}
 
     # How far apart are the two fits of the same target? Measured under CLAP, because that is the
@@ -75,7 +78,7 @@ def main():
     loss_deep.select("clap")
     rows = []
     for name in shared:
-        p0, p1 = banks[BANKS[0][0]][name], banks[BANKS[1][0]][name]
+        p0, p1 = banks[banks_in[0][0]][name], banks[banks_in[1][0]][name]
         note = note_of(name, p0["category"])
         a0, a1 = (engine.render(p["values"], note=note, gate_s=search.GATE_S, tail_s=search.TAIL_S)
                   for p in (p0, p1))
@@ -88,13 +91,13 @@ def main():
     trials = []
     for cat in CATS:
         pool = sorted([r for r in rows if r["category"] == cat], key=lambda r: -r["spread"])
-        trials.extend(pool[:PER_CAT])                     # the pairs that actually differ
+        trials.extend(pool[:per_cat])                     # the pairs that actually differ
     rng.shuffle(trials)                                   # category order must not cue the listener
 
     manifest = []
     for i, t in enumerate(trials):
         flip = bool(rng.integers(2))                      # which bank plays as A
-        first, second = (BANKS[1][0], BANKS[0][0]) if flip else (BANKS[0][0], BANKS[1][0])
+        first, second = (banks_in[1][0], banks_in[0][0]) if flip else (banks_in[0][0], banks_in[1][0])
         stem = f"t{i:02d}"
         audio, sr = ns.load(targets[t["name"]])
         write_wav(os.path.join(OUT, f"{stem}_target.wav"), audio, sr)
@@ -106,7 +109,7 @@ def main():
                          "spread": round(t["spread"], 4), "a": first, "b": second})
         print(f"  {stem}  {t['category']:8} {t['name']:22} spread {t['spread']:.3f}")
 
-    json.dump({"source": SOURCE, "banks": [b[0] for b in BANKS], "seed": SEED,
+    json.dump({"source": source, "banks": [b[0] for b in banks_in], "seed": SEED,
                "trials": manifest}, open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
     print(f"\nwrote {len(manifest)} trials -> {OUT}")
     print("  python3 -m http.server 8765 -d webui   # then open http://127.0.0.1:8765/ab_check.html")

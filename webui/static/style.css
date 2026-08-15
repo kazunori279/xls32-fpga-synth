@@ -167,6 +167,20 @@ body{
 .bitem:hover{background:linear-gradient(#f8f2e3,#e8ddc6)}
 .bitem.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10}
 .bitem.empty{color:#a89b83;font-style:italic}
+/* Audition buttons on a preset row (presetgen/build_previews.py). `T` is the corpus sample the
+   preset was fitted to, `E` is engine.py's render of the preset — the offline model, not the
+   board. Drawn only where a clip exists, so a checkout without the (gitignored) previews just
+   shows plain rows. They sit inside a .bitem, which is itself a click target, so they are small
+   and to the right where a mis-aimed click still selects the preset rather than playing it. */
+.bitem.previtem{display:flex;align-items:center;gap:5px}
+.bitem.previtem .dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbtn{flex:none;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;line-height:1.6;
+  border:1px solid rgba(0,0,0,.3);background:linear-gradient(#ded2b8,#c5b596);color:#3a3227;
+  font-family:inherit;cursor:pointer}
+.pbtn:hover{background:linear-gradient(#efe6d0,#d8caab);color:#241f18}
+.pbtn.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10;color:#241109}
+.pbtn.err{background:linear-gradient(#d8a9a0,#bb867c)}
+
 /* a board this browser cannot open: shown, not hidden, so the reason is visible */
 .bitem.off{color:#a89b83;cursor:default}
 .bitem.off:hover{background:linear-gradient(#f3ecdb,#e2d7be)}   /* no hover lift: nothing to click */

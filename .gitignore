@@ -45,6 +45,8 @@ presetgen/name_audit*.json
 # ab_render.py output: ~10 MB of WAV plus the manifest that says which bank is A. Regenerable in a
 # minute from the banks, and committing the manifest would put the answer key in the repo.
 webui/ab/
+# build_previews.py output: ~54 MB of audition WAV, regenerable from the banks in one command.
+webui/static/preview/
 
 # stray screenshots
 Screenshot*.png
