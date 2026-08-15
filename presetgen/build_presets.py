@@ -13,10 +13,15 @@ HERE = os.path.dirname(__file__)
 PER_CAT = int(sys.argv[1]) if len(sys.argv) > 1 else 16
 BUDGET = int(sys.argv[2]) if len(sys.argv) > 2 else 300
 SOURCE = sys.argv[3] if len(sys.argv) > 3 else "nsynth"     # target module: nsynth | freesound
-OUT = os.path.abspath(os.path.join(HERE, "..", "webui", f"presets_{SOURCE}.json"))
 # A bank is only meaningful next to the distance that made it -- losses are not comparable across
 # definitions, so a stored `loss` fitted under CDPAM cannot be read against one fitted under STFT.
+# A non-default distance therefore writes its own bank file rather than overwriting the shipped
+# one: webui/synthspec.py tags each bank with its filename stem, so the browser gets a second
+# source tab and the two can be A/B'd by ear, which is the only comparison that settles anything.
 LOSSNAME = loss.backend()
+STEM = os.environ.get("BANK") or (SOURCE if LOSSNAME == "stft"
+                                  else f"{SOURCE}{LOSSNAME.replace('+', '')}")
+OUT = os.path.abspath(os.path.join(HERE, "..", "webui", f"presets_{STEM}.json"))
 CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 
 

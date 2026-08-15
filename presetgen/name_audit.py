@@ -19,8 +19,15 @@ Chance is 1/8 for category and rank 64.5 for own-name in a 128-slot bank. Read t
 that, and remember CLAP is judging a 1.6 s single note of an FPGA synth, which is not what it was
 trained on -- a low score is a hypothesis about the bank, not a verdict on it.
 
+Chance is the wrong yardstick on its own, though: a bank inherits its labels from a corpus whose own
+labels CLAP may not agree with either. `--targets <source>` scores the corpus samples instead of our
+fits, which is the ceiling -- a category the targets already fail is mislabelled upstream and no
+amount of fitting will recover it, while a category the targets keep and the bank loses is the
+engine or the search dropping it.
+
     uv sync --extra deepfit
     uv run python presetgen/name_audit.py [bank ...]        # default: every webui/presets_*.json
+    uv run python presetgen/name_audit.py --targets soundfont        # the ceiling, not the bank
 """
 import json
 import os
@@ -86,6 +93,40 @@ def clean_name(name):
     return _ID_RE.sub("", _NOTE_RE.sub("", name)).strip() or name
 
 
+def category_report(A, truth):
+    """Which category prompt does CLAP rank first, against the label the corpus/bank carries?"""
+    cats = list(CATEGORY_PROMPT)
+    C = loss_deep.clap_text_emb([CATEGORY_PROMPT[c] for c in cats])
+    pred = (A @ C.T).argmax(axis=1)
+    acc = float((pred == truth).mean())
+    print(f"category agreement: {acc*100:5.1f}%  (chance {100/len(cats):.1f}%)")
+    conf = np.zeros((len(cats), len(cats)), dtype=int)
+    for t, q in zip(truth, pred):
+        conf[t, q] += 1
+    print("            " + "".join(f"{c[:4]:>6}" for c in cats) + "   <- CLAP heard")
+    for i, c in enumerate(cats):
+        n = conf[i].sum()
+        hit = conf[i, i] / n * 100 if n else 0
+        print(f"  {c:9} " + "".join(f"{v:6d}" for v in conf[i]) + f"   {hit:5.1f}% kept")
+    return acc, pred
+
+
+def audit_targets(source):
+    """The ceiling: score the corpus samples our banks are fitted to, not the fits."""
+    import importlib
+    ns = importlib.import_module(source)
+    targets = ns.list_targets(per_cat=int(os.environ.get("PER_CAT", 16)))
+    cats = list(CATEGORY_PROMPT)
+    print(f"\n=== {source} targets: {len(targets)} samples " + "=" * 20)
+    waves, sr = [], None
+    for _, _, path, _ in targets:
+        a, sr = ns.load(path)
+        waves.append(np.asarray(a, dtype=np.float64))
+    A = loss_deep.clap_audio_emb(waves, sr)
+    acc, _ = category_report(A, np.array([cats.index(t[0]) for t in targets]))
+    return {"bank": f"{source} targets", "n": len(targets), "category_agreement": acc}
+
+
 def audit(path, limit=None):
     bank = json.load(open(path))
     presets = bank["presets"][:limit]
@@ -101,19 +142,7 @@ def audit(path, limit=None):
 
     # ---- category: does the sound land in the box the bank filed it under?
     cats = list(CATEGORY_PROMPT)
-    C = loss_deep.clap_text_emb([CATEGORY_PROMPT[c] for c in cats])
-    pred = (A @ C.T).argmax(axis=1)
-    truth = np.array([cats.index(p["category"]) for p in presets])
-    acc = float((pred == truth).mean())
-    print(f"category agreement: {acc*100:5.1f}%  (chance {100/len(cats):.1f}%)")
-    conf = np.zeros((len(cats), len(cats)), dtype=int)
-    for t, q in zip(truth, pred):
-        conf[t, q] += 1
-    print("            " + "".join(f"{c[:4]:>6}" for c in cats) + "   <- CLAP heard")
-    for i, c in enumerate(cats):
-        n = conf[i].sum()
-        hit = conf[i, i] / n * 100 if n else 0
-        print(f"  {c:9} " + "".join(f"{v:6d}" for v in conf[i]) + f"   {hit:5.1f}% kept")
+    acc, pred = category_report(A, np.array([cats.index(p["category"]) for p in presets]))
 
     # ---- own name: rank among every name in the bank
     names = [clean_name(p["name"]) for p in presets]
@@ -150,6 +179,10 @@ def audit(path, limit=None):
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     limit = int(os.environ.get("LIMIT", "0")) or None
+    if "--targets" in sys.argv:
+        out = [audit_targets(s) for s in (args or ["soundfont"])]
+        json.dump(out, open(os.path.join(HERE, "name_audit_targets.json"), "w"), indent=1)
+        sys.exit(0)
     banks = args or sorted(f for f in
                            [os.path.join(WEBUI, x) for x in os.listdir(WEBUI)]
                            if re.search(r"presets_\w+\.json$", f))
