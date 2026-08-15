@@ -6,13 +6,17 @@ keep the best-matching engine patch. Writes webui/presets_matched.json (name/cat
 """
 import os, sys, json, time, importlib
 import numpy as np
-import engine, loss, params, search
+import engine, params, search
+import loss_deep as loss          # $LOSS selects the distance; "stft" (default) is loss.py verbatim
 
 HERE = os.path.dirname(__file__)
 PER_CAT = int(sys.argv[1]) if len(sys.argv) > 1 else 16
 BUDGET = int(sys.argv[2]) if len(sys.argv) > 2 else 300
 SOURCE = sys.argv[3] if len(sys.argv) > 3 else "nsynth"     # target module: nsynth | freesound
 OUT = os.path.abspath(os.path.join(HERE, "..", "webui", f"presets_{SOURCE}.json"))
+# A bank is only meaningful next to the distance that made it -- losses are not comparable across
+# definitions, so a stored `loss` fitted under CDPAM cannot be read against one fitted under STFT.
+LOSSNAME = loss.backend()
 CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 
 
@@ -21,7 +25,7 @@ def main():
     # warm the JIT
     engine.render(params.preset_from_vec(params.seed_vec("Lead")), gate_s=search.GATE_S, tail_s=search.TAIL_S)
     targets = ns.list_targets(per_cat=PER_CAT)
-    print(f"matching {len(targets)} presets (budget={BUDGET})")
+    print(f"matching {len(targets)} presets (budget={BUDGET}, loss={LOSSNAME})")
     out, losses = [], []
     t0 = time.time()
     for i, (cat, name, path, note) in enumerate(targets):
@@ -39,7 +43,7 @@ def main():
     out.sort(key=lambda p: (order[p["category"]], p["loss"]))
     with open(OUT, "w") as f:
         json.dump({"presets": [{k: p[k] for k in ("name", "category", "values")} for p in out],
-                   "meta": {"count": len(out), "budget": BUDGET}}, f)
+                   "meta": {"count": len(out), "budget": BUDGET, "loss": LOSSNAME}}, f)
     dt = time.time() - t0
     print(f"\nwrote {len(out)} presets -> {OUT}  ({dt/60:.1f} min)")
     if losses:

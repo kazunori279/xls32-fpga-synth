@@ -11,17 +11,33 @@ engine's expressive reach (see the loss-driven roadmap), not the optimizer.
 """
 import numpy as np
 import cma
-import engine, loss, params
+import engine, params
+# $LOSS picks the distance: "stft" (default) dispatches to loss.py unchanged, so the numbers and
+# the banks are exactly what they were; "cdpam"/"clap"/"cdpam+stft"/"clap+stft" are the learned
+# alternatives. See loss_deep.py -- none of them is known to be better yet.
+import loss_deep as loss
 
 GATE_S, TAIL_S = 1.6, 0.3            # render window (sample targets hold a while)
+SILENT = 1e3                         # score for a silent/degenerate patch
 
 
 def _objective(vec, target, note):
-    preset = params.preset_from_vec(vec)
-    a = engine.render(preset, note=note, gate_s=GATE_S, tail_s=TAIL_S)
-    if np.sqrt(np.mean(a * a)) < 1e-4:               # silent patch -> reject
-        return 1e3
-    return loss.loss(a, target, a_sr=engine.SR, b_prepped=True)
+    return _objective_batch([vec], target, note)[0]
+
+
+def _objective_batch(vecs, target, note):
+    """Score a whole CMA-ES generation at once. The FFT loss does not care, but a learned distance
+    runs one model call for the population instead of one per candidate, which is where its cost
+    would otherwise land."""
+    renders, live = [], []
+    for i, v in enumerate(vecs):
+        a = engine.render(params.preset_from_vec(v), note=note, gate_s=GATE_S, tail_s=TAIL_S)
+        if np.sqrt(np.mean(a * a)) >= 1e-4:          # silent patch -> reject, do not embed it
+            renders.append(a); live.append(i)
+    out = np.full(len(vecs), SILENT)
+    if renders:
+        out[live] = loss.dists(renders, target, a_sr=engine.SR, b_prepped=True)
+    return out
 
 
 def match(target, category="Lead", note=60, budget=800, seed=1):

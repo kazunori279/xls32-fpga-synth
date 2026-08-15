@@ -39,6 +39,9 @@ presetgen/targets_freesound/
 presetgen/targets_soundfont/
 presetgen/demo_out/
 presetgen/__pycache__/
+# name_audit.py output: regenerable from the banks in one command, and it moves whenever the
+# CLAP checkpoint or the prompts do, so a committed copy would go stale silently.
+presetgen/name_audit*.json
 
 # stray screenshots
 Screenshot*.png

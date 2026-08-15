@@ -40,3 +40,22 @@ presetgen = [
     "cma>=4.4.4",
     "scipy>=1.13.1",
 ]
+# Learned audio distances for preset fitting (presetgen/loss_deep.py) and the CLAP name audit
+# (presetgen/name_audit.py). Separate from [presetgen] because it is heavy — torch plus a ~2 GB
+# CLAP checkpoint on first use — and because it does NOT need the target-corpus half of presetgen
+# (dawdreamer/fluidsynth render targets; rendering our own engine and embedding audio does not).
+# It repeats scipy/numba/cma so `uv sync --extra deepfit` alone can render, fit and audit:
+#   uv sync --extra deepfit
+deepfit = [
+    "torch>=2.6.0",
+    "cdpam>=0.0.6",             # human-JND-trained perceptual audio distance (22.05 kHz)
+    "librosa>=0.10.2",          # cdpam's loader dependency, undeclared in its own metadata
+    # CLAP audio<->text embeddings (the name-vs-sound audit) come through transformers'
+    # ClapModel, NOT the `laion-clap` package: that one pins numpy==1.23.5 / <2.0.0, which is
+    # unsatisfiable against this project's numpy>=2.0.2. Same LAION checkpoints either way.
+    "transformers>=4.45",
+    "numba>=0.60.0",
+    "cma>=4.4.4",
+    "scipy>=1.13.1",
+    "resampy>=0.4.3",
+]
