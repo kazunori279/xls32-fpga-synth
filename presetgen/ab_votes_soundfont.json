@@ -1,0 +1,39 @@
+{
+ "_": "Blind forced-choice listening test, webui/ab_check.html, one listener (the author), 2026-08-16.",
+ "_setup": "24 trials, 3 per category, the pairs the two banks disagree on most under CLAP. Same 128 GM soundfont targets, same engine, same budget 800; only $LOSS differs. A/B coin-flipped per trial, levels peak-normalised, answer key not read until every trial was voted. One held note, 1.6 s gate + 0.3 s tail -- the window the search optimised.",
+ "_result": "clapstft 18, stft 1, tie 5, on both questions. Exact two-sided sign test on n=19 decided trials: p = 7.6e-05. The two questions came back identical in all 24 trials, so this test cannot separate 'fits the target better' from 'is the better patch' -- it shows only that one bank won both times it was asked.",
+ "_caveat": "One listener, not blinded to the hypothesis (only to the assignment), n=24, single notes. Enough to choose between these two banks; not a general result about either distance.",
+ "source": "soundfont",
+ "banks": ["stft", "clapstft"],
+ "seed": 20260816,
+ "tally": {
+  "closer": {"stft": 1, "clapstft": 18, "tie": 5, "p": 7.63e-05},
+  "better": {"stft": 1, "clapstft": 18, "tie": 5, "p": 7.63e-05}
+ },
+ "votes": [
+  {"id": "t00", "name": "Kalimba", "category": "Pluck", "spread": 0.3964, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t01", "name": "Soundtrack", "category": "FX", "spread": 0.5311, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t02", "name": "Choir Pad G4", "category": "Pad", "spread": 0.4884, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t03", "name": "Synth Brass 2 G4", "category": "Brass", "spread": 0.3111, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t04", "name": "Goblins", "category": "FX", "spread": 0.552, "closer": "tie", "better": "tie"},
+  {"id": "t05", "name": "E-Piano 2 G4", "category": "Keys", "spread": 0.4306, "closer": "tie", "better": "tie"},
+  {"id": "t06", "name": "Square Lead", "category": "Lead", "spread": 0.272, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t07", "name": "Synth Bass 2 C4", "category": "Bass", "spread": 0.3521, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t08", "name": "Harpsichord G3", "category": "Keys", "spread": 0.3794, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t09", "name": "Soundtrack G4", "category": "FX", "spread": 0.5646, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t10", "name": "New Age Pad", "category": "Pad", "spread": 0.4765, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t11", "name": "Synth Bass 2 G3", "category": "Bass", "spread": 0.4233, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t12", "name": "Synth Brass 1 C5", "category": "Brass", "spread": 0.3145, "closer": "tie", "better": "tie"},
+  {"id": "t13", "name": "Synth Bass 1", "category": "Bass", "spread": 0.3371, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t14", "name": "Fifths G4", "category": "Lead", "spread": 0.2781, "closer": "tie", "better": "tie"},
+  {"id": "t15", "name": "Pizzicato", "category": "Pluck", "spread": 0.4308, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t16", "name": "Square Lead G4", "category": "Lead", "spread": 0.4391, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t17", "name": "Brass Section", "category": "Brass", "spread": 0.3421, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t18", "name": "E-Piano 2 G3", "category": "Keys", "spread": 0.2877, "closer": "stft", "better": "stft"},
+  {"id": "t19", "name": "Metallic Pad G4", "category": "Pad", "spread": 0.4212, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t20", "name": "Glockenspiel", "category": "Pluck", "spread": 0.4347, "closer": "tie", "better": "tie"},
+  {"id": "t21", "name": "Strings 1 G3", "category": "Strings", "spread": 0.1926, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t22", "name": "Synth Strings 2 G3", "category": "Strings", "spread": 0.2795, "closer": "clapstft", "better": "clapstft"},
+  {"id": "t23", "name": "Strings 1 C5", "category": "Strings", "spread": 0.2997, "closer": "clapstft", "better": "clapstft"}
+ ]
+}
