@@ -1,0 +1,219 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Blind A/B — does the learned distance fit better, or just score better?</title>
+<!--
+  Two banks, the same 128 GM targets, the same engine, the same budget. The only difference is the
+  distance CMA-ES minimised: the multi-resolution STFT loss the project has always used, against
+  that loss plus a CLAP embedding term. `bank_compare.py` says the second is 29% closer under CLAP
+  and 2% further under STFT, and neither of those is an answer, because the complaint that started
+  this branch was that the STFT numbers looked fine while the patches did not.
+
+  So this page asks an ear. It is blind and it is forced-choice, for two reasons that are not
+  ceremony: the person running it built both banks and knows which one they hope wins, and a
+  three-way "A / B / same" with an easy middle collects mostly middles. There is a "can't tell"
+  here, but it is off to the side and it is counted separately rather than folded into either bank.
+
+  IT ASKS TWO QUESTIONS PER TRIAL, and they are not the same question:
+
+    closer    which of A and B is nearer the target. This is what the loss function is *for*, and
+              it is the question the numbers already answered -- so it is the one where the two
+              can be checked against each other.
+    better    which is the better patch, target ignored. This is what was actually complained
+              about. A fitting loss can win the first and lose the second, and if it does, that is
+              the most useful thing this page can find out.
+
+  WHAT IS HIDDEN: the manifest says which bank is A for each trial, and A/B was coin-flipped per
+  trial at render time, so a listener who noticed "the second one is always brighter" learns
+  nothing. The page does not look at that field until every trial is voted, and the tally is
+  computed only at the end. Trials are ordered so categories do not come in blocks.
+
+  WHAT IS NOT CONTROLLED, and should be read into any result: 24 trials is a small n. A 17-7 split
+  clears a two-sided sign test at p<0.05, a 15-9 does not, and the page prints the p so the
+  difference between "won" and "did not lose" stays visible. Levels are peak-normalised at render,
+  so loudness cannot decide it. Everything is one held note of 1.6 s, which is what the search
+  optimised and is not what a patch gets used for -- a bank that wins here has won at single notes.
+
+    uv run python presetgen/ab_render.py 3 soundfont
+    python3 -m http.server 8765 -d webui        # http://127.0.0.1:8765/ab_check.html
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { background:#15161a; color:#dfe1e6; font:15px/1.5 ui-sans-serif,system-ui,sans-serif;
+         margin:0; padding:28px 32px; }
+  h1 { font-size:17px; margin:0 0 4px; font-weight:600; }
+  .sub { color:#8b909b; font-size:13px; margin-bottom:22px; }
+  .bar { height:4px; background:#26282e; border-radius:2px; margin-bottom:26px; }
+  .bar i { display:block; height:100%; background:#5b8cff; border-radius:2px; transition:width .2s; }
+  .trial { color:#8b909b; font-size:13px; margin-bottom:10px; }
+  .trial b { color:#dfe1e6; font-weight:600; }
+  .row { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .q { color:#8b909b; font-size:13px; width:74px; flex:none; }
+  button { background:#22242a; color:#dfe1e6; border:1px solid #33363e; border-radius:7px;
+           padding:9px 16px; font:inherit; cursor:pointer; }
+  button:hover { background:#2b2e36; }
+  button:disabled { opacity:.4; cursor:default; }
+  button.play { min-width:104px; }
+  button.play.on { border-color:#5b8cff; color:#a9c2ff; }
+  button.pick { min-width:74px; }
+  button.pick.sel { background:#2f4a8f; border-color:#5b8cff; }
+  button.skip { min-width:auto; padding:9px 12px; color:#8b909b; }
+  kbd { font:12px ui-monospace,monospace; color:#6d727d; }
+  .foot { margin-top:26px; color:#6d727d; font-size:12px; }
+  pre { background:#1b1d22; border:1px solid #2a2d34; border-radius:8px; padding:16px;
+        overflow:auto; font:13px/1.55 ui-monospace,monospace; color:#dfe1e6; }
+  .hint { color:#6d727d; font-size:12px; margin-left:4px; }
+</style>
+
+<h1>Blind A/B — <span id="head">loading…</span></h1>
+<div class="sub" id="sub">the same target fitted two ways; which bank is which flips per trial</div>
+<div class="bar"><i id="prog" style="width:0"></i></div>
+<div id="body"></div>
+<div class="foot">
+  <kbd>1</kbd> target &nbsp; <kbd>2</kbd> A &nbsp; <kbd>3</kbd> B &nbsp;&nbsp;
+  <kbd>q</kbd>/<kbd>w</kbd> closer: A/B &nbsp; <kbd>a</kbd>/<kbd>s</kbd> better: A/B &nbsp;
+  <kbd>x</kbd> can't tell (both) &nbsp; <kbd>Enter</kbd> next
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let M = null, i = 0, votes = [], ctx = null, src = null, buf = {};
+
+async function boot() {
+  M = await (await fetch('ab/manifest.json')).json();
+  votes = M.trials.map(() => ({closer: null, better: null}));
+  $('#head').textContent = `${M.trials.length} trials, ${M.banks.join(' vs ')} (${M.source})`;
+  render();
+  addEventListener('keydown', key);
+}
+
+// One AudioContext, one voice. Starting a clip stops whatever is playing: A/B judgement is a
+// comparison of two sounds heard one after the other, and overlapping them just makes a chord.
+async function play(id, slot, btn) {
+  ctx = ctx || new AudioContext();
+  const url = `ab/${id}_${slot}.wav`;
+  if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  if (src) { try { src.stop(); } catch (e) {} }
+  document.querySelectorAll('.play.on').forEach(b => b.classList.remove('on'));
+  src = ctx.createBufferSource();
+  src.buffer = buf[url];
+  src.connect(ctx.destination);
+  src.onended = () => btn && btn.classList.remove('on');
+  btn && btn.classList.add('on');
+  src.start();
+}
+
+function render() {
+  if (i >= M.trials.length) return results();
+  const t = M.trials[i], v = votes[i];
+  $('#prog').style.width = `${i / M.trials.length * 100}%`;
+  // The name and category are shown: they say what the TARGET is, which the listener hears anyway,
+  // and knowing "this is meant to be a plucked note" is part of judging whether a fit got there.
+  // Neither one hints at which bank is A.
+  $('#body').innerHTML = `
+    <div class="trial">trial <b>${i + 1}</b> of ${M.trials.length} &nbsp;·&nbsp;
+      target: <b>${t.category} — ${t.name}</b></div>
+    <div class="row">
+      <span class="q">listen</span>
+      <button class="play" data-slot="target">▶ target</button>
+      <button class="play" data-slot="a">▶ A</button>
+      <button class="play" data-slot="b">▶ B</button>
+    </div>
+    <div class="row">
+      <span class="q">closer</span>
+      <button class="pick" data-k="closer" data-v="a">A</button>
+      <button class="pick" data-k="closer" data-v="b">B</button>
+      <button class="pick skip" data-k="closer" data-v="tie">can't tell</button>
+      <span class="hint">to the target</span>
+    </div>
+    <div class="row">
+      <span class="q">better</span>
+      <button class="pick" data-k="better" data-v="a">A</button>
+      <button class="pick" data-k="better" data-v="b">B</button>
+      <button class="pick skip" data-k="better" data-v="tie">can't tell</button>
+      <span class="hint">as a patch, target ignored</span>
+    </div>
+    <div class="row">
+      <button id="next" ${v.closer && v.better ? '' : 'disabled'}>next →</button>
+      <button id="back" ${i ? '' : 'disabled'}>← back</button>
+    </div>`;
+  document.querySelectorAll('.play').forEach(b =>
+    b.onclick = () => play(t.id, b.dataset.slot, b));
+  document.querySelectorAll('.pick').forEach(b => {
+    if (v[b.dataset.k] === b.dataset.v) b.classList.add('sel');
+    b.onclick = () => pick(b.dataset.k, b.dataset.v);
+  });
+  $('#next').onclick = () => { i++; render(); };
+  $('#back').onclick = () => { i--; render(); };
+}
+
+function pick(k, v) {
+  votes[i][k] = v;
+  render();
+}
+
+function key(e) {
+  if (i >= M.trials.length) return;
+  const t = M.trials[i];
+  const slot = {'1': 'target', '2': 'a', '3': 'b'}[e.key];
+  if (slot) return play(t.id, slot, document.querySelector(`.play[data-slot="${slot}"]`));
+  const map = {q: ['closer', 'a'], w: ['closer', 'b'], a: ['better', 'a'], s: ['better', 'b']};
+  if (map[e.key]) return pick(...map[e.key]);
+  if (e.key === 'x') { votes[i] = {closer: 'tie', better: 'tie'}; return render(); }
+  if (e.key === 'Enter' && votes[i].closer && votes[i].better) { i++; render(); }
+}
+
+// ---- tally. Only here does the page read which bank was A.
+function binomP(k, n) {                       // two-sided sign test, exact; ties excluded from n
+  if (!n) return 1;
+  const c = (n, k) => { let r = 1; for (let j = 0; j < k; j++) r = r * (n - j) / (j + 1); return r; };
+  const pmf = j => c(n, j) * Math.pow(0.5, n);
+  const lo = Math.min(k, n - k);
+  let p = 0;
+  for (let j = 0; j <= lo; j++) p += pmf(j);
+  return Math.min(1, 2 * p);
+}
+
+function results() {
+  $('#prog').style.width = '100%';
+  const [b0, b1] = M.banks;
+  const out = M.trials.map((t, n) => ({
+    id: t.id, name: t.name, category: t.category, spread: t.spread,
+    closer: votes[n].closer === 'tie' ? 'tie' : t[votes[n].closer],
+    better: votes[n].better === 'tie' ? 'tie' : t[votes[n].better],
+  }));
+  const lines = [];
+  for (const k of ['closer', 'better']) {
+    const w0 = out.filter(r => r[k] === b0).length;
+    const w1 = out.filter(r => r[k] === b1).length;
+    const tie = out.filter(r => r[k] === 'tie').length;
+    const p = binomP(w0, w0 + w1);
+    lines.push(`${k.padEnd(7)}  ${b0} ${String(w0).padStart(2)}   ` +
+               `${b1} ${String(w1).padStart(2)}   tie ${String(tie).padStart(2)}   ` +
+               `sign test p = ${p.toFixed(3)}${p < 0.05 ? '  *' : ''}`);
+  }
+  const cats = [...new Set(out.map(r => r.category))];
+  lines.push('', `by category (closer / better, "-" = tie)`);
+  for (const c of cats) {
+    const r = out.filter(x => x.category === c);
+    const f = k => r.map(x => x[k] === 'tie' ? '-' : (x[k] === b0 ? '0' : '1')).join('');
+    lines.push(`  ${c.padEnd(8)} ${f('closer')}  ${f('better')}`);
+  }
+  lines.push('', `0 = ${b0}, 1 = ${b1}. n=${out.length}; a 17-7 split is p<0.05, 15-9 is not.`);
+  $('#head').textContent = 'done';
+  $('#sub').textContent = 'the reveal, and the vote file to keep';
+  $('#body').innerHTML = `<pre>${lines.join('\n')}</pre>
+    <div class="row"><button id="save">save votes.json</button>
+    <button id="again">start over</button></div>`;
+  $('#save').onclick = () => {
+    const blob = new Blob([JSON.stringify({source: M.source, banks: M.banks, seed: M.seed,
+                                           votes: out}, null, 1)], {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ab_votes.json';
+    a.click();
+  };
+  $('#again').onclick = () => { i = 0; votes = M.trials.map(() => ({closer: null, better: null})); render(); };
+}
+
+boot();
+</script>
