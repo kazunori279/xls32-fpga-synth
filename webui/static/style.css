@@ -75,8 +75,15 @@ body{
 .slot.active{background:linear-gradient(#e8b24a,#c98a1f);box-shadow:0 0 10px rgba(230,170,60,.6)}
 .slot.empty .t{color:#a89b83;font-style:italic;font-weight:500}
 .pactions{display:flex;flex-direction:row;gap:8px;flex:0 0 auto}   /* horizontal -> one-row patch panel (shorter) */
-.pbtn{padding:8px 12px;border-radius:4px;cursor:pointer;font-size:10px;letter-spacing:1px;font-weight:700;
-  white-space:nowrap;background:linear-gradient(#4a453c,#2a2620);color:#e9dcc2;border:1px solid #000}
+/* DEMO / SAVE / INIT / PANIC. These declarations lived at the bottom of this file, written for the
+   preset-row audition buttons, and reached the header buttons only because the selector was the
+   unscoped `.pbtn` and it came second. The audition buttons are gone; the look they gave the header
+   is the shipped one, so it is kept here rather than silently reverted to the dark rule it had been
+   overriding. */
+.pbtn{flex:none;padding:1px 5px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:1px;
+  font-weight:700;line-height:1.6;white-space:nowrap;border:1px solid rgba(0,0,0,.3);
+  background:linear-gradient(#ded2b8,#c5b596);color:#3a3227}
+.pbtn:hover{background:linear-gradient(#efe6d0,#d8caab);color:#241f18}
 .pbtn.ghost:hover{background:linear-gradient(#5b5548,#332f28)}
 
 /* preset bar */
@@ -167,20 +174,6 @@ body{
 .bitem:hover{background:linear-gradient(#f8f2e3,#e8ddc6)}
 .bitem.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10}
 .bitem.empty{color:#a89b83;font-style:italic}
-/* Audition buttons on a preset row (presetgen/build_previews.py). `T` is the corpus sample the
-   preset was fitted to, `E` is engine.py's render of the preset — the offline model, not the
-   board. Drawn only where a clip exists, so a checkout without the (gitignored) previews just
-   shows plain rows. They sit inside a .bitem, which is itself a click target, so they are small
-   and to the right where a mis-aimed click still selects the preset rather than playing it. */
-.bitem.previtem{display:flex;align-items:center;gap:5px}
-.bitem.previtem .dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pbtn{flex:none;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;line-height:1.6;
-  border:1px solid rgba(0,0,0,.3);background:linear-gradient(#ded2b8,#c5b596);color:#3a3227;
-  font-family:inherit;cursor:pointer}
-.pbtn:hover{background:linear-gradient(#efe6d0,#d8caab);color:#241f18}
-.pbtn.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10;color:#241109}
-.pbtn.err{background:linear-gradient(#d8a9a0,#bb867c)}
-
 /* a board this browser cannot open: shown, not hidden, so the reason is visible */
 .bitem.off{color:#a89b83;cursor:default}
 .bitem.off:hover{background:linear-gradient(#f3ecdb,#e2d7be)}   /* no hover lift: nothing to click */

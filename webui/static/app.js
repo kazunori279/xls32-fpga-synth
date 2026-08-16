@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v87-out';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v88-preset';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -490,96 +490,32 @@ function renderCats() {
     box.append(el);
   });
 }
-// ---------- preset audition (clips from presetgen/build_previews.py) ----------
-// Selecting a preset pushes it to a board, which needs a board and tells you nothing about the
-// sample the preset was fitted to -- and "how far is this from the target?" is the question that
-// keeps coming up while listening through a fitted bank. Two pre-rendered clips per preset answer
-// it in the browser, with or without hardware:
-//
-//   T   the corpus sample the fit was aiming at (soundfont only: nsynth's corpus is a 4.6 GB
-//       download that is usually not on the machine, and the fm bank is voiced by ear, so neither
-//       has one -- those rows get an E button alone rather than a button that 404s).
-//   E   engine.py's render of this preset. That is the OFFLINE MODEL the search optimises, not the
-//       RTL. It is the right thing to judge a fit by, and if a board is powered the two can be
-//       played in turn -- a difference between them is a finding about the engine port, not the
-//       preset.
-//
-// Previews are gitignored (~54 MB) so a fresh checkout has none: everything here degrades to
-// "no buttons", never to an error.
-let preview = {}, pvOwn = null, pvSrc = null, pvBtn = null;
-const pvBytes = {};
-function pvStop() {
-  if (pvSrc) { try { pvSrc.stop(); } catch (e) {} pvSrc = null; }
-  if (pvBtn) { pvBtn.classList.remove('on'); pvBtn = null; }
-}
-// Play through the panel's own context when it is up, so the OUT picker, MASTER VOL and the meter
-// all apply to an audition exactly as they do to the boards -- comparing a preview against a board
-// through two different output devices would compare the devices. Before POWER there is no such
-// context, so a private one is opened rather than refusing to play.
-function pvGraph() {
-  if (ctx && masterGainNode && powered) return { c: ctx, dest: masterGainNode };
-  pvOwn = pvOwn || new AudioContext();
-  return { c: pvOwn, dest: pvOwn.destination };
-}
-async function pvPlay(src, slug, kind, btn) {
-  const again = pvBtn === btn;
-  pvStop();
-  if (again) return;                                  // clicking the playing button stops it
-  const url = `preview/${src}/${slug}_${kind}.wav`;
-  const { c, dest } = pvGraph();
-  try {
-    if (c.state === 'suspended') await c.resume();
-    if (!pvBytes[url]) pvBytes[url] = await (await fetch(url)).arrayBuffer();
-    // decodeAudioData detaches the buffer it is given, and the panel context can be replaced by a
-    // POWER cycle, so the bytes are cached and a fresh copy is decoded per play. A 1.9 s clip
-    // decodes in single-digit ms; caching the decoded buffer would tie it to one context.
-    const buf = await c.decodeAudioData(pvBytes[url].slice(0));
-    const s = c.createBufferSource();
-    s.buffer = buf; s.connect(dest);
-    s.onended = () => { if (pvSrc === s) pvStop(); };
-    pvSrc = s; pvBtn = btn; btn.classList.add('on');
-    s.start();
-  } catch (e) {
-    delete pvBytes[url];
-    btn.classList.add('err'); btn.title = String((e && e.message) || e);
-    setTimeout(() => btn.classList.remove('err'), 1200);
-  }
-}
+// The preset rows used to carry two audition buttons -- `T` played the corpus sample the fit was
+// aiming at, `E` played engine.py's render of it, both from presetgen/build_previews.py. They
+// answered "how far is this from its target?" in the browser, which was the question while the
+// fitting pipeline was being built. That question is settled offline now (bank_compare.py,
+// ab_render.py), and what is left in a shipped panel is a preset list that a listener browses by
+// name -- so the buttons, and the clip loading behind them, are gone. build_previews.py still
+// writes the clips; nothing serves them.
 function renderList() {
   const box = document.getElementById('blist'); box.innerHTML = '';
-  pvStop();
   const list = filtered();
-  const pv = preview[bank] || {};
   list.forEach((p, i) => {
     const el = document.createElement('div');
     el.className = 'bitem' + (p.empty ? ' empty' : '') +
                   (flatList[curIndex] && p === flatList[curIndex] ? ' on' : '');
-    const clips = p.empty ? null : pv[p.name];
-    if (!clips) {
-      el.textContent = p.name;
-    } else {
-      el.classList.add('previtem');
-      const lbl = document.createElement('span');
-      lbl.className = 'dlabel'; lbl.textContent = p.name;
-      el.append(lbl);
-      const add = (kind, text, title) => {
-        const b = document.createElement('button');
-        b.className = 'pbtn'; b.textContent = text; b.title = title;
-        // The row is a click target too. Without this the audition would also load the preset,
-        // which on a powered rig means every comparison overwrites the patch being compared.
-        b.addEventListener('click', (e) => { e.stopPropagation(); pvPlay(bank, clips.slug, kind, b); });
-        el.append(b);
-      };
-      if (clips.target) add('target', 'T', 'play the sample this preset was fitted to');
-      add('ours', 'E', "play engine.py's render of this preset (the model, not the board)");
-    }
+    el.textContent = p.name;
     el.addEventListener('click', () => selectPreset(p, list, i));
     box.append(el);
   });
 }
 function openBrowser() { document.getElementById('browser').classList.remove('hidden'); renderCats(); renderList(); }
 function closeBrowser() { document.getElementById('browser').classList.add('hidden'); }
-const SRC_LABEL = { nsynth: 'NSynth', soundfont: 'SoundFont', freesound: 'Freesound', factory: 'Factory', fm: 'FM' };
+// Tab labels. `soundfont` is the corpus the bank was FITTED to, which is a fact about how the
+// presets were made and not something a player needs at the moment of picking one -- next to USER
+// the useful distinction is simply "the ones that shipped", so it reads `Preset`. The id stays
+// `soundfont` everywhere else (spec.sources, presets_soundfont.json, the whole presetgen tree).
+const SRC_LABEL = { nsynth: 'NSynth', soundfont: 'Preset', freesound: 'Freesound', factory: 'Factory', fm: 'FM' };
 function setBank(b) {
   bank = b; bcat = 'All';
   document.querySelectorAll('#btabs .btab').forEach((t) => t.classList.toggle('on', t.dataset.bank === b));
@@ -1196,8 +1132,6 @@ async function boot() {
   // plain files, so any static host serves the whole app.
   spec = await (await fetch('spec.json?' + VERSION)).json();
   demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
-  // Audition clips are a local build artefact, not part of the app: absent is the normal case.
-  preview = await fetch('preview/index.json?' + VERSION).then((r) => r.json()).catch(() => ({}));
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');
   initMasterVol(); initOutputPicker();
