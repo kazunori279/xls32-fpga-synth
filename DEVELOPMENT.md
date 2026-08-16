@@ -2327,6 +2327,13 @@ above where flat would put it. So flat is the floor of what the ear does here, n
 it — the Aria's `[31, 66, 127, 122]` is a mix that is levelled, not one that is finished, and its
 melody may still want that 6 dB. Peak 0.99 → **0.46**, which is the part that was actually broken.
 
+It wanted it. Handed back to the panel, the Aria came out at `[55, 88, 93, 108]` — part 0 lifted
+**+6.8 dB** over flat and the other three trimmed by 1–3 dB, which is the *Prelude*/*Winter* shape
+arrived at independently on a third song. That is the division of labour worth keeping: the meter
+finds the level and cannot find the lead, and it takes about a minute to hand it the level so the
+ear only has to decide the one thing it is better at. (Two of the four parts were re-voiced in the
+same pass, so the flat numbers moved to `[25, 71, 127, 122]` under them; peak 0.52.)
+
 ---
 
 # Friction logs & learnings
