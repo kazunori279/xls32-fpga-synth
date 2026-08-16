@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v92-save">
+<link rel="stylesheet" href="style.css?v93-settings">
 </head>
 <body>
 <div id="synth">
@@ -19,7 +19,11 @@
       </div>
       <div class="head-right">
         <div class="status" id="status"><span class="dot" id="dot"></span><span id="statustext">off</span></div>
-        <div class="outsel"><label class="outlabel" for="outdev">OUT</label><select id="outdev" class="outdev"></select></div>
+        <!-- Where OUT used to be. The sink picker was the only setting with a permanent seat in the
+             header, and it is not the one you reach for most -- you choose a speaker once. It moved
+             into SETTINGS along with the footer, which had grown into three lines of small grey
+             prose under the keyboard that nobody reads while playing. -->
+        <button id="settings" class="setbtn" title="output device, file targets, MIDI status, key map">⚙ SETTINGS</button>
         <div id="mvol" class="mvol" title="Master output volume (final mix)"><div class="knob" id="mvolknob"></div><div class="mvollabel">VOL</div></div>
         <button id="power" class="power">POWER</button>
       </div>
@@ -38,6 +42,10 @@
       </div>
       <div class="pactions">
         <button id="demo" class="pbtn ghost">▶ DEMO</button>
+        <!-- LOAD is SAVE read backwards, and it shares SAVE's remembered handles: whichever file you
+             last wrote is the one it offers to read, so the round trip is two clicks and no picker.
+             It sits before SAVE because that is the order the two verbs are learned in. -->
+        <button id="load" class="pbtn ghost">📂 LOAD</button>
         <!-- One SAVE, two files. It used to be this button plus a 💾 TONES that lived in the demo
              browser -- a full-screen overlay playDemo() closes, so the one control that only means
              anything while a song is playing was in the one place you cannot reach while a song is
@@ -63,6 +71,63 @@
           <button id="democlose" class="bclose" title="close">✕</button>
         </div>
         <div class="bbody"><div id="demolist" class="blist"></div></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS. Everything here used to be on the instrument itself: the OUT picker in the header,
+         and the rest in a footer that ran the full width under the keyboard. None of it is played,
+         all of it is read once and then wanted again only when something is wrong, which is exactly
+         what a panel behind a button is for. The ids are unchanged (`outdev`, `octlabel`, `midiin`,
+         `dbg`), so the code that writes them did not have to learn where they moved to. -->
+    <div id="setbox" class="browser hidden">
+      <div class="bwin setwin">
+        <div class="bhead">
+          <div class="dtitle">SETTINGS</div>
+          <button id="setclose" class="bclose" title="close">✕</button>
+        </div>
+        <div class="setbody">
+
+          <div class="setsec">
+            <h4>Output</h4>
+            <div class="setrow">
+              <span class="setk">Audio out</span>
+              <span class="setv"><select id="outdev" class="outdev"></select></span>
+            </div>
+            <div class="setnote">Applies live, and is remembered across reloads. Every Tiliqua also
+              enumerates as an <i>output</i>, because macOS opens both directions together — nothing
+              in the gateware plays host audio, so those entries are marked rather than hidden.
+              <b>No sound</b> is a real sink, not a gain of zero: the meters go on reading.</div>
+          </div>
+
+          <div class="setsec">
+            <h4>Files</h4>
+            <div class="setrow"><span class="setk">patches.json</span><span class="setv" id="fpatches">—</span></div>
+            <div class="setrow"><span class="setk">demos.json</span><span class="setv" id="fdemos">—</span></div>
+            <div class="setnote">Where 📂 LOAD reads and 💾 SAVE writes. The browser hands the page a
+              file <i>handle</i> and not a path — the folder you picked is deliberately not
+              readable, so only the name can be shown. Shift-click either button to choose a
+              different file.</div>
+          </div>
+
+          <div class="setsec">
+            <h4>Status</h4>
+            <div class="setrow"><span class="setk">Audio</span><span class="setv" id="dbg">not started</span></div>
+            <div class="setrow"><span class="setk">MIDI</span><span class="setv midiin none" id="midiin"></span></div>
+            <div class="setrow"><span class="setk">Octave</span><span class="setv" id="octlabel">oct 4</span></div>
+          </div>
+
+          <div class="setsec">
+            <h4>Keys &amp; parts</h4>
+            <div class="setnote">
+              <b>Keys</b> — on-screen, or the computer keyboard: <code>A S D F G H J K L ; '</code>
+              are the white keys from C, <code>W E T Y U O P</code> the black ones between them.
+              <code>Z</code> / <code>X</code> shift the octave, <code>Esc</code> panics.<br>
+              <b>Parts</b> — click a name to play that part alone and edit it, ⇧-click to layer
+              parts, click the LED to mute that part in a demo.
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
@@ -105,17 +170,14 @@
       <button id="panic" class="panicbtn" title="all notes off, every part of every board — or press Esc. Use it if a key held across a PART change is still sounding.">PANIC</button>
     </section>
 
-    <footer class="foot">
-      <span>Keys: on-screen · computer A S D F G H J K L ; ' = the white keys from C, W E T Y U O P = the black · Z/X octave &nbsp;·&nbsp; Parts: click a name = play that part alone · ⇧-click = layer parts · click the LED = mute it in a demo</span>
-      <span id="octlabel">oct 4</span>
-      <span id="midiin" class="midiin none"></span>
-      <span id="dbg"></span>
-    </footer>
+    <!-- The footer that used to be here — key map, part gestures, `oct 4`, the MIDI-in readout and
+         the audio debug line — is the Status and Keys blocks of SETTINGS now. It was three lines of
+         10px grey under the keyboard: too small to read while playing, too permanent to ignore. -->
 
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v92-save"></script>
-<script src="app.js?v92-save"></script>
+<script src="transport.js?v93-settings"></script>
+<script src="app.js?v93-settings"></script>
 </body>
 </html>

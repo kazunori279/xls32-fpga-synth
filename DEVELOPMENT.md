@@ -2375,6 +2375,50 @@ without a native dialog. Three saves cost two picker calls (the first and a forc
 after a full page reload the fourth cost **zero** and landed in the same file. `route_check.html`:
 26/26, every hash byte-identical — the buttons moved, the MIDI did not.
 
+### 📂 LOAD, and a settings panel to put the rest of the panel's prose in
+
+SAVE without LOAD is a one-way door: the USER bank could leave the browser and never come back, and
+`demos.json` could only be re-read by dropping it into `webui/static/` and reloading. **📂 LOAD** is
+the mirror, and it shares SAVE's remembered handles — a `FileSystemFileHandle` carries both
+permissions, so the file you last wrote is the one LOAD offers to read and a round trip costs no
+dialog at all. It always shows its two-entry menu where SAVE shows one conditionally, because both
+files exist whether or not a song is playing.
+
+Loading replaces rather than merges, for the reason the files are written whole: `patches.json` *is*
+the bank, and a merge and a replace differ only in what happens to the slots the file does not
+mention. So it counts them and asks — "Replace the USER bank with 2 patches from patches.json? 1
+slot not in the file will be cleared." Loading a song bank stops whatever is playing and resets
+`demoIdx`, because that index is what SAVE ▸ TONES writes through and the new bank is a different
+list.
+
+**The bug the first draft shipped with, caught by testing the unhappy path.** `loadFromFile()`
+remembered the handle the moment the picker closed, which is one line earlier than it should be:
+reading a file says nothing about whether it was the *right* file. Pointing LOAD at a stray JSON
+therefore re-aimed SAVE at it too — the load itself failed loudly, and the only sign of the damage
+was a changed line in SETTINGS. Remembering is now the caller's move: `loadFromFile` returns
+`{name, text, accept}`, and `accept()` is called after the content has parsed and the player has
+agreed. Verified by loading a good bank, then a bad one, and checking that the IndexedDB handle,
+the localStorage name and the SETTINGS row all still named the good one.
+
+**⚙ SETTINGS** is where the OUT picker and the footer went. Both were on the instrument's face and
+neither is played: the sink is chosen once, and the footer had grown to a full-width strip of 10px
+grey — key map, part gestures, `oct 4`, the MIDI-in readout, the audio debug line — too small to
+read while playing and too permanent to ignore. The panel adds a Files block, which is the one
+genuinely new thing in it: where `patches.json` and `demos.json` currently point. Only the *name*,
+because the File System Access API hands a page a handle and not a path — the folder is deliberately
+not readable — and saying so is better than showing a name that looks like it might be one.
+
+The move cost nothing in code because the ids did not change: `#outdev`, `#octlabel`, `#midiin` and
+`#dbg` are the same elements, written by the same `renderMidiIn()` / `octLabel()` / meter interval,
+which go on updating behind a closed overlay so it is never stale when opened. `route_check.html`:
+26/26 again.
+
+The one thing SETTINGS should show and does not is **when the firmware on the board was built**.
+Nothing on the wire can answer it — the engine implements no SysEx identity reply, and the Tiliqua
+flash archive's `manifest.json` carries a git `tag` but no timestamp — so the honest version is a
+build step that reads the committed artefacts and a row that says the MCU is not reporting.
+[#27](https://github.com/kazunori279/xls32-fpga-synth/issues/27).
+
 ---
 
 # Friction logs & learnings

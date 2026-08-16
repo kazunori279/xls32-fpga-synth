@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v92-save';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v93-settings';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -114,7 +114,7 @@ function initMasterVol() {
   mvolKnob.addEventListener('dblclick', () => setMasterVolume(127));
   renderMasterVol(masterVol);
 }
-// ---------- header OUT: which speaker the mix lands in ----------
+// ---------- OUT: which speaker the mix lands in (lives in SETTINGS since v93) ----------
 // A sink choice on the AudioContext, not a rewiring — `analyser → ctx.destination` is untouched
 // and `setSinkId` moves the destination itself. Remembered across reloads, because which box is
 // plugged into the desk is a property of the desk and not of the session.
@@ -187,6 +187,28 @@ function initOutputPicker() {
 function applyValues(vals, send) {
   for (const id in vals) setValue(id, vals[id], send);
 }
+
+// ---------- SETTINGS ----------
+// The panel's junk drawer, and deliberately so: the sink picker, where the two JSON files go, the
+// three status readouts and the key map. Every one of them was on the instrument's face, and every
+// one of them is read once and then only when something is wrong.
+//
+// Only the file rows are recomputed here. `#dbg`, `#midiin` and `#octlabel` are written where they
+// always were -- the audio meter's interval, `renderMidiIn()`, `octLabel()` -- and moving them into
+// this overlay changed nothing about that, because they are still the same elements by id. They go
+// on updating behind a closed panel, which costs nothing and means it is never stale when opened.
+function refreshSettings() {
+  const put = (id, key) => {
+    const el = document.getElementById(id); if (!el) return;
+    const n = fileName(key);
+    el.textContent = n || 'not chosen yet';
+    el.classList.toggle('unset', !n);
+  };
+  put('fpatches', 'patches');
+  put('fdemos', 'demos');
+}
+function openSettings() { refreshSettings(); refreshOutputs(); document.getElementById('setbox').classList.remove('hidden'); }
+function closeSettings() { document.getElementById('setbox').classList.add('hidden'); }
 
 // ---------- widgets ----------
 function makeKnob(c) {
@@ -280,7 +302,7 @@ function refreshPartUI() {
     chip.classList.toggle('layered', selSet.has(p) && p !== activePart);
     chip.querySelector('.partled').classList.toggle('on', playSet.has(p));
   });
-  renderMidiIn();                     // the footer names the part a hardware keyboard now plays
+  renderMidiIn();                     // SETTINGS names the part a hardware keyboard now plays
   if (trsFollow) sendPartSelect();    // keep an existing claim in step; never make one here
 }
 // A keyboard on the Tiliqua's TRS jack sends on its own channel and reaches the FPGA without
@@ -566,6 +588,10 @@ function idbDo(mode, fn) {
   })).catch(() => null);            // private mode / blocked storage: fall back to picking each time
 }
 function fileName(key) { return localStorage.getItem('synth.file.' + key) || ''; }
+function rememberFile(key, name) {
+  localStorage.setItem('synth.file.' + key, name);
+  refreshSaveUI(); refreshSettings();      // the button title and the SETTINGS row both name it
+}
 
 // Write `blob` to the file remembered under `key`, asking for one the first time. `repick` forces
 // the picker even when a target is remembered -- that is the only way back out of a wrong choice.
@@ -592,8 +618,49 @@ async function saveToFile(key, suggestedName, blob, repick) {
     await idbDo('readwrite', (s) => s.put(h, key));
   }
   const w = await h.createWritable(); await w.write(blob); await w.close();
-  localStorage.setItem('synth.file.' + key, h.name);
+  rememberFile(key, h.name);
   return h.name;
+}
+
+// Read the file remembered under `key`, asking for one the first time. The same handle SAVE writes
+// to, on purpose: a handle carries both permissions, so the file you last wrote is the one LOAD
+// offers to read and the round trip costs no picker at all. Picking a *different* file here
+// therefore re-points SAVE as well — one file per key, which is also what SETTINGS displays.
+//
+// Which is why remembering is the CALLER's move and not this function's. Reading a file says
+// nothing about whether it was the right file, and the first draft made a mis-picked JSON the
+// permanent target the moment the picker closed — so a stray click re-aimed SAVE at it, and the
+// only sign was a line in SETTINGS. `accept()` is called once the content has been read and agreed
+// to; a file that turns out not to be a bank leaves the previous target exactly where it was.
+// Returns {name, text, accept}, or null if the picker was dismissed.
+async function loadFromFile(key, repick) {
+  if (!window.showOpenFilePicker) {           // Firefox / Safari: a one-shot <input>, nothing to remember
+    return new Promise((res) => {
+      const i = document.createElement('input');
+      i.type = 'file'; i.accept = 'application/json,.json';
+      i.onchange = () => { const f = i.files[0]; if (!f) return res(null); f.text().then((t) => res({ name: f.name, text: t, accept() {} })); };
+      i.oncancel = () => res(null);
+      i.click();
+    });
+  }
+  let h = repick ? null : await idbDo('readonly', (s) => s.get(key));
+  let fresh = false;
+  if (h) {
+    let p = await h.queryPermission({ mode: 'read' });
+    if (p !== 'granted') p = await h.requestPermission({ mode: 'read' });
+    if (p !== 'granted') h = null;
+  }
+  if (!h) {
+    [h] = await window.showOpenFilePicker({ multiple: false,
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+    if (!h) return null;
+    fresh = true;
+  }
+  return {
+    name: h.name,
+    text: await (await h.getFile()).text(),
+    accept: async () => { if (fresh) await idbDo('readwrite', (s) => s.put(h, key)); rememberFile(key, h.name); },
+  };
 }
 
 // ---------- SAVE ----------
@@ -652,44 +719,120 @@ function flashSave(text) {
   saveFlash = setTimeout(refreshSaveUI, 1800);
 }
 
-// Two files, one button. The menu appears only while a demo song is loaded, because that is the
-// only time there are two answers -- a menu whose single entry you have to click through is a
-// second click for nothing. Shift-click carries through to whichever entry is chosen, so "save it
-// somewhere else" is one gesture and not a setting.
-let saveMenuEl = null, saveMenuOff = null;
-function closeSaveMenu() {
-  if (!saveMenuEl) return false;
-  document.removeEventListener('pointerdown', saveMenuOff, true);
-  saveMenuEl.remove(); saveMenuEl = null; saveMenuOff = null;
+// Two files, one button -- twice, since LOAD is the same shape. The menu appears only when there
+// are genuinely two answers; a menu whose single entry you have to click through is a second click
+// for nothing. Shift-click carries through to whichever entry is chosen, so "use a different file"
+// is one gesture and not a setting.
+let menuEl = null, menuOff = null;
+function closeMenu() {
+  if (!menuEl) return false;
+  document.removeEventListener('pointerdown', menuOff, true);
+  menuEl.remove(); menuEl = null; menuOff = null;
   return true;
 }
-function openSaveMenu(btn, repick) {
+function openMenu(btn, items) {
   const m = document.createElement('div'); m.className = 'savemenu';
-  const add = (label, sub, fn) => {
+  items.forEach(([label, sub, fn]) => {
     const b = document.createElement('button'); b.className = 'smitem';
     const t = document.createElement('span'); t.className = 'smt'; t.textContent = label;
     const s = document.createElement('span'); s.className = 'sms'; s.textContent = sub;
     b.append(t, s);
-    b.addEventListener('click', () => { closeSaveMenu(); fn(); });
+    b.addEventListener('click', () => { closeMenu(); fn(); });
     m.append(b);
-  };
-  add('PATCH ▸ USER slot', saveTarget('patches', 'patches.json'), () => savePatch(repick));
-  add('TONES ▸ ' + demos.songs[demoIdx].name, saveTarget('demos', 'demos.json'), () => saveDemoTones(repick));
+  });
   document.body.append(m);
   const r = btn.getBoundingClientRect();
   m.style.left = Math.round(Math.max(6, Math.min(r.left, innerWidth - m.offsetWidth - 6))) + 'px';
   m.style.top = Math.round(r.bottom + 6) + 'px';
-  saveMenuEl = m;
+  menuEl = m;
   // Capture, so a click anywhere else closes it before that click does its own job. The button is
   // excluded: its own handler toggles, and closing here first would make the toggle reopen.
-  saveMenuOff = (e) => { if (!m.contains(e.target) && !btn.contains(e.target)) closeSaveMenu(); };
-  document.addEventListener('pointerdown', saveMenuOff, true);
+  menuOff = (e) => { if (!m.contains(e.target) && !btn.contains(e.target)) closeMenu(); };
+  document.addEventListener('pointerdown', menuOff, true);
 }
+function loadedSong() { return (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null; }
 function onSaveClick(e) {
-  if (closeSaveMenu()) return;
-  const song = (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null;
-  if (song) openSaveMenu(e.currentTarget, e.shiftKey);
-  else savePatch(e.shiftKey);
+  if (closeMenu()) return;
+  const song = loadedSong();
+  if (song) {
+    openMenu(e.currentTarget, [
+      ['PATCH ▸ USER slot', saveTarget('patches', 'patches.json'), () => savePatch(e.shiftKey)],
+      ['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)],
+    ]);
+  } else savePatch(e.shiftKey);
+}
+// LOAD always has two answers -- both files exist whether or not a song is playing -- so it always
+// opens the menu.
+function onLoadClick(e) {
+  if (closeMenu()) return;
+  openMenu(e.currentTarget, [
+    ['PATCHES ▸ USER bank', saveTarget('patches', 'patches.json'), () => loadPatches(e.shiftKey)],
+    ['SONGS ▸ demo bank', saveTarget('demos', 'demos.json'), () => loadDemos(e.shiftKey)],
+  ]);
+}
+
+// ---------- LOAD ----------
+// The mirror of SAVE, and destructive in the same way SAVE's files are whole: patches.json holds
+// the entire USER bank, so putting one back REPLACES the bank rather than merging into it. A merge
+// would make a file that no longer matches anything you can hold in your head -- and the slot
+// numbers are in the file, so a merge and a replace differ only in what happens to the slots the
+// file does not mention. Say how many those are and ask, rather than pick one silently.
+let loadFlash = 0;
+function flashLoad(text) {
+  const b = document.getElementById('load'); if (!b) return;
+  clearTimeout(loadFlash);
+  if (text === null) { b.textContent = '📂 LOAD'; return; }
+  b.textContent = text;
+  loadFlash = setTimeout(() => { b.textContent = '📂 LOAD'; }, 1800);
+}
+async function loadPatches(repick) {
+  let got;
+  try { got = await loadFromFile('patches', repick); }
+  catch (e) { flashLoad(e && e.name === 'AbortError' ? null : '✗ err'); return; }
+  if (!got) { flashLoad(null); return; }
+  let list;
+  try {
+    const d = JSON.parse(got.text);
+    list = d.patches;
+    if (!Array.isArray(list)) throw new Error('no "patches" array');
+  } catch (e) { alert('That is not a patches.json: ' + (e.message || e)); flashLoad('✗ err'); return; }
+  const have = [];
+  for (let i = 1; i <= USER_SLOTS; i++) if (readUser(i)) have.push(i);
+  const incoming = new Set(list.map((p) => p.slot));
+  const lost = have.filter((i) => !incoming.has(i)).length;
+  if (!confirm(`Replace the USER bank with ${list.length} patch${list.length === 1 ? '' : 'es'} from ${got.name}?`
+             + (lost ? `\n\n${lost} slot${lost === 1 ? '' : 's'} not in the file will be cleared.` : ''))) {
+    flashLoad(null); return;
+  }
+  await got.accept();
+  for (let i = 1; i <= USER_SLOTS; i++) localStorage.removeItem(userKey(i));
+  list.forEach((p, i) => {
+    const slot = Math.max(1, Math.min(USER_SLOTS, p.slot | 0 || i + 1));
+    localStorage.setItem(userKey(slot), JSON.stringify({ name: p.name || 'User ' + slot, values: p.values || {} }));
+  });
+  curUserSlot = firstEmptyUser();
+  if (bank === 'user') { flatList = []; curIndex = -1; renderList(); }
+  flashLoad('✓ ' + list.length + ' patches');
+}
+async function loadDemos(repick) {
+  let got;
+  try { got = await loadFromFile('demos', repick); }
+  catch (e) { flashLoad(e && e.name === 'AbortError' ? null : '✗ err'); return; }
+  if (!got) { flashLoad(null); return; }
+  let d;
+  try {
+    d = JSON.parse(got.text);
+    if (!Array.isArray(d.songs) || !d.songs.length) throw new Error('no "songs" array');
+  } catch (e) { alert('That is not a demos.json: ' + (e.message || e)); flashLoad('✗ err'); return; }
+  await got.accept();
+  // Whatever was playing belongs to the old bank, and `demoIdx` indexes into a list that is about
+  // to be a different list. Stop first and forget the loaded song rather than carry an index over
+  // into songs that have nothing to do with it -- SAVE ▸ TONES writes to `demoIdx`.
+  stopDemo();
+  demos = d; demoIdx = -1;
+  renderDemoList();
+  refreshDemoUI();
+  flashLoad('✓ ' + d.songs.length + ' songs');
 }
 
 // ---------- keyboard ----------
@@ -748,9 +891,9 @@ document.addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   if (typingInField(e.target)) return;
   const code = e.code;
-  // Esc dismisses the SAVE menu before it reaches PANIC: a menu is the nearest thing on screen to
+  // Esc dismisses a popup menu before it reaches PANIC: a menu is the nearest thing on screen to
   // "what Escape means", and a stray Esc while choosing a file should not also cut a held note.
-  if (code === 'Escape' && closeSaveMenu()) { e.preventDefault(); return; }
+  if (code === 'Escape' && closeMenu()) { e.preventDefault(); return; }
   if (code === 'Escape') { allSoundOff(); e.preventDefault(); return; }   // the same thing PANIC does
   if (code === OCT_DOWN) { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
   if (code === OCT_UP) { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }
@@ -824,11 +967,11 @@ function setupWheels() {
 // one -- so its channel is DISCARDED here and the note is re-addressed to the selected part(s),
 // exactly as the on-screen keys are. That makes the PART chips steer both the same way.
 //
-// The readout in the footer exists because the failure this routing has is silent: if no port is
+// The readout in SETTINGS exists because the failure this routing has is silent: if no port is
 // bound, the chips look like they are being ignored when in fact nothing ever arrived to route.
 let midiPorts = [];              // Web-MIDI inputs bound in this tab
 function partsLabel() { return noteParts().map((c) => 'P' + (c + 1)).join('+'); }
-// Two different inputs, and the footer has to keep them apart. `midiPorts` are the *host's* MIDI
+// Two different inputs, and the readout has to keep them apart. `midiPorts` are the *host's* MIDI
 // devices; this page re-addresses their notes to the selected parts before forwarding them, so
 // they always land on `partsLabel()`. The Tiliqua's TRS jack never passes through here at all --
 // the gateware routes it, and the one thing the panel knows is whether it has claimed it. Say
@@ -1294,8 +1437,10 @@ async function saveDemoTones(repick) {
     flashSave(f ? '✓ ' + f : '✓ saved');
   } catch (e) { flashSave(e && e.name === 'AbortError' ? null : '✗ err'); }
 }
-function buildDemo() {
-  const box = document.getElementById('demolist');
+// Rebuilt rather than built once, because 📂 LOAD ▸ SONGS can swap the whole bank underneath it.
+function renderDemoList() {
+  const box = document.getElementById('demolist'); if (!box) return;
+  box.innerHTML = '';
   (demos.songs || []).forEach((s, idx) => {
     const el = document.createElement('div'); el.className = 'bitem demoitem';
     const lbl = document.createElement('span'); lbl.className = 'dlabel'; lbl.textContent = s.genre + ' · ' + s.name;
@@ -1303,6 +1448,9 @@ function buildDemo() {
     el.addEventListener('click', () => playDemo(idx));
     box.append(el);
   });
+}
+function buildDemo() {
+  renderDemoList();
   const overlay = document.getElementById('demobox');
   // The label already flips to `■ DEMO` while a song plays, so make the button do what it says:
   // stop. The picker only opens when nothing is playing -- otherwise the one control that looks
@@ -1328,10 +1476,14 @@ async function boot() {
   demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');
-  refreshSaveUI();                   // the title names the remembered file, so it has to run at boot
+  refreshSaveUI(); refreshSettings();   // both name the remembered files, so both run at boot
   initMasterVol(); initOutputPicker();
   document.getElementById('power').addEventListener('click', togglePower);
+  document.getElementById('load').addEventListener('click', onLoadClick);
   document.getElementById('save').addEventListener('click', onSaveClick);
+  document.getElementById('settings').addEventListener('click', openSettings);
+  document.getElementById('setclose').addEventListener('click', closeSettings);
+  document.getElementById('setbox').addEventListener('click', (e) => { if (e.target.id === 'setbox') closeSettings(); });
   document.getElementById('panic').addEventListener('click', allSoundOff);
   document.getElementById('init').addEventListener('click', () => {
     applyValues(spec.defaults, powered); setBar('—', 'Init'); curIndex = -1;

@@ -68,9 +68,13 @@ addition rather than a rewrite.
   **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
   carries tone edits over by song name). The same button's **▸ PATCH** entry writes the USER slots
   out as `patches.json` (a copy — `localStorage` stays the live bank, and nothing reads the file
-  back at boot). Both go through the File System Access API and remember where you put them:
+  back at boot) and **📂 LOAD** reads either file back — replacing the bank, since both files are
+  written whole. Everything goes through the File System Access API and remembers where you put it:
   the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot
-  hold one, with the file name mirrored into `localStorage` for the tooltip. Shift-click re-picks.
+  hold one, with the file name mirrored into `localStorage` for the tooltip. LOAD and SAVE share one
+  handle per file, so a round trip costs no dialog; shift-click either to re-pick. **⚙ SETTINGS**
+  (the header button where OUT used to be) holds the audio-output picker, the two file targets, the
+  MIDI/audio status readouts and the key map — the last two used to be a footer under the keyboard.
   The matched preset banks live here as
   `presets_*.json`. See the [Web UI](../DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](../DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
