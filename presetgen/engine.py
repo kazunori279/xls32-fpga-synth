@@ -76,7 +76,7 @@ def decode(preset):
         pw=p['pw'],
         detsel=(p['detune'] >> 5) & 3,
         portsel=(p['porta'] >> 5) & 3,
-        tdsel=(p['trem'] >> 5) & 3,
+        trdep=p['trem'],                 # raw CC92, continuous: synth.x:193 takes `evv` unmodified
         unison=(p['unison'] >> 5) & 3,
         xmode=(p['xmode'] >> 5) & 3, xdepth=p['xdepth'], xratio=(p['xratio'] >> 4) & 7,   # 3-bit ratio
         a_att=rate(p['aatt']), a_dec=rate(p['adec']), a_sus=p['asus'] << 9, a_rel=rate(p['arel']),
@@ -132,7 +132,7 @@ def _voice_wave(wave, t, noise, pwthr, sine):
 @njit(cache=True, fastmath=False)
 def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
           wave, pwbase, subsel, detsel, cutoff_base, reso, fdepth, fmode,
-          lfo_rate, lfo_depth, tdsel, xmode, xdepth, xratio,
+          lfo_rate, lfo_depth, trdep, xmode, xdepth, xratio,
           a_att, a_dec, a_sus, a_rel, f_att, f_dec, f_sus, f_rel, comp, sine):
     nv = ph.shape[0]
     out = np.zeros(n, dtype=np.float64)
@@ -150,14 +150,15 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
         lfo_raw = sine[(lfo_ph >> 24) & 255]
         lfo_mod = (lfo_raw * lfo_depth) >> 8
         lfoU = (lfo_raw >> 6) + 32
-        if tdsel == 0:
-            tg = 64
-        elif tdsel == 1:
-            tg = 64 - ((64 - lfoU) >> 2)
-        elif tdsel == 2:
-            tg = 64 - ((64 - lfoU) >> 1)
-        else:
-            tg = lfoU
+        # synth.x:399 verbatim. This used to be a 2-bit select read out of CC92's bits 5-6, which
+        # is what the RTL was before the depth went continuous, and the two had drifted: the
+        # select's four steps are the board at trdep 0/32/64/127 (the first three exactly, the last
+        # to within one LSB -- full swing would want trdep=128), while params.SELECTS["trem"]
+        # offers 0/32/64/**96** -- so the fourth option rendered full-depth tremolo here and 75% of
+        # it on the board. No shipped preset uses 96 (the bank is {0: 38, 32: 20, 64: 6}), so this
+        # corrects the panel, where CC92 is a continuous knob and every value between the four was
+        # being rounded down to one of them. See issue #23.
+        tg = 64 - (((64 - lfoU) * trdep) >> 7)
         if tg < 0:
             tg = 0
         elif tg > 64:
@@ -471,7 +472,7 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None
         tgt[cnt] = tgt0
     dry = _core(n, gate, note, vel, ph, ph2, uni, tgt, d['portsel'],
                 d['wave'], d['pw'], d['subsel'], d['detsel'], d['cutoff_base'], d['reso'],
-                d['fdepth'], d['fmode'], d['lfo_rate'], d['lfo_depth'], d['tdsel'],
+                d['fdepth'], d['fmode'], d['lfo_rate'], d['lfo_depth'], d['trdep'],
                 d['xmode'], d['xdepth'], d['xratio'],
                 d['a_att'], d['a_dec'], d['a_sus'], d['a_rel'],
                 d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE)
