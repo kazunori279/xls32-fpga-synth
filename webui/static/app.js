@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v89-stop';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v90-tones';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -1056,8 +1056,28 @@ function flushScheduled(parts = null) {
     demoSched.delete(k);
   }
 }
+// The demo transport's two states in one place, because they were drifting: the header label was
+// set in `playDemo` and `stopDemo` separately, and 💾 TONES lived in the browser overlay and so was
+// governed by nothing at all.
+//
+// `demoIdx` survives a stop on purpose. It is the song 💾 TONES writes to, and the tones themselves
+// live in `partValues`, which stopping does not touch -- so "tweak, hit stop out of habit, save"
+// has to keep working. It means "the loaded song", and only `playDemo` changes it.
+function refreshDemoUI() {
+  const b = document.getElementById('demo');
+  if (b) b.textContent = demoPlaying ? '■ DEMO' : '▶ DEMO';
+  const s = document.getElementById('demosave');
+  if (s) {
+    const song = demoIdx >= 0 ? demos.songs[demoIdx] : null;
+    s.classList.toggle('hidden', !song);
+    if (song) s.title = `save the four PART tones into "${song.name}"` +
+                        (demoPlaying ? '' : ' (stopped, but the tones are still on the panel)');
+  }
+  document.querySelectorAll('#demolist .bitem').forEach((el, k) =>
+    el.classList.toggle('on', demoPlaying && k === demoIdx));
+}
 function stopDemo() {
-  demoPlaying = false; demoIdx = -1;
+  demoPlaying = false;
   if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
   for (const l of links) l.cancelPending();     // drop whatever was scheduled but not yet sent
   // A cancelled look-ahead has certainly dropped some note-offs on the floor. The sweep rather
@@ -1065,8 +1085,7 @@ function stopDemo() {
   // hand on a part the song was not using, and `allSoundOff` sends CC120, which clicks.
   sweepAllParts();
   flushScheduled();                             // ...and the ones the sweep is too early to catch
-  document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
-  const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
+  refreshDemoUI();
 }
 async function playDemo(idx) {
   if (idx === demoIdx && demoPlaying) { stopDemo(); return; }   // toggle off if same song
@@ -1117,13 +1136,14 @@ async function playDemo(idx) {
   demoBase = performance.now() + 240;
   demoPlaying = true;
   demoTick();
-  document.querySelectorAll('#demolist .bitem').forEach((el, k) => el.classList.toggle('on', k === idx));
   setBar(song.genre, song.name);
-  const b = document.getElementById('demo'); if (b) b.textContent = '■ DEMO';
+  refreshDemoUI();
 }
 async function saveDemoTones() {
   const btn = document.getElementById('demosave'); const label = btn.textContent;
   const flash = (t) => { btn.textContent = t; setTimeout(() => (btn.textContent = label), 1300); };
+  // Unreachable now that the button is hidden without a loaded song, but the button is one
+  // `classList.toggle` away from being wrong and this writes a file.
   if (demoIdx < 0 || !demos.songs[demoIdx]) { flash('play a demo first'); return; }
   const song = demos.songs[demoIdx];
   const parts = [];
@@ -1171,7 +1191,6 @@ function buildDemo() {
     overlay.classList.remove('hidden');
   });
   document.getElementById('democlose').addEventListener('click', () => overlay.classList.add('hidden'));
-  document.getElementById('demostop').addEventListener('click', stopDemo);
   document.getElementById('demosave').addEventListener('click', saveDemoTones);
   overlay.addEventListener('click', (e) => { if (e.target.id === 'demobox') overlay.classList.add('hidden'); });
 }

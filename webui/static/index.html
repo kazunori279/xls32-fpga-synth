@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v89-stop">
+<link rel="stylesheet" href="style.css?v90-tones">
 </head>
 <body>
 <div id="synth">
@@ -38,6 +38,11 @@
       </div>
       <div class="pactions">
         <button id="demo" class="pbtn ghost">▶ DEMO</button>
+        <!-- Lives here and not in the demo browser, which is where it used to be: that browser is a
+             full-screen overlay and playDemo() closes it, so a control that only means anything while
+             a song is playing was in the one place you cannot reach while a song is playing. Hidden
+             until there is a song to save. -->
+        <button id="demosave" class="pbtn ghost hidden">💾 TONES</button>
         <button id="save" class="pbtn ghost">SAVE ▸ USER</button>
         <button id="init" class="pbtn ghost">INIT</button>
         <button id="panic" class="pbtn ghost" title="all notes off, every part — or press Esc. Use it if a key held across a PART change is still sounding.">PANIC</button>
@@ -52,9 +57,9 @@
     <div id="demobox" class="browser hidden">
       <div class="bwin">
         <div class="bhead">
-          <div class="dtitle">DEMO SONGS<span class="dhint"> — play, tweak each PART's tone, then save</span></div>
-          <button id="demosave" class="pbtn ghost" title="save the 4 parts' current tones to the playing song">💾 TONES</button>
-          <button id="demostop" class="pbtn ghost">■ STOP</button>
+          <div class="dtitle">DEMO SONGS<span class="dhint"> — pick one, tweak each PART's tone while it plays, then 💾 TONES up in the header</span></div>
+          <!-- The ■ STOP that used to sit here was dead for the same reason 💾 TONES was: this panel
+               is only open when nothing is playing. The header button says ■ DEMO and stops. -->
           <button id="democlose" class="bclose" title="close">✕</button>
         </div>
         <div class="bbody"><div id="demolist" class="blist"></div></div>
@@ -105,7 +110,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v89-stop"></script>
-<script src="app.js?v89-stop"></script>
+<script src="transport.js?v90-tones"></script>
+<script src="app.js?v90-tones"></script>
 </body>
 </html>

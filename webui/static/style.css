@@ -45,6 +45,9 @@ body{
 /* the glow breathes, not the opacity: fading a dark red button out over a beige panel reads as
    pink and half-broken, where a pulsing version of the lamp ON wears is unmistakably "coming up" */
 @keyframes powerwait{50%{box-shadow:0 0 12px rgba(255,80,50,.55)}}
+/* 💾 TONES is in the header only while there is a song to write to; `.browser.hidden` above cannot
+   do this one, and the display here has to out-specify the `.power,.pbtn,.pstep` inline-flex below. */
+.pbtn.hidden{display:none}
 /* uniform height for every top-bar button/control */
 .power,.pbtn,.pstep,.partchip,.pcur{height:36px;box-sizing:border-box}
 .power,.pbtn,.pstep{display:inline-flex;align-items:center;justify-content:center}
