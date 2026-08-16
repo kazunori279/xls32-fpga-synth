@@ -2341,6 +2341,40 @@ finds the level and cannot find the lead, and it takes about a minute to hand it
 ear only has to decide the one thing it is better at. (Two of the four parts were re-voiced in the
 same pass, so the flat numbers moved to `[25, 71, 127, 122]` under them; peak 0.52.)
 
+### One SAVE button, two files, and a directory the browser remembers
+
+The panel had two save controls that did not know about each other. 💾 TONES wrote `demos.json`
+through the File System Access API and lived in the demo browser; SAVE wrote a patch to a
+`localStorage` slot and lived in the header. The first was in the wrong place — `playDemo()` closes
+that overlay, so the one control that only means anything *while a song is playing* was in the one
+place you cannot reach while a song is playing. The second was a different thing wearing the same
+verb: nothing left the browser, so the only way to get a USER patch into the repo was to read it out
+of devtools.
+
+Both are now the header's `💾 SAVE`. Not by switching modes on it — `demoIdx` never clears once a
+song has been loaded, so a label that follows the demo state would make the patch path unreachable
+for the rest of the session. It opens a two-entry menu instead, and only when there genuinely are
+two answers; with no song loaded it goes straight to the patch. `savePatch()` still writes the
+`localStorage` slot first and unconditionally (that is the live bank and the file is a copy of it),
+then writes the *whole* USER bank as `{patches:[{slot,name,values}]}` at `indent:1`, the same
+encoding `demos.json` uses. It is write-only for now: nothing reads `patches.json` back at boot.
+
+The remembering is the part with a trap in it. **A `FileSystemFileHandle` is not JSON**, so
+`localStorage` cannot hold one — `JSON.stringify` gives you `{}` and the next session silently
+re-prompts. It *is* structured-cloneable, which is exactly what IndexedDB stores, so the handle
+lives in `synth.files`/`handles` and only its `.name` is mirrored into
+`localStorage['synth.file.<key>']`, for the button's tooltip to show. Permission still resets to
+`'prompt'` in a new session, so a remembered handle is re-authorised with
+`requestPermission({mode:'readwrite'})` — which needs transient activation, and survives the
+IndexedDB round trip because the click is still the current task. Shift-click forces a re-pick;
+a private window with no IndexedDB falls back to picking every time.
+
+Verified against real handles rather than mocks: OPFS (`navigator.storage.getDirectory()`) hands
+out genuine `FileSystemFileHandle` objects, so the whole clone-store-restore-reauthorise path runs
+without a native dialog. Three saves cost two picker calls (the first and a forced re-pick), and
+after a full page reload the fourth cost **zero** and landed in the same file. `route_check.html`:
+26/26, every hash byte-identical — the buttons moved, the MIDI did not.
+
 ---
 
 # Friction logs & learnings

@@ -45,9 +45,6 @@ body{
 /* the glow breathes, not the opacity: fading a dark red button out over a beige panel reads as
    pink and half-broken, where a pulsing version of the lamp ON wears is unmistakably "coming up" */
 @keyframes powerwait{50%{box-shadow:0 0 12px rgba(255,80,50,.55)}}
-/* 💾 TONES is in the header only while there is a song to write to; `.browser.hidden` above cannot
-   do this one, and the display here has to out-specify the `.power,.pbtn,.pstep` inline-flex below. */
-.pbtn.hidden{display:none}
 /* uniform height for every top-bar button/control */
 .power,.pbtn,.pstep,.partchip,.pcur{height:36px;box-sizing:border-box}
 .power,.pbtn,.pstep{display:inline-flex;align-items:center;justify-content:center}
@@ -99,6 +96,16 @@ body{
   background:linear-gradient(#ded2b8,#c5b596);color:#3a3227}
 .pbtn:hover{background:linear-gradient(#efe6d0,#d8caab);color:#241f18}
 .pbtn.ghost:hover{background:linear-gradient(#5b5548,#332f28)}
+/* SAVE's two-entry menu. `fixed`, because it is positioned from a viewport rect and the page
+   scrolls; z-index above the `.browser` overlays, since the demo picker can be open behind it. */
+.savemenu{position:fixed;z-index:60;display:flex;flex-direction:column;min-width:230px;
+  background:linear-gradient(#2b2721,#1c1915);border:1px solid #000;border-radius:5px;
+  padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
+.smitem{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
+  font-family:inherit;padding:6px 9px;border:0;border-radius:3px;background:none;cursor:pointer}
+.smitem:hover{background:linear-gradient(#5b5548,#332f28)}
+.smt{font-size:10px;font-weight:700;letter-spacing:1px;color:#e7dcc4}
+.sms{font-size:9px;color:#9b8f76}
 
 /* preset bar */
 .pbar{display:flex;align-items:center;gap:8px;min-width:0}

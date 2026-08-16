@@ -63,10 +63,15 @@ addition rather than a rewrite.
   pieces arranged for the 4 parts (Bach's *Prelude in C* BWV 846 and *Goldberg* Aria,
   Saint-Saëns' *Le Cygne*, Vivaldi's *Winter* Largo — notes in `presetgen/demo_scores.py`).
   While a demo plays, its 4 part tones load
-  into the multitimbral editor — tweak each part live and **💾 TONES** saves them straight back
-  out as `demos.json` (File System Access API — drop it into `static/`), which is the
+  into the multitimbral editor — tweak each part live and the header's **💾 SAVE ▸ TONES** writes
+  them straight back out as `demos.json`, which is the
   **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
-  carries tone edits over by song name). The matched preset banks live here as
+  carries tone edits over by song name). The same button's **▸ PATCH** entry writes the USER slots
+  out as `patches.json` (a copy — `localStorage` stays the live bank, and nothing reads the file
+  back at boot). Both go through the File System Access API and remember where you put them:
+  the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot
+  hold one, with the file name mirrored into `localStorage` for the tooltip. Shift-click re-picks.
+  The matched preset banks live here as
   `presets_*.json`. See the [Web UI](../DEVELOPMENT.md#web-ui--a-browser-synth-panel-done-hardware-verified) and
   [Preset banks](../DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis) sections.
   The page drives **up to four Tiliquas at once** — one USB cable each, the same bitstream on all

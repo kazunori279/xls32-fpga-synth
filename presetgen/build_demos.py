@@ -1,6 +1,6 @@
 """Generate webui/static/demos.json — the DEMO player's song bank (4 songs).
 
-demos.json is the live bank: the web UI's 💾 TONES button saves edited patches straight back
+demos.json is the live bank: the web UI's 💾 SAVE ▸ TONES saves edited patches straight back
 into it (M31: the browser writes the file itself, through the File System Access API; drop the
 download into webui/static/ to keep it). Re-running this generator PRESERVES those edits — a
 song's tones (parts + effect amounts) are carried over by name, and only the notes are
@@ -327,7 +327,7 @@ def add_effects(sg):
         sg.setdefault(k, v)
     return sg
 
-# what the web UI's 💾 TONES button owns: the sound, not the score. Re-running the generator
+# what the web UI's 💾 SAVE ▸ TONES owns: the sound, not the score. Re-running the generator
 # keeps these as they are in demos.json and refreshes everything else.
 TONE_KEYS = ("parts", "reverb", "room", "chorusd", "echod", "dtime")
 def keep_tones(songs, path):

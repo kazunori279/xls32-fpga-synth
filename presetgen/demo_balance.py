@@ -3,7 +3,7 @@
 The four parts of a demo song are mixed by addition on the board (`synth.x:422`, one `mixacc`
 for all 32 voices) and hard-clipped at the end of it (`scale_mix`), so the only thing standing
 between a four-part song and a mush is CC7. Three of the four shipped songs got their levels set
-by ear through the panel's 💾 TONES button; this measures what that ear did, so the fourth can be
+by ear through the panel's 💾 SAVE ▸ TONES; this measures what that ear did, so the fourth can be
 made to match without guessing.
 
 The measurement is an offline mix: every note of the song is rendered through `engine.render`

@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v91-panic';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v92-save';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -543,7 +543,74 @@ function buildPresets() {
   setBank(bank);
   curUserSlot = firstEmptyUser();
 }
-function saveUser() {
+// ---------- remembered save targets ----------
+// The page writes two files and neither of them is in a directory it is allowed to guess, so both
+// go out through `showSaveFilePicker`. Picking the same file every time is the cost of that, and
+// the fix is to keep the handle -- but a `FileSystemFileHandle` is not JSON, so `localStorage`
+// cannot hold one. It IS structured-cloneable, which is precisely what IndexedDB stores. So the
+// handle lives in IndexedDB and its *name* is mirrored into localStorage, where the button title
+// can read it without an await.
+const FILE_DB = 'synth.files', FILE_STORE = 'handles';
+function fileDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(FILE_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(FILE_STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbDo(mode, fn) {
+  return fileDB().then((db) => new Promise((res, rej) => {
+    const rq = fn(db.transaction(FILE_STORE, mode).objectStore(FILE_STORE));
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+  })).catch(() => null);            // private mode / blocked storage: fall back to picking each time
+}
+function fileName(key) { return localStorage.getItem('synth.file.' + key) || ''; }
+
+// Write `blob` to the file remembered under `key`, asking for one the first time. `repick` forces
+// the picker even when a target is remembered -- that is the only way back out of a wrong choice.
+// Returns the file name written, or null if the picker was dismissed.
+async function saveToFile(key, suggestedName, blob, repick) {
+  if (!window.showSaveFilePicker) {          // Firefox / Safari: a download, and nothing to remember
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = suggestedName; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    return suggestedName;
+  }
+  let h = repick ? null : await idbDo('readonly', (s) => s.get(key));
+  if (h) {
+    // The handle outlives the tab; the permission behind it does not. A new session starts at
+    // 'prompt' and has to ask again from inside a user gesture -- which a click on SAVE is, and
+    // stays for a few seconds, so the IndexedDB round-trip above does not spend it.
+    let p = await h.queryPermission({ mode: 'readwrite' });
+    if (p !== 'granted') p = await h.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') h = null;           // denied or revoked: fall through and pick again
+  }
+  if (!h) {
+    h = await window.showSaveFilePicker({ suggestedName,
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+    await idbDo('readwrite', (s) => s.put(h, key));
+  }
+  const w = await h.createWritable(); await w.write(blob); await w.close();
+  localStorage.setItem('synth.file.' + key, h.name);
+  return h.name;
+}
+
+// ---------- SAVE ----------
+// The USER bank lives in localStorage and always has: it is what the browser reads back on the next
+// load, and an origin's storage is the only thing a page can re-open without being handed a file.
+// patches.json is that bank written out -- a backup, and the way one gets from this machine to
+// another. Whole bank, not the one slot, for the same reason demos.json goes out whole: a file that
+// is only part of the state is not one you can put back.
+function userBankBlob() {
+  const out = [];
+  for (let i = 1; i <= USER_SLOTS; i++) {
+    const s = readUser(i);
+    if (s) out.push({ slot: i, name: s.name, values: s.values });
+  }
+  return new Blob([JSON.stringify({ patches: out }, null, 1)], { type: 'application/json' });
+}
+async function savePatch(repick) {
   const def = curUserSlot || firstEmptyUser();
   const raw = prompt('Save current patch to USER slot (1-' + USER_SLOTS + '):', def);
   if (raw === null) return;
@@ -555,6 +622,74 @@ function saveUser() {
   localStorage.setItem(userKey(slotN), JSON.stringify({ name, values: vals }));
   curUserSlot = slotN; setBar('User', name);
   if (bank === 'user' && !document.getElementById('browser').classList.contains('hidden')) renderList();
+  // The slot is saved by the line above whatever happens next, so dismissing the picker loses the
+  // file and not the patch. Say which happened rather than flashing one '✓' for both.
+  try {
+    const f = await saveToFile('patches', 'patches.json', userBankBlob(), repick);
+    flashSave(f ? '✓ ' + f : '✓ slot ' + slotN);
+  } catch (e) { flashSave(e && e.name === 'AbortError' ? '✓ slot ' + slotN : '✗ err'); }
+}
+
+// The one button says three things -- what it will do, that it is doing it, where it went -- and the
+// last two are transient, so there is no saved label to restore: the resting state is recomputed.
+let saveFlash = 0;
+function saveTarget(key, dflt) { return fileName(key) || dflt + ' (not chosen yet)'; }
+function refreshSaveUI() {
+  const b = document.getElementById('save'); if (!b) return;
+  clearTimeout(saveFlash);
+  b.textContent = '💾 SAVE';
+  const song = (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null;
+  b.title = (song ? `the patch → a USER slot + ${saveTarget('patches', 'patches.json')}, `
+                  + `or the four PART tones → "${song.name}" in ${saveTarget('demos', 'demos.json')}`
+                  : `the patch → a USER slot, and the whole USER bank → ${saveTarget('patches', 'patches.json')}`)
+           + ' — shift-click to write somewhere else';
+}
+function flashSave(text) {
+  const b = document.getElementById('save'); if (!b) return;
+  if (text === null) { refreshSaveUI(); return; }
+  clearTimeout(saveFlash);
+  b.textContent = text;
+  saveFlash = setTimeout(refreshSaveUI, 1800);
+}
+
+// Two files, one button. The menu appears only while a demo song is loaded, because that is the
+// only time there are two answers -- a menu whose single entry you have to click through is a
+// second click for nothing. Shift-click carries through to whichever entry is chosen, so "save it
+// somewhere else" is one gesture and not a setting.
+let saveMenuEl = null, saveMenuOff = null;
+function closeSaveMenu() {
+  if (!saveMenuEl) return false;
+  document.removeEventListener('pointerdown', saveMenuOff, true);
+  saveMenuEl.remove(); saveMenuEl = null; saveMenuOff = null;
+  return true;
+}
+function openSaveMenu(btn, repick) {
+  const m = document.createElement('div'); m.className = 'savemenu';
+  const add = (label, sub, fn) => {
+    const b = document.createElement('button'); b.className = 'smitem';
+    const t = document.createElement('span'); t.className = 'smt'; t.textContent = label;
+    const s = document.createElement('span'); s.className = 'sms'; s.textContent = sub;
+    b.append(t, s);
+    b.addEventListener('click', () => { closeSaveMenu(); fn(); });
+    m.append(b);
+  };
+  add('PATCH ▸ USER slot', saveTarget('patches', 'patches.json'), () => savePatch(repick));
+  add('TONES ▸ ' + demos.songs[demoIdx].name, saveTarget('demos', 'demos.json'), () => saveDemoTones(repick));
+  document.body.append(m);
+  const r = btn.getBoundingClientRect();
+  m.style.left = Math.round(Math.max(6, Math.min(r.left, innerWidth - m.offsetWidth - 6))) + 'px';
+  m.style.top = Math.round(r.bottom + 6) + 'px';
+  saveMenuEl = m;
+  // Capture, so a click anywhere else closes it before that click does its own job. The button is
+  // excluded: its own handler toggles, and closing here first would make the toggle reopen.
+  saveMenuOff = (e) => { if (!m.contains(e.target) && !btn.contains(e.target)) closeSaveMenu(); };
+  document.addEventListener('pointerdown', saveMenuOff, true);
+}
+function onSaveClick(e) {
+  if (closeSaveMenu()) return;
+  const song = (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null;
+  if (song) openSaveMenu(e.currentTarget, e.shiftKey);
+  else savePatch(e.shiftKey);
 }
 
 // ---------- keyboard ----------
@@ -613,6 +748,9 @@ document.addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   if (typingInField(e.target)) return;
   const code = e.code;
+  // Esc dismisses the SAVE menu before it reaches PANIC: a menu is the nearest thing on screen to
+  // "what Escape means", and a stray Esc while choosing a file should not also cut a held note.
+  if (code === 'Escape' && closeSaveMenu()) { e.preventDefault(); return; }
   if (code === 'Escape') { allSoundOff(); e.preventDefault(); return; }   // the same thing PANIC does
   if (code === OCT_DOWN) { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
   if (code === OCT_UP) { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }
@@ -1066,13 +1204,7 @@ function flushScheduled(parts = null) {
 function refreshDemoUI() {
   const b = document.getElementById('demo');
   if (b) b.textContent = demoPlaying ? '■ DEMO' : '▶ DEMO';
-  const s = document.getElementById('demosave');
-  if (s) {
-    const song = demoIdx >= 0 ? demos.songs[demoIdx] : null;
-    s.classList.toggle('hidden', !song);
-    if (song) s.title = `save the four PART tones into "${song.name}"` +
-                        (demoPlaying ? '' : ' (stopped, but the tones are still on the panel)');
-  }
+  refreshSaveUI();
   document.querySelectorAll('#demolist .bitem').forEach((el, k) =>
     el.classList.toggle('on', demoPlaying && k === demoIdx));
 }
@@ -1139,12 +1271,10 @@ async function playDemo(idx) {
   setBar(song.genre, song.name);
   refreshDemoUI();
 }
-async function saveDemoTones() {
-  const btn = document.getElementById('demosave'); const label = btn.textContent;
-  const flash = (t) => { btn.textContent = t; setTimeout(() => (btn.textContent = label), 1300); };
-  // Unreachable now that the button is hidden without a loaded song, but the button is one
-  // `classList.toggle` away from being wrong and this writes a file.
-  if (demoIdx < 0 || !demos.songs[demoIdx]) { flash('play a demo first'); return; }
+async function saveDemoTones(repick) {
+  // Unreachable now that the menu only offers this entry when a song is loaded, but the menu is one
+  // condition away from being wrong and this writes a file.
+  if (demoIdx < 0 || !demos.songs[demoIdx]) { flashSave('play a demo first'); return; }
   const song = demos.songs[demoIdx];
   const parts = [];
   for (let ch = 0; ch < PPB; ch++) {       // the 4 parts of the board the song is playing on
@@ -1160,18 +1290,9 @@ async function saveDemoTones() {
   // is not something you can put back without a tool.
   const blob = new Blob([JSON.stringify(demos, null, 1)], { type: 'application/json' });
   try {
-    if (window.showSaveFilePicker) {
-      const h = await window.showSaveFilePicker({ suggestedName: 'demos.json',
-        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
-      const w = await h.createWritable(); await w.write(blob); await w.close();
-    } else {                                     // Firefox / Safari: fall back to a plain download
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'demos.json'; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    }
-    btn.textContent = '✓ saved';
-  } catch (e) { btn.textContent = (e && e.name === 'AbortError') ? label : '✗ err'; }
-  setTimeout(() => (btn.textContent = label), 1300);
+    const f = await saveToFile('demos', 'demos.json', blob, repick);
+    flashSave(f ? '✓ ' + f : '✓ saved');
+  } catch (e) { flashSave(e && e.name === 'AbortError' ? null : '✗ err'); }
 }
 function buildDemo() {
   const box = document.getElementById('demolist');
@@ -1191,7 +1312,6 @@ function buildDemo() {
     overlay.classList.remove('hidden');
   });
   document.getElementById('democlose').addEventListener('click', () => overlay.classList.add('hidden'));
-  document.getElementById('demosave').addEventListener('click', saveDemoTones);
   overlay.addEventListener('click', (e) => { if (e.target.id === 'demobox') overlay.classList.add('hidden'); });
 }
 
@@ -1208,9 +1328,10 @@ async function boot() {
   demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
   buildPanel(); buildParts(); buildPresets(); buildKeyboard(); setupWheels(); octLabel(); initWebMidi(); buildDemo();
   setBar('—', 'Init');
+  refreshSaveUI();                   // the title names the remembered file, so it has to run at boot
   initMasterVol(); initOutputPicker();
   document.getElementById('power').addEventListener('click', togglePower);
-  document.getElementById('save').addEventListener('click', saveUser);
+  document.getElementById('save').addEventListener('click', onSaveClick);
   document.getElementById('panic').addEventListener('click', allSoundOff);
   document.getElementById('init').addEventListener('click', () => {
     applyValues(spec.defaults, powered); setBar('—', 'Init'); curIndex = -1;
