@@ -515,9 +515,10 @@ system sound panel, and a name explains more than a disappearance does. The pick
 `AudioContext.setSinkId` (Chrome 110+); where that is missing the menu says so and the system
 sound settings are the way.
 
-**Keeping what you make.** **💾 SAVE** writes two things and asks which when both apply: the patch
-you are editing into a USER slot (and the whole USER bank out as `patches.json`), or — while a demo
-song is loaded — the four PART tones back into `demos.json`. **📂 LOAD** reads either one back.
+**Keeping what you make.** **💾 SAVE** asks which of three: the whole USER bank out as
+`patches.json` — every slot, no questions, and the entry to reach for when you want a backup — the
+one patch you are editing into a USER slot, or, while a demo song is loaded, the four PART tones
+back into `demos.json`. **📂 LOAD** reads either file back.
 The USER bank lives in the browser's own storage and is what reloads with the page; the files are
 how it gets onto another machine, and how `webui/static/demos.json` in this repo is edited. Both
 buttons remember the file you chose, so the second trip costs no dialog; ⇧-click either to point it

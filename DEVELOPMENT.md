@@ -2382,7 +2382,8 @@ SAVE without LOAD is a one-way door: the USER bank could leave the browser and n
 the mirror, and it shares SAVE's remembered handles — a `FileSystemFileHandle` carries both
 permissions, so the file you last wrote is the one LOAD offers to read and a round trip costs no
 dialog at all. It always shows its two-entry menu where SAVE shows one conditionally, because both
-files exist whether or not a song is playing.
+files exist whether or not a song is playing. (SAVE always opens its menu too, as of the bank entry
+below.)
 
 Loading replaces rather than merges, for the reason the files are written whole: `patches.json` *is*
 the bank, and a merge and a replace differ only in what happens to the slots the file does not
@@ -2418,7 +2419,21 @@ budge. It is write-only in the API's own direction — a dialog can be sent to a
 reports one back — which is the same fact as before, put to use instead of apologised for. The same
 `pickerOpts()` now gives both real pickers an `id` (Chrome remembers a directory per file *kind*
 across restarts) and a `startIn` of the current handle, so a ⇧-click re-pick opens beside the file
-it is replacing rather than wherever the last dialog of any kind happened to be.
+it is replacing rather than wherever the last dialog of any kind happened to be. (The panel's own
+note stops at the fact and lets the button's tooltip carry the rest — a settings row explaining
+itself in five lines is a settings row nobody finishes.)
+
+**The bank is its own entry now.** SAVE wrote all 128 slots from the start — `patches.json` has
+always been the whole bank, because a file that is only part of the state is not one you can put
+back — but the only door to it was *"save the patch on the panel to slot N"*, behind two `prompt()`
+boxes. Backing up asked which slot and what name, and neither question has anything to do with
+backing up. So **PATCHES ▸ USER bank** leads the menu: every slot, no prompts, one write, flashing
+`✓ 3 patches`, and refusing with `✗ bank empty` before it touches a picker. **PATCH ▸ USER slot** is
+the old flow, unchanged, second — it is a different act, and it keeps the questions that belong to
+it. The menu is now the mirror of LOAD's, first entry to first entry, and SAVE opens it
+unconditionally for LOAD's reason: both answers are always available. Verified with the pickers
+bound to OPFS so nothing native could open — three slot-saves cost one picker, then the bank entry
+cost zero prompts, zero extra pickers, and wrote all three patches in slot order.
 
 The move cost nothing in code because the ids did not change: `#outdev`, `#octlabel`, `#midiin` and
 `#dbg` are the same elements, written by the same `renderMidiIn()` / `octLabel()` / meter interval,

@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v94-reveal';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v95-savebank';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -700,14 +700,31 @@ async function loadFromFile(key, repick) {
 // patches.json is that bank written out -- a backup, and the way one gets from this machine to
 // another. Whole bank, not the one slot, for the same reason demos.json goes out whole: a file that
 // is only part of the state is not one you can put back.
-function userBankBlob() {
+function userBank() {
   const out = [];
   for (let i = 1; i <= USER_SLOTS; i++) {
     const s = readUser(i);
     if (s) out.push({ slot: i, name: s.name, values: s.values });
   }
-  return new Blob([JSON.stringify({ patches: out }, null, 1)], { type: 'application/json' });
+  return out;
 }
+function userBankBlob(bank) {
+  return new Blob([JSON.stringify({ patches: bank }, null, 1)], { type: 'application/json' });
+}
+
+// The bank, and nothing about the patch on the panel. This is the entry the button leads with,
+// because it is the one that answers "keep what I have made" -- all of it, in one gesture, with no
+// prompts, since every slot already carries its own name and number. Writing the panel's patch to a
+// slot is a different act with a different question attached, and it is below.
+async function saveBank(repick) {
+  const bank = userBank();
+  if (!bank.length) { flashSave('✗ bank empty'); return; }
+  try {
+    const f = await saveToFile('patches', 'patches.json', userBankBlob(bank), repick);
+    flashSave(f ? '✓ ' + bank.length + (bank.length === 1 ? ' patch' : ' patches') : null);
+  } catch (e) { flashSave(e && e.name === 'AbortError' ? null : '✗ err'); }
+}
+
 async function savePatch(repick) {
   const def = curUserSlot || firstEmptyUser();
   const raw = prompt('Save current patch to USER slot (1-' + USER_SLOTS + '):', def);
@@ -723,7 +740,7 @@ async function savePatch(repick) {
   // The slot is saved by the line above whatever happens next, so dismissing the picker loses the
   // file and not the patch. Say which happened rather than flashing one '✓' for both.
   try {
-    const f = await saveToFile('patches', 'patches.json', userBankBlob(), repick);
+    const f = await saveToFile('patches', 'patches.json', userBankBlob(userBank()), repick);
     flashSave(f ? '✓ ' + f : '✓ slot ' + slotN);
   } catch (e) { flashSave(e && e.name === 'AbortError' ? '✓ slot ' + slotN : '✗ err'); }
 }
@@ -737,10 +754,10 @@ function refreshSaveUI() {
   clearTimeout(saveFlash);
   b.textContent = '💾 SAVE';
   const song = (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null;
-  b.title = (song ? `the patch → a USER slot + ${saveTarget('patches', 'patches.json')}, `
-                  + `or the four PART tones → "${song.name}" in ${saveTarget('demos', 'demos.json')}`
-                  : `the patch → a USER slot, and the whole USER bank → ${saveTarget('patches', 'patches.json')}`)
-           + ' — shift-click to write somewhere else';
+  b.title = `the whole USER bank → ${saveTarget('patches', 'patches.json')}, or the patch on the panel`
+          + ' → a USER slot'
+          + (song ? `, or the four PART tones → "${song.name}" in ${saveTarget('demos', 'demos.json')}` : '')
+          + ' — shift-click to write somewhere else';
 }
 function flashSave(text) {
   const b = document.getElementById('save'); if (!b) return;
@@ -782,15 +799,21 @@ function openMenu(btn, items) {
   document.addEventListener('pointerdown', menuOff, true);
 }
 function loadedSong() { return (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null; }
+// SAVE now always opens the menu, the same as LOAD and for the same reason: writing the bank out and
+// putting one patch into it are both always available, so there are always at least two answers. The
+// bank goes first because it is the mirror of LOAD's first entry, and because it is the one that
+// costs nothing to be wrong about -- it asks nothing and overwrites only the file.
 function onSaveClick(e) {
   if (closeMenu()) return;
   const song = loadedSong();
-  if (song) {
-    openMenu(e.currentTarget, [
-      ['PATCH ▸ USER slot', saveTarget('patches', 'patches.json'), () => savePatch(e.shiftKey)],
-      ['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)],
-    ]);
-  } else savePatch(e.shiftKey);
+  const n = userBank().length;
+  const items = [
+    ['PATCHES ▸ USER bank', saveTarget('patches', 'patches.json') + ' · ' + n + (n === 1 ? ' patch' : ' patches'),
+      () => saveBank(e.shiftKey)],
+    ['PATCH ▸ USER slot', 'the patch on the panel, into the bank', () => savePatch(e.shiftKey)],
+  ];
+  if (song) items.push(['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)]);
+  openMenu(e.currentTarget, items);
 }
 // LOAD always has two answers -- both files exist whether or not a song is playing -- so it always
 // opens the menu.

@@ -66,9 +66,10 @@ addition rather than a rewrite.
   into the multitimbral editor — tweak each part live and the header's **💾 SAVE ▸ TONES** writes
   them straight back out as `demos.json`, which is the
   **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
-  carries tone edits over by song name). The same button's **▸ PATCH** entry writes the USER slots
-  out as `patches.json` (a copy — `localStorage` stays the live bank, and nothing reads the file
-  back at boot) and **📂 LOAD** reads either file back — replacing the bank, since both files are
+  carries tone edits over by song name). The same button's **▸ PATCHES** entry writes the whole USER
+  bank out as `patches.json` in one gesture (a copy — `localStorage` stays the live bank, and nothing
+  reads the file back at boot), **▸ PATCH** puts the patch on the panel into a USER slot,
+  and **📂 LOAD** reads either file back — replacing the bank, since both files are
   written whole. Everything goes through the File System Access API and remembers where you put it:
   the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot
   hold one, with the file name mirrored into `localStorage` for the tooltip. LOAD and SAVE share one
