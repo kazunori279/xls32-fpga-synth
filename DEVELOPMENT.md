@@ -851,6 +851,69 @@ Two measured findings shaped this (equal-*total-cost* A/B over 8 targets/categor
   (anti-aliased oscillators, a real 2nd oscillator, exponential envelopes) would extend. A cheaper,
   orthogonal win is matching over multiple notes/velocities (generalization across the keyboard).
 
+> **Half of the first finding is wrong, and the other half is bigger than it looks (2026-08-16).**
+> "Don't restart" survives. "Diminishing returns past ~800" does not. That table was measured on
+> *corpus* targets, where no patch is exactly right, so the flat part of it is the engine's reach and
+> not the optimizer's — the same thing the second bullet says, mistaken for convergence. On targets
+> the engine can play **exactly**, there is no knee at all: `loss_bench.py 8 300,800,3000` under
+> `clap+stft` goes **8.99 → 3.35 → 1.81** on the STFT column and 0.049 → 0.035 → 0.022 on CLAP,
+> monotone. The shipped `budget=800` is a cost decision, not a converged one.
+
+#### The search cannot recover parameters, and no optimizer can (issue #17)
+
+`loss_bench.py` hides a patch the engine plays exactly, renders it, throws the parameters away and
+asks CMA-ES to find its way back. Ground truth is known, so parameter error is measurable — and it
+sat at 0.19 no matter which distance drove the search, which is what #17 was opened on. Two columns
+the benchmark did not have turn that number into a different finding (`loss_bench_budget.json`):
+
+- **`floor` = 0.027** — what a *perfect* answer scores. `preset_from_vec()` rounds each select to an
+  option index and `vec_from_preset()` returns that bin's midpoint, so an exactly correct recovery
+  still lands half a bin from a continuous truth. Part of the 0.19 was always the ruler.
+- **`seed L1` = 0.125** — where the search *started*, same distance, same truth.
+
+| budget | drove the search | stft | clap | **param L1** | seed L1 | floor | worse than the seed |
+|---|---|---|---|---|---|---|---|
+| 300 | clap+stft | 8.99 | 0.049 | **0.190** | 0.125 | 0.027 | 8/8 |
+| 800 | clap+stft | 3.35 | 0.035 | **0.182** | 0.125 | 0.027 | 7/8 |
+| 3000 | clap+stft | **1.81** | **0.022** | **0.181** | 0.125 | 0.027 | 6/8 |
+
+**Budget is binding on the loss and not on the parameters.** Ten times the compute buys a 5× better
+render and moves parameter error by 0.009 — and every row is *worse than not searching*. In **44 of
+48** (patch, loss, budget) runs the search ends farther from the true parameters than the seed it
+was handed. It is not failing to converge; it is converging away.
+
+One line of the log is the whole issue:
+
+```
+b3000  Brass  stft  own 0.000   |dp| 0.134 (seed 0.132, floor 0.027)
+```
+
+Loss **0.000** — the render recovered as exactly as that distance can express — with the parameters
+no closer than doing nothing. **A global optimum with the wrong parameters is not a local-minimum
+problem.** IPOP/BIPOP restarts, per-waveform multi-start and coarse-to-fine all treat local minima;
+a restart here just finds another point on the same level set. So this is a property of the inverse
+problem, not a bug in the optimizer: the map from 22 CCs to a 1.9 s render is many-to-one under
+every distance we have, and `match()` returns *a* patch that sounds like the target and can never
+return *the* patch.
+
+Per coordinate, the split is sharp. Under `clap+stft` at budget 3000 the search reliably recovers
+the oscillator and the filter's steady state — `reso` 0.129 → **0.014**, `aatt` 0.094 → 0.032, then
+`wave`, `sub`, `cutoff`, `unison` — and reliably destroys the filter envelope and the modulators:
+`fsus` +0.358, `pw` +0.284, `fdepth` +0.181, `room` +0.166, `lforate` +0.134.
+
+> **`room` is the control that validates the metric.** It provably cannot reach a render at
+> `SPACE=base` (`engine.py:480` skips the effects chain while dry), and the search randomises it by
+> +0.166 — exactly what a dead coordinate must do. Counted over the shipped 64: `room` inert in
+> 64/64, `pw` in 49/64 (`engine.py:165`, non-pulse waves), `lforate` in 2/64, the filter ADSR in
+> 0/64. Mean **1.8 of 22 coordinates describe nothing**, 8% — real, and far too small to be the
+> explanation.
+
+**This is also the mechanism behind [#16's null](#widening-the-search-space-what-30-ccs-bought-and-what-it-cost).**
+A widening that wins the objective 48–16 at *p* = 0.0001 and comes back 9–7–8 in a blind listening
+test is what a many-to-one landscape produces: the extra dimensions bought loss, and loss is not the
+sound. Two widenings have now failed to pay, which is why `trem` stayed in `SELECTS` when the CC92
+model bug was fixed (#23) even though moving it to `KNOBS` was half of what that issue asked for.
+
 **Hard-won lessons (see [§6](#friction-logs--learnings)):** the simulator's fidelity bounds
 everything, and a `calibrate.py` probe against the board is essential; the "clinical" nature of
 NSynth notes and the difficulty of driving/obtaining ground truth (Surge XT can't be loaded
