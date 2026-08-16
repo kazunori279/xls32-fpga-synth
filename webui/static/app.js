@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v88-preset';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v89-stop';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -322,6 +322,7 @@ function setPlay(p, on) {   // the LED = this part's demo mute
     playSet.delete(p);
     for (const [n, parts] of activeNotes) if (parts.includes(p)) sendPart(p, [0x80, n, 0]);  // release held on this part
     sweepPart(p);                                                // and whatever the demo is holding there
+    flushScheduled(new Set([p]));                                // incl. the note-ons already scheduled ahead
   }
   refreshPartUI();
 }
@@ -926,7 +927,31 @@ async function connectBoard() {
   }
 }
 
-function togglePower() { return powered ? powerOff() : powerOn(); }
+// Powering on takes about a second of real work -- MIDI + audio permission, the serial or UAC2
+// open, the AudioWorklet module, then ~200 CC per part to tell the board what the panel is showing.
+// None of it can be started before the click (they are all user-gesture gated), so the wait is not
+// removable; being silent through it is. The button dims and the status LED says `starting` for the
+// whole of it, and the flag is also a re-entrancy guard: the second click on an unresponsive button
+// used to run the whole connect a second time against the board the first one was still opening.
+let powering = false;
+async function togglePower() {
+  if (powering) return;
+  if (powered) return powerOff();
+  const btn = document.getElementById('power');
+  const st = document.getElementById('statustext');
+  powering = true;
+  btn.classList.add('busy');
+  st.textContent = 'starting';
+  try {
+    await powerOn();
+  } finally {
+    powering = false;
+    btn.classList.remove('busy');
+    // Only clear what this wrote: powerOn() reports its own failures there ('no board', 'need
+    // https', 'audio error') and setStatus() writes 'live' on success.
+    if (st.textContent === 'starting') st.textContent = powered ? 'live' : 'off';
+  }
+}
 function powerOff() {
   powered = false;
   if (masterGainNode) { try { masterGainNode.disconnect(); } catch (_) {} }   // mute browser output
@@ -980,6 +1005,10 @@ const TICK_MS = 60;              // and how often it does so -- comfortably insi
 // as the events are built, and the router takes them from there.
 let demos = { songs: [] }, demoIdx = -1, demoPlaying = false, demoBoard = 0;
 let demoEvents = [], demoLoopMs = 0, demoBase = 0, demoPos = 0, demoTimer = null;
+// Every note-on handed to a transport with a future timestamp that has not been given its note-off
+// yet, keyed part<<8|note, plus the latest timestamp handed out. This is the look-ahead's debt: see
+// `flushScheduled`.
+let demoSched = new Set(), demoSchedTo = 0;
 
 function demoTick() {
   demoTimer = null;
@@ -998,9 +1027,34 @@ function demoTick() {
     // A muted part swallows its note-ons and still gets its note-offs, so muting mid-note
     // releases what is already sounding instead of stranding it.
     if ((m[0] & 0xF0) === 0x90 && !playSet.has(m[0] & 0x0F)) continue;
-    sendPart(m[0] & 0x0F, m, when);            // the low nibble is a GLOBAL part, offset at build time
+    const part = m[0] & 0x0F;                  // the low nibble is a GLOBAL part, offset at build time
+    if ((m[0] & 0xF0) === 0x90) demoSched.add((part << 8) | m[1]);
+    else if ((m[0] & 0xF0) === 0x80) demoSched.delete((part << 8) | m[1]);
+    demoSchedTo = Math.max(demoSchedTo, when);
+    sendPart(part, m, when);
   }
   demoTimer = setTimeout(demoTick, TICK_MS);
+}
+// The other half of the look-ahead, and the reason STOP used to leave notes sounding.
+// `cancelPending()` retracts what the PAGE still holds -- which on the Basys 3 is everything, since
+// its scheduler is a setTimeout per message. On the Tiliqua the scheduler is the browser's: a
+// message goes to the MIDI service with a timestamp the moment the tick runs, and the only way to
+// take it back is `MIDIOutput.clear()`, which Chrome does not implement (`typeof out.clear ===
+// 'undefined'`, so the call throws into an empty catch and cancels nothing). So up to LOOKAHEAD_MS
+// of note-ons are already gone and still coming, and their note-offs -- which the cancelled loop
+// never reached -- are not. The 128-note sweep cannot help: it lands BEFORE the stray note-on.
+//
+// So every note-on the sequencer scheduled without a matching note-off is released here, stamped
+// past the last timestamp handed out. The MIDI service delivers in timestamp order, so it arrives
+// after the stray note-on rather than racing it.
+function flushScheduled(parts = null) {
+  const at = Math.max(performance.now(), demoSchedTo) + 2;
+  for (const k of Array.from(demoSched)) {
+    const p = k >> 8;
+    if (parts && !parts.has(p)) continue;
+    sendPart(p, [0x80, k & 0x7f, 0], at);
+    demoSched.delete(k);
+  }
 }
 function stopDemo() {
   demoPlaying = false; demoIdx = -1;
@@ -1010,6 +1064,7 @@ function stopDemo() {
   // than `allSoundOff` on purpose: stopping a song should not cut a note the player is holding by
   // hand on a part the song was not using, and `allSoundOff` sends CC120, which clicks.
   sweepAllParts();
+  flushScheduled();                             // ...and the ones the sweep is too early to catch
   document.querySelectorAll('#demolist .bitem').forEach((el) => el.classList.remove('on'));
   const b = document.getElementById('demo'); if (b) b.textContent = '▶ DEMO';
 }

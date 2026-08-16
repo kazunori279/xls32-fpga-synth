@@ -36,6 +36,15 @@ body{
 .power{font-weight:700;letter-spacing:2px;font-size:12px;padding:9px 16px;border-radius:5px;cursor:pointer;
   background:linear-gradient(#3a3630,#211e19);color:#e9dcc2;border:1px solid #000;box-shadow:0 2px 0 #000}
 .power.on{background:linear-gradient(#8a2418,#5c130b);color:#ffd;box-shadow:0 0 10px rgba(255,80,50,.5)}
+/* Power-up is ~1 s of permission prompts, board open, worklet load and the patch burst, none of it
+   startable before the click. The button answers immediately even though the result cannot: a warm
+   half-lit red that is clearly neither OFF nor ON, breathing so it reads as working rather than
+   stuck. `cursor:progress` for the same reason, and the LED next to it says `starting`. */
+.power.busy{background:linear-gradient(#6b2a1c,#41180f);color:#f0d3c4;cursor:progress;
+  animation:powerwait 1.1s ease-in-out infinite}
+/* the glow breathes, not the opacity: fading a dark red button out over a beige panel reads as
+   pink and half-broken, where a pulsing version of the lamp ON wears is unmistakably "coming up" */
+@keyframes powerwait{50%{box-shadow:0 0 12px rgba(255,80,50,.55)}}
 /* uniform height for every top-bar button/control */
 .power,.pbtn,.pstep,.partchip,.pcur{height:36px;box-sizing:border-box}
 .power,.pbtn,.pstep{display:inline-flex;align-items:center;justify-content:center}

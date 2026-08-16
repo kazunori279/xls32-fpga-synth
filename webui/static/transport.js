@@ -70,7 +70,13 @@ class TiliquaTransport {
     try { this.out.send(bytes, when); } catch (e) { /* port closed under us */ }
   }
 
-  cancelPending() { if (this.out) { try { this.out.clear(); } catch (e) {} } }
+  // Nothing to cancel, on Chrome. `MIDIOutput.clear()` is in the Web MIDI spec and is the only way
+  // to retract a message already handed to the browser's scheduler, and Blink does not implement it
+  // -- `typeof out.clear` is 'undefined' on Chrome 141/macOS, so this used to throw into an empty
+  // catch and report success. It is still called where it exists, but a caller must assume that
+  // everything it scheduled WILL be delivered: app.js `flushScheduled()` is what actually stops a
+  // song, by releasing the notes this could not recall.
+  cancelPending() { if (this.out && this.out.clear) { try { this.out.clear(); } catch (e) {} } }
 
   async attachAudio(ctx) {
     if (!this.deviceId) return null;             // discovery found fewer inputs than outputs
