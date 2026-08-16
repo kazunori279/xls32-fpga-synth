@@ -655,5 +655,134 @@
     "delta": 0.358
    }
   ]
+ },
+ "_corpus_pilot": "The sweep above is on targets the engine can play exactly, which is the right rig for the identifiability question and the wrong one for 'should the bank be re-fitted'. So the same question again on the corpus the bank is actually made from: 16 of the shipped 64 slots, two per category, build_presets.py at budget 800 and 3000, everything else held (clap+stft, SPACE=base, the aligned window, seed=1). Mean loss 20.72 -> 18.77, -8.8% per target, 13 wins / 3 ties / 0 losses, sign test p = 0.021, Wilcoxon p = 0.0015. For scale, the aligned-window re-fit that actually shipped won 77/128 at p ~ 0.02 for a mean of -1.9%; this is 4.6x that effect with no target made worse. Biggest movers Clavinet -35%, Trumpet -21%, Synth Bass 2 -14%. Brass is the category DEVELOPMENT.md lists as beyond the engine's reach, so a fifth of the gap there was the optimizer stopping early, not the engine. This is what sent the full 64-slot re-fit at 3000 (~2.8 h); the listening test is still the gate -- #16 is on record that an objective win of this size can come back a null.",
+ "corpus_pilot": {
+  "targets": 16,
+  "source": "soundfont",
+  "loss": "clap+stft",
+  "space": "base",
+  "mean_800": 20.72,
+  "mean_3000": 18.77,
+  "mean_pct": -8.8,
+  "wins_3000": 13,
+  "ties": 3,
+  "losses": 0,
+  "sign_p": 0.0213,
+  "wilcoxon_p": 0.00146,
+  "per_target": [
+   {
+    "name": "Synth Bass 2 G3",
+    "category": "Bass",
+    "seed": 93.2,
+    "b800": 25.5,
+    "b3000": 22.0
+   },
+   {
+    "name": "Synth Bass 1 C4",
+    "category": "Bass",
+    "seed": 65.0,
+    "b800": 18.9,
+    "b3000": 18.0
+   },
+   {
+    "name": "Square Lead G4",
+    "category": "Lead",
+    "seed": 37.9,
+    "b800": 19.0,
+    "b3000": 17.6
+   },
+   {
+    "name": "Chiff G4",
+    "category": "Lead",
+    "seed": 42.8,
+    "b800": 20.2,
+    "b3000": 18.1
+   },
+   {
+    "name": "New Age Pad G4",
+    "category": "Pad",
+    "seed": 41.5,
+    "b800": 22.2,
+    "b3000": 21.3
+   },
+   {
+    "name": "Choir Pad G4",
+    "category": "Pad",
+    "seed": 39.4,
+    "b800": 20.9,
+    "b3000": 20.9
+   },
+   {
+    "name": "Kalimba G4",
+    "category": "Pluck",
+    "seed": 52.6,
+    "b800": 14.1,
+    "b3000": 12.6
+   },
+   {
+    "name": "Marimba G4",
+    "category": "Pluck",
+    "seed": 51.3,
+    "b800": 14.4,
+    "b3000": 14.4
+   },
+   {
+    "name": "Clavinet G4",
+    "category": "Keys",
+    "seed": 40.1,
+    "b800": 20.9,
+    "b3000": 13.5
+   },
+   {
+    "name": "E-Piano 1 C5",
+    "category": "Keys",
+    "seed": 23.6,
+    "b800": 13.2,
+    "b3000": 13.2
+   },
+   {
+    "name": "Trumpet G4",
+    "category": "Brass",
+    "seed": 32.8,
+    "b800": 28.5,
+    "b3000": 22.5
+   },
+   {
+    "name": "Synth Brass 1 C5",
+    "category": "Brass",
+    "seed": 34.4,
+    "b800": 21.1,
+    "b3000": 20.3
+   },
+   {
+    "name": "Synth Strings 1",
+    "category": "Strings",
+    "seed": 33.2,
+    "b800": 23.7,
+    "b3000": 23.2
+   },
+   {
+    "name": "Synth Strings 2 C5",
+    "category": "Strings",
+    "seed": 28.0,
+    "b800": 24.7,
+    "b3000": 21.5
+   },
+   {
+    "name": "Echoes",
+    "category": "FX",
+    "seed": 101.2,
+    "b800": 23.3,
+    "b3000": 22.8
+   },
+   {
+    "name": "Rain FX G4",
+    "category": "FX",
+    "seed": 100.6,
+    "b800": 20.9,
+    "b3000": 18.4
+   }
+  ]
  }
 }
