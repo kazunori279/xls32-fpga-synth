@@ -1,0 +1,659 @@
+{
+ "_": "Issue #17, the budget sweep. presetgen/loss_bench.py 8 300,800,3000 stft clap+stft, 2026-08-16. Eight hidden patches (one per category), each a category seed nudged by N(0, 0.22) so the target is reachable by construction and the true parameters are known. search.match() runs with seed=1 fixed, so the three budgets are one trajectory stopped at three places rather than three experiments.",
+ "_question": "#17 asked whether the shipped budget of 800 is the binding constraint on parameter recovery: if param L1 moves with budget the budget was simply too low, and if it does not, restarts are the answer.",
+ "_answer": "Neither. Budget is binding on the LOSS and not on the PARAMETERS. From 300 to 3000 under clap+stft the objective falls about 5x (STFT column 8.99 -> 1.81, CLAP 0.049 -> 0.022) while param L1 goes 0.190 -> 0.181, which is nothing. Ten times the compute buys a much better render and not one step toward the patch that made it.",
+ "_baselines": "Two columns #17 did not have, and they are what changes the reading. `floor` = 0.027 is what a PERFECT answer scores, because preset_from_vec() rounds each select to an option index and vec_from_preset() hands back that bin's midpoint, so part of the old 0.19 was always the ruler. `seed L1` = 0.125 is where the search STARTED. Every headline number in the table is worse than 0.125: in 44 of the 48 (patch, loss, budget) runs the search ends FARTHER from the true parameters than the seed it was handed.",
+ "_proof": "b3000 / Brass / stft reaches own loss 0.000 -- the render is recovered as exactly as that distance can express -- with param L1 0.134 against the seed's 0.132. A global optimum with the wrong parameters is not a local-minimum problem, and restarts, multi-start and coarse-to-fine all treat local minima. The parameter-to-audio map is many-to-one under every distance here, so parameter recovery is not a goal this pipeline can hold. Audio recovery is, and there the budget is the constraint.",
+ "_per_dim": "What the search reliably recovers is the oscillator and the filter's steady state -- under clap+stft at 3000, reso 0.129 -> 0.014, aatt 0.094 -> 0.032, then wave, sub, cutoff, unison. What it reliably destroys is the filter envelope and the modulators: fsus +0.358, pw +0.284, fdepth +0.181, room +0.166, lforate +0.134, fdec +0.116, frel +0.111. `room` is the control that validates the metric: params.py already proves it cannot reach a render at SPACE=base, and the search randomises it by +0.166 exactly as a dead coordinate should.",
+ "_inert": "Counting the shipped bank (webui/presets_soundfont.json, 64 presets) against the render paths: `room` is inert in 64/64 (engine.py:480 skips the whole chain while dry), `pw` in 49/64 (engine.py:165, non-pulse waves), the filter ADSR in 0/64 (fdepth is never 0 in a fit) and `lforate` in 2/64. Mean 1.8 of 22 coordinates describe nothing, 8%. Real but small -- deadness is not the explanation, it is a rounding error on top of it.",
+ "_consequences": [
+  "#17 is a property, not a bug. Retitle or close: 'CMA-ES does not recover parameters' is true and unfixable by the optimizer, because the objective cannot tell the right answer from the wrong one. The three fixes the issue proposed (IPOP/BIPOP restarts, coarse-to-fine, seeding from the bank) all target local minima and none of them applies.",
+  "Budget 800 IS too low for the thing that is achievable. clap+stft: STFT 3.35 -> 1.81 and CLAP 0.035 -> 0.022 going 800 -> 3000, monotone, no sign of a knee. A 64-slot refit at 3000 is about 2.8 h. Whether it reaches an ear is #22's question, not this one's.",
+  "search.py's docstring says the loss is 'BUDGET-limited, not local-minima-limited' with 'diminishing returns past ~900'. The first half is confirmed and the second is wrong -- it was measured on corpus targets, where no patch is exactly right and the loss floor is the engine's reach rather than the optimizer's.",
+  "Dropping `room` from SPACE=base and gating `pw` on the wave would return 8% of the search dimensions. Free, and much smaller than the budget effect."
+ ],
+ "setup": {
+  "n_patches": 8,
+  "seed": 7,
+  "sigma": 0.22,
+  "space": "base",
+  "dim": 22,
+  "budgets": [
+   300,
+   800,
+   3000
+  ],
+  "losses": [
+   "stft",
+   "clap+stft"
+  ],
+  "gate_s": 1.6,
+  "tail_s": 0.3
+ },
+ "runs": [
+  {
+   "loss": "clap+stft",
+   "budget": 300,
+   "stft": 8.995,
+   "cdpam": 0.194,
+   "clap": 0.049,
+   "param_l1": 0.19,
+   "seed_l1": 0.125,
+   "floor": 0.027,
+   "worse_than_seed": 8,
+   "sec_per_patch": 16.2,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 4.0029,
+     "param_l1": 0.207,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 12.3793,
+     "param_l1": 0.201,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pad",
+     "own": 10.1835,
+     "param_l1": 0.226,
+     "seed_l1": 0.137
+    },
+    {
+     "cat": "Pluck",
+     "own": 4.8494,
+     "param_l1": 0.19,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 14.2554,
+     "param_l1": 0.16,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Brass",
+     "own": 0.9652,
+     "param_l1": 0.166,
+     "seed_l1": 0.132
+    },
+    {
+     "cat": "Strings",
+     "own": 13.702,
+     "param_l1": 0.186,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 17.4504,
+     "param_l1": 0.18,
+     "seed_l1": 0.163
+    }
+   ]
+  },
+  {
+   "loss": "stft",
+   "budget": 300,
+   "stft": 13.029,
+   "cdpam": 0.256,
+   "clap": 0.08,
+   "param_l1": 0.182,
+   "seed_l1": 0.125,
+   "floor": 0.027,
+   "worse_than_seed": 8,
+   "sec_per_patch": 5.7,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 32.187,
+     "param_l1": 0.153,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 12.1654,
+     "param_l1": 0.222,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pad",
+     "own": 10.6201,
+     "param_l1": 0.198,
+     "seed_l1": 0.137
+    },
+    {
+     "cat": "Pluck",
+     "own": 4.5278,
+     "param_l1": 0.197,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 13.1695,
+     "param_l1": 0.16,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Brass",
+     "own": 0.6514,
+     "param_l1": 0.183,
+     "seed_l1": 0.132
+    },
+    {
+     "cat": "Strings",
+     "own": 15.3687,
+     "param_l1": 0.176,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 15.5258,
+     "param_l1": 0.168,
+     "seed_l1": 0.163
+    }
+   ]
+  },
+  {
+   "loss": "clap+stft",
+   "budget": 800,
+   "stft": 3.352,
+   "cdpam": 0.087,
+   "clap": 0.035,
+   "param_l1": 0.182,
+   "seed_l1": 0.125,
+   "floor": 0.027,
+   "worse_than_seed": 7,
+   "sec_per_patch": 42.2,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 3.0255,
+     "param_l1": 0.203,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 3.2288,
+     "param_l1": 0.164,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pad",
+     "own": 0.8596,
+     "param_l1": 0.181,
+     "seed_l1": 0.137
+    },
+    {
+     "cat": "Pluck",
+     "own": 2.9322,
+     "param_l1": 0.175,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 10.1775,
+     "param_l1": 0.219,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Brass",
+     "own": 0.069,
+     "param_l1": 0.156,
+     "seed_l1": 0.132
+    },
+    {
+     "cat": "Strings",
+     "own": 4.482,
+     "param_l1": 0.202,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 6.2554,
+     "param_l1": 0.157,
+     "seed_l1": 0.163
+    }
+   ]
+  },
+  {
+   "loss": "stft",
+   "budget": 800,
+   "stft": 9.557,
+   "cdpam": 0.182,
+   "clap": 0.057,
+   "param_l1": 0.196,
+   "seed_l1": 0.125,
+   "floor": 0.027,
+   "worse_than_seed": 8,
+   "sec_per_patch": 15.0,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 28.4742,
+     "param_l1": 0.29,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 3.4725,
+     "param_l1": 0.151,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pad",
+     "own": 10.6201,
+     "param_l1": 0.198,
+     "seed_l1": 0.137
+    },
+    {
+     "cat": "Pluck",
+     "own": 2.0718,
+     "param_l1": 0.152,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 13.1695,
+     "param_l1": 0.16,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Brass",
+     "own": 0.081,
+     "param_l1": 0.211,
+     "seed_l1": 0.132
+    },
+    {
+     "cat": "Strings",
+     "own": 5.2542,
+     "param_l1": 0.161,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 13.335,
+     "param_l1": 0.247,
+     "seed_l1": 0.163
+    }
+   ]
+  },
+  {
+   "loss": "clap+stft",
+   "budget": 3000,
+   "stft": 2.408,
+   "cdpam": 0.096,
+   "clap": 0.029,
+   "param_l1": 0.185,
+   "seed_l1": 0.122,
+   "floor": 0.025,
+   "worse_than_seed": 6,
+   "sec_per_patch": 156.3,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 1.0902,
+     "param_l1": 0.199,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 0.1231,
+     "param_l1": 0.139,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pluck",
+     "own": 2.5951,
+     "param_l1": 0.158,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 8.9505,
+     "param_l1": 0.265,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Strings",
+     "own": 2.5612,
+     "param_l1": 0.146,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 1.7706,
+     "param_l1": 0.201,
+     "seed_l1": 0.163
+    }
+   ]
+  },
+  {
+   "loss": "stft",
+   "budget": 3000,
+   "stft": 4.527,
+   "cdpam": 0.083,
+   "clap": 0.033,
+   "param_l1": 0.146,
+   "seed_l1": 0.124,
+   "floor": 0.026,
+   "worse_than_seed": 6,
+   "sec_per_patch": 55.5,
+   "per_patch": [
+    {
+     "cat": "Bass",
+     "own": 0.1586,
+     "param_l1": 0.102,
+     "seed_l1": 0.094
+    },
+    {
+     "cat": "Lead",
+     "own": 0.1947,
+     "param_l1": 0.118,
+     "seed_l1": 0.086
+    },
+    {
+     "cat": "Pad",
+     "own": 10.6201,
+     "param_l1": 0.198,
+     "seed_l1": 0.137
+    },
+    {
+     "cat": "Pluck",
+     "own": 2.0718,
+     "param_l1": 0.152,
+     "seed_l1": 0.136
+    },
+    {
+     "cat": "Keys",
+     "own": 13.1695,
+     "param_l1": 0.16,
+     "seed_l1": 0.13
+    },
+    {
+     "cat": "Strings",
+     "own": 3.9719,
+     "param_l1": 0.13,
+     "seed_l1": 0.121
+    },
+    {
+     "cat": "FX",
+     "own": 1.5059,
+     "param_l1": 0.161,
+     "seed_l1": 0.163
+    }
+   ]
+  }
+ ],
+ "per_dim_at_3000": {
+  "stft": [
+   {
+    "param": "adec",
+    "seed": 0.22,
+    "got": 0.13,
+    "delta": -0.091
+   },
+   {
+    "param": "fmode",
+    "seed": 0.145,
+    "got": 0.06,
+    "delta": -0.085
+   },
+   {
+    "param": "wave",
+    "seed": 0.124,
+    "got": 0.045,
+    "delta": -0.079
+   },
+   {
+    "param": "arel",
+    "seed": 0.151,
+    "got": 0.082,
+    "delta": -0.069
+   },
+   {
+    "param": "sub",
+    "seed": 0.141,
+    "got": 0.088,
+    "delta": -0.053
+   },
+   {
+    "param": "pw",
+    "seed": 0.173,
+    "got": 0.121,
+    "delta": -0.052
+   },
+   {
+    "param": "cutoff",
+    "seed": 0.162,
+    "got": 0.143,
+    "delta": -0.019
+   },
+   {
+    "param": "fatt",
+    "seed": 0.156,
+    "got": 0.141,
+    "delta": -0.015
+   },
+   {
+    "param": "unison",
+    "seed": 0.114,
+    "got": 0.1,
+    "delta": -0.014
+   },
+   {
+    "param": "reso",
+    "seed": 0.129,
+    "got": 0.116,
+    "delta": -0.013
+   },
+   {
+    "param": "fdepth",
+    "seed": 0.108,
+    "got": 0.104,
+    "delta": -0.003
+   },
+   {
+    "param": "trem",
+    "seed": 0.099,
+    "got": 0.099,
+    "delta": 0.0
+   },
+   {
+    "param": "room",
+    "seed": 0.087,
+    "got": 0.125,
+    "delta": 0.038
+   },
+   {
+    "param": "aatt",
+    "seed": 0.094,
+    "got": 0.147,
+    "delta": 0.053
+   },
+   {
+    "param": "asus",
+    "seed": 0.065,
+    "got": 0.13,
+    "delta": 0.065
+   },
+   {
+    "param": "lfodep",
+    "seed": 0.08,
+    "got": 0.147,
+    "delta": 0.067
+   },
+   {
+    "param": "frel",
+    "seed": 0.156,
+    "got": 0.226,
+    "delta": 0.071
+   },
+   {
+    "param": "detune",
+    "seed": 0.085,
+    "got": 0.167,
+    "delta": 0.082
+   },
+   {
+    "param": "porta",
+    "seed": 0.096,
+    "got": 0.183,
+    "delta": 0.088
+   },
+   {
+    "param": "fdec",
+    "seed": 0.134,
+    "got": 0.245,
+    "delta": 0.111
+   },
+   {
+    "param": "lforate",
+    "seed": 0.118,
+    "got": 0.288,
+    "delta": 0.17
+   },
+   {
+    "param": "fsus",
+    "seed": 0.111,
+    "got": 0.29,
+    "delta": 0.18
+   }
+  ],
+  "clap+stft": [
+   {
+    "param": "reso",
+    "seed": 0.129,
+    "got": 0.014,
+    "delta": -0.115
+   },
+   {
+    "param": "aatt",
+    "seed": 0.094,
+    "got": 0.032,
+    "delta": -0.062
+   },
+   {
+    "param": "wave",
+    "seed": 0.124,
+    "got": 0.07,
+    "delta": -0.054
+   },
+   {
+    "param": "sub",
+    "seed": 0.141,
+    "got": 0.088,
+    "delta": -0.053
+   },
+   {
+    "param": "cutoff",
+    "seed": 0.162,
+    "got": 0.12,
+    "delta": -0.042
+   },
+   {
+    "param": "unison",
+    "seed": 0.114,
+    "got": 0.076,
+    "delta": -0.038
+   },
+   {
+    "param": "fmode",
+    "seed": 0.145,
+    "got": 0.121,
+    "delta": -0.024
+   },
+   {
+    "param": "lfodep",
+    "seed": 0.08,
+    "got": 0.058,
+    "delta": -0.022
+   },
+   {
+    "param": "arel",
+    "seed": 0.151,
+    "got": 0.142,
+    "delta": -0.01
+   },
+   {
+    "param": "trem",
+    "seed": 0.099,
+    "got": 0.099,
+    "delta": 0.0
+   },
+   {
+    "param": "detune",
+    "seed": 0.085,
+    "got": 0.104,
+    "delta": 0.019
+   },
+   {
+    "param": "porta",
+    "seed": 0.096,
+    "got": 0.117,
+    "delta": 0.021
+   },
+   {
+    "param": "adec",
+    "seed": 0.22,
+    "got": 0.28,
+    "delta": 0.059
+   },
+   {
+    "param": "asus",
+    "seed": 0.065,
+    "got": 0.129,
+    "delta": 0.063
+   },
+   {
+    "param": "frel",
+    "seed": 0.156,
+    "got": 0.266,
+    "delta": 0.111
+   },
+   {
+    "param": "fdec",
+    "seed": 0.134,
+    "got": 0.25,
+    "delta": 0.116
+   },
+   {
+    "param": "lforate",
+    "seed": 0.118,
+    "got": 0.252,
+    "delta": 0.134
+   },
+   {
+    "param": "fatt",
+    "seed": 0.156,
+    "got": 0.291,
+    "delta": 0.135
+   },
+   {
+    "param": "room",
+    "seed": 0.087,
+    "got": 0.253,
+    "delta": 0.166
+   },
+   {
+    "param": "fdepth",
+    "seed": 0.108,
+    "got": 0.289,
+    "delta": 0.181
+   },
+   {
+    "param": "pw",
+    "seed": 0.173,
+    "got": 0.457,
+    "delta": 0.284
+   },
+   {
+    "param": "fsus",
+    "seed": 0.111,
+    "got": 0.469,
+    "delta": 0.358
+   }
+  ]
+ }
+}

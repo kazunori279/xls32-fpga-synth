@@ -7,9 +7,22 @@ per dimension, so an equal-budget run at a wider space is the only fair control 
 
 Benchmarking (8 targets/category, equal-budget A/B) showed the loss is BUDGET-limited, not
 local-minima-limited: at budget 900 a single run beat per-waveform multi-start (which starved
-each run) AND continuous-space restarts. So the effective knob is per-run budget (diminishing
-returns past ~900); a single well-converged run is best. Remaining loss beyond that is the
-engine's expressive reach (see the loss-driven roadmap), not the optimizer.
+each run) AND continuous-space restarts. So the effective knob is per-run budget; a single
+well-converged run is best.
+
+That benchmark also said "diminishing returns past ~900", and **that half is wrong**. It was run
+on corpus targets, where no patch is exactly right, so the loss it plateaued at was the engine's
+reach and not the optimizer's. On targets the engine can play exactly, the return has no knee at
+all: `loss_bench.py 8 300,800,3000` under clap+stft goes 8.99 -> 3.35 -> 1.81 on the STFT column
+and 0.049 -> 0.035 -> 0.022 on CLAP, monotone. The shipped `budget=800` is a cost decision, not a
+converged one (`loss_bench_budget.json`, issue #17).
+
+What that extra budget does NOT buy is the right parameters. The same sweep measures error against
+a known ground truth and it does not move -- 0.190 -> 0.181 while the loss falls 5x -- and it stays
+worse than the seed the run started from in 44 of 48 runs, including one that reached loss 0.000.
+The map from these 22 CCs to a 1.9 s render is many-to-one under every distance we have, so `match`
+returns *a* patch that sounds like the target and never *the* patch. Restarts do not help a search
+that already found the global optimum.
 """
 import numpy as np
 import cma
