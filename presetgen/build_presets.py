@@ -6,7 +6,8 @@ keep the best-matching engine patch. Writes webui/presets_matched.json (name/cat
 """
 import os, sys, json, time, importlib
 import numpy as np
-import engine, params, search
+import engine, params, protocol, search
+import loss as stft_loss     # for its SEG flag; the objective itself goes through loss_deep
 import loss_deep as loss          # $LOSS selects the distance; "stft" (default) is loss.py verbatim
 
 HERE = os.path.dirname(__file__)
@@ -27,17 +28,26 @@ CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 
 def main():
     ns = importlib.import_module(SOURCE)                    # source module: list_targets() + load()
-    # warm the JIT
-    engine.render(params.preset_from_vec(params.seed_vec("Lead")), gate_s=search.GATE_S, tail_s=search.TAIL_S)
+    # The corpus owns the note-on/note-off window; the render and the segment weighting both read
+    # it from there, so the two sides of every comparison agree on where the note ends.
+    win = protocol.window(ns)
+    engine.render(params.preset_from_vec(params.seed_vec("Lead")), gate_s=win[0], tail_s=win[1])
     targets = ns.list_targets(per_cat=PER_CAT)
-    print(f"matching {len(targets)} presets (budget={BUDGET}, loss={LOSSNAME})")
+    # ONLY= restricts the run to named presets, for a pilot that answers a question about the
+    # objective without paying for all 128.
+    only = [n for n in os.environ.get("ONLY", "").split("|") if n]
+    if only:
+        targets = [t for t in targets if t[1] in only]
+    print(f"matching {len(targets)} presets (budget={BUDGET}, loss={LOSSNAME}, "
+          f"window={win}, seg={stft_loss.SEG})")
     out, losses = [], []
     t0 = time.time()
     for i, (cat, name, path, note) in enumerate(targets):
         try:
             audio, sr = ns.load(path)
-            tprep = loss.prep(audio, sr)
-            preset, mloss, seedloss = search.match(tprep, category=cat, note=note, budget=BUDGET)
+            tprep = loss.prep(audio, sr, window=win)
+            preset, mloss, seedloss = search.match(tprep, category=cat, note=note, budget=BUDGET,
+                                                   window=win)
         except Exception as e:
             print(f"  [{i+1}/{len(targets)}] skip {cat}/{name}: {repr(e)[:70]}"); continue
         out.append({"name": name, "category": cat, "values": preset, "loss": round(mloss, 2)})
@@ -48,7 +58,11 @@ def main():
     out.sort(key=lambda p: (order[p["category"]], p["loss"]))
     with open(OUT, "w") as f:
         json.dump({"presets": [{k: p[k] for k in ("name", "category", "values")} for p in out],
-                   "meta": {"count": len(out), "budget": BUDGET, "loss": LOSSNAME}}, f)
+                   # "targets" names the corpus, not the bank: with $BANK the two can differ, and
+                   # every consumer (previews, attack_audit) needs the corpus to find the target.
+                   "meta": {"count": len(out), "budget": BUDGET, "loss": LOSSNAME,
+                            "targets": SOURCE, "window": list(win),
+                            "seg": bool(stft_loss.SEG)}}, f)
     dt = time.time() - t0
     print(f"\nwrote {len(out)} presets -> {OUT}  ({dt/60:.1f} min)")
     if losses:

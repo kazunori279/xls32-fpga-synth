@@ -157,10 +157,14 @@ def clap_text_emb(texts):
 
 # ------------------------------------------------------------------------------- public interface
 
-def prep(x, sr):
-    """Cache a target in whatever form the active backend consumes (mirrors loss.prep)."""
+def prep(x, sr, window=None):
+    """Cache a target in whatever form the active backend consumes (mirrors loss.prep).
+
+    `window` is the corpus's (gate_s, tail_s), carried along so the STFT term can weight the
+    note's phases by the target's own energy. Only a TARGET needs it -- a candidate is prepped
+    without one and the weights come from the target it is being compared to."""
     x = np.asarray(x, dtype=np.float64).flatten()
-    out = {"raw": x, "sr": sr}
+    out = {"raw": x, "sr": sr, "window": window}
     b = _BACKEND
     if "stft" in b:
         out["stft"] = _stft.prep(x, sr)
@@ -171,19 +175,21 @@ def prep(x, sr):
     return out
 
 
-def _as_prepped(x, sr, prepped):
-    return x if prepped else prep(x, sr)
+def _as_prepped(x, sr, prepped, window=None):
+    return x if prepped else prep(x, sr, window)
 
 
-def loss(a, b, a_sr=ARATE, b_sr=ARATE, a_prepped=False, b_prepped=False):
+def loss(a, b, a_sr=ARATE, b_sr=ARATE, a_prepped=False, b_prepped=False, window=None):
     """Distance between a and b under the active backend. Same signature as loss.loss."""
-    return dists([a], b, a_sr=a_sr, b_sr=b_sr, a_prepped=a_prepped, b_prepped=b_prepped)[0]
+    return dists([a], b, a_sr=a_sr, b_sr=b_sr, a_prepped=a_prepped, b_prepped=b_prepped,
+                 window=window)[0]
 
 
-def dists(cands, target, a_sr=ARATE, b_sr=ARATE, a_prepped=False, b_prepped=False):
+def dists(cands, target, a_sr=ARATE, b_sr=ARATE, a_prepped=False, b_prepped=False, window=None):
     """Distances from each of `cands` to `target`. Batched: this is the call a CMA-ES generation
     should make, so the model runs once for the whole population instead of once per candidate."""
-    T = _as_prepped(target, b_sr, b_prepped)
+    T = _as_prepped(target, b_sr, b_prepped, window)
+    win = window or T.get("window")
     b = _BACKEND
     n = len(cands)
     total = np.zeros(n)
@@ -191,7 +197,7 @@ def dists(cands, target, a_sr=ARATE, b_sr=ARATE, a_prepped=False, b_prepped=Fals
     if b == "stft" or b.endswith("+stft"):
         for i, c in enumerate(cands):
             C = c["stft"] if a_prepped else _stft.prep(c, a_sr)
-            total[i] += _stft.loss(C, T["stft"], a_prepped=True, b_prepped=True)
+            total[i] += _stft.loss(C, T["stft"], a_prepped=True, b_prepped=True, window=win)
 
     if b.startswith("cdpam"):
         cw = [c["cdpam"] if a_prepped else _cdpam_wav(c, a_sr) for c in cands]

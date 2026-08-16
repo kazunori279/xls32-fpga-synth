@@ -745,8 +745,16 @@ loop.
 > it scores per frequency-bin, so partials a few Hz off draw a double penalty, and its dominant
 > terms reward *filling the gross energy curve* (which a rich saw+noise+filter does) over placing
 > sparse exact partials. So FM ties, at best, only on the most inharmonic/brightest targets. Like
-> every real FM synth, the bell/EP/metallic patches are **voiced by ear** (see the **FM** bank in
-> the browser), not inverse-synthesized.
+> every real FM synth, the bell/EP/metallic patches are **voiced by ear** (`make_fm_bank.py`, which
+> writes an FM bank the browser will show if it is present), not inverse-synthesized.
+>
+> **Overturned once the loss changed.** That verdict was a property of the magnitude-STFT loss, and
+> the shipped bank is now fitted under **clap+stft** — an embedding distance that does not compare
+> bins at all. Re-asked with `presetgen/xmod_probe.py`: on the 10 most metallic targets, a
+> same-budget re-fit with cross-mod pinned on beats the cross-mod-off control **6/10** (E-Piano 1
+> by 4.87, E-Piano 2 by 4.19, Clavinet by 2.50), and the attack spectral centroid — a metric the
+> loss never sees — goes from 0.52 to 0.59 of the target's. See
+> [the dull attack](#the-dull-attack-three-fixes-tried-and-the-one-that-worked).
 
 ## Preset browser & AI-matched preset banks (inverse synthesis)
 
@@ -755,11 +763,17 @@ synthesis* — a CMA-ES search over the CC space minimizing a spectrogram loss a
 sounds, run on a fast software model of the engine.
 
 The web UI has a Serum/Vital-style **preset browser** (Factory/User tabs, a category rail, a
-scrollable list, search) backed by **128-slot** banks; `webui/synthspec.py` concatenates every
-`presets_*.json`, so multiple source banks coexist. But the interesting part is *how the
-factory presets are made* — not by hand-guessing knob values (which sounds bland), but by
-**inverse synthesis**: for each named target sound, search the engine's parameter space to
-minimize a spectrogram distance to that target.
+scrollable list, search); `webui/synthspec.py` concatenates every `presets_*.json`, so multiple
+source banks can coexist. But the interesting part is *how the factory presets are made* — not by
+hand-guessing knob values (which sounds bland), but by **inverse synthesis**: for each named target
+sound, search the engine's parameter space to minimize a spectrogram distance to that target.
+
+> **What ships today is one bank of 64.** The tree has produced four (NSynth, GM SoundFont, an
+> ear-voiced FM bank, and a Freesound experiment) and the browser is happy to show all of them at
+> once, but a browser is judged on how fast you find a sound, not on how many rows it has. The
+> NSynth and FM banks are removed from `webui/` (regenerate: `build_presets.py … nsynth`,
+> `make_fm_bank.py`), and the SoundFont bank is **halved to 64 by `consolidate.py`** — see
+> [Half a bank is a better bank](#half-a-bank-is-a-better-bank).
 
 The pipeline (`presetgen/`):
 1. **Software model of the engine** (`engine.py`) — a sample-accurate NumPy/[numba](https://numba.pydata.org/)
@@ -867,6 +881,117 @@ constraints, not the search itself.
 - **numba is what makes it tractable:** the SVF and effects are recursive per-sample, so a pure
   NumPy sample loop is too slow for CMA-ES; JIT the kernels and thousands of renders/target
   become milliseconds each.
+
+### The dull attack: three fixes tried, and the one that worked
+
+Listening to the browser's target-vs-ours pairs, the GM samples have a **metallic, FM-ish attack**
+that our fits do not. `presetgen/attack_audit.py` puts a number on it, deliberately **outside the
+loss** (a loss cannot grade a change to itself): over the first 80 ms, the **spectral centroid as a
+ratio ours/target**, and the **share of energy off the harmonic grid**. On the shipped bank:
+geo-mean centroid **0.741**, too dull on **95 of 128**, worst on Pluck (×0.62) and Keys (×0.64).
+
+First, what the targets actually are. A pdta dump of the SoundFont says every one of them is a
+**recording, usually layered**: Music Box is two pitch-shifted *Celeste* samples (−3 and −18
+semitones), E-Piano 2 is `DX7 Strike 3` + `DX7 Wave`, Crystal is `Synth Bell-1` + `Crystal-C5`,
+Charang is three layers. So the target of a "single oscillator + ADSR" fit is a **multi-sample
+instrument recorded off DX-class hardware**, and no amount of optimizer is going to close that.
+
+Three hypotheses, in increasing order of how much they cost to test:
+
+**1. The loss ignores the attack.** Every spectral term in `loss.py` is a `mean()` over frames, and
+Music Box puts **78% of its energy in the first 200 ms** of a 1.9 s window — so the part a listener
+calls "the sound" gets ~13% of the vote. Fix: group frames into the note's phases and weight each
+by **sqrt of its share of the target's energy** (`loss.py:SEG`, `protocol.segments`). The
+redistribution works exactly as designed — Music Box's AD phase goes 13% → 65% of the frame weight
+— and it **does not help**. 24 presets, budget 800, same seed:
+
+| objective | SEG=0 | SEG=1 |
+|---|---|---|
+| **clap+stft** (shipped) | **0.706** | 0.642 |
+| stft | 0.576 | 0.594 |
+
+Worse under the objective we ship, and inside the noise under the other. Under `SEG=1` the fits
+also drift inharmonic in the wrong places (Brass 46% against a 7% target). `SEG` stays in the tree,
+defaulted off, because the measurement is worth being able to repeat.
+
+**2. The target and the render disagreed about the note.** Found while building the above, and a
+real bug: the window was three numbers in three files. `search.py` rendered gate 1.6 s / tail 0.3 s,
+`soundfont.py` rendered its targets at 1.5 / 0.5, and NSynth ships ~3 s held notes. `loss.py`
+truncates to the shorter signal, so nothing ever complained — the soundfont bank was fitted with
+the target's note-off **100 ms before** the render's, and the NSynth bank scored 0.3 s of *our
+release* against 0.3 s of *the target still sustaining*. `protocol.py` makes the window one
+declaration per corpus that both sides read. Re-fitting all 128 under the aligned window is
+**statistically better but perceptually nothing**: on the same objective it wins **77/128** (mean
+27.31 → 26.78, sign test p ≈ 0.02), while the attack centroid does not move (0.741 → 0.731). Worth
+keeping as a correctness fix; not the answer to the complaint.
+
+**3. The search space has no cross-mod in it.** M19 built FM/ring (CC85/86/87) but
+`params.py:SELECTS` leaves it out, so **0 of 128** fitted presets use it. `presetgen/xmod_probe.py`
+re-asks M19's question on the 10 most metallic targets, in two stages: **graft** (hold the fitted
+preset, sweep 96 xmode×xratio×xdepth settings) and **refit** (CMA-ES from the fitted preset with
+the best three CCs pinned, against a **same-budget control with cross-mod off** — so the control
+absorbs whatever the extra budget alone buys). Under clap+stft: graft **8/10** improved, refit
+**6/10** (two are ties by construction — their best graft was "off", so both arms are the same
+run). E-Piano 1 −4.87, E-Piano 2 −4.19, Clavinet −2.50, Charang −1.82, Crystal −1.44.
+
+And it moves the metric the loss never sees, which is the point:
+
+| | attack centroid, ours/target |
+|---|---|
+| cross-mod off | 0.521 |
+| **cross-mod on** | **0.591** |
+
+(Glockenspiel 421 → 849 Hz against a 1769 Hz target; E-Piano 2 271 → 421 against 837.)
+
+**So M19's "the matcher would not choose cross-mod" verdict was true of the loss it was measured
+under, and is not true any more.** That verdict was reasoned from the magnitude-STFT loss being
+*too literal* — per-bin, so a partial a few Hz off draws a double penalty and filling the gross
+energy curve with saw+noise+filter always wins. A CLAP embedding does not compare bins at all, and
+under `clap+stft` the same three CCs are worth roughly a point and a half of loss on exactly the
+patches that motivated building them. The open item is the expensive one: adding X-Mod to
+`SELECTS` widens the search space by three dimensions, which costs budget on all 128 targets to buy
+something on maybe a dozen — a full-bank A/B, not a graft probe.
+
+**The honest summary of all three:** the attack is not dull because the loss is looking the wrong
+way, and it is not dull because the windows were misaligned. It is dull because a single carrier
+with a static modulation index cannot make a layered DX sample's transient — and the only fix that
+moved the number was **giving the search more engine**, not giving it a better objective.
+
+### Half a bank is a better bank
+
+A 128-slot fitted bank is not 128 sounds. `soundfont.py` lists each GM program at several pitches
+and every pitch becomes its own slot, so the Bass category shipped **six** independently-fitted
+"Synth Bass 1" patches that mostly landed in the same place. `presetgen/consolidate.py` keeps half,
+chosen for **spread** rather than for score:
+
+- **Distance is perceptual, not parametric.** Two presets with different CC values can sound
+  identical (close the filter and the waveform select stops mattering) and two with similar values
+  can not. So each preset is rendered and embedded with **CLAP** — the encoder the bank was fitted
+  under — and distance is cosine on that.
+- **Instrument coverage is a hard constraint ahead of distance.** Farthest-point selection alone
+  keeps three pitches of one instrument and drops another entirely, because *pitch* moves a CLAP
+  embedding more than *timbre* does. So no instrument gets a second slot until every instrument in
+  the category has one; distance only breaks ties inside that rule.
+- **Per category, not globally.** The category rail is the browser's main axis; a "diverse" bank
+  that emptied Brass to make room for six FX patches would be worse to use whatever a global
+  spread metric said.
+- **The worst-fitting tail is a last resort.** Max-min selection favours outliers by construction,
+  and in a bank fitted to *named* targets the outlier is usually the fit that **missed** — a patch
+  nothing else resembles because it does not resemble its own target either, while still carrying
+  that target's name. Deprioritising the worst 15% costs almost nothing in spread (0.085 → 0.083)
+  and drops eight mislabelled slots.
+
+Result: **128 → 64**, all **46 instruments** kept, and mean nearest-neighbour distance — how close
+the closest pair of slots sits, which is what a listener feels as "these two are the same patch" —
+up **0.060 → 0.083 (+38%)**. Per category: Bass 0.090→0.151, Pluck 0.102→0.144, Brass 0.080→0.117,
+FX 0.082→0.117, Keys 0.091→0.115, Pad 0.069→0.113, Lead 0.077→0.104, Strings 0.051→0.078
+(Strings stays the tightest category both before and after — four string programs that the engine
+renders as four slightly different filtered saws).
+
+> **A naming trap worth one line.** The first cut keyed instruments off `name_audit.clean_name()`,
+> which strips a trailing index — so "E-Piano 1" (a Rhodes) and "E-Piano 2" (a DX) became one
+> instrument, as did "Synth Bass 1"/"Synth Bass 2". Under that key coverage was satisfied by four
+> E-Pianos and one Clavinet. `consolidate.py` strips **only** the pitch tag.
 
 ## Milestone 7 + 8 — hardware I/O: DIN MIDI in + I2S DAC out (built; hardware pending)
 

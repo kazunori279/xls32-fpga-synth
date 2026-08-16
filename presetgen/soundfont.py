@@ -14,10 +14,19 @@ import soundfile as sf
 os.environ.setdefault("DYLD_LIBRARY_PATH", "/opt/homebrew/lib:/usr/local/lib")
 import fluidsynth  # noqa: E402
 
+import protocol  # noqa: E402
+
 SF2 = "/tmp/sf/MuseScore_General.sf3"
 SR = 44100
-CACHE = os.path.join(os.path.dirname(__file__), "targets_soundfont")
-GATE_S, TAIL_S = 1.5, 0.5
+# The window both sides of the comparison use. It used to be 1.5/0.5 here against search.py's
+# 1.6/0.3, so every fit in this corpus scored the target's release against our sustain for 100 ms
+# and then had its last 100 ms truncated away. See protocol.py.
+WINDOW = GATE_S, TAIL_S = protocol.GATE_S, protocol.TAIL_S
+# The window is in the cache path: these WAVs are the note, not just the patch, and a rendered
+# target from a different window is a different note. Without this the old 1.5/0.5 files would
+# have been reused silently and the fix would have changed nothing.
+CACHE = os.path.join(os.path.dirname(__file__), "targets_soundfont",
+                     f"g{int(GATE_S*1000)}t{int(TAIL_S*1000)}")
 
 # GM program (0-indexed) -> display name, grouped into our categories.
 _GM = {

@@ -30,7 +30,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import engine                                                              # noqa: E402
-import search                                                              # noqa: E402
+import protocol                                                            # noqa: E402
 from ab_render import write_wav                                            # noqa: E402
 from name_audit import note_of                                             # noqa: E402
 
@@ -63,33 +63,51 @@ def main():
                                for p in sorted(os.listdir(WEBUI))
                                if re.fullmatch(r"presets_\w+\.json", p)]
     os.makedirs(OUT, exist_ok=True)
-    engine.render(engine._DEFAULTS, gate_s=search.GATE_S, tail_s=search.TAIL_S)
+    engine.render(engine._DEFAULTS, gate_s=protocol.GATE_S, tail_s=protocol.TAIL_S)
 
-    index = {}
+    # Merged, not rebuilt: naming a source on the command line is how you re-render one bank, and
+    # rebuilding the index from that run alone would drop every other bank out of the browser
+    # while its (still perfectly good) WAVs sat on disk unreferenced.
+    ipath = os.path.join(OUT, "index.json")
+    index = json.load(open(ipath)) if os.path.exists(ipath) else {}
     for source in sources:
         path = os.path.join(WEBUI, f"presets_{source}.json")
         if not os.path.exists(path):
             print(f"  {source}: no bank file, skipped")
             continue
-        presets = json.load(open(path))["presets"]
-        ns, targets = targets_for(source)
+        bank = json.load(open(path))
+        presets, meta = bank["presets"], bank.get("meta") or {}
+        # A bank is normally named after the corpus it was fitted to, and its presets carry the
+        # target's own name. A probe bank is neither -- it holds two variants per target under
+        # renamed slots -- so `meta.targets` and `meta.names` let it say so and still get the
+        # target clip that makes the comparison worth hearing.
+        ns, targets = targets_for(meta.get("targets", source))
+        # Per corpus, not one global window: the target clip and our clip have to be the same note
+        # for the A/B to mean anything, and nsynth's is shorter than soundfont's (protocol.py).
+        win = protocol.window(ns) if ns else (protocol.GATE_S, protocol.TAIL_S)
+        alias = meta.get("names") or {}
         d = os.path.join(OUT, source)
         os.makedirs(d, exist_ok=True)
+        index[source] = {}                # this bank is re-read in full, so drop any stale slots
         n_t = 0
         for p in presets:
             s = slug(p["name"])
-            w = engine.render(p["values"], note=note_of(p["name"], p["category"]),
-                              gate_s=search.GATE_S, tail_s=search.TAIL_S)
+            tname = alias.get(p["name"], p["name"])
+            w = engine.render(p["values"], note=note_of(tname, p["category"]),
+                              gate_s=win[0], tail_s=win[1])
             write_wav(os.path.join(d, f"{s}_ours.wav"), w, engine.SR)
-            has_t = p["name"] in targets
+            has_t = tname in targets
             if has_t:
-                audio, sr = ns.load(targets[p["name"]])
+                audio, sr = ns.load(targets[tname])
                 write_wav(os.path.join(d, f"{s}_target.wav"), audio, sr)
                 n_t += 1
             index.setdefault(source, {})[p["name"]] = {"slug": s, "target": has_t}
+        if len(index[source]) != len(presets):
+            print(f"  {source}: WARNING {len(presets) - len(index[source])} duplicate preset names"
+                  f" -- their clips overwrote each other")
         print(f"  {source}: {len(presets)} ours, {n_t} target")
 
-    json.dump(index, open(os.path.join(OUT, "index.json"), "w"))
+    json.dump(index, open(ipath, "w"))
     mb = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(OUT) for f in fs) / 1e6
     print(f"\nwrote {OUT}  ({mb:.0f} MB)")
 

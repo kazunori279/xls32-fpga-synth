@@ -12,6 +12,12 @@ import soundfile as sf
 
 ROOT = "/tmp/nsynthv/nsynth-valid"
 SR = 16000
+# NSynth holds the note for ~3 s of a 4 s clip, so its release is nowhere near the 1.9 s window a
+# search can afford; stretching every candidate render to 3.4 s to catch it would cost 1.8x on
+# every evaluation for one segment. tail_s = 0 says so: this corpus is compared over a held note,
+# protocol.segments() emits no R phase for it, and the release of an NSynth-fitted preset is
+# therefore unconstrained by the fit. See protocol.py.
+WINDOW = (1.9, 0.0)
 
 # our category -> NSynth instrument_family_str (synth_lead absent in valid -> guitar for Lead)
 CAT_FAMILY = {
@@ -73,7 +79,10 @@ def load(path):
     a, sr = sf.read(path, dtype="float32")
     if a.ndim > 1:
         a = a.mean(axis=1)
-    return a, sr
+    # Cropped to the window, from the onset: NSynth clips start at note-on, so this is a held note
+    # of exactly the length the candidate is rendered at. Without the crop the last 0.3 s compared
+    # our release against the target still sustaining.
+    return a[:int(sum(WINDOW) * sr)], sr
 
 
 if __name__ == "__main__":

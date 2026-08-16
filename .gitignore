@@ -45,8 +45,19 @@ presetgen/name_audit*.json
 # ab_render.py output: ~10 MB of WAV plus the manifest that says which bank is A. Regenerable in a
 # minute from the banks, and committing the manifest would put the answer key in the repo.
 webui/ab/
-# build_previews.py output: ~54 MB of audition WAV, regenerable from the banks in one command.
+# build_previews.py output: ~60 MB of audition WAV, regenerable from the banks in one command.
 webui/static/preview/
+# xmod_probe.py output: the measurement, plus both re-fit arms as an auditionable bank. The bank
+# is a probe and not something anyone should be able to load onto a board -- and since synthspec
+# globs presets_*.json, leaving it in place also puts it into a rebuilt spec.json. Regenerate,
+# listen, delete, rebuild the spec.
+presetgen/xmod_probe.json
+webui/presets_xmodprobe.json
+
+# attack_audit.py output: a measurement of whatever banks happened to be on disk when it ran, so
+# it is reproducible from the banks and stale the moment one is re-fitted. The numbers worth
+# keeping are quoted in DEVELOPMENT.md.
+presetgen/attack_audit.json
 
 # stray screenshots
 Screenshot*.png
