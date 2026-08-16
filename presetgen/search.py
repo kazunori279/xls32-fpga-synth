@@ -1,7 +1,9 @@
 """CMA-ES inverse synthesis: find engine params whose render best matches a target spectrogram.
 
-match() is a single CMA-ES run over the 23-dim [0,1] vector (params.py), seeded from a
-per-category region, with a guard against silent/degenerate patches.
+match() is a single CMA-ES run over the [0,1]^params.DIM vector (params.py), seeded from a
+per-category region, with a guard against silent/degenerate patches. DIM is 22 by default and
+$SPACE widens it to 25, 26 or 29; nothing here has to know which, but note that budget buys less
+per dimension, so an equal-budget run at a wider space is the only fair control for one.
 
 Benchmarking (8 targets/category, equal-budget A/B) showed the loss is BUDGET-limited, not
 local-minima-limited: at budget 900 a single run beat per-waveform multi-start (which starved
@@ -52,7 +54,12 @@ def match(target, category="Lead", note=60, budget=800, seed=1, window=None):
     best_v, best_f = x0, _objective(x0, target, note, window)   # include the seed itself
     while not es.stop():
         xs = es.ask()
-        fs = [_objective(x, target, note, window) for x in xs]
+        # The whole generation in one call, which is what _objective_batch exists for -- scoring
+        # one at a time went through it a population of 1 at a time and never used it. Worth ~8%
+        # and no more: CLAP on CPU is compute-bound, so 13 clips cost 13 clips' FLOPs whether they
+        # arrive together or not. Results are unchanged (a re-fit of Crystal reproduces the shipped
+        # bank's 30.79 exactly); this is the honest shape, not a speedup.
+        fs = list(_objective_batch(xs, target, note, window))
         es.tell(xs, fs)
         i = int(np.argmin(fs))
         if fs[i] < best_f:

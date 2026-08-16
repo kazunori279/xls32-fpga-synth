@@ -22,11 +22,19 @@ SR = 44100
 # 1.6/0.3, so every fit in this corpus scored the target's release against our sustain for 100 ms
 # and then had its last 100 ms truncated away. See protocol.py.
 WINDOW = GATE_S, TAIL_S = protocol.GATE_S, protocol.TAIL_S
-# The window is in the cache path: these WAVs are the note, not just the patch, and a rendered
-# target from a different window is a different note. Without this the old 1.5/0.5 files would
-# have been reused silently and the fix would have changed nothing.
+# FluidSynth's own reverb and chorus are ON by default -- room-size 0.5 / level 0.7 and depth
+# 4.25 / level 0.6 -- so every target in this corpus is a WET recording of a GM patch. That was
+# invisible while the fitting pipeline had no effects to reach for; the moment CC93/94/95 entered
+# the search space (params.py $SPACE), the search started matching the renderer's room instead of
+# the instrument. DRY=1 renders the same corpus with both switched off, which is the control that
+# tells the two apart. Neither is "the" corpus: wet is what a GM player hears, dry is what the
+# instrument is.
+DRY = os.environ.get("DRY", "0") not in ("0", "false", "no")
+# The window and the wet/dry choice are both in the cache path: these WAVs are the note, not just
+# the patch, and a target rendered under different settings is a different target. Without this
+# the old 1.5/0.5 files would have been reused silently and the fix would have changed nothing.
 CACHE = os.path.join(os.path.dirname(__file__), "targets_soundfont",
-                     f"g{int(GATE_S*1000)}t{int(TAIL_S*1000)}")
+                     f"g{int(GATE_S*1000)}t{int(TAIL_S*1000)}" + ("dry" if DRY else ""))
 
 # GM program (0-indexed) -> display name, grouped into our categories.
 _GM = {
@@ -70,6 +78,9 @@ def _render(prog, note):
     global _synth, _sfid
     if _synth is None:
         _synth = fluidsynth.Synth(samplerate=float(SR))
+        if DRY:
+            _synth.setting("synth.reverb.active", 0)
+            _synth.setting("synth.chorus.active", 0)
         _sfid = _synth.sfload(SF2)
     _synth.program_select(0, _sfid, 0, prog)
     _synth.all_notes_off(0)

@@ -15,8 +15,15 @@ are the ones that carry information, and a trial where both banks landed on the 
 spends a listener's attention. `manifest.json` records `spread` per trial so a null result can be
 told apart from a set that never asked a hard question.
 
+The two banks are arguments, not constants. They were once the `_stft`/`_clapstft` pair spelled
+into this file; those filenames no longer exist, and the question this rig answers is asked again
+every time the fitting pipeline changes -- most recently by the $SPACE arms in issue #16, which are
+four banks over the same 64 targets and need pairing on demand. The FIRST bank listed is the
+incumbent.
+
     uv sync --extra deepfit
-    uv run python presetgen/ab_render.py [trials-per-category] [source]
+    uv run python presetgen/ab_render.py webui/presets_a.json webui/presets_b.json \
+        [trials-per-category] [source]
 """
 import json
 import os
@@ -28,7 +35,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import engine                                                              # noqa: E402
 import loss_deep                                                           # noqa: E402
-import search                                                              # noqa: E402
+import protocol                                                            # noqa: E402
 from name_audit import note_of                                             # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -55,19 +62,25 @@ def write_wav(path, x, sr):
 
 def main():
     import importlib
-    per_cat = int(sys.argv[1]) if len(sys.argv) > 1 else 3
-    source = sys.argv[2] if len(sys.argv) > 2 else "soundfont"
-    # The two banks under test, by their $LOSS name. Left is the incumbent.
-    banks_in = [("stft", f"presets_{source}_stft.json"),
-                ("clapstft", f"presets_{source}_clapstft.json")]
+    argv = sys.argv[1:]
+    paths = [a for a in argv if a.endswith(".json")]
+    rest = [a for a in argv if not a.endswith(".json")]
+    if len(paths) != 2:
+        sys.exit("usage: ab_render.py bank_a.json bank_b.json [trials-per-category] [source]")
+    per_cat = int(rest[0]) if rest else 3
+    source = rest[1] if len(rest) > 1 else "soundfont"
+    # Tag = the filename stem minus "presets_", which is what the manifest records as the answer
+    # key. Left is the incumbent.
+    banks_in = [(os.path.basename(p)[8:-5] if os.path.basename(p).startswith("presets_")
+                 else os.path.basename(p)[:-5], p) for p in paths]
     ns = importlib.import_module(source)
     os.makedirs(OUT, exist_ok=True)
-    engine.render(engine._DEFAULTS, gate_s=search.GATE_S, tail_s=search.TAIL_S)
+    win = protocol.window(ns)         # the corpus's window, not the global one -- see protocol.py
+    engine.render(engine._DEFAULTS, gate_s=win[0], tail_s=win[1])
 
-    webui = os.path.abspath(os.path.join(HERE, "..", "webui"))
     banks = {}
     for tag, fn in banks_in:
-        d = json.load(open(os.path.join(webui, fn)))
+        d = json.load(open(fn))
         banks[tag] = {p["name"]: p for p in d["presets"]}
     shared = [n for n in banks[banks_in[0][0]] if n in banks[banks_in[1][0]]]
     targets = {name: path for _, name, path, _ in ns.list_targets(per_cat=16) if name in shared}
@@ -80,7 +93,7 @@ def main():
     for name in shared:
         p0, p1 = banks[banks_in[0][0]][name], banks[banks_in[1][0]][name]
         note = note_of(name, p0["category"])
-        a0, a1 = (engine.render(p["values"], note=note, gate_s=search.GATE_S, tail_s=search.TAIL_S)
+        a0, a1 = (engine.render(p["values"], note=note, gate_s=win[0], tail_s=win[1])
                   for p in (p0, p1))
         spread = float(loss_deep.loss(a0, a1, a_sr=engine.SR, b_sr=engine.SR))
         rows.append({"name": name, "category": p0["category"], "note": note, "spread": spread})
@@ -103,7 +116,7 @@ def main():
         write_wav(os.path.join(OUT, f"{stem}_target.wav"), audio, sr)
         for slot, tag in (("a", first), ("b", second)):
             w = engine.render(banks[tag][t["name"]]["values"], note=t["note"],
-                              gate_s=search.GATE_S, tail_s=search.TAIL_S)
+                              gate_s=win[0], tail_s=win[1])
             write_wav(os.path.join(OUT, f"{stem}_{slot}.wav"), w, engine.SR)
         manifest.append({"id": stem, "name": t["name"], "category": t["category"],
                          "spread": round(t["spread"], 4), "a": first, "b": second})

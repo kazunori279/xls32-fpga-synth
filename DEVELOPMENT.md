@@ -783,8 +783,9 @@ The pipeline (`presetgen/`):
    renders per target).
 2. **Perceptual loss** (`loss.py`) — a multi-resolution STFT + mel + amplitude-envelope
    distance, RMS-normalized and magnitude-only.
-3. **Search** (`search.py`) — [CMA-ES](https://en.wikipedia.org/wiki/CMA-ES) over the 23-dim
+3. **Search** (`search.py`) — [CMA-ES](https://en.wikipedia.org/wiki/CMA-ES) over the 22-dim
    CC space (`params.py`), seeded per category, minimizing the loss against a target render.
+   `$SPACE` widens it to 25, 26 or 29 of the engine's 30 CCs — see below.
 4. **Targets** — real single-note samples, one *source module* per corpus (all expose the same
    `list_targets()`/`load()` interface): `nsynth.py` (Google's **NSynth** — 128-preset bank,
    loss median 28.5), `soundfont.py` (a **GM soundfont** rendered with [FluidSynth](https://www.fluidsynth.org/)
@@ -819,8 +820,8 @@ loss =  Σ over FFT ∈ {256,512,1024,2048}  [ mean|Aₘ−Bₘ|  +  0.5·mean|l
 
 ### The CMA-ES search (`search.py`, `params.py`)
 
-Each target is fit by one [CMA-ES](https://en.wikipedia.org/wiki/CMA-ES) run over a **23-dim
-`[0,1]` vector** (14 continuous knobs + 9 bit-packed selects), seeded from a per-category
+Each target is fit by one [CMA-ES](https://en.wikipedia.org/wiki/CMA-ES) run over a **22-dim
+`[0,1]` vector** (14 continuous knobs + 8 bit-packed selects), seeded from a per-category
 region (`seed_vec`). Discrete selects (waveform, filter mode, fx, …) are handled by
 **continuous relaxation**: each is one `[0,1]` coordinate that `preset_from_vec()` quantizes into
 its option buckets (e.g. waveform = one of 5 equal bands), so CMA-ES only ever optimizes a
@@ -952,6 +953,10 @@ patches that motivated building them. The open item is the expensive one: adding
 `SELECTS` widens the search space by three dimensions, which costs budget on all 128 targets to buy
 something on maybe a dozen — a full-bank A/B, not a graft probe.
 
+> **The full-bank A/B was run, and it overturned this.** A graft asks "is the fitted preset
+> improvable from where it stands"; a bank asks "is the wider space better to search". They have
+> different answers — see *Widening the search space*, below.
+
 **The honest summary of all three:** the attack is not dull because the loss is looking the wrong
 way, and it is not dull because the windows were misaligned. It is dull because a single carrier
 with a static modulation index cannot make a layered DX sample's transient — and the only fix that
@@ -992,6 +997,89 @@ renders as four slightly different filtered saws).
 > which strips a trailing index — so "E-Piano 1" (a Rhodes) and "E-Piano 2" (a DX) became one
 > instrument, as did "Synth Bass 1"/"Synth Bass 2". Under that key coverage was satisfied by four
 > E-Pianos and one Clavinet. `consolidate.py` strips **only** the pitch tag.
+
+### Widening the search space: what 30 CCs bought, and what it cost
+
+The engine exposes **30 CCs**; the fits had only ever reached **22**, and one of those 22 was
+inert. `params.py` now takes a `$SPACE` and all four widths run from one tree, so the question is
+settled by measurement rather than by argument:
+
+| `$SPACE` | dims | adds |
+|---|---|---|
+| `base` | 22 | — (what every shipped bank was fitted under; the default) |
+| `xmod` | 25 | CC85 xmode, CC86 xdepth, CC87 xratio |
+| `fx` | 26 | CC93 reverb, CC94 chorusd, CC95 echod, CC82 dtime |
+| `full` | 29 | both |
+
+The thirtieth CC is `volume`, and it is correctly excluded for good: the loss RMS-normalizes, so
+gain is unobservable and the coordinate would be free.
+
+> **`room` (CC91) had been a dead dimension the whole time.** It is in `SELECTS`, so CMA-ES has
+> been optimising it on every target in every bank — and `engine.py:480` skips the effects chain
+> unless one of the three depths is nonzero, so `rsize`, the only thing `room` feeds, never
+> reached a render during a fit. The real width of the shipped search was **21**, wearing a
+> 22-dimensional vector. `SPACE=fx` is what brings it to life.
+
+**The control is exact, not approximate.** All four arms re-fit the *same 64 targets* the shipped
+bank occupies (`ONLY_FROM=`), at the same budget (800), from the same seed — and the new dimensions
+seed from `engine._DEFAULTS`, which is dry with cross-mod off, so a wider arm starts at its own
+control's starting point. `armbase` then reproduces the shipped bank on **64 of 64 slots, exactly**,
+which is what makes the rest of the table readable.
+
+`bank_compare.py` scores each arm against `armbase` **per preset** — two banks over the same targets
+are a paired sample, and a mean can be carried by two outliers while the majority of slots get
+worse:
+
+| arm | median loss | stft W–L | p | clap W–L | p | attack centroid |
+|---|---|---|---|---|---|---|
+| base (22) | 25.9 | — | — | — | — | **0.777** |
+| xmod (25) | 24.1 | 40–24 | 0.060 | 37–27 | 0.260 | 0.703 |
+| **fx (26)** | 24.5 | **48–16** | **0.0001** | **48–16** | **0.0001** | 0.707 |
+| full (29) | 24.1 | 47–17 | 0.0002 | 43–21 | 0.0081 | 0.726 |
+
+Three things fall out of it, and only the first is the one that was expected.
+
+**1. The effect depths win, decisively, and cross-mod does not.** `fx` takes 48 of 64 slots on
+*both* yardsticks at p = 0.0001. `xmod` alone cannot clear chance under CLAP (p = 0.26), and adding
+it *on top of* `fx` makes `fx` worse (clap 48–16 → 43–21): three more dimensions cost more budget
+than they buy. This is the reverse of `xmod_probe.py`'s verdict, and the two are not in conflict —
+a graft holds a converged preset and asks whether cross-mod improves it, which it does; a re-fit
+from the category seed asks whether the wider space is better to *search*, which at a fixed 800
+evals it is not.
+
+**2. It is not the corpus's reverb.** `soundfont.py` renders through FluidSynth, whose reverb
+(room 0.5 / level 0.7) and chorus (depth 4.25 / level 0.6) are **on by default** — so every target
+is a *wet* recording, and the obvious reading of the `fx` result is that the search found the
+renderer's room rather than the instrument. `DRY=1` re-renders the corpus with both switched off
+into its own cache, and the win survives it essentially unchanged: **48–16, p = 0.0001** under CLAP,
+46–18 under STFT. Worth knowing anyway that the wet/dry gap is concentrated in the release tail of
+short-release patches (Brass ×4.3, Keys ×2.9) and is ~1.0 everywhere else.
+
+**3. Every arm made the attack duller, including the winner.** The loss-independent metric moves the
+wrong way across the board — and not one category improves under `xmod`, least of all the one it was
+supposed to fix:
+
+| centroid, ours/target | Bass | Lead | Pad | Pluck | Keys | Brass | Strings | FX |
+|---|---|---|---|---|---|---|---|---|
+| base | 0.63 | **0.91** | **0.89** | **0.73** | **0.66** | 0.80 | 1.03 | 0.66 |
+| xmod | 0.54 | 0.76 | 0.84 | 0.68 | 0.49 | 0.80 | 1.00 | 0.65 |
+| fx | 0.59 | 0.80 | 0.82 | 0.55 | 0.50 | 0.80 | 1.14 | 0.64 |
+| full | 0.59 | 0.75 | 0.83 | 0.59 | 0.63 | 0.78 | 1.06 | **0.68** |
+
+Cross-mod *does* make the bell content the probe promised: on the 13 metallic slots the target sits
+at **18.8%** off-harmonic energy, `base` undershoots at 10.4%, and `xmod` lands at **19.0%** — dead
+on. The refit then spends it on a darker attack. Getting the inharmonicity right and the brightness
+wrong at the same time is a real result about the engine, not a measurement artefact.
+
+**And the hypothesis that started all this did not survive.** The effect depths went into the
+search space because `name_audit.py` showed Strings at **0% kept** against a 50% target ceiling, and
+"an ensemble string sound without chorus is not an ensemble string sound" is a good argument.
+Strings is still at **0%** in all four arms. Chorus was not what was missing.
+
+**So nothing is promoted on this evidence.** `fx` is the objective winner and the one to audition —
+`presetgen/ab_render.py webui/presets_armbase.json webui/presets_armfx.json` writes the blind set —
+but a bank whose attack got measurably duller is exactly the bank that should not ship on a p-value.
+The arms are gitignored (`webui/presets_arm*.json`); the listening test is the gate.
 
 ## Milestone 7 + 8 — hardware I/O: DIN MIDI in + I2S DAC out (built; hardware pending)
 

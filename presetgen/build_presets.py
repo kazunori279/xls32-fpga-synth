@@ -34,12 +34,18 @@ def main():
     engine.render(params.preset_from_vec(params.seed_vec("Lead")), gate_s=win[0], tail_s=win[1])
     targets = ns.list_targets(per_cat=PER_CAT)
     # ONLY= restricts the run to named presets, for a pilot that answers a question about the
-    # objective without paying for all 128.
+    # objective without paying for all 128. ONLY_FROM= is the same thing spelled as an existing
+    # bank: the shipped bank is 64 of the corpus's 128 slots (consolidate.py), and a re-fit that
+    # is meant to replace it has to be over those 64 and not over the 128 they were drawn from.
     only = [n for n in os.environ.get("ONLY", "").split("|") if n]
+    src = os.environ.get("ONLY_FROM")
+    if src:
+        ref = os.path.abspath(os.path.join(HERE, "..", "webui", f"presets_{src}.json"))
+        only += [p["name"] for p in json.load(open(ref))["presets"]]
     if only:
         targets = [t for t in targets if t[1] in only]
     print(f"matching {len(targets)} presets (budget={BUDGET}, loss={LOSSNAME}, "
-          f"window={win}, seg={stft_loss.SEG})")
+          f"space={params.SPACE}/{params.DIM}d, window={win}, seg={stft_loss.SEG})")
     out, losses = [], []
     t0 = time.time()
     for i, (cat, name, path, note) in enumerate(targets):
@@ -60,8 +66,12 @@ def main():
         json.dump({"presets": [{k: p[k] for k in ("name", "category", "values")} for p in out],
                    # "targets" names the corpus, not the bank: with $BANK the two can differ, and
                    # every consumer (previews, attack_audit) needs the corpus to find the target.
+                   # "space"/"dim": which CCs the search could reach. Two banks fitted at
+                   # different widths are not each other's control, and without this the
+                   # difference is invisible in the file.
                    "meta": {"count": len(out), "budget": BUDGET, "loss": LOSSNAME,
                             "targets": SOURCE, "window": list(win),
+                            "space": params.SPACE, "dim": params.DIM,
                             "seg": bool(stft_loss.SEG)}}, f)
     dt = time.time() - t0
     print(f"\nwrote {len(out)} presets -> {OUT}  ({dt/60:.1f} min)")

@@ -54,6 +54,13 @@ webui/static/preview/
 presetgen/xmod_probe.json
 webui/presets_xmodprobe.json
 
+# $SPACE arm banks: build_presets.py output for the search-space experiment (issue #16). Four
+# banks over the same 64 targets at four widths, of which at most one can ever ship -- and since
+# synthspec globs presets_*.json, leaving them in place would put all four into a rebuilt
+# spec.json as browser tabs. Promote the winner by rewriting presets_soundfont.json, delete the
+# rest.
+webui/presets_arm*.json
+
 # attack_audit.py output: a measurement of whatever banks happened to be on disk when it ran, so
 # it is reproducible from the banks and stale the moment one is re-fitted. The numbers worth
 # keeping are quoted in DEVELOPMENT.md.
