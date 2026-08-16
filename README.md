@@ -521,8 +521,10 @@ song is loaded — the four PART tones back into `demos.json`. **📂 LOAD** rea
 The USER bank lives in the browser's own storage and is what reloads with the page; the files are
 how it gets onto another machine, and how `webui/static/demos.json` in this repo is edited. Both
 buttons remember the file you chose, so the second trip costs no dialog; ⇧-click either to point it
-somewhere else, and **⚙ SETTINGS ▸ Files** shows where each currently goes. (Only the file *name* —
-the browser deliberately does not tell a page which folder you picked.)
+somewhere else, and **⚙ SETTINGS ▸ Files** shows where each currently goes — by name only, because
+the browser deliberately does not tell a web page which folder you picked. To see the folder, use
+the **📁 Show** button on that row: it opens your system's file dialog *inside* it, path in the
+location bar, and reads nothing — close the dialog once you have looked.
 
 The panel is the same on both boards; it takes the frame rate from the transport it opened
 (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming. See the

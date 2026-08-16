@@ -72,7 +72,9 @@ addition rather than a rewrite.
   written whole. Everything goes through the File System Access API and remembers where you put it:
   the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot
   hold one, with the file name mirrored into `localStorage` for the tooltip. LOAD and SAVE share one
-  handle per file, so a round trip costs no dialog; shift-click either to re-pick. **⚙ SETTINGS**
+  handle per file, so a round trip costs no dialog; shift-click either to re-pick. A handle has no
+  path — `.name` is all of it — so the Files rows name the file and a **📁 Show** button opens the
+  system dialog in its folder (`startIn:`), which is the only "where is it" the API allows. **⚙ SETTINGS**
   (the header button where OUT used to be) holds the audio-output picker, the two file targets, the
   MIDI/audio status readouts and the key map — the last two used to be a footer under the keyboard.
   The matched preset banks live here as

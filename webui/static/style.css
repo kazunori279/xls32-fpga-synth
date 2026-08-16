@@ -298,6 +298,14 @@ body{
 /* a file that has never been picked is not an error and not a value — say it, in the voice of an
    empty preset slot rather than of a warning */
 .setv.unset{color:#a89b83;font-style:italic}
+/* Opens the system file dialog in the file's own folder -- the only "where is it" a page can give.
+   Disabled until there is a file to point at, and greyed rather than hidden so the row still says
+   the affordance exists. */
+.setgo{flex:0 0 auto;height:22px;padding:0 9px;border-radius:3px;cursor:pointer;font-family:inherit;
+  font-size:9px;letter-spacing:1px;font-weight:700;white-space:nowrap;
+  background:#e6dcc6;color:#3a3226;border:1px solid #b6a98d}
+.setgo:hover:not(:disabled){background:#f2ead8;border-color:#8d8168}
+.setgo:disabled{opacity:.4;cursor:default}
 .setnote{padding:4px 8px;font-size:10px;line-height:1.55;color:#6d6455}
 .setnote code{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#3a3226;
   background:rgba(0,0,0,.07);border-radius:3px;padding:1px 4px}

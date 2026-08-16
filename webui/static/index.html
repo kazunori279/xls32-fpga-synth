@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v93-settings">
+<link rel="stylesheet" href="style.css?v94-reveal">
 </head>
 <body>
 <div id="synth">
@@ -101,12 +101,16 @@
 
           <div class="setsec">
             <h4>Files</h4>
-            <div class="setrow"><span class="setk">patches.json</span><span class="setv" id="fpatches">—</span></div>
-            <div class="setrow"><span class="setk">demos.json</span><span class="setv" id="fdemos">—</span></div>
+            <div class="setrow"><span class="setk">patches.json</span><span class="setv" id="fpatches">—</span>
+              <button class="setgo" id="gopatches" title="open a file dialog in this file's folder">📁 Show</button></div>
+            <div class="setrow"><span class="setk">demos.json</span><span class="setv" id="fdemos">—</span>
+              <button class="setgo" id="godemos" title="open a file dialog in this file's folder">📁 Show</button></div>
             <div class="setnote">Where 📂 LOAD reads and 💾 SAVE writes. The browser hands the page a
-              file <i>handle</i> and not a path — the folder you picked is deliberately not
-              readable, so only the name can be shown. Shift-click either button to choose a
-              different file.</div>
+              file <i>handle</i> and not a path — the folder you picked is deliberately not readable
+              by a web page, so the name is all this row can say. <b>📁 Show</b> is the way to see
+              the rest: it opens your system's file dialog <i>in that folder</i>, with the path in
+              its location bar. Nothing is read or written — close the dialog when you have looked.
+              Shift-click 📂 LOAD or 💾 SAVE to point one somewhere else.</div>
           </div>
 
           <div class="setsec">
@@ -177,7 +181,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v93-settings"></script>
-<script src="app.js?v93-settings"></script>
+<script src="transport.js?v94-reveal"></script>
+<script src="app.js?v94-reveal"></script>
 </body>
 </html>

@@ -2408,6 +2408,18 @@ genuinely new thing in it: where `patches.json` and `demos.json` currently point
 because the File System Access API hands a page a handle and not a path — the folder is deliberately
 not readable — and saying so is better than showing a name that looks like it might be one.
 
+**Which leaves "so where *is* it?" unanswered, and a row that admits it is still a row that does not
+help.** The page cannot answer it; the file dialog can. `startIn:` takes a `FileSystemFileHandle`
+and opens the picker in that handle's own directory, so **📁 Show** on each Files row opens the
+system dialog *inside* the folder with the path in its location bar, and throws away whatever comes
+back — `revealFile()` reads nothing, writes nothing, and re-points nothing, which was worth a test
+of its own: stub the picker into returning a *different* handle and the remembered target must not
+budge. It is write-only in the API's own direction — a dialog can be sent to a directory and never
+reports one back — which is the same fact as before, put to use instead of apologised for. The same
+`pickerOpts()` now gives both real pickers an `id` (Chrome remembers a directory per file *kind*
+across restarts) and a `startIn` of the current handle, so a ⇧-click re-pick opens beside the file
+it is replacing rather than wherever the last dialog of any kind happened to be.
+
 The move cost nothing in code because the ids did not change: `#outdev`, `#octlabel`, `#midiin` and
 `#dbg` are the same elements, written by the same `renderMidiIn()` / `octLabel()` / meter interval,
 which go on updating behind a closed overlay so it is never stale when opened. `route_check.html`:

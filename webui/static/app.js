@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v93-settings';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v94-reveal';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -198,14 +198,18 @@ function applyValues(vals, send) {
 // this overlay changed nothing about that, because they are still the same elements by id. They go
 // on updating behind a closed panel, which costs nothing and means it is never stale when opened.
 function refreshSettings() {
-  const put = (id, key) => {
+  const put = (id, btn, key) => {
     const el = document.getElementById(id); if (!el) return;
     const n = fileName(key);
     el.textContent = n || 'not chosen yet';
     el.classList.toggle('unset', !n);
+    // 📁 Show has nothing to open until a file has been picked, and nothing to open it WITH on a
+    // browser without the File System Access API -- there the file went to the download folder.
+    const b = document.getElementById(btn);
+    if (b) b.disabled = !n || !window.showOpenFilePicker;
   };
-  put('fpatches', 'patches');
-  put('fdemos', 'demos');
+  put('fpatches', 'gopatches', 'patches');
+  put('fdemos', 'godemos', 'demos');
 }
 function openSettings() { refreshSettings(); refreshOutputs(); document.getElementById('setbox').classList.remove('hidden'); }
 function closeSettings() { document.getElementById('setbox').classList.add('hidden'); }
@@ -593,6 +597,31 @@ function rememberFile(key, name) {
   refreshSaveUI(); refreshSettings();      // the button title and the SETTINGS row both name it
 }
 
+// Common options for both pickers. `id` gives Chrome a per-file-kind memory of the last directory
+// that survives a restart, so even a first pick after clearing storage opens where the last one
+// did; `startIn` beats it with the remembered handle's own folder when there is one. Both are
+// write-only hints -- the dialog can be *sent* to a directory but never reports one back, which is
+// the whole shape of this API and the reason SETTINGS can only name the file.
+function pickerOpts(key, handle, extra) {
+  return Object.assign({
+    id: 'xls32-' + key,
+    startIn: handle || undefined,
+    types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+  }, extra || {});
+}
+
+// "Where did it go?" is a question the page cannot answer and the file dialog can. A handle carries
+// no path -- `.name` is the whole of it -- so the only honest way to point at a folder is to open
+// the system picker inside it and let the dialog's own location bar do the telling. Whatever comes
+// back is dropped: this reads nothing, writes nothing and re-points nothing.
+async function revealFile(key) {
+  if (!window.showOpenFilePicker) return;
+  const h = await idbDo('readonly', (s) => s.get(key));
+  if (!h) return;
+  try { await window.showOpenFilePicker(pickerOpts(key, h, { multiple: false })); }
+  catch (e) { /* dismissed, which is the expected way to leave it */ }
+}
+
 // Write `blob` to the file remembered under `key`, asking for one the first time. `repick` forces
 // the picker even when a target is remembered -- that is the only way back out of a wrong choice.
 // Returns the file name written, or null if the picker was dismissed.
@@ -603,7 +632,8 @@ async function saveToFile(key, suggestedName, blob, repick) {
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     return suggestedName;
   }
-  let h = repick ? null : await idbDo('readonly', (s) => s.get(key));
+  const prev = await idbDo('readonly', (s) => s.get(key));
+  let h = repick ? null : prev;
   if (h) {
     // The handle outlives the tab; the permission behind it does not. A new session starts at
     // 'prompt' and has to ask again from inside a user gesture -- which a click on SAVE is, and
@@ -613,8 +643,9 @@ async function saveToFile(key, suggestedName, blob, repick) {
     if (p !== 'granted') h = null;           // denied or revoked: fall through and pick again
   }
   if (!h) {
-    h = await window.showSaveFilePicker({ suggestedName,
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+    // A re-pick opens beside the file it is replacing, not wherever the last dialog of any kind
+    // happened to be -- moving one file is a different act from choosing the first one.
+    h = await window.showSaveFilePicker(pickerOpts(key, prev, { suggestedName }));
     await idbDo('readwrite', (s) => s.put(h, key));
   }
   const w = await h.createWritable(); await w.write(blob); await w.close();
@@ -643,7 +674,8 @@ async function loadFromFile(key, repick) {
       i.click();
     });
   }
-  let h = repick ? null : await idbDo('readonly', (s) => s.get(key));
+  const prev = await idbDo('readonly', (s) => s.get(key));
+  let h = repick ? null : prev;
   let fresh = false;
   if (h) {
     let p = await h.queryPermission({ mode: 'read' });
@@ -651,8 +683,7 @@ async function loadFromFile(key, repick) {
     if (p !== 'granted') h = null;
   }
   if (!h) {
-    [h] = await window.showOpenFilePicker({ multiple: false,
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+    [h] = await window.showOpenFilePicker(pickerOpts(key, prev, { multiple: false }));
     if (!h) return null;
     fresh = true;
   }
@@ -1483,6 +1514,8 @@ async function boot() {
   document.getElementById('save').addEventListener('click', onSaveClick);
   document.getElementById('settings').addEventListener('click', openSettings);
   document.getElementById('setclose').addEventListener('click', closeSettings);
+  document.getElementById('gopatches').addEventListener('click', () => revealFile('patches'));
+  document.getElementById('godemos').addEventListener('click', () => revealFile('demos'));
   document.getElementById('setbox').addEventListener('click', (e) => { if (e.target.id === 'setbox') closeSettings(); });
   document.getElementById('panic').addEventListener('click', allSoundOff);
   document.getElementById('init').addEventListener('click', () => {
