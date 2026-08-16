@@ -69,11 +69,13 @@ body{
 
 /* presets */
 .topbar{display:flex;align-items:stretch;gap:14px;margin-bottom:14px}
-/* `#synth` is capped at 1180px, so the top bar has a fixed width to spend and the patch panel wants
-   more of it than is there — PANIC pushed it 51px over, which clipped the last PART chip at every
-   window size. The panel is therefore allowed to shrink (`min-width:0` all the way down to `.pcur`,
-   or a flex item refuses to go below its content), and the patch *name* is what gives: it ellipses,
-   and everything with a fixed job — the caption, the ‹ › steps, the action buttons — does not. */
+/* `#synth` is capped at 1180px, so the top bar has a fixed width to spend and the patch panel once
+   wanted more of it than was there — PANIC pushed it 51px over, which clipped the last PART chip at
+   every window size. The panel is therefore allowed to shrink (`min-width:0` all the way down to
+   `.pcur`, or a flex item refuses to go below its content), and the patch *name* is what gives: it
+   ellipses, and everything with a fixed job — the caption, the ‹ › steps, the action buttons — does
+   not. PANIC has since moved down to the keyboard and the row is 53px under budget again, so this
+   is now headroom rather than a fix; it stays because 16 PART chips can still call it in. */
 .presets{display:flex;justify-content:flex-start;align-items:center;gap:16px;flex:0 1 auto;
   min-width:0;background:linear-gradient(#2b2721,#1c1915);border-radius:6px;padding:10px 14px}
 .plabel{font-size:9px;letter-spacing:3px;color:#9b8f76;margin-bottom:6px;flex:0 0 auto}
@@ -87,7 +89,7 @@ body{
 .slot.active{background:linear-gradient(#e8b24a,#c98a1f);box-shadow:0 0 10px rgba(230,170,60,.6)}
 .slot.empty .t{color:#a89b83;font-style:italic;font-weight:500}
 .pactions{display:flex;flex-direction:row;gap:8px;flex:0 0 auto}   /* horizontal -> one-row patch panel (shorter) */
-/* DEMO / SAVE / INIT / PANIC. These declarations lived at the bottom of this file, written for the
+/* DEMO / SAVE / INIT. These declarations lived at the bottom of this file, written for the
    preset-row audition buttons, and reached the header buttons only because the selector was the
    unscoped `.pbtn` and it came second. The audition buttons are gone; the look they gave the header
    is the shipped one, so it is kept here rather than silently reverted to the dark rule it had been
@@ -253,6 +255,15 @@ body{
 .wnub{position:absolute;left:2px;right:2px;height:14px;border-radius:6px;top:41px;
   background:linear-gradient(#c9b78e,#8a7a55);box-shadow:0 1px 2px #000}
 .keyboard{position:relative;flex:1;height:120px;display:flex;user-select:none}
+/* PANIC, moved out of the patch row. Full keyboard height so the keyzone's three items share one
+   bottom edge, and red rather than the bone-coloured `.pbtn` because it is the only control on the
+   panel that interrupts rather than sets something. */
+.panicbtn{flex:0 0 auto;width:52px;height:120px;box-sizing:border-box;cursor:pointer;
+  font-family:inherit;font-size:9px;font-weight:700;letter-spacing:1px;
+  border:1px solid #000;border-radius:4px;color:#f0d9cf;
+  background:linear-gradient(#7c2a1c,#4a1810);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px #000}
+.panicbtn:hover{background:linear-gradient(#a33a26,#6b2014);color:#fff}
+.panicbtn:active{background:linear-gradient(#4a1810,#7c2a1c);box-shadow:inset 0 2px 4px #000}
 .wkey{flex:1;background:linear-gradient(#fff,#e9e3d6);border:1px solid #3a352c;border-radius:0 0 4px 4px;
   position:relative;cursor:pointer}
 .wkey.down{background:linear-gradient(#e8b24a,#d69a2c)}

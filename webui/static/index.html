@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v90-tones">
+<link rel="stylesheet" href="style.css?v91-panic">
 </head>
 <body>
 <div id="synth">
@@ -45,7 +45,6 @@
         <button id="demosave" class="pbtn ghost hidden">💾 TONES</button>
         <button id="save" class="pbtn ghost">SAVE ▸ USER</button>
         <button id="init" class="pbtn ghost">INIT</button>
-        <button id="panic" class="pbtn ghost" title="all notes off, every part — or press Esc. Use it if a key held across a PART change is still sounding.">PANIC</button>
       </div>
     </section>
     <section class="partbar">
@@ -98,6 +97,11 @@
         <div class="wheel-wrap"><div class="wheel" id="modwheel"><div class="wnub"></div></div><span>MOD</span></div>
       </div>
       <div class="keyboard" id="keyboard"></div>
+      <!-- Down here and not in the patch row it used to share with SAVE and INIT, because it is not
+           a patch control: it sends CC120 plus a note-off sweep to every part of every board and
+           changes not one value a patch holds. It is pressed with the hand that is already on the
+           keys, so it belongs with the keys. -->
+      <button id="panic" class="panicbtn" title="all notes off, every part of every board — or press Esc. Use it if a key held across a PART change is still sounding.">PANIC</button>
     </section>
 
     <footer class="foot">
@@ -110,7 +114,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v90-tones"></script>
-<script src="app.js?v90-tones"></script>
+<script src="transport.js?v91-panic"></script>
+<script src="app.js?v91-panic"></script>
 </body>
 </html>

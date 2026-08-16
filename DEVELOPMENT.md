@@ -2299,6 +2299,13 @@ grows into the space. `flex:0 1 230px` with a floor of 176px shrinks it by exact
 Both layouts were then measured rather than eyeballed: one board leaves the last chip 17px clear,
 and four boards fit all 16 chips with 68px to spare.
 
+> **The cause left later.** PANIC is not a patch control — it sends CC120 and a note-off sweep to
+> every part of every board and changes nothing a patch holds — so it moved out of the patch row and
+> down to the keyboard, where the hand pressing it already is. That gives the top bar its 53px back:
+> the last chip now clears by **142px** on one board and **193px** with sixteen. The shrink rule
+> above stays as headroom rather than as the fix. `route_check.html` re-ran green across all 26
+> checks, PANIC's own 516-message trace included — the button moved, the bytes did not.
+
 ### Mixing a demo song with a meter: `presetgen/demo_balance.py`
 
 Three of the four demo songs had their per-part CC7 set by ear through 💾 TONES. The fourth, the
