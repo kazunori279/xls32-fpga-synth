@@ -2299,6 +2299,34 @@ grows into the space. `flex:0 1 230px` with a floor of 176px shrinks it by exact
 Both layouts were then measured rather than eyeballed: one board leaves the last chip 17px clear,
 and four boards fit all 16 chips with 68px to spare.
 
+### Mixing a demo song with a meter: `presetgen/demo_balance.py`
+
+Three of the four demo songs had their per-part CC7 set by ear through 💾 TONES. The fourth, the
+*Goldberg* Aria, was still four parts at 127 — which is not a mix, it is the absence of one, and
+on this board that has a consequence: all 32 voices of all four parts land in a single `mixacc`
+and `scale_mix` hard-clips the sum (`synth.x:328`). The Aria measured **peak 0.99** dry, with
+reverb 127 and delay 65 still to be added *after* the sum.
+
+Rather than guess, measure. `demo_balance.py` renders every note of a song through `engine.py` —
+the same model the preset search is fitted against — sums each part's notes into its own track at
+its own onset, and scores A-weighted loudness two ways: the 90th-percentile frame (how loud a part
+is *while it sounds*) and the mean over the whole song (its share of the energy). The two disagree
+on purpose. Part 3 of the Aria plays 45% of the time: while it sounds it is the equal of part 2
+(−28.2 vs −28.5 dBA), across the song it is 4.8 dB below it (−34.9 vs −30.1). Levelling on the
+second number would hand it that 4.8 dB and it would shout every time it entered.
+
+CC7 is `vol/127` at `synth.x:412` — a downward gain — so the only place four parts can meet is the
+quietest one. That removes the arbitrary choice: no target to invent, and the loudest part takes
+the whole cut.
+
+The check that the meter is measuring the right thing is *Le Cygne*, mixed entirely by ear:
+hand-set `[15, 46, 39, 127]`, computed-flat `[14, 52, 55, 127]`. Two of four are within a couple of
+LSBs and the worst of the four is 3.0 dB apart, from an ear that never saw the numbers. The other two
+hand-mixed songs are flat *plus a lead*: *Prelude* and *Winter* both sit their part 0 about 6 dB
+above where flat would put it. So flat is the floor of what the ear does here, not a substitute for
+it — the Aria's `[31, 66, 127, 122]` is a mix that is levelled, not one that is finished, and its
+melody may still want that 6 dB. Peak 0.99 → **0.46**, which is the part that was actually broken.
+
 ---
 
 # Friction logs & learnings

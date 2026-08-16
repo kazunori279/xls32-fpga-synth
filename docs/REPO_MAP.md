@@ -89,6 +89,10 @@ addition rather than a rewrite.
   CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board
   calibration probe (`calibrate.py`), and the orchestrator (`build_presets.py`). See
   [Preset banks](../DEVELOPMENT.md#preset-browser--ai-matched-preset-banks-inverse-synthesis).
+  `demo_balance.py` reuses the same engine on the DEMO songs: it renders every note of a song into
+  a per-part track, scores each part's A-weighted loudness, and can write back the per-part CC7
+  that levels them — the mix the board does is one hard-clipped accumulator, so this is the
+  difference between four parts and one.
 - **`test/`** — the end-to-end hardware test suite: drives **either** board over USB, scores the
   captured audio (0–100), and builds a captioned report video. See
   [§3](../README.md#3-builders-guide) and `test/README.md`.
