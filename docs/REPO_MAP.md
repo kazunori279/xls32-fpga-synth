@@ -66,17 +66,19 @@ addition rather than a rewrite.
   into the multitimbral editor — tweak each part live and the header's **💾 SAVE ▸ TONES** writes
   them straight back out as `demos.json`, which is the
   **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
-  carries tone edits over by song name). The same button's **▸ PATCHES** entry writes the whole USER
-  bank out as `patches.json` in one gesture (a copy — `localStorage` stays the live bank, and nothing
-  reads the file back at boot), **▸ PATCH** puts the patch on the panel into a USER slot — asking
-  which with the preset browser itself, opened on its USER bank as a slot picker,
-  and **📂 LOAD** reads either file back — replacing the bank, since both files are
+  carries tone edits over by song name). The same button's **▸ PATCH** entry puts the patch on the
+  panel into a USER slot — asking which with the preset browser itself, opened on its USER bank as a
+  slot picker — and writes the whole bank out as `patches.json` on the way past, which is the only
+  way that file is written (a copy — `localStorage` stays the live bank, and nothing reads the file
+  back at boot). **📂 LOAD** reads either file back — replacing the bank, since both files are
   written whole. Everything goes through the File System Access API and remembers where you put it:
   the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot
   hold one, with the file name mirrored into `localStorage` for the tooltip. LOAD and SAVE share one
   handle per file, so a round trip costs no dialog; shift-click either to re-pick. A handle has no
   path — `.name` is all of it — so the Files rows name the file and a **📁 Show** button opens the
-  system dialog in its folder (`startIn:`), which is the only "where is it" the API allows. **⚙ SETTINGS**
+  system dialog in its folder (`startIn:`), which is the only "where is it" the API allows. A
+  **Clear** button beside it is the way back to a first visitor's state — an empty USER bank, the
+  shipped demo songs, no remembered target — and never touches the file itself. **⚙ SETTINGS**
   (the header button where OUT used to be) holds the audio-output picker, the two file targets, the
   MIDI/audio status readouts and the key map — the last two used to be a footer under the keyboard.
   The matched preset banks live here as

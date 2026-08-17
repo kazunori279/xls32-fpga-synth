@@ -2382,8 +2382,7 @@ SAVE without LOAD is a one-way door: the USER bank could leave the browser and n
 the mirror, and it shares SAVE's remembered handles — a `FileSystemFileHandle` carries both
 permissions, so the file you last wrote is the one LOAD offers to read and a round trip costs no
 dialog at all. It always shows its two-entry menu where SAVE shows one conditionally, because both
-files exist whether or not a song is playing. (SAVE always opens its menu too, as of the bank entry
-below.)
+files exist whether or not a song is playing.
 
 Loading replaces rather than merges, for the reason the files are written whole: `patches.json` *is*
 the bank, and a merge and a replace differ only in what happens to the slots the file does not
@@ -2423,33 +2422,65 @@ it is replacing rather than wherever the last dialog of any kind happened to be.
 note stops at the fact and lets the button's tooltip carry the rest — a settings row explaining
 itself in five lines is a settings row nobody finishes.)
 
-**The bank is its own entry now.** SAVE wrote all 128 slots from the start — `patches.json` has
-always been the whole bank, because a file that is only part of the state is not one you can put
-back — but the only door to it was *"save the patch on the panel to slot N"*, behind two `prompt()`
-boxes. Backing up asked which slot and what name, and neither question has anything to do with
-backing up. So **PATCHES ▸ USER bank** leads the menu: every slot, no prompts, one write, flashing
-`✓ 3 patches`, and refusing with `✗ bank empty` before it touches a picker. **PATCH ▸ USER slot** is
-the old flow, unchanged, second — it is a different act, and it keeps the questions that belong to
-it. The menu is now the mirror of LOAD's, first entry to first entry, and SAVE opens it
-unconditionally for LOAD's reason: both answers are always available. Verified with the pickers
-bound to OPFS so nothing native could open — three slot-saves cost one picker, then the bank entry
-cost zero prompts, zero extra pickers, and wrote all three patches in slot order.
+**A bank entry that was added and then removed.** SAVE wrote all 128 slots from the start —
+`patches.json` has always been the whole bank, because a file that is only part of the state is not
+one you can put back — but the only door to it was *"save the patch on the panel to slot N"*, behind
+two `prompt()` boxes. Backing up asked which slot and what name, and neither question has anything
+to do with backing up. So **PATCHES ▸ USER bank** was added at the top of the menu: every slot, no
+prompts, one write, flashing `✓ 3 patches`.
 
-And then it was wrong for the one flow that matters most, which is the first one anybody does:
+It was wrong immediately for the one flow that matters most, which is the first one anybody does:
 **INIT → turn some knobs → SAVE**. The bank is empty there, so the entry now at the *top* of the
 menu had nothing to write — it flashed `✗ bank empty` for a second and left no file, which reads as
-"SAVE did nothing" and shows up as an empty Files row in SETTINGS. Leading with the summary of a
-thing you have not made yet is the mistake. The entry is disabled on an empty bank now and says
-*"the bank is empty — save a patch to a slot first"* in its own subtitle, with the live entry
-directly beneath it, so the answer is on screen before the click rather than as an error after it.
-`openMenu()` grew one rule for this: an item with a null callback renders disabled. The `✗ bank
-empty` guard stays in `saveBank()`, unreachable from the menu and cheap to keep.
+"SAVE did nothing" and shows up as an empty Files row in SETTINGS. That got a fix (disabled, with
+*"the bank is empty — save a patch to a slot first"* in its own subtitle) and the fix held, but the
+question the fix raised is the one that mattered: **when would anyone click this?** Not to back up —
+saving a slot already writes the whole file, so the file is never behind. Not to write the first
+patch — the slot entry does that too. What was left was ⇧-click Save-As and re-syncing after a
+dismissed picker, which are recoveries, not verbs. So the entry is gone, and the menu with it when
+no song is loaded: **PATCH ▸ USER slot** is the only way `patches.json` is written, `saveBank()` is
+deleted, and `openMenu()` loses the disabled-item rule that existed for one caller. Two ways to
+write one file was one way too many, and the shorter menu says what the model actually is — the
+slots and the file are one thing, and saving a slot saves it.
+
+**Clear, in SETTINGS ▸ Files.** The page keeps two kinds of state across reloads — the USER bank in
+`localStorage`, and which file each half is aimed at — and neither had an off switch, so a browser
+that had ever been played with could not be put back to how it greets a first visitor. That is a
+real thing to want before a demo, after importing someone else's bank, or when the remembered target
+is a file you have since moved and every SAVE re-asks for it. Each Files row gets a **Clear** beside
+its 📁 Show: `clearPatches()` drops all 128 `synth.user.*` keys, `clearDemos()` re-fetches the shipped
+`demos.json`, and both then call `forgetFile()`, which removes the mirrored name and deletes the
+IndexedDB handle.
+
+The two halves are not symmetric, and that is the interesting part: the demo bank **is not in
+`localStorage` at all**. It is fetched from the page's own `demos.json` at boot and only ever
+replaced in memory by 📂 LOAD ▸ SONGS, so "default demos" is a fetch and not a delete. It needed a
+`demosEdited` flag — set by LOAD ▸ SONGS and by SAVE ▸ TONES, cleared by Clear — purely so the button
+can grey itself out when there is nothing to undo. The patches button greys on an empty bank with no
+remembered target, so a first visitor's panel has both of them dim.
+
+What Clear emphatically does not do is delete the file, which is why it is tinted rather than red:
+a red button beside a file name reads as exactly the wrong promise. The tooltip, the panel note and
+the confirm dialog all say the same sentence — the file is not touched, 📂 LOAD reads it back.
+
+**And the default name for an empty slot is `User Patch 7`, not `U7`.** `U7` was shorter and told
+you nothing; it read like a bank abbreviation rather than like the thing you are about to overwrite,
+and it disagreed with the name box that offered `User Patch 7` for the same slot one click later.
+One `defaultPatchName()` now feeds all three places a free slot can be named: the browser row, the
+name box, and a `patches.json` entry that arrived without a name.
+
+Which is also how a CSS bug from the slot-picker work surfaced. `#bpick` — *"Choose a user patch
+slot to save"* — was toggled with a `hidden` class from JS, and **this stylesheet has no generic
+`.hidden{display:none}`**, only `.browser.hidden`. So the class did nothing and the question sat
+permanently above the tabs, including on a browser opened to *play* a preset. It was invisible in
+review and obvious in a screenshot. Both halves of the swap hang off the `.picking` class now — the
+tabs step aside, the title steps in — and the JS toggles one class instead of two.
 
 **Choosing the slot is a list, not a number.** PATCH ▸ USER slot asked with
 `prompt('Save current patch to USER slot (1-128):')` — type a number, with no way to see which of
 the 128 were taken, what was in them, or which one you used last. The panel already draws exactly
-that list: the preset browser's USER tab, named rows where a slot is taken and italic `U<n>` where
-it is free. So SAVE borrows it rather than describing it. Same overlay, same rows, tabs hidden
+that list: the preset browser's USER tab, named rows where a slot is taken and a grey italic
+`User Patch <n>` where it is free. So SAVE borrows it rather than describing it. Same overlay, same rows, tabs hidden
 (there is nothing to switch to), a title that says what a click will now mean — *"Choose a user
 patch slot to save — a named slot will be overwritten"* — and the slot the prompt would have
 defaulted to already highlighted and scrolled to. The search box stays, because 128 rows is a lot

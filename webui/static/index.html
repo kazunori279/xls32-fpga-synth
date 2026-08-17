@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v97-slotpicker">
+<link rel="stylesheet" href="style.css?v98-clear">
 </head>
 <body>
 <div id="synth">
@@ -46,12 +46,13 @@
              last wrote is the one it offers to read, so the round trip is two clicks and no picker.
              It sits before SAVE because that is the order the two verbs are learned in. -->
         <button id="load" class="pbtn ghost">📂 LOAD</button>
-        <!-- One SAVE, two files, three answers: the whole USER bank out, the patch on the panel into
-             a slot, and -- while a song is loaded -- its four PART tones. It used to be this button
+        <!-- One SAVE, two files: the patch on the panel into a USER slot -- which writes the whole
+             bank out to patches.json as well, since the slots and the file are one thing -- and,
+             while a song is loaded, its four PART tones. There was a third entry that wrote only the
+             file, and it did nothing the first one does not already do. It used to be this button
              plus a 💾 TONES that lived in the demo browser, a full-screen overlay playDemo() closes,
              so the one control that only means anything while a song is playing was in the one place
-             you cannot reach while a song is playing. The bank leads because it is the entry you
-             want when you want a backup, and it is the only one that asks nothing. -->
+             you cannot reach while a song is playing. -->
         <button id="save" class="pbtn ghost">💾 SAVE</button>
         <button id="init" class="pbtn ghost">INIT</button>
       </div>
@@ -103,12 +104,16 @@
           <div class="setsec">
             <h4>Files</h4>
             <div class="setrow"><span class="setk">patches.json</span><span class="setv" id="fpatches">—</span>
-              <button class="setgo" id="gopatches" title="open a file dialog in this file's folder — the path is in its location bar. Nothing is read or written; close the dialog when you have looked.">📁 Show</button></div>
+              <button class="setgo" id="gopatches" title="open a file dialog in this file's folder — the path is in its location bar. Nothing is read or written; close the dialog when you have looked.">📁 Show</button>
+              <button class="setgo warn" id="clrpatches" title="delete every USER patch saved in this browser and forget this file as a save target. The file itself is not touched — 📂 LOAD reads it back.">Clear</button></div>
             <div class="setrow"><span class="setk">demos.json</span><span class="setv" id="fdemos">—</span>
-              <button class="setgo" id="godemos" title="open a file dialog in this file's folder — the path is in its location bar. Nothing is read or written; close the dialog when you have looked.">📁 Show</button></div>
+              <button class="setgo" id="godemos" title="open a file dialog in this file's folder — the path is in its location bar. Nothing is read or written; close the dialog when you have looked.">📁 Show</button>
+              <button class="setgo warn" id="clrdemos" title="go back to the demo songs that ship with the page, and forget this file as a save target. The file itself is not touched.">Clear</button></div>
             <div class="setnote">Where 📂 LOAD reads and 💾 SAVE writes. The browser hands the page a
               file <i>handle</i> and not a path — the folder you picked is deliberately not readable
-              by a web page, so the name is all this row can say.</div>
+              by a web page, so the name is all this row can say. <b>Clear</b> puts this browser back
+              to how it greets a first visitor — an empty USER bank, the demo songs as shipped, and
+              no remembered target. It clears what the browser holds, never the file on disk.</div>
           </div>
 
           <div class="setsec">
@@ -148,9 +153,10 @@
         <div class="bhead">
           <!-- The same browser, borrowed by SAVE. Picking a slot to write to and picking a patch to
                play are the same act of pointing at a row, so the list that already shows all 128
-               slots -- named where taken, "U<n>" where free -- is the one that should ask. The tabs
-               go away while it asks: there is nothing to choose but a USER slot. -->
-          <div class="dtitle bpick hidden" id="bpick">Choose a user patch slot to save<span class="dhint"> — a named slot will be overwritten</span></div>
+               slots -- named where taken, "User Patch n" in grey where free -- is the one that
+               should ask. The tabs go away while it asks: there is nothing to choose but a USER
+               slot. -->
+          <div class="dtitle bpick" id="bpick">Choose a user patch slot to save<span class="dhint"> — a named slot will be overwritten</span></div>
           <div class="btabs" id="btabs"></div>
           <input id="bsearch" class="bsearch" type="search" placeholder="search…" autocomplete="off">
           <button id="bclose" class="bclose" title="close">✕</button>
@@ -184,7 +190,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v97-slotpicker"></script>
-<script src="app.js?v97-slotpicker"></script>
+<script src="transport.js?v98-clear"></script>
+<script src="app.js?v98-clear"></script>
 </body>
 </html>

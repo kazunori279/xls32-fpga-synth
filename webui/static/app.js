@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v97-slotpicker';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v98-clear';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -210,9 +210,56 @@ function refreshSettings() {
   };
   put('fpatches', 'gopatches', 'patches');
   put('fdemos', 'godemos', 'demos');
+  // Clear is greyed out when there is nothing of yours to clear: no saved slots and no remembered
+  // target, or a demo bank that is already the shipped one.
+  const cp = document.getElementById('clrpatches');
+  if (cp) cp.disabled = !userBank().length && !fileName('patches');
+  const cd = document.getElementById('clrdemos');
+  if (cd) cd.disabled = !demosEdited && !fileName('demos');
 }
 function openSettings() { refreshSettings(); refreshOutputs(); document.getElementById('setbox').classList.remove('hidden'); }
 function closeSettings() { document.getElementById('setbox').classList.add('hidden'); }
+
+// Start over. The page keeps two kinds of state that outlive a reload -- the USER bank in
+// localStorage, and which file each half is aimed at -- and neither had an off switch, so a browser
+// that had ever been played with could not be put back to how it greets a first visitor. That is a
+// real thing to want: before a demo, after importing someone else's bank, or when the remembered
+// target is a file you have since moved and every SAVE re-asks for it.
+//
+// What is emphatically NOT cleared is the file on disk. Forgetting a target un-aims the page; it
+// does not reach out and delete anything, and both dialogs say so, because "Clear" next to a file
+// name is otherwise a fair thing to read the other way.
+async function forgetFile(key) {
+  localStorage.removeItem('synth.file.' + key);
+  await idbDo('readwrite', (s) => s.delete(key));
+  refreshSaveUI(); refreshSettings();
+}
+async function clearPatches() {
+  const n = userBank().length;
+  if (!confirm(`Empty the USER bank in this browser?\n\n`
+             + `${n} saved patch${n === 1 ? '' : 'es'} will be deleted and patches.json will be forgotten as a `
+             + `save target. The file itself is not touched — 📂 LOAD reads it back.`)) return;
+  for (let i = 1; i <= USER_SLOTS; i++) localStorage.removeItem(userKey(i));
+  curUserSlot = firstEmptyUser();
+  if (bank === 'user') { flatList = []; curIndex = -1; renderList(); }
+  await forgetFile('patches');
+}
+// The demo bank is not in localStorage at all -- it is fetched from the page's own demos.json at
+// boot and only ever replaced in memory, by 📂 LOAD ▸ SONGS -- so "default demos" means dropping
+// what is in memory and fetching that file again. Anything playing belongs to the old bank, so this
+// is the same stop-and-forget dance loadDemos() does.
+async function clearDemos() {
+  if (!confirm('Go back to the demo songs that ship with the page?\n\n'
+             + 'The bank loaded in this browser will be dropped, along with any PART tone edits you '
+             + 'have not written out, and demos.json will be forgotten as a save target. The file '
+             + 'itself is not touched.')) return;
+  stopDemo();
+  demos = await fetch('demos.json?' + VERSION).then((r) => r.json()).catch(() => ({ songs: [] }));
+  demoIdx = -1; demosEdited = false;
+  renderDemoList();
+  refreshDemoUI();
+  await forgetFile('demos');
+}
 
 // ---------- widgets ----------
 function makeKnob(c) {
@@ -461,7 +508,10 @@ let bank = 'factory', bcat = 'All', bquery = '', flatList = [], curIndex = -1;
 function userKey(n) { return 'synth.user.' + n; }
 function readUser(n) { try { return JSON.parse(localStorage.getItem(userKey(n))); } catch (e) { return null; } }
 function firstEmptyUser() { for (let i = 1; i <= USER_SLOTS; i++) if (!readUser(i)) return i; return 1; }
-function defaultPatchName(n) { return 'User Patch ' + n; }   // what the name box offers for a free slot
+// One name for a free slot, used in all three places it can appear: the browser row, the name box
+// SAVE opens on it, and a patches.json whose entry forgot to carry a name. `U7` was shorter and told
+// you nothing -- it read like a bank abbreviation rather than the thing you are about to overwrite.
+function defaultPatchName(n) { return 'User Patch ' + n; }
 
 // current bank ('user' or a source name) -> normalized list of {name, category, values, slot?, empty?}
 function bankList() {
@@ -470,7 +520,7 @@ function bankList() {
     for (let i = 1; i <= USER_SLOTS; i++) {
       const s = readUser(i);
       out.push(s ? { name: s.name, category: 'User', values: s.values, slot: i }
-                 : { name: 'U' + i, category: 'User', slot: i, empty: true });
+                 : { name: defaultPatchName(i), category: 'User', slot: i, empty: true });
     }
     return out;
   }
@@ -554,18 +604,18 @@ function closeBrowser() {
 let slotPick = null;
 function pickUserSlot() {
   const prevBank = bank, prevQuery = bquery;
-  const box = document.getElementById('browser'), lab = document.getElementById('bpick');
+  const box = document.getElementById('browser');
   return new Promise((res) => {
     slotPick = (slot) => {
       slotPick = null;                            // cleared first: closeBrowser() below must not re-enter
-      lab.classList.add('hidden'); box.classList.remove('picking');
+      box.classList.remove('picking');            // takes the question away with the tabs it replaced
       closeBrowser();
       bquery = prevQuery; document.getElementById('bsearch').value = prevQuery;
       setBank(prevBank);                          // put the browser back the way it was found
       res(slot);
     };
     bquery = ''; document.getElementById('bsearch').value = '';
-    lab.classList.remove('hidden'); box.classList.add('picking');
+    box.classList.add('picking');
     bank = 'user'; bcat = 'All';
     document.querySelectorAll('#btabs .btab').forEach((t) => t.classList.toggle('on', t.dataset.bank === 'user'));
     openBrowser();
@@ -751,19 +801,10 @@ function userBankBlob(bank) {
   return new Blob([JSON.stringify({ patches: bank }, null, 1)], { type: 'application/json' });
 }
 
-// The bank, and nothing about the patch on the panel. This is the entry the button leads with,
-// because it is the one that answers "keep what I have made" -- all of it, in one gesture, with no
-// prompts, since every slot already carries its own name and number. Writing the panel's patch to a
-// slot is a different act with a different question attached, and it is below.
-async function saveBank(repick) {
-  const bank = userBank();
-  if (!bank.length) { flashSave('✗ bank empty'); return; }
-  try {
-    const f = await saveToFile('patches', 'patches.json', userBankBlob(bank), repick);
-    flashSave(f ? '✓ ' + bank.length + (bank.length === 1 ? ' patch' : ' patches') : null);
-  } catch (e) { flashSave(e && e.name === 'AbortError' ? null : '✗ err'); }
-}
-
+// Saving a patch is one act and it writes both places: the slot, and the file the slots live in.
+// There was a second entry for the file alone -- "PATCHES ▸ USER bank" -- and it was redundant the
+// day it shipped, because this function already writes the whole bank every time. Two ways to write
+// one file is one way too many; the slot is the verb the player has, so it is the only one left.
 async function savePatch(repick) {
   const slotN = await pickUserSlot();
   if (slotN === null) return;
@@ -796,8 +837,7 @@ function refreshSaveUI() {
   clearTimeout(saveFlash);
   b.textContent = '💾 SAVE';
   const song = (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null;
-  b.title = `the whole USER bank → ${saveTarget('patches', 'patches.json')}, or the patch on the panel`
-          + ' → a USER slot'
+  b.title = `the patch on the panel → a USER slot, and the bank → ${saveTarget('patches', 'patches.json')}`
           + (song ? `, or the four PART tones → "${song.name}" in ${saveTarget('demos', 'demos.json')}` : '')
           + ' — shift-click to write somewhere else';
 }
@@ -820,8 +860,7 @@ function closeMenu() {
   menuEl.remove(); menuEl = null; menuOff = null;
   return true;
 }
-// An item is [label, sub, fn]; a null `fn` renders it disabled, which is how an entry that cannot
-// do anything right now explains itself before the click instead of after it.
+// An item is [label, sub, fn].
 function openMenu(btn, items) {
   const m = document.createElement('div'); m.className = 'savemenu';
   items.forEach(([label, sub, fn]) => {
@@ -829,8 +868,7 @@ function openMenu(btn, items) {
     const t = document.createElement('span'); t.className = 'smt'; t.textContent = label;
     const s = document.createElement('span'); s.className = 'sms'; s.textContent = sub;
     b.append(t, s);
-    if (fn) b.addEventListener('click', () => { closeMenu(); fn(); });
-    else b.disabled = true;
+    b.addEventListener('click', () => { closeMenu(); fn(); });
     m.append(b);
   });
   document.body.append(m);
@@ -844,29 +882,17 @@ function openMenu(btn, items) {
   document.addEventListener('pointerdown', menuOff, true);
 }
 function loadedSong() { return (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null; }
-// SAVE always opens the menu, the same as LOAD and for the same reason: writing the bank out and
-// putting one patch into it are both always available, so there are always at least two answers. The
-// bank goes first because it is the mirror of LOAD's first entry, and because it is the one that
-// costs nothing to be wrong about -- it asks nothing and overwrites only the file.
-//
-// Except on a bank with nothing in it, which is where the first session starts and where INIT and a
-// few knobs leave you: the leading entry then had nothing to write, so the first SAVE of a new
-// patch clicked the top of the menu and silently did nothing. It is disabled and says so now, and
-// the entry that DOES keep that patch is the live one directly under it.
+// With one patch verb there is only a second answer while a song is loaded, so the menu appears only
+// then; otherwise SAVE means save the patch and says so by doing it. A menu whose one entry you have
+// to click through is a second click for nothing.
 function onSaveClick(e) {
   if (closeMenu()) return;
   const song = loadedSong();
-  const n = userBank().length;
-  const items = [
-    ['PATCHES ▸ USER bank',
-      n ? saveTarget('patches', 'patches.json') + ' · ' + n + (n === 1 ? ' patch' : ' patches')
-        : 'the bank is empty — save a patch to a slot first',
-      n ? () => saveBank(e.shiftKey) : null],
-    ['PATCH ▸ USER slot', 'the patch on the panel, into the bank' + (n ? '' : ' — and out to the file'),
-      () => savePatch(e.shiftKey)],
-  ];
-  if (song) items.push(['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)]);
-  openMenu(e.currentTarget, items);
+  if (!song) { savePatch(e.shiftKey); return; }
+  openMenu(e.currentTarget, [
+    ['PATCH ▸ USER slot', saveTarget('patches', 'patches.json'), () => savePatch(e.shiftKey)],
+    ['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)],
+  ]);
 }
 // LOAD always has two answers -- both files exist whether or not a song is playing -- so it always
 // opens the menu.
@@ -936,7 +962,7 @@ async function loadDemos(repick) {
   // to be a different list. Stop first and forget the loaded song rather than carry an index over
   // into songs that have nothing to do with it -- SAVE ▸ TONES writes to `demoIdx`.
   stopDemo();
-  demos = d; demoIdx = -1;
+  demos = d; demoIdx = -1; demosEdited = true;
   renderDemoList();
   refreshDemoUI();
   flashLoad('✓ ' + d.songs.length + ' songs');
@@ -1393,6 +1419,9 @@ const TICK_MS = 60;              // and how often it does so -- comfortably insi
 // The song data never learns any of this -- its channels 0-3 are offset into global part numbers
 // as the events are built, and the router takes them from there.
 let demos = { songs: [] }, demoIdx = -1, demoPlaying = false, demoBoard = 0;
+// Whether `demos` still is the bank the page shipped with. Only SETTINGS ▸ Clear reads it, to know
+// whether it has anything to undo.
+let demosEdited = false;
 let demoEvents = [], demoLoopMs = 0, demoBase = 0, demoPos = 0, demoTimer = null;
 // Every note-on handed to a transport with a future timestamp that has not been given its note-off
 // yet, keyed part<<8|note, plus the latest timestamp handed out. This is the look-ahead's debt: see
@@ -1535,6 +1564,7 @@ async function saveDemoTones(repick) {
   }
   const fxState = {}; EFFECT_IDS.forEach((id) => { fxState[id] = partValues[activePart][id]; });   // full effect state
   song.parts = parts; Object.assign(song, fxState);           // update in memory
+  demosEdited = true;
   // The server used to patch demos.json in place. With no server the page cannot write into its
   // own directory, so it hands the whole file back and you drop it into webui/static/ yourself.
   // Whole file, not the one song: demos.json is the single source of truth and a diff of one song
@@ -1593,6 +1623,8 @@ async function boot() {
   document.getElementById('setclose').addEventListener('click', closeSettings);
   document.getElementById('gopatches').addEventListener('click', () => revealFile('patches'));
   document.getElementById('godemos').addEventListener('click', () => revealFile('demos'));
+  document.getElementById('clrpatches').addEventListener('click', clearPatches);
+  document.getElementById('clrdemos').addEventListener('click', clearDemos);
   document.getElementById('setbox').addEventListener('click', (e) => { if (e.target.id === 'setbox') closeSettings(); });
   document.getElementById('panic').addEventListener('click', allSoundOff);
   document.getElementById('init').addEventListener('click', () => {

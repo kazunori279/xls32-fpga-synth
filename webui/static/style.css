@@ -107,10 +107,7 @@ body{
   padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
 .smitem{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
   font-family:inherit;padding:6px 9px;border:0;border-radius:3px;background:none;cursor:pointer}
-.smitem:hover:not(:disabled){background:linear-gradient(#5b5548,#332f28)}
-/* An entry with nothing to do says why in its own subtitle rather than flashing an error after the
-   click -- a dead click on the first entry of a menu is how "SAVE did nothing" happens. */
-.smitem:disabled{opacity:.45;cursor:default}
+.smitem:hover{background:linear-gradient(#5b5548,#332f28)}
 .smt{font-size:10px;font-weight:700;letter-spacing:1px;color:#e7dcc4}
 .sms{font-size:9px;color:#9b8f76}
 
@@ -142,9 +139,14 @@ body{
 .dtitle{flex:1;font-size:11px;font-weight:700;letter-spacing:.5px;color:#e9e3d6}
 .dhint{font-weight:400;color:#8a8272}
 /* While the browser is being used to choose a save slot there is no bank to switch to, so the tabs
-   step aside for the question. The search box stays: 128 rows is a lot to scroll past. */
+   step aside for the question. The search box stays: 128 rows is a lot to scroll past.
+   Both halves of the swap hang off `.picking` and nothing else. The first draft also toggled a
+   `hidden` class on the title from JS -- and there is no generic `.hidden{display:none}` in this
+   sheet, only `.browser.hidden`, so the class did nothing and the question sat above the tabs
+   permanently, on a browser opened to play a preset. One mechanism, not two. */
 #browser.picking #btabs{display:none}
-.bpick{flex:0 0 auto}
+.bpick{flex:0 0 auto;display:none}
+#browser.picking .bpick{display:block}
 .bitem.demoitem{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btabs{display:flex;gap:6px}
@@ -316,6 +318,11 @@ body{
   background:#e6dcc6;color:#3a3226;border:1px solid #b6a98d}
 .setgo:hover:not(:disabled){background:#f2ead8;border-color:#8d8168}
 .setgo:disabled{opacity:.4;cursor:default}
+/* Clear throws state away, so it is tinted rather than shouting: a red button beside a file name
+   reads as "delete the file", which is the one thing it does not do. It is greyed out when there is
+   nothing of yours to clear, so the panel of a first visitor has both of them dim. */
+.setgo.warn{background:#ecd9d1;border-color:#c2a294;color:#5a332a}
+.setgo.warn:hover:not(:disabled){background:#f7e7e0;border-color:#a3776a}
 .setnote{padding:4px 8px;font-size:10px;line-height:1.55;color:#6d6455}
 .setnote code{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#3a3226;
   background:rgba(0,0,0,.07);border-radius:3px;padding:1px 4px}

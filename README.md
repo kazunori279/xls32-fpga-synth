@@ -515,21 +515,22 @@ system sound panel, and a name explains more than a disappearance does. The pick
 `AudioContext.setSinkId` (Chrome 110+); where that is missing the menu says so and the system
 sound settings are the way.
 
-**Keeping what you make.** **💾 SAVE** asks which of three: the whole USER bank out as
-`patches.json` — every slot, no questions, and the entry to reach for when you want a backup — the
-one patch you are editing into a USER slot, or, while a demo song is loaded, the four PART tones
-back into `demos.json`. The first one is greyed out until the bank has something in it, so the very
-first patch you make goes in through **PATCH ▸ USER slot** (which writes the file too). That one
-opens the patch browser on its USER bank to ask *where* — 128 rows, named where taken and `U<n>`
-where free, with the slot it would have chosen already highlighted — and then asks what to call it.
-**📂 LOAD** reads either file back.
+**Keeping what you make.** **💾 SAVE** puts the patch on the panel into a USER slot. It opens the
+patch browser on its USER bank to ask *where* — 128 rows, named where taken and `User Patch n` in
+grey where free, with the slot it would have chosen already highlighted — then asks what to call it,
+and writes the whole bank out to `patches.json` on its way past. There is no separate "save the
+bank" verb, because there is nothing left for it to do. While a demo song is loaded SAVE offers a
+second answer, the four PART tones back into `demos.json`, and **📂 LOAD** reads either file back.
 The USER bank lives in the browser's own storage and is what reloads with the page; the files are
 how it gets onto another machine, and how `webui/static/demos.json` in this repo is edited. Both
 buttons remember the file you chose, so the second trip costs no dialog; ⇧-click either to point it
 somewhere else, and **⚙ SETTINGS ▸ Files** shows where each currently goes — by name only, because
 the browser deliberately does not tell a web page which folder you picked. To see the folder, use
 the **📁 Show** button on that row: it opens your system's file dialog *inside* it, path in the
-location bar, and reads nothing — close the dialog once you have looked.
+location bar, and reads nothing — close the dialog once you have looked. **Clear** on that row is
+the other direction: it puts this browser back to how it greets a first visitor — an empty USER
+bank, the demo songs as shipped, no remembered target — and never touches the file on disk, which
+📂 LOAD will read straight back.
 
 The panel is the same on both boards; it takes the frame rate from the transport it opened
 (32 kHz Basys 3, 48 kHz Tiliqua) rather than assuming. See the
