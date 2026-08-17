@@ -509,14 +509,24 @@ matcher upstream of `MidiSysexFilter` and a CDC back into the `usb` domain, agai
 stamp goes in a string descriptor instead, which costs no cells at all:
 
 ```
-iManufacturer = "apf.audio XLS32/2026-08-17T02:49Z-729212a"     # '+' appended for a dirty tree
+iManufacturer = "apf.audio XLS32/2026-08-17T03:23Z-9c752e3"     # '+' appended for a dirty tree
 ```
 
 Web MIDI hands that to the page verbatim as `MIDIPort.manufacturer`, per port, so four boards give
 four stamps under the MIDI permission the panel already holds — no SysEx permission, no WebUSB
 picker. `iProduct` was rejected because it is what the macOS sound picker shows, and
 `iSerialNumber` because CoreAudio builds a device's persistent UID from it and a serial that
-changed on every flash would make every reflash a new device. See
+changed on every flash would make every reflash a new device.
+
+The timestamp is **HEAD's committer date, not the build instant**, and that is a hardware
+constraint rather than a convenience. A string descriptor is a ROM; yosys constant-folds it, so
+the characters — not just their number — decide how much logic it takes. Two wall-clock stamps of
+identical length, thirty-four minutes apart, placed at 23,679 and 23,792 `TRELLIS_COMB` on a
+design with 559 to spare, and a netlist that moves re-draws the router seed lottery, which at 97%
+about half the seeds lose. Stamping the clock meant every build was a fresh coin flip on whether
+the design routed, including a rebuild of untouched source. Stamping the commit keeps the pre-#27
+rule — the netlist changes when the source does — at the cost that two bitstreams from one commit
+now carry one stamp. See
 [`build_id.py`](boards/tiliqua/gateware/build_id.py) and the parser in
 [`webui/static/transport.js`](webui/static/transport.js), which have to agree on the format.
 

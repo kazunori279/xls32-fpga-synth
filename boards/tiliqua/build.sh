@@ -70,7 +70,9 @@ export XLS_ENGINE_V="$WORK/engine.v"
 # --- the stamp the board reports over USB (issue #27) ---
 # Two variables, both consumed by gateware/build_id.py, which turns them into iManufacturer. The
 # rule for computing them lives in that file too, so `eval` here rather than a second copy in
-# shell. Pre-set either one to pin it -- a reproducible build wants a fixed XLS32_BUILD_UTC.
+# shell. Both come from HEAD, not from the clock, so the same commit builds the same bitstream --
+# read the note in build_id.py before changing that, because the alternative re-draws the seed
+# lottery below on every single build. Pre-set either variable to pin it.
 # Leaving both unset (which is what a bare `python top.py build` does) produces a bitstream with no
 # stamp at all, indistinguishable from a pre-#27 one; the panel reports that honestly.
 eval "$("$PY" "$REPO/boards/tiliqua/gateware/build_id.py")"

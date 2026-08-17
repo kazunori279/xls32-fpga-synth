@@ -39,6 +39,20 @@
 #     apf.audio                                      <- built without a stamp (see below)
 #
 # `webui/static/transport.js` has the matching parser, and the two formats have to agree.
+#
+# **The timestamp is the commit's, not the clock's, and that is not a shortcut.** The first cut
+# stamped the build instant, and it made the gateware unbuildable in practice. A string descriptor
+# is a ROM, yosys constant-folds it, and the *characters* decide how much logic it takes: two
+# stamps of identical length, thirty-four minutes apart, placed at 23,679 and 23,792 TRELLIS_COMB
+# -- 113 cells apart on a design with 559 to spare. Worse, a different netlist re-draws the router
+# seed lottery (build.sh's `--seed`), and at 97% about half the tickets lose. Stamping the clock
+# therefore meant every build -- including a rebuild of untouched source -- was a fresh coin flip
+# on whether the bitstream routes at all, and the recorded seed was never valid for the build in
+# front of you. Stamping the commit date restores the pre-#27 rule: the netlist changes when the
+# *source* changes, the seed stays drawn until then, and two builds of one commit are identical.
+# The trade is real and worth naming -- two bitstreams built from the same commit now carry the
+# same stamp, so the panel cannot tell a rebuild from the shipped artefact. It can still tell the
+# thing #27 is about, which is whether your board is running the code this repo has.
 
 import os
 import subprocess
@@ -77,26 +91,41 @@ def usb_manufacturer():
     return f"{MANUFACTURER} {TAG}{stamp}" if stamp else MANUFACTURER
 
 
-def env_from_git(repo_root, now_utc):
+def env_from_git(repo_root, fallback_utc):
     """
     The two variables `build.sh` exports, computed here so the rule lives in one place.
 
-    `now_utc` is passed in rather than read, so a caller that wants a reproducible build can pin it.
+    The timestamp is HEAD's committer date, to the minute, in UTC -- see the note above on why it
+    is not the build instant. `fallback_utc` is used only when there is no git to ask, which is the
+    one case where the clock is all there is; pass a fixed string to keep even that reproducible.
+
     A dirty tree gets a trailing '+' on the commit: a bitstream built over uncommitted edits is not
-    the commit it names, and the one character says so wherever the stamp is displayed.
+    the commit it names, and the one character says so wherever the stamp is displayed. Such a
+    build is a fresh netlist and a fresh seed draw no matter what we stamp, which is the honest
+    cost of building from edits you have not committed.
     """
+
+    # TZ=UTC because `format-local` means "the machine's local zone", and the whole point is that
+    # the stamp reads the same whoever builds it. Without this the string is the builder's clock.
+    env = dict(os.environ, TZ="UTC")
 
     def git(*args):
         try:
             return subprocess.run(("git", "-C", repo_root, *args), capture_output=True,
-                                  text=True, check=True).stdout.strip()
+                                  text=True, check=True, env=env).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return ""
 
     commit = git("rev-parse", "--short=7", "HEAD") or "unknown"
     if commit != "unknown" and git("status", "--porcelain") != "":
         commit += "+"
-    return {"XLS32_BUILD_UTC": now_utc, "XLS32_BUILD_COMMIT": commit}
+
+    # %cd with an explicit format, rather than %cI plus string surgery: git does the timezone
+    # conversion, so a commit made anywhere reads the same here.
+    utc = git("show", "-s", "--date=format-local:%Y-%m-%dT%H:%MZ", "--format=%cd", "HEAD")
+    if not utc:
+        utc = fallback_utc
+    return {"XLS32_BUILD_UTC": utc, "XLS32_BUILD_COMMIT": commit}
 
 
 if __name__ == "__main__":
@@ -106,6 +135,6 @@ if __name__ == "__main__":
     import shlex
 
     root = pathlib.Path(__file__).resolve().parents[3]
-    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
-    for k, v in env_from_git(str(root), stamp).items():
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    for k, v in env_from_git(str(root), now).items():
         print(f"export {k}={shlex.quote(v)}")
