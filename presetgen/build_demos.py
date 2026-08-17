@@ -147,8 +147,8 @@ def bach_prelude():
     return mk("Bach · Prelude in C", 76, 35, [HARPSI(), STRINGS(), UPRIGHT(), BELL()], out)
 
 def goldberg_aria():
-    """Aria from the Goldberg Variations, first half (16 bars of 3/4). `bars` counts 4-beat
-    bars because that's what the web player loops on, so 48 beats -> 12."""
+    """Aria from the Goldberg Variations, all 32 bars of 3/4 -- both halves, neither repeated.
+    `bars` counts 4-beat bars because that's what the web player loops on, so 96 beats -> 24."""
     out = SC.unpack(SC.GOLDBERG_MEL, 0, 84, transpose=-12)
     for bi, (root, qual) in enumerate(SC.GOLDBERG_HARM):
         t = bi * 3.0
@@ -156,7 +156,7 @@ def goldberg_aria():
         hold(out, 2, [note_name(SC.GOLDBERG_BASS[bi])], t, 1.9, 80)  # the bass the 30 variations share
         out.append([round(t+2,4), 0.9, 2, note_name(SC.GOLDBERG_BASS[bi]) + 12, 58])
         out.append([round(t+1,4), 1.0, 3, n(root, 5), 34])           # sarabande stress on beat 2
-    sg = mk("Bach · Goldberg Aria", 58, 12, [HARPSI(), WARMPAD(), UPRIGHT(), GLOCK()], out)
+    sg = mk("Bach · Goldberg Aria", 58, 24, [HARPSI(), WARMPAD(), UPRIGHT(), GLOCK()], out)
     return fx_amounts(sg, reverb=96, room=s(2), chorusd=34)      # small room, a little shimmer
 
 def the_swan():
