@@ -515,6 +515,21 @@ system sound panel, and a name explains more than a disappearance does. The pick
 `AudioContext.setSinkId` (Chrome 110+); where that is missing the menu says so and the system
 sound settings are the way.
 
+**Which build is on the board.** **⚙ SETTINGS ▸ Firmware** asks the module and shows the answer
+next to what this repo ships, because those two are different questions and routinely have
+different answers — the interesting one is "is the board I flashed last month still current?".
+A Tiliqua reports its own build stamp, `2026-08-17 02:49 UTC · 729212a`, and the panel says
+whether that is the commit the shipped bitstream was built from. It arrives in the module's USB
+`iManufacturer` string, which Web MIDI hands over per port, so four boards give four stamps under
+the MIDI permission the panel already holds — no extra prompt, and no gateware, which mattered:
+the ECP5 has 559 of 24,288 LUTs left and a proper SysEx identity reply needs a device-to-host
+endpoint this design cannot afford. A bitstream flashed before the stamp existed says so rather
+than guessing, and the Basys 3 has no way to answer at all — its link is a raw 2 Mbaud UART whose
+return direction is a continuous PCM frame with nowhere to put a reply. For those, the second half
+of the block is the whole truth available: when each committed artefact was built, read out of the
+artefact itself — the Vivado header inside `top.bit`, and the tar entry of the Tiliqua archive's
+inner bitstream, which is when nextpnr finished rather than when the archive was copied in.
+
 **Keeping what you make.** **💾 SAVE** puts the patch on the panel into a USER slot. It opens the
 patch browser on its USER bank to ask *where* — 128 rows, named where taken and `User Patch n` in
 grey where free, with the slot it would have chosen already highlighted — then asks what to call it,

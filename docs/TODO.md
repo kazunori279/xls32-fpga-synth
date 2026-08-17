@@ -260,6 +260,17 @@ those three; git history keeps the original.)*
   unhashable from here). And **nothing runs it automatically** — no hook, no CI step, so it only
   helps someone who thinks to run it.
 
+  The record now has a second consumer, which raises the cost of it being stale.
+  `scripts/build_firmware_json.py` reads `built_from_commit` out of `artefact_hashes.json` and
+  writes `webui/static/firmware.json`, the "what this repo ships" half of SETTINGS ▸ Firmware
+  (#27). Everything *else* in that file is read out of the artefacts themselves — the Vivado
+  header in `top.bit`, the tar entry mtime of the Tiliqua archive's inner bitstream — because a
+  fresh clone rewrites every file mtime and an mtime-derived date would be a confident lie on any
+  machine but the one that built it. The commit is the one field that cannot be recovered that
+  way, so it is borrowed rather than duplicated, and a stale record is now visible on the panel
+  instead of only in `git log`. The other half of that block is the board's own answer, which the
+  Tiliqua reports in its USB `iManufacturer` string since #27 — see `gateware/build_id.py`.
+
   **Building on push was considered and cancelled**, not deferred: Vivado needs a licence and
   ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one board of
   two claims more than it checks. `.github/workflows/pages.yml` deploys `webui/static/` and

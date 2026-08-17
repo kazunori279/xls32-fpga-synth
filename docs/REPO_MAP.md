@@ -31,7 +31,8 @@ addition rather than a rewrite.
   - **`boards/tiliqua/`** — `board.py` (descriptor: 48 kHz, UAC2 + USB-MIDI transport),
     `gateware/` (`top.py` + `xls_core.py`, an [Amaranth](https://amaranth-lang.org/) shell that
     `Instance()`s the same generated `engine.v`, plus `usb_iface.py`, `midi_filter.py`,
-    `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py` and their Verilator/Amaranth harnesses),
+    `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py`, `build_id.py` (the build stamp the module
+    reports over USB, in its `iManufacturer` string) and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone
     exit checks) and `check_panic_hw.py` (the same channel mode messages on the module, over
@@ -42,7 +43,10 @@ addition rather than a rewrite.
   each committed bitstream into `artefact_hashes.json` and tells you when one has drifted. It
   hashes them with the comments stripped, so editing prose does not report a good bitstream as
   stale; `--self-test` deletes every code line in the tree one at a time to prove the stripping
-  is not also blind to real edits.
+  is not also blind to real edits. `build_firmware_json.py` writes `webui/static/firmware.json`
+  from the same artefacts — when each was built, read out of the Vivado header in `top.bit` and
+  the tar entry of the Tiliqua archive's inner bitstream, never out of a file mtime, which a fresh
+  clone rewrites. That is what SETTINGS ▸ Firmware shows next to what the boards themselves say.
 - **`host/`** — host tools: `synth.py` (MIDI + sample maths, board-agnostic), `transport/`
   (`base.py` the contract, `uart.py` the 2 Mbaud serial link for Basys 3, `usbaudio.py` the
   Tiliqua's UAC2 + USB-MIDI link — everything that talks to a board goes through here: the graded

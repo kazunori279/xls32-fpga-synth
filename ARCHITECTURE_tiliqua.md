@@ -501,6 +501,25 @@ IAD). The device enumerates as `0x1209:0xAA62`, `iProduct = "Tiliqua XLS32"` —
 a distinct PID, since squatting a different pid.codes allocation would be worse than sharing, and
 `iProduct` is what the host transport matches on anyway.
 
+**The build stamp rides in `iManufacturer`.** EP 3 is OUT only — MIDI goes down and nothing comes
+back up it — so the module could not say what was flashed on it, and the panel could only report
+what the repo ships. A SysEx identity reply would need a device-to-host endpoint, a packetiser, a
+matcher upstream of `MidiSysexFilter` and a CDC back into the `usb` domain, against **559
+`TRELLIS_COMB` free** of 24,288 and a router that only converges on a hand-picked seed. So the
+stamp goes in a string descriptor instead, which costs no cells at all:
+
+```
+iManufacturer = "apf.audio XLS32/2026-08-17T02:49Z-729212a"     # '+' appended for a dirty tree
+```
+
+Web MIDI hands that to the page verbatim as `MIDIPort.manufacturer`, per port, so four boards give
+four stamps under the MIDI permission the panel already holds — no SysEx permission, no WebUSB
+picker. `iProduct` was rejected because it is what the macOS sound picker shows, and
+`iSerialNumber` because CoreAudio builds a device's persistent UID from it and a serial that
+changed on every flash would make every reflash a new device. See
+[`build_id.py`](boards/tiliqua/gateware/build_id.py) and the parser in
+[`webui/static/transport.js`](webui/static/transport.js), which have to agree on the format.
+
 **The nine literal bytes.** MIDI 1.0 §3.1 requires the MIDIStreaming interface to sit behind an
 AudioControl interface, and that AudioControl interface is UAC **1** shaped even on a USB 2.0
 device — protocol `0x00`, and a class-specific header enumerating its streaming interfaces. UAC2's

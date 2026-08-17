@@ -48,6 +48,34 @@ function midiAccess() {
 const TILIQUA_MATCH = 'tiliqua xls32';
 const matches = (name) => (name || '').toLowerCase().includes(TILIQUA_MATCH);
 
+// ---------- what is actually flashed on the board ----------
+// The board's own build stamp, read off its USB iManufacturer string, which Web MIDI hands over
+// verbatim as `MIDIPort.manufacturer`. Measured on Chrome 150 / macOS:
+//
+//     {id: "759255568", name: "Tiliqua XLS32", manufacturer: "apf.audio", version: ""}
+//
+// `version` is empty (CoreMIDI fills it from the *driver*, and there is no driver), and `name` is
+// iProduct, which is also what the audio device list shows -- so iManufacturer is the one field
+// that can carry this without turning up in the macOS sound picker. The producing end is
+// `boards/tiliqua/gateware/build_id.py`, and the two formats have to agree:
+//
+//     "apf.audio XLS32/2026-08-17T09:31Z-974552b"   -> {utc, commit, dirty: false}
+//     "apf.audio XLS32/2026-08-17T09:31Z-974552b+"  -> dirty: the tree had uncommitted edits
+//     "apf.audio"                                   -> null
+//
+// null is the answer for a bitstream flashed before #27 existed *and* for one built without the
+// stamp, deliberately: both are "this board cannot tell you", and a third state would be one the
+// player could not act on differently.
+const FW_TAG = 'XLS32/';
+const FW_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z)-([0-9a-f]{7}|unknown)(\+?)$/;
+function parseFirmware(manufacturer) {
+  const s = manufacturer || '';
+  const i = s.indexOf(FW_TAG);
+  if (i < 0) return null;
+  const m = FW_RE.exec(s.slice(i + FW_TAG.length).trim());
+  return m ? { utc: m[1], commit: m[2], dirty: m[3] === '+' } : null;
+}
+
 class TiliquaTransport {
   // A transport is handed its hardware rather than going to look for it: finding the boards is
   // `discoverTiliquas()`'s job, below, because with more than one plugged in it is a question
@@ -55,6 +83,9 @@ class TiliquaTransport {
   constructor(out, deviceId, board = 0) {
     this.kind = 'tiliqua'; this.label = 'Tiliqua'; this.sr = 48000; this.timed = true;
     this.out = out; this.stream = null; this.deviceId = deviceId; this.board = board;
+    // Read here and not on demand: `MIDIPort.manufacturer` is a property of the port, and close()
+    // drops the port. SETTINGS can be opened after a board has gone away.
+    this.firmware = parseFirmware(out && out.manufacturer);
   }
 
   async connect() {
@@ -142,17 +173,27 @@ async function discoverTiliquas() {
   return links;
 }
 
-// How many boards, without asking for anything. Same contract as `detectTiliqua()` below: this runs
-// at page load, so a prompt here would be the page demanding MIDI access from a passer-by. 0 is
-// what a first visit gets, and the panel draws one board's worth until POWER says otherwise.
-async function countTiliquas() {
-  if (!navigator.requestMIDIAccess) return 0;
+// Every board on the bus, in board order, without asking for anything. Same contract as
+// `detectTiliqua()` below: this runs at page load, so a prompt here would be the page demanding
+// MIDI access from a passer-by. An empty list is what a first visit gets, and the panel draws one
+// board's worth until POWER says otherwise.
+//
+// It answers two questions that both have to be answerable before POWER: how many boards to draw,
+// and what each of them says it is running. The second one is why SETTINGS ▸ Firmware is readable
+// on a page nobody has clicked POWER on -- the whole point of that row is to check a board you are
+// *about* to use.
+async function probeTiliquas() {
+  if (!navigator.requestMIDIAccess) return [];
   try {
-    if ((await navigator.permissions.query({ name: 'midi' })).state !== 'granted') return 0;
-  } catch (e) { return 0; }                // no 'midi' permission name here; asking is the only way
+    if ((await navigator.permissions.query({ name: 'midi' })).state !== 'granted') return [];
+  } catch (e) { return []; }               // no 'midi' permission name here; asking is the only way
   const access = await midiAccess();       // already granted, so this resolves without a prompt
-  return [...access.outputs.values()].filter((o) => matches(o.name)).length;
+  return [...access.outputs.values()].filter((o) => matches(o.name))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))   // board order, as discoverTiliquas
+    .map((o, i) => ({ board: i, name: o.name, firmware: parseFirmware(o.manufacturer) }));
 }
+
+async function countTiliquas() { return (await probeTiliquas()).length; }
 
 // ---------- Basys 3: Web Serial ----------
 
@@ -249,6 +290,12 @@ class Aligner {
 class Basys3Transport {
   constructor() {
     this.kind = 'basys3'; this.label = 'Basys 3'; this.sr = 32000; this.timed = false;
+    // No stamp, and no way to carry one. This link is a raw 2 Mbaud UART with no descriptors of its
+    // own -- the FT2232H's strings are the *bridge chip's*, not the bitstream's -- and the return
+    // direction is a continuous 4-byte PCM frame the Aligner locks onto, so there is nowhere to put
+    // a reply that would not desynchronise the audio. SETTINGS says so rather than leaving the row
+    // blank; #27 tracks it.
+    this.firmware = null;
     this.port = null; this.writer = null; this.reader = null;
     this.align = new Aligner(); this.node = null; this.pending = new Set(); this.running = false;
   }
@@ -434,4 +481,5 @@ async function detectBoards() {
   return Object.fromEntries(keys.map((k, i) => [k, states[i]]));
 }
 
-window.XLS32 = { TRANSPORTS, detectBoards, midiAccess, Aligner, countTiliquas };
+window.XLS32 = { TRANSPORTS, detectBoards, midiAccess, Aligner, countTiliquas, probeTiliquas,
+                 parseFirmware };

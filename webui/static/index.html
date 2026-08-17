@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v99-aria">
+<link rel="stylesheet" href="style.css?v100-firmware">
 </head>
 <body>
 <div id="synth">
@@ -123,6 +123,24 @@
             <div class="setrow"><span class="setk">Octave</span><span class="setv" id="octlabel">oct 4</span></div>
           </div>
 
+          <!-- FIRMWARE. Two questions that are easy to run together and routinely have different
+               answers: what is flashed on the board in front of you, and what this repo would give
+               you if you flashed it now. The rows are separated so nobody has to guess which one
+               they are reading. Filled by refreshFirmware(); see app.js. -->
+          <div class="setsec">
+            <h4>Firmware</h4>
+            <div id="fwboards"></div>
+            <div id="fwship"></div>
+            <div class="setnote"><b>On the board</b> is the build stamp the module reports over USB
+              — its own answer, not this page's. Only the Tiliqua can give one, and only a bitstream
+              built after the stamp existed; the Basys 3's link is a raw UART with no descriptors of
+              its own, so it has no way to say. <b>This repo ships</b> is what
+              <code>boards/*/firmware/</code> holds right now, read out of the artefacts themselves
+              — the Vivado header in <code>top.bit</code>, and the tar entry of the Tiliqua
+              archive's inner bitstream, which is when it was built rather than when it was copied
+              in.</div>
+          </div>
+
           <div class="setsec">
             <h4>Keys &amp; parts</h4>
             <div class="setnote">
@@ -190,7 +208,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v99-aria"></script>
-<script src="app.js?v99-aria"></script>
+<script src="transport.js?v100-firmware"></script>
+<script src="app.js?v100-firmware"></script>
 </body>
 </html>

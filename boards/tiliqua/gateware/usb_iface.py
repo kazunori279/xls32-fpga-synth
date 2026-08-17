@@ -43,6 +43,8 @@ from usb_protocol.types.descriptors.midi1 import MidiStreamingJackTypes
 from tiliqua.midi.decode_usb import USBMidiCIN
 from tiliqua.usb_audio import USB2AudioInterface
 
+from build_id import usb_manufacturer
+
 
 class UsbMidiUnpack(wiring.Component):
 
@@ -155,7 +157,16 @@ class XlsUsbInterface(USB2AudioInterface):
             d.idVendor = 0x1209
             d.idProduct = 0xAA62
 
-            d.iManufacturer = "apf.audio"
+            # iManufacturer carries the build stamp -- "apf.audio XLS32/<utc>-<commit>" -- because
+            # Web MIDI hands it to the page verbatim as `MIDIOutput.manufacturer`, which is the
+            # only channel on this device that can say what is *flashed* rather than what the repo
+            # ships, and the only one that costs no gateware. See build_id.py for the three fields
+            # that were considered and why the other two were rejected. Unstamped builds get the
+            # bare vendor string, unchanged from before #27.
+            d.iManufacturer = usb_manufacturer()
+            # NOT the stamp. iProduct is what the audio device list shows, in the macOS sound
+            # picker and in the panel's own OUT picker, and iSerialNumber is half of the UID
+            # CoreAudio remembers a device by.
             d.iProduct = "Tiliqua XLS32"
             d.iSerialNumber = "beta-0000"
             d.bcdDevice = 0.01

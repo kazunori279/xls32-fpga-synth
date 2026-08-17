@@ -83,6 +83,11 @@ ARTEFACTS = {
             "boards/tiliqua/gateware/top.py",
             "boards/tiliqua/gateware/xls_core.py",
             "boards/tiliqua/gateware/usb_iface.py",
+            # Reaches the bitstream through iManufacturer -- one string descriptor, no logic. Its
+            # *output* changes on every build by design (it is a timestamp), which this check does
+            # not see and should not: the record is about whether the sources drifted, and a
+            # bitstream that differs only in the minute it names has not drifted.
+            "boards/tiliqua/gateware/build_id.py",
             "boards/tiliqua/gateware/midi_filter.py",
             "boards/tiliqua/gateware/midi_arb.py",
             "boards/tiliqua/gateware/fx.py",
