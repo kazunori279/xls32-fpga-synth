@@ -116,7 +116,14 @@ def env_from_git(repo_root, now_utc):
     commit = git("rev-parse", "--short=7", "HEAD") or "unknown"
     if commit != "unknown" and git("status", "--porcelain") != "":
         commit += "+"
-    return {"XLS32_BUILD_UTC": now_utc, "XLS32_BUILD_COMMIT": commit}
+
+    # A value already in the environment wins. build.sh consumes this through `eval`, which would
+    # otherwise re-export over the top of whatever the caller pinned -- so `XLS32_BUILD_UTC=... \
+    # ./build.sh` silently got the clock anyway, and the documented way to make a reproducible
+    # build did nothing. The override belongs here rather than in the shell for the usual reason:
+    # this file is the one place that knows what the variables mean.
+    return {"XLS32_BUILD_UTC": os.environ.get("XLS32_BUILD_UTC") or now_utc,
+            "XLS32_BUILD_COMMIT": os.environ.get("XLS32_BUILD_COMMIT") or commit}
 
 
 if __name__ == "__main__":
