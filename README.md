@@ -519,7 +519,9 @@ sound settings are the way.
 `patches.json` — every slot, no questions, and the entry to reach for when you want a backup — the
 one patch you are editing into a USER slot, or, while a demo song is loaded, the four PART tones
 back into `demos.json`. The first one is greyed out until the bank has something in it, so the very
-first patch you make goes in through **PATCH ▸ USER slot** (which writes the file too).
+first patch you make goes in through **PATCH ▸ USER slot** (which writes the file too). That one
+opens the patch browser on its USER bank to ask *where* — 128 rows, named where taken and `U<n>`
+where free, with the slot it would have chosen already highlighted — and then asks what to call it.
 **📂 LOAD** reads either file back.
 The USER bank lives in the browser's own storage and is what reloads with the page; the files are
 how it gets onto another machine, and how `webui/static/demos.json` in this repo is edited. Both

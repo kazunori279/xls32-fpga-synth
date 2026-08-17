@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v96-emptybank';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v97-slotpicker';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -461,6 +461,7 @@ let bank = 'factory', bcat = 'All', bquery = '', flatList = [], curIndex = -1;
 function userKey(n) { return 'synth.user.' + n; }
 function readUser(n) { try { return JSON.parse(localStorage.getItem(userKey(n))); } catch (e) { return null; } }
 function firstEmptyUser() { for (let i = 1; i <= USER_SLOTS; i++) if (!readUser(i)) return i; return 1; }
+function defaultPatchName(n) { return 'User Patch ' + n; }   // what the name box offers for a free slot
 
 // current bank ('user' or a source name) -> normalized list of {name, category, values, slot?, empty?}
 function bankList() {
@@ -532,12 +533,50 @@ function renderList() {
     el.className = 'bitem' + (p.empty ? ' empty' : '') +
                   (flatList[curIndex] && p === flatList[curIndex] ? ' on' : '');
     el.textContent = p.name;
-    el.addEventListener('click', () => selectPreset(p, list, i));
+    // Two things a row can mean. Normally: load this. While SAVE is asking where to put a patch:
+    // write it here -- which must not also make it the sound on the panel, since the patch being
+    // saved is the one already there.
+    el.addEventListener('click', () => (slotPick ? slotPick(p.slot) : selectPreset(p, list, i)));
     box.append(el);
   });
 }
 function openBrowser() { document.getElementById('browser').classList.remove('hidden'); renderCats(); renderList(); }
-function closeBrowser() { document.getElementById('browser').classList.add('hidden'); }
+function closeBrowser() {
+  if (slotPick) { slotPick(null); return; }     // ✕, a click outside, or Esc: the save is cancelled
+  document.getElementById('browser').classList.add('hidden');
+}
+
+// Saving to a USER slot used to open `prompt('...slot (1-128):')` -- type a number, with no way to
+// see which slots were taken or what was in them, and no way back but remembering. The browser
+// already draws that list. So SAVE borrows it: same overlay, same rows, tabs hidden, a title that
+// says what the click will mean, and the slot SAVE would have defaulted to highlighted. Resolves to
+// a slot number, or null if the panel was dismissed.
+let slotPick = null;
+function pickUserSlot() {
+  const prevBank = bank, prevQuery = bquery;
+  const box = document.getElementById('browser'), lab = document.getElementById('bpick');
+  return new Promise((res) => {
+    slotPick = (slot) => {
+      slotPick = null;                            // cleared first: closeBrowser() below must not re-enter
+      lab.classList.add('hidden'); box.classList.remove('picking');
+      closeBrowser();
+      bquery = prevQuery; document.getElementById('bsearch').value = prevQuery;
+      setBank(prevBank);                          // put the browser back the way it was found
+      res(slot);
+    };
+    bquery = ''; document.getElementById('bsearch').value = '';
+    lab.classList.remove('hidden'); box.classList.add('picking');
+    bank = 'user'; bcat = 'All';
+    document.querySelectorAll('#btabs .btab').forEach((t) => t.classList.toggle('on', t.dataset.bank === 'user'));
+    openBrowser();
+    // Highlight the slot the old prompt would have offered, so the default is visible rather than
+    // typed. curIndex indexes the list being drawn, and in USER order that is slot - 1.
+    const def = curUserSlot || firstEmptyUser();
+    document.querySelectorAll('#blist .bitem').forEach((el, i) => el.classList.toggle('on', i === def - 1));
+    const row = document.querySelectorAll('#blist .bitem')[def - 1];
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  });
+}
 // Tab labels. `soundfont` is the corpus the bank was FITTED to, which is a fact about how the
 // presets were made and not something a player needs at the moment of picking one -- next to USER
 // the useful distinction is simply "the ones that shipped", so it reads `Preset`. The id stays
@@ -726,23 +765,26 @@ async function saveBank(repick) {
 }
 
 async function savePatch(repick) {
-  const def = curUserSlot || firstEmptyUser();
-  const raw = prompt('Save current patch to USER slot (1-' + USER_SLOTS + '):', def);
-  if (raw === null) return;
-  const slotN = Math.max(1, Math.min(USER_SLOTS, parseInt(raw, 10) || def));
+  const slotN = await pickUserSlot();
+  if (slotN === null) return;
   const ex = readUser(slotN);
-  const name = prompt('Patch name:', ex ? ex.name : 'User ' + slotN);
+  const name = prompt('Enter user patch name:', ex ? ex.name : defaultPatchName(slotN));
   if (name === null) return;
   const vals = {}; spec.controls.forEach((c) => vals[c.id] = values[c.id]);
   localStorage.setItem(userKey(slotN), JSON.stringify({ name, values: vals }));
   curUserSlot = slotN; setBar('User', name);
   if (bank === 'user' && !document.getElementById('browser').classList.contains('hidden')) renderList();
-  // The slot is saved by the line above whatever happens next, so dismissing the picker loses the
-  // file and not the patch. Say which happened rather than flashing one '✓' for both.
+  // The slot is saved by the line above whatever happens next, so losing the file does not lose the
+  // patch. Say which happened rather than flashing one '✓' for both. A dismissed picker is one way
+  // to get here; so is a lapsed user gesture, because a slot panel and a name box is a long time to
+  // hold the click that authorised the write, and neither is an error worth a ✗.
   try {
     const f = await saveToFile('patches', 'patches.json', userBankBlob(userBank()), repick);
     flashSave(f ? '✓ ' + f : '✓ slot ' + slotN);
-  } catch (e) { flashSave(e && e.name === 'AbortError' ? '✓ slot ' + slotN : '✗ err'); }
+  } catch (e) {
+    const soft = e && (e.name === 'AbortError' || e.name === 'SecurityError' || e.name === 'NotAllowedError');
+    flashSave(soft ? '✓ slot ' + slotN : '✗ err');
+  }
 }
 
 // The one button says three things -- what it will do, that it is doing it, where it went -- and the
@@ -873,7 +915,7 @@ async function loadPatches(repick) {
   for (let i = 1; i <= USER_SLOTS; i++) localStorage.removeItem(userKey(i));
   list.forEach((p, i) => {
     const slot = Math.max(1, Math.min(USER_SLOTS, p.slot | 0 || i + 1));
-    localStorage.setItem(userKey(slot), JSON.stringify({ name: p.name || 'User ' + slot, values: p.values || {} }));
+    localStorage.setItem(userKey(slot), JSON.stringify({ name: p.name || defaultPatchName(slot), values: p.values || {} }));
   });
   curUserSlot = firstEmptyUser();
   if (bank === 'user') { flatList = []; curIndex = -1; renderList(); }
@@ -959,6 +1001,7 @@ document.addEventListener('keydown', (e) => {
   // Esc dismisses a popup menu before it reaches PANIC: a menu is the nearest thing on screen to
   // "what Escape means", and a stray Esc while choosing a file should not also cut a held note.
   if (code === 'Escape' && closeMenu()) { e.preventDefault(); return; }
+  if (code === 'Escape' && slotPick) { slotPick(null); e.preventDefault(); return; }   // cancel the save
   if (code === 'Escape') { allSoundOff(); e.preventDefault(); return; }   // the same thing PANIC does
   if (code === OCT_DOWN) { baseOct = Math.max(0, baseOct - 1); octLabel(); buildKeyboard(); return; }
   if (code === OCT_UP) { baseOct = Math.min(8, baseOct + 1); octLabel(); buildKeyboard(); return; }

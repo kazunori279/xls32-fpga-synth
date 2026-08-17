@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v96-emptybank">
+<link rel="stylesheet" href="style.css?v97-slotpicker">
 </head>
 <body>
 <div id="synth">
@@ -146,6 +146,11 @@
     <div id="browser" class="browser hidden">
       <div class="bwin">
         <div class="bhead">
+          <!-- The same browser, borrowed by SAVE. Picking a slot to write to and picking a patch to
+               play are the same act of pointing at a row, so the list that already shows all 128
+               slots -- named where taken, "U<n>" where free -- is the one that should ask. The tabs
+               go away while it asks: there is nothing to choose but a USER slot. -->
+          <div class="dtitle bpick hidden" id="bpick">Choose a user patch slot to save<span class="dhint"> — a named slot will be overwritten</span></div>
           <div class="btabs" id="btabs"></div>
           <input id="bsearch" class="bsearch" type="search" placeholder="search…" autocomplete="off">
           <button id="bclose" class="bclose" title="close">✕</button>
@@ -179,7 +184,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v96-emptybank"></script>
-<script src="app.js?v96-emptybank"></script>
+<script src="transport.js?v97-slotpicker"></script>
+<script src="app.js?v97-slotpicker"></script>
 </body>
 </html>

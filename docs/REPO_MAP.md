@@ -68,7 +68,8 @@ addition rather than a rewrite.
   **single source of truth** for the bank (re-running `build_demos.py` regenerates the notes but
   carries tone edits over by song name). The same button's **▸ PATCHES** entry writes the whole USER
   bank out as `patches.json` in one gesture (a copy — `localStorage` stays the live bank, and nothing
-  reads the file back at boot), **▸ PATCH** puts the patch on the panel into a USER slot,
+  reads the file back at boot), **▸ PATCH** puts the patch on the panel into a USER slot — asking
+  which with the preset browser itself, opened on its USER bank as a slot picker,
   and **📂 LOAD** reads either file back — replacing the bank, since both files are
   written whole. Everything goes through the File System Access API and remembers where you put it:
   the handles are structured-cloned into IndexedDB (`synth.files`) because `localStorage` cannot

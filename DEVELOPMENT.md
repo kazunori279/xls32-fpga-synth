@@ -2445,6 +2445,31 @@ directly beneath it, so the answer is on screen before the click rather than as 
 `openMenu()` grew one rule for this: an item with a null callback renders disabled. The `✗ bank
 empty` guard stays in `saveBank()`, unreachable from the menu and cheap to keep.
 
+**Choosing the slot is a list, not a number.** PATCH ▸ USER slot asked with
+`prompt('Save current patch to USER slot (1-128):')` — type a number, with no way to see which of
+the 128 were taken, what was in them, or which one you used last. The panel already draws exactly
+that list: the preset browser's USER tab, named rows where a slot is taken and italic `U<n>` where
+it is free. So SAVE borrows it rather than describing it. Same overlay, same rows, tabs hidden
+(there is nothing to switch to), a title that says what a click will now mean — *"Choose a user
+patch slot to save — a named slot will be overwritten"* — and the slot the prompt would have
+defaulted to already highlighted and scrolled to. The search box stays, because 128 rows is a lot
+to scroll, and a filtered row still knows its own slot number.
+
+Mechanically it is one promise and one branch: `pickUserSlot()` resolves to a slot or null, and
+`slotPick` — the resolver, non-null only while the question is open — is what `renderList()` checks
+to decide whether a click means *load this* or *write here*. The two must not be the same thing:
+the patch being saved is the one already on the panel, so loading the row you clicked would
+overwrite it with the slot's old contents at exactly the wrong moment. `closeBrowser()` resolves
+null, which gets ✕, the backdrop and Esc for free; the previous bank and search text are put back
+afterwards, so the browser is where you left it next time you open it to play.
+
+The name box then says *"Enter user patch name:"* and offers `User Patch <n>` for a free slot or the
+existing name for a taken one. One consequence of a two-step question: the click that authorised
+the file write is a panel and a dialog ago, and transient activation expires in about five seconds,
+so `showSaveFilePicker()` can throw `SecurityError` on a slow answer. The slot is already in
+`localStorage` by then, so that — like a dismissed picker — flashes `✓ slot N` rather than `✗ err`.
+It is not a failed save; it is a save that did not also reach the file.
+
 The move cost nothing in code because the ids did not change: `#outdev`, `#octlabel`, `#midiin` and
 `#dbg` are the same elements, written by the same `renderMidiIn()` / `octLabel()` / meter interval,
 which go on updating behind a closed overlay so it is never stale when opened. `route_check.html`:

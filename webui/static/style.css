@@ -141,6 +141,10 @@ body{
   background:linear-gradient(#2b2721,#1c1915)}
 .dtitle{flex:1;font-size:11px;font-weight:700;letter-spacing:.5px;color:#e9e3d6}
 .dhint{font-weight:400;color:#8a8272}
+/* While the browser is being used to choose a save slot there is no bank to switch to, so the tabs
+   step aside for the question. The search box stays: 128 rows is a lot to scroll past. */
+#browser.picking #btabs{display:none}
+.bpick{flex:0 0 auto}
 .bitem.demoitem{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btabs{display:flex;gap:6px}
@@ -202,6 +206,9 @@ body{
 .bitem:hover{background:linear-gradient(#f8f2e3,#e8ddc6)}
 .bitem.on{background:linear-gradient(#e8b24a,#c98a1f);border-color:#8a5e10}
 .bitem.empty{color:#a89b83;font-style:italic}
+/* An empty slot is grey so it reads as free; highlighted as the save target it needs the same dark
+   ink the named rows get, or the one row the eye should land on is the palest thing on screen. */
+.bitem.empty.on{color:#241109}
 /* a board this browser cannot open: shown, not hidden, so the reason is visible */
 .bitem.off{color:#a89b83;cursor:default}
 .bitem.off:hover{background:linear-gradient(#f3ecdb,#e2d7be)}   /* no hover lift: nothing to click */
