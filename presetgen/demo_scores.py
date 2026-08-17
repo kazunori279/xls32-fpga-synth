@@ -5,6 +5,13 @@ transcribed from public-domain scores (Bach d.1750, Vivaldi pub.1725, Saint-Saen
 The ARRANGEMENT — which line goes on which of the synth's 4 multitimbral parts, the patches
 and the velocities — lives in build_demos.py; this is just the notes.
 
+Where the notes came from. The works are public domain; a modern *engraving* of one need not be,
+so the edition each transcription was checked against is worth recording. The Goldberg Aria's
+32 bars were read off the Mutopia Project's BWV 988 edition (Bach-Gesellschaft source, maintainer
+JD Erickson, CC BY-SA 3.0) and every bar's pitch sequence cross-checked against that edition's
+MIDI. What is below is note data — pitch and duration, facts of Bach's score rather than of anyone's
+typesetting — but the check is only meaningful if you can say what it was checked against.
+
 Two formats:
   * BWV846 / *_HARM: readable note-name or chord tables, one entry per bar.
   * everything else: a run of "onset,duration,midi" triples, times in TICKS of 1/96 beat
