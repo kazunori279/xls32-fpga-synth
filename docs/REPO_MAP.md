@@ -35,8 +35,11 @@ addition rather than a rewrite.
     reports over USB, in its `iManufacturer` string) and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone
-    exit checks) and `check_panic_hw.py` (the same channel mode messages on the module, over
-    USB-MIDI, judged on the USB audio capture),
+    exit checks), `check_panic_hw.py` (the same channel mode messages on the module, over
+    USB-MIDI, judged on the USB audio capture) and `check_descriptors.py` (the three USB strings,
+    read back out of the descriptor collection without a board — that the stamp matches the parser
+    in `transport.js`, that `iProduct` and `iSerialNumber` have not moved, and that the stamp is
+    still the fixed width the router seed was drawn against),
     `spike/` (the M21/M22 fit sweeps), `firmware/` (the committed prebuilt bitstream archive).
 - **`scripts/`** — board-agnostic tools: `spectro.sh` (.wav → PNG), `make_mp4.sh` (.wav →
   spectrogram MP4), `demo_video.sh`, and `check_artefacts.py` — which hashes the sources behind
