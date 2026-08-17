@@ -518,7 +518,9 @@ sound settings are the way.
 **Keeping what you make.** **💾 SAVE** asks which of three: the whole USER bank out as
 `patches.json` — every slot, no questions, and the entry to reach for when you want a backup — the
 one patch you are editing into a USER slot, or, while a demo song is loaded, the four PART tones
-back into `demos.json`. **📂 LOAD** reads either file back.
+back into `demos.json`. The first one is greyed out until the bank has something in it, so the very
+first patch you make goes in through **PATCH ▸ USER slot** (which writes the file too).
+**📂 LOAD** reads either file back.
 The USER bank lives in the browser's own storage and is what reloads with the page; the files are
 how it gets onto another machine, and how `webui/static/demos.json` in this repo is edited. Both
 buttons remember the file you chose, so the second trip costs no dialog; ⇧-click either to point it

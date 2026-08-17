@@ -2435,6 +2435,16 @@ unconditionally for LOAD's reason: both answers are always available. Verified w
 bound to OPFS so nothing native could open — three slot-saves cost one picker, then the bank entry
 cost zero prompts, zero extra pickers, and wrote all three patches in slot order.
 
+And then it was wrong for the one flow that matters most, which is the first one anybody does:
+**INIT → turn some knobs → SAVE**. The bank is empty there, so the entry now at the *top* of the
+menu had nothing to write — it flashed `✗ bank empty` for a second and left no file, which reads as
+"SAVE did nothing" and shows up as an empty Files row in SETTINGS. Leading with the summary of a
+thing you have not made yet is the mistake. The entry is disabled on an empty bank now and says
+*"the bank is empty — save a patch to a slot first"* in its own subtitle, with the live entry
+directly beneath it, so the answer is on screen before the click rather than as an error after it.
+`openMenu()` grew one rule for this: an item with a null callback renders disabled. The `✗ bank
+empty` guard stays in `saveBank()`, unreachable from the menu and cheap to keep.
+
 The move cost nothing in code because the ids did not change: `#outdev`, `#octlabel`, `#midiin` and
 `#dbg` are the same elements, written by the same `renderMidiIn()` / `octLabel()` / meter interval,
 which go on updating behind a closed overlay so it is never stale when opened. `route_check.html`:

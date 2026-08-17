@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v95-savebank';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v96-emptybank';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -778,6 +778,8 @@ function closeMenu() {
   menuEl.remove(); menuEl = null; menuOff = null;
   return true;
 }
+// An item is [label, sub, fn]; a null `fn` renders it disabled, which is how an entry that cannot
+// do anything right now explains itself before the click instead of after it.
 function openMenu(btn, items) {
   const m = document.createElement('div'); m.className = 'savemenu';
   items.forEach(([label, sub, fn]) => {
@@ -785,7 +787,8 @@ function openMenu(btn, items) {
     const t = document.createElement('span'); t.className = 'smt'; t.textContent = label;
     const s = document.createElement('span'); s.className = 'sms'; s.textContent = sub;
     b.append(t, s);
-    b.addEventListener('click', () => { closeMenu(); fn(); });
+    if (fn) b.addEventListener('click', () => { closeMenu(); fn(); });
+    else b.disabled = true;
     m.append(b);
   });
   document.body.append(m);
@@ -799,18 +802,26 @@ function openMenu(btn, items) {
   document.addEventListener('pointerdown', menuOff, true);
 }
 function loadedSong() { return (demoIdx >= 0 && demos && demos.songs) ? demos.songs[demoIdx] : null; }
-// SAVE now always opens the menu, the same as LOAD and for the same reason: writing the bank out and
+// SAVE always opens the menu, the same as LOAD and for the same reason: writing the bank out and
 // putting one patch into it are both always available, so there are always at least two answers. The
 // bank goes first because it is the mirror of LOAD's first entry, and because it is the one that
 // costs nothing to be wrong about -- it asks nothing and overwrites only the file.
+//
+// Except on a bank with nothing in it, which is where the first session starts and where INIT and a
+// few knobs leave you: the leading entry then had nothing to write, so the first SAVE of a new
+// patch clicked the top of the menu and silently did nothing. It is disabled and says so now, and
+// the entry that DOES keep that patch is the live one directly under it.
 function onSaveClick(e) {
   if (closeMenu()) return;
   const song = loadedSong();
   const n = userBank().length;
   const items = [
-    ['PATCHES ▸ USER bank', saveTarget('patches', 'patches.json') + ' · ' + n + (n === 1 ? ' patch' : ' patches'),
-      () => saveBank(e.shiftKey)],
-    ['PATCH ▸ USER slot', 'the patch on the panel, into the bank', () => savePatch(e.shiftKey)],
+    ['PATCHES ▸ USER bank',
+      n ? saveTarget('patches', 'patches.json') + ' · ' + n + (n === 1 ? ' patch' : ' patches')
+        : 'the bank is empty — save a patch to a slot first',
+      n ? () => saveBank(e.shiftKey) : null],
+    ['PATCH ▸ USER slot', 'the patch on the panel, into the bank' + (n ? '' : ' — and out to the file'),
+      () => savePatch(e.shiftKey)],
   ];
   if (song) items.push(['TONES ▸ ' + song.name, saveTarget('demos', 'demos.json'), () => saveDemoTones(e.shiftKey)]);
   openMenu(e.currentTarget, items);

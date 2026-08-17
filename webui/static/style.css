@@ -107,7 +107,10 @@ body{
   padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
 .smitem{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
   font-family:inherit;padding:6px 9px;border:0;border-radius:3px;background:none;cursor:pointer}
-.smitem:hover{background:linear-gradient(#5b5548,#332f28)}
+.smitem:hover:not(:disabled){background:linear-gradient(#5b5548,#332f28)}
+/* An entry with nothing to do says why in its own subtitle rather than flashing an error after the
+   click -- a dead click on the first entry of a menu is how "SAVE did nothing" happens. */
+.smitem:disabled{opacity:.45;cursor:default}
 .smt{font-size:10px;font-weight:700;letter-spacing:1px;color:#e7dcc4}
 .sms{font-size:9px;color:#9b8f76}
 
