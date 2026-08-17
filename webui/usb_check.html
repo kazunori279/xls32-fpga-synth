@@ -1,0 +1,208 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>USB check — is the build stamp the panel reads the one on the board?</title>
+<!--
+  The board reports its build stamp in the USB `iManufacturer` string (issue #27, produced by
+  `boards/tiliqua/gateware/build_id.py`), and SETTINGS ▸ Firmware reads it back. The mechanism
+  works. What does not work is the *reading*, on macOS, and this page is how that was found and is
+  how it stays found.
+
+  THE PROBLEM. Web MIDI's `MIDIPort.manufacturer` does not come from the device. On macOS it comes
+  from CoreMIDI, which caches every string it has ever seen for a device in
+
+      ~/Library/Preferences/ByHost/com.apple.MIDI.<uuid>.plist
+
+  keyed on USBLocationID + USBVendorProduct + SerialNumber. All three of those are deliberately
+  fixed across builds -- the serial is pinned at "beta-0000" precisely so that CoreAudio keeps
+  remembering the device -- so **reflashing the module does not invalidate the entry**. The board
+  re-enumerates carrying a new stamp and CoreMIDI keeps handing out the old one. Measured, with a
+  probe bitstream built purely to prove it:
+
+      USB (ioreg):  "apf.audio XLS32/2026-08-17T09:00Z-76e49c9"    <- what the board actually says
+      CoreMIDI:     "apf.audio XLS32/2026-08-17T03:57Z-890d4be"    <- what Web MIDI reports
+      plist cache:  "apf.audio XLS32/2026-08-17T03:57Z-890d4be"
+
+  A firmware readout that answers with the *previous* firmware is worse than no readout: it is
+  confidently wrong, and the one question it exists to answer -- "did my flash take?" -- is exactly
+  the question it gets wrong. Moving the stamp to `iProduct` would not have helped; the same plist
+  row caches `model` alongside `manufacturer`. Chrome stacks a second, browser-process-lifetime
+  cache on top of CoreMIDI's, so even pruning the plist needs a Chrome restart to show through.
+
+  THE FIX THIS PAGE CHECKS, and the run that confirmed it. `navigator.usb` does not go through
+  CoreMIDI. Chrome reads the string descriptors from IOKit, which the reflash *does* refresh --
+  that is the same place `ioreg` reads. So `USBDevice.manufacturerName` is live where
+  `MIDIPort.manufacturer` is stale, and the panel prefers it. Measured here on one module, one
+  grant, one sitting, with no further click between the two reads:
+
+                        before reflash              after reflash
+      ioreg             ...T03:57Z-890d4be          ...T14:00Z-76e49c9
+      WebUSB            ...T03:57Z-890d4be          ...T14:00Z-76e49c9
+      Web MIDI          "apf.audio"                 "apf.audio"
+
+  The Web MIDI column is a pre-stamp build that had not been on the board for hours. Note also
+  that it did not move when the grant did: WebUSB reflects the *device*, and the permission is not
+  what refreshes it.
+
+  It costs one click, once per origin, and never again: WebUSB permission is granted through a
+  device picker that needs a user gesture, but afterwards `navigator.usb.getDevices()` returns the
+  granted device silently on every later visit. That is why the permission survives a reflash at
+  all -- it is keyed on vendor/product/serial, the three fields that were pinned. The same pinning
+  that breaks the CoreMIDI path is what makes this one free after the first click.
+
+  WHAT A RUN MEANS.
+
+    both agree      Nothing is proven either way -- the cache happens to hold the current value.
+                    Reflash with a different stamp and run it again if you want the real answer.
+    they disagree   The interesting result, and a PASS: WebUSB is live and Web MIDI is stale.
+                    Cross-check the WebUSB column against
+                    `ioreg -p IOUSB -l -w 0 | grep -i "USB Vendor Name"`; they must match.
+    no WebUSB       Either the picker was cancelled, or Chrome refused the device. Then the
+                    fallback is to make the stamp part of the *cache key*: put a 9-character
+                    build id in iSerialNumber (it must stay exactly 9 -- the descriptor is a ROM
+                    and its width decides whether the router seed in build.sh still routes), at
+                    the cost of the remembered audio sinkId being forgotten on every flash.
+
+  This page asks for nothing on load. It reads Web MIDI only if the permission is already granted,
+  and WebUSB only if the device was already picked, so opening it is never a demand.
+
+  Run it:  cd webui && python3 -m http.server 8123
+           open http://localhost:8123/usb_check.html
+
+  The panel itself is same-origin at /static/index.html, so the grant made here is the grant it
+  uses -- which is the point of serving both from one port.
+-->
+<style>
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         margin: 2rem; max-width: 72rem }
+  h1 { font-size: 1.1rem } h2 { font-size: .95rem; margin: 1.6rem 0 .4rem }
+  table { border-collapse: collapse; margin: .4rem 0 }
+  th, td { padding: .2rem .8rem .2rem 0; text-align: left; border-bottom: 1px solid #ddd;
+           vertical-align: top; font-variant-numeric: tabular-nums }
+  .pass { color: #0a0 } .fail { color: #c00; font-weight: bold } .skip { color: #888 }
+  #verdict { font-size: 1.2rem; margin: 1rem 0 }
+  button { font: inherit; padding: .3rem .8rem; margin: .2rem .4rem .2rem 0 }
+  p.note { color: #555; max-width: 62rem }
+  code { background: #f4f4f4; padding: 0 .2rem }
+</style>
+
+<h1>USB check — the build stamp, read two ways</h1>
+<p class="note">
+  Web MIDI reads the stamp through CoreMIDI, which caches it per device and does not notice a
+  reflash. WebUSB reads the descriptor itself. If the two columns disagree, the right one is
+  WebUSB — check it against <code>ioreg -p IOUSB -l -w 0 | grep -i "USB Vendor Name"</code>.
+</p>
+
+<div>
+  <button id="pick">Grant WebUSB access…</button>
+  <button id="again">Re-read</button>
+  <span class="skip" id="hint">the picker needs a click; after that this page reads silently</span>
+</div>
+
+<div id="verdict">…</div>
+
+<h2>What each source says</h2>
+<table id="tbl"><thead>
+  <tr><th>source</th><th>port / device</th><th>iManufacturer</th><th>parsed stamp</th></tr>
+</thead><tbody></tbody></table>
+
+<h2>Log</h2>
+<pre id="log"></pre>
+
+<script src="static/transport.js"></script>
+<script>
+// The panel's own parser, not a second copy of it: the whole reason this page loads transport.js
+// is so that a format change cannot pass here and fail there. Under a different name because
+// transport.js is a classic script, so its own `parseFirmware` is already a global here.
+const parseFw = window.XLS32.parseFirmware;
+
+// boards/tiliqua/gateware/usb_iface.py. Both halves are pinned in the descriptor, so a filter on
+// them is exact -- and Chrome's picker shows nothing else, which is the friendliest picker there is.
+const VID = 0x1209, PID = 0xaa62;
+
+const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+const fmt = (fw) => fw ? `${fw.utc} · ${fw.commit}${fw.dirty ? ' (dirty)' : ''}` : '—';
+
+function row(source, port, manu, fw) {
+  const tr = document.getElementById('tbl').tBodies[0].insertRow();
+  for (const v of [source, port, manu === null ? '(unreadable)' : `"${manu}"`, fmt(fw)]) {
+    tr.insertCell().textContent = v;
+  }
+}
+
+async function readMidi() {
+  if (!navigator.requestMIDIAccess) { log('web midi: not in this browser'); return []; }
+  try {
+    if ((await navigator.permissions.query({ name: 'midi' })).state !== 'granted') {
+      log('web midi: not granted yet — open the panel once, or click POWER there');
+      return [];
+    }
+  } catch (e) { log('web midi: no "midi" permission name here'); return []; }
+  // The ports are walked here rather than through `probeTiliquas()`, which hands back the parsed
+  // stamp but not the raw string it parsed -- and the raw string is half of what this page is for.
+  const access = await navigator.requestMIDIAccess({ sysex: false });
+  const outs = [...access.outputs.values()]
+    .filter((o) => (o.name || '').toLowerCase().includes('tiliqua xls32'))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  outs.forEach((o, i) => row('Web MIDI (CoreMIDI)', `board ${i} · ${o.name}`,
+                             o.manufacturer, parseFw(o.manufacturer)));
+  return outs.map((o) => o.manufacturer || '');
+}
+
+async function readUsb() {
+  if (!navigator.usb) { log('webusb: not in this browser'); return []; }
+  const devs = (await navigator.usb.getDevices())
+    .filter((d) => d.vendorId === VID && d.productId === PID);
+  if (!devs.length) { log('webusb: no granted device — click "Grant WebUSB access…"'); return []; }
+  // No open() and no claimInterface(): the string descriptors are read by Chrome during
+  // enumeration and are already on the USBDevice. That matters on macOS, where the audio and MIDI
+  // interfaces are claimed by the kernel's own drivers and could not be claimed here anyway.
+  devs.forEach((d, i) => row('WebUSB (device)', `device ${i} · ${d.productName}`,
+                             d.manufacturerName, parseFw(d.manufacturerName)));
+  devs.forEach((d) => log(`webusb: serial=${JSON.stringify(d.serialNumber)} ` +
+                          `product=${JSON.stringify(d.productName)}`));
+  return devs.map((d) => d.manufacturerName || '');
+}
+
+function verdict(midi, usb) {
+  const el = document.getElementById('verdict');
+  const usbFw = usb.map(parseFw).filter(Boolean);
+  if (!usb.length) {
+    el.className = 'skip';
+    el.textContent = 'INCONCLUSIVE — no WebUSB device granted. Click the button above.';
+    return;
+  }
+  if (!usbFw.length) {
+    el.className = 'fail';
+    el.textContent = 'FAIL — WebUSB read the device but found no stamp. Either the board is '
+                   + 'running a pre-#27 bitstream, or the format and the parser have drifted.';
+    return;
+  }
+  const same = midi.length === usb.length && midi.every((m, i) => m === usb[i]);
+  el.className = 'pass';
+  el.textContent = same
+    ? 'PASS (weakly) — WebUSB read a live stamp, and the CoreMIDI cache happens to agree with it. '
+    + 'Reflash with a different stamp and re-run to see the two come apart.'
+    : 'PASS — the two sources DISAGREE, which is the whole finding: WebUSB is reading the board '
+    + 'and Web MIDI is reading a stale CoreMIDI cache. The WebUSB row is the truth; confirm with '
+    + 'ioreg.';
+}
+
+async function run() {
+  document.getElementById('tbl').tBodies[0].innerHTML = '';
+  document.getElementById('log').textContent = '';
+  const usb = await readUsb();
+  const midi = await readMidi();
+  verdict(midi, usb);
+}
+
+document.getElementById('pick').onclick = async () => {
+  try {
+    await navigator.usb.requestDevice({ filters: [{ vendorId: VID, productId: PID }] });
+  } catch (e) {
+    log(`webusb: picker returned nothing (${e.name}: ${e.message})`);
+  }
+  run();
+};
+document.getElementById('again').onclick = run;
+run();
+</script>

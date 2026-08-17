@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v101-firmware';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v102-usbstamp';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -249,6 +249,26 @@ const fwRow = (k, v, cls) =>
 const fwStamp = (f) => `${f.utc.replace('T', ' ').replace('Z', '')} UTC · ${f.commit}` +
                        (f.dirty ? ' <b>+uncommitted</b>' : '');
 
+// Why the picker was cancelled or came back empty, kept so the redraw can say. Cleared by a
+// successful grant, because the row it explains is gone by then.
+let usbAskNote = '';
+
+async function grantUsbFirmware() {
+  const btn = document.getElementById('fwusb');
+  if (btn) { btn.disabled = true; btn.textContent = 'asking…'; }
+  usbAskNote = '';
+  try {
+    // The click this runs in is the user gesture the picker needs, so it has to be awaited from
+    // here and not from inside refreshFirmware().
+    if (!(await window.XLS32.requestUsbStamps()).length) {
+      usbAskNote = 'the browser granted nothing — is the module plugged in?';
+    }
+  } catch (e) {
+    usbAskNote = e && e.name === 'NotFoundError' ? 'no module chosen' : String(e.message || e);
+  }
+  refreshFirmware();
+}
+
 async function refreshFirmware() {
   const onboard = document.getElementById('fwboards');
   const ship = document.getElementById('fwship');
@@ -259,6 +279,11 @@ async function refreshFirmware() {
   // asking would be this page demanding MIDI access to fill in a diagnostic nobody opened it for.
   let boards = links.length ? links.map((l) => ({ board: l.board ?? 0, kind: l.kind, firmware: l.firmware }))
                             : (await window.XLS32.probeTiliquas()).map((p) => ({ ...p, kind: 'tiliqua' }));
+  // ...and then read the same string off the devices themselves where that is possible, because
+  // the one Web MIDI hands over is a CoreMIDI cache entry that a reflash does not clear. See the
+  // long note in transport.js; `webui/usb_check.html` is the measurement behind it.
+  const usb = await window.XLS32.withUsbStamps(boards);
+  boards = usb.boards;
   const shp = await shippedFirmware();
   const shipTiliqua = (shp.boards || []).find((b) => b.board === 'Tiliqua');
 
@@ -271,10 +296,16 @@ async function refreshFirmware() {
       // behind a separator that would wrap it onto two lines.
       const name = b.kind === 'basys3' ? 'Basys 3'
                  : 'Tiliqua' + (boards.length > 1 ? ' ' + (b.board + 1) : '');
+      // Everything below this line that came from Web MIDI carries the same caveat, including the
+      // absence of a stamp: the cache remembers "no stamp" exactly as faithfully as it remembers
+      // the wrong one, so a board that was flashed *out* of a pre-#27 bitstream reads the same as
+      // one that never left it.
+      const stale = b.kind === 'tiliqua' && b.fwSource !== 'usb'
+        ? ' — <b>from the OS cache</b>, which a reflash does not clear' : '';
       if (!b.firmware) {
         return fwRow(name, b.kind === 'basys3'
           ? 'the UART link carries no identity — see the note below'
-          : 'no stamp — this bitstream predates it; reflash to see one', 'unset');
+          : 'no stamp — this bitstream predates it; reflash to see one' + stale, 'unset');
       }
       let v = fwStamp(b.firmware);
       // `manifest_tag` before `commit`: the tag is baked into the archive by the build, so it is
@@ -289,8 +320,23 @@ async function refreshFirmware() {
           ? ' — same commit as the shipped build'
           : ' — <b>not</b> the commit this repo ships';
       }
-      return fwRow(name, v);
+      return fwRow(name, v + stale);
     }).join('');
+  }
+
+  // The way out of the cache, offered only while the page is still in it, and only where the
+  // browser has the API. One click, once per origin: after this the read is silent forever, which
+  // is why it is a button here rather than a prompt on open.
+  if (navigator.usb && !usb.live && boards.some((b) => b.kind === 'tiliqua')) {
+    onboard.innerHTML += fwRow('',
+      '<button class="setgo" id="fwusb">Ask the board</button> ' +
+      (usbAskNote ? `<span class="skip">${usbAskNote} — </span>` : '') +
+      (usb.granted && usb.granted !== boards.filter((b) => b.kind === 'tiliqua').length
+        ? `<span class="skip">${usb.granted} of ${boards.filter((b) => b.kind === 'tiliqua').length}`
+          + ' modules granted; the rest still read from the cache</span>'
+        : '<span class="skip">reads the stamp off the module itself instead of the OS cache</span>'));
+    const btn = document.getElementById('fwusb');
+    if (btn) btn.onclick = grantUsbFirmware;
   }
 
   ship.innerHTML = fwRow('This repo ships',

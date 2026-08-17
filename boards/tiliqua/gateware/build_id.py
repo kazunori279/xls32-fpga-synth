@@ -11,14 +11,8 @@
 # converges on a hand-picked seed -- see the `--seed 3` note in build.sh. A few hundred cells for a
 # diagnostic is not a trade this board can make, and it would re-draw the seed lottery.
 #
-# So the stamp goes where the USB stack already has room for it: a string descriptor. Measured on
-# Chrome 150 / macOS, `MIDIOutput` exposes iManufacturer **verbatim** as `.manufacturer` --
-#
-#     {id: "759255568", name: "Tiliqua XLS32", manufacturer: "apf.audio", version: ""}
-#
-# -- so the panel reads it with the MIDI permission it already holds: no SysEx permission, no
-# WebUSB picker, no new endpoint, and *zero* gateware cells. Per port, so four boards give four
-# stamps, which is exactly the table #27 asks for.
+# So the stamp goes where the USB stack already has room for it: a string descriptor. No new
+# endpoint, no SysEx permission, and *zero* gateware cells.
 #
 # Three USB strings were candidates and two were rejected on evidence:
 #
@@ -29,7 +23,19 @@
 #     UID from vendor/product/serial. A serial that changes on every flash makes every reflash a
 #     new device to macOS and to Chrome's permission store, and strands the remembered `sinkId`.
 #     It stays "beta-0000".
-#   * `iManufacturer` is keyed on by nothing, shown by nothing, and read verbatim by Web MIDI.
+#   * `iManufacturer` is keyed on by nothing and shown by nothing, which is what makes it free.
+#
+# **Reading it back does not go through Web MIDI, and that was not free.** `MIDIPort.manufacturer`
+# was the intended path -- the panel already holds the MIDI permission -- but on macOS it is not
+# the device talking. CoreMIDI caches every string it has seen for a device in
+# `~/Library/Preferences/ByHost/com.apple.MIDI.<uuid>.plist`, keyed on USBLocationID +
+# USBVendorProduct + SerialNumber, all three of which are pinned above *on purpose*. So a reflash
+# never invalidates the entry and Web MIDI keeps reporting the build you just replaced -- which is
+# worse than reporting nothing, since "did my flash take?" is the only question this exists for.
+# The panel reads `USBDevice.manufacturerName` over WebUSB instead, which comes from IOKit and does
+# follow a reflash; see the note in `webui/static/transport.js` and the side-by-side in
+# `webui/usb_check.html`. None of that changes anything on this side of the wire, but it is the
+# reason the field cannot be quietly renamed: two read paths now depend on the format.
 #
 # The format keeps "apf.audio" first so the field is still true, and puts the stamp behind a token
 # the parser can key on:

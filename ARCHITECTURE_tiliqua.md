@@ -512,11 +512,37 @@ stamp goes in a string descriptor instead, which costs no cells at all:
 iManufacturer = "apf.audio XLS32/2026-08-17T03:23Z-9c752e3"     # '+' appended for a dirty tree
 ```
 
-Web MIDI hands that to the page verbatim as `MIDIPort.manufacturer`, per port, so four boards give
-four stamps under the MIDI permission the panel already holds — no SysEx permission, no WebUSB
-picker. `iProduct` was rejected because it is what the macOS sound picker shows, and
-`iSerialNumber` because CoreAudio builds a device's persistent UID from it and a serial that
-changed on every flash would make every reflash a new device.
+`iProduct` was rejected because it is what the macOS sound picker shows, and `iSerialNumber`
+because CoreAudio builds a device's persistent UID from it and a serial that changed on every
+flash would make every reflash a new device.
+
+**Reading it back is the hard half, and Web MIDI cannot do it.** `MIDIPort.manufacturer` looked
+like the free answer — the panel already holds the MIDI permission, and the string arrives per
+port, so four boards would give four stamps. It is not the device talking. On macOS every string
+Web MIDI exposes comes from CoreMIDI's own cache in
+`~/Library/Preferences/ByHost/com.apple.MIDI.<uuid>.plist`, whose entry is keyed on
+USBLocationID + USBVendorProduct + SerialNumber — and all three of those are pinned across builds
+on purpose, the serial most of all, precisely so the host keeps recognising the module. So the
+cache is never invalidated by a reflash, and Web MIDI keeps reporting the build you have just
+replaced. That is worse than reporting nothing: *did my flash take?* is the only question the row
+exists for.
+
+`navigator.usb` reads the descriptor from IOKit instead, which the reflash does refresh, so
+SETTINGS ▸ Firmware prefers `USBDevice.manufacturerName` and falls back to Web MIDI labelled as
+cached. Measured on one module, in one sitting, with no click between the two reads:
+
+| | before reflash | after reflash |
+|---|---|---|
+| device (`ioreg`) | `…T03:57Z-890d4be` | `…T14:00Z-76e49c9` |
+| WebUSB | `…T03:57Z-890d4be` | `…T14:00Z-76e49c9` |
+| Web MIDI | `apf.audio` (a pre-stamp build, cached) | `apf.audio` |
+
+The cost is one device-picker click per origin, ever: `requestDevice()` needs a user gesture, but
+`getDevices()` is silent afterwards — and the grant survives a reflash for the very same reason
+the stale cache does, because it is keyed on the same pinned fields. Nothing is opened and no
+interface is claimed; the strings were read during enumeration and are already on the `USBDevice`,
+which matters here because the kernel's own audio and MIDI drivers hold every interface this
+device has. `webui/usb_check.html` is the side-by-side that produced the table above.
 
 The stamp is **fixed-width on purpose**. A string descriptor is a ROM, and this design sits at 97%
 `TRELLIS_COMB` behind a hand-picked router seed, so anything that moves the netlist costs a fresh

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v101-firmware">
+<link rel="stylesheet" href="style.css?v102-usbstamp">
 </head>
 <body>
 <div id="synth">
@@ -140,7 +140,13 @@
               archive's inner bitstream, which is when it was built rather than when it was copied
               in. The two clocks are minutes apart on purpose: the module names the instant its
               build <i>started</i>, the archive the instant it <i>finished</i>. The commit is the
-              part to compare.</div>
+              part to compare.<br>
+              <b>Ask the board</b> is there because macOS does not pass that stamp through
+              unchanged — it caches every USB name it has seen for a module, keyed on fields that
+              are the same in every build, so after a reflash it keeps reporting the build you just
+              replaced. The button reads the module directly instead. It opens the browser's device
+              picker once per site and never again; nothing is sent to the module and no audio or
+              MIDI is interrupted.</div>
           </div>
 
           <div class="setsec">
@@ -210,7 +216,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v101-firmware"></script>
-<script src="app.js?v101-firmware"></script>
+<script src="transport.js?v102-usbstamp"></script>
+<script src="app.js?v102-usbstamp"></script>
 </body>
 </html>

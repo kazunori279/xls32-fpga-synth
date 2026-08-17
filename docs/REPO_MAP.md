@@ -105,7 +105,14 @@ addition rather than a rewrite.
   all four parts, and counts dropouts and splices per board from inside an AudioWorklet — the four
   free-running UAC2 clocks in one AudioContext are the part of the multi-board rig that cannot be
   reasoned about. It self-tests its own detector offline first, so a green run means the counters
-  were alive. `cd webui && python3 -m http.server 8123`, then open any of them.
+  were alive. `usb_check.html` is the fourth, and it needs one board: it reads the module's build
+  stamp twice, once through Web MIDI and once through WebUSB, and shows them side by side. They
+  disagree, and that is the point — on macOS `MIDIPort.manufacturer` is a CoreMIDI cache entry
+  keyed on fields the design pins across builds, so it keeps reporting the firmware you just
+  replaced. `navigator.usb` reads the descriptor from IOKit instead, which is why SETTINGS ▸
+  Firmware has an **Ask the board** button. `cd webui && python3 -m http.server 8123`, then open
+  any of them (the panel is same-origin at `/static/`, so a WebUSB grant made in the check page is
+  the one the panel uses).
 - **`presetgen/`** — offline **inverse-synthesis** preset generator: a NumPy/numba software
   model of the engine (`engine.py`), a multi-resolution spectrogram loss (`loss.py`), the
   CMA-ES search (`search.py`), target sources (`nsynth.py`, `freesound.py`), a sim↔board

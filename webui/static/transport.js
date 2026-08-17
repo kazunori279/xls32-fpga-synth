@@ -76,6 +76,85 @@ function parseFirmware(manufacturer) {
   return m ? { utc: m[1], commit: m[2], dirty: m[3] === '+' } : null;
 }
 
+// ---------- the same string, read from the device instead of from a cache ----------
+// `MIDIPort.manufacturer` is not the board talking. On macOS it comes from CoreMIDI, which caches
+// every string it has ever seen for a device in
+//
+//     ~/Library/Preferences/ByHost/com.apple.MIDI.<uuid>.plist
+//
+// keyed on USBLocationID + USBVendorProduct + SerialNumber -- and all three of those are pinned
+// across builds deliberately, the serial most of all, so that CoreAudio keeps recognising the sink
+// the player chose. So **a reflash does not invalidate the entry**: the board comes back carrying a
+// new stamp and Web MIDI keeps handing out the old one. Measured against a probe bitstream built
+// only to prove it:
+//
+//     ioreg (the device):  "apf.audio XLS32/2026-08-17T09:00Z-76e49c9"
+//     Web MIDI (CoreMIDI): "apf.audio XLS32/2026-08-17T03:57Z-890d4be"
+//
+// A firmware readout that answers with the firmware you have just replaced is worse than no
+// readout at all: "did my flash take?" is the one question it exists to answer, and that is the
+// question it gets wrong. Moving the stamp to another descriptor field would not help -- the same
+// plist row caches `model` next to `manufacturer`.
+//
+// `navigator.usb` does not go through CoreMIDI. Chrome reads the string descriptors from IOKit,
+// which is where `ioreg` reads and which the reflash does refresh. So the stamp comes from there
+// when it can, and Web MIDI is the fallback. `webui/usb_check.html` puts the two side by side.
+//
+// It costs one picker click per origin, once: `requestDevice()` needs a user gesture, but
+// `getDevices()` then returns the granted device silently on every later visit -- and the grant
+// survives a reflash for exactly the same reason the stale cache does, because it is keyed on the
+// same three pinned fields. Nothing is opened and no interface is claimed: the string descriptors
+// were read during enumeration and are already on the `USBDevice`, which matters on macOS where
+// the kernel's own audio and MIDI drivers hold the interfaces and could not be claimed here.
+const TILIQUA_USB = { vendorId: 0x1209, productId: 0xaa62 };
+
+async function usbStamps() {
+  if (!navigator.usb) return [];
+  try {
+    return (await navigator.usb.getDevices())
+      .filter((d) => d.vendorId === TILIQUA_USB.vendorId && d.productId === TILIQUA_USB.productId)
+      .map((d) => d.manufacturerName || '');
+  } catch (e) { return []; }               // permissions policy, or a sandboxed frame
+}
+
+// The picker. Must be called from inside a click, and rejects if the player cancels it.
+async function requestUsbStamps() {
+  if (!navigator.usb) throw new Error('this browser has no WebUSB');
+  await navigator.usb.requestDevice({ filters: [TILIQUA_USB] });
+  return usbStamps();
+}
+
+// The live stamps, applied to the boards they can honestly be applied to.
+//
+// The two lists cannot be paired one for one. A `MIDIPort` carries no USB location, every board
+// answers to the same iSerialNumber, and the browser exposes nothing that spans CoreMIDI and
+// WebUSB -- the same wall `discoverTiliquas()` hits pairing MIDI outputs with audio inputs. There
+// it does not matter, because every board's audio is summed and any bijection sounds the same.
+// Here it would matter: the whole point of the row is to say which build is on *which* board.
+//
+// So the live answer is only used where it needs no pairing -- every board granted, and all of them
+// reporting the same string, in which case that string is each board's stamp whichever way round
+// they are. A partial grant, or boards genuinely running different builds, falls back to Web MIDI
+// per board and is labelled as possibly stale. A stale answer that says it might be stale is worth
+// more than a fresh one pinned to the wrong board.
+//
+// `live` being an unparseable string is a real answer and not a failure: it is what a board
+// reflashed *back* to a pre-stamp bitstream reports, and the fresh null has to win over the
+// cache's memory of a stamp.
+async function withUsbStamps(boards) {
+  const tiliquas = boards.filter((b) => (b.kind || 'tiliqua') === 'tiliqua');
+  const stamps = await usbStamps();
+  const live = stamps.length > 0 && stamps.length === tiliquas.length
+               && stamps.every((s) => s === stamps[0]);
+  const fw = live ? parseFirmware(stamps[0]) : null;
+  return {
+    live,
+    granted: stamps.length,
+    boards: boards.map((b) => ((b.kind || 'tiliqua') !== 'tiliqua' ? b
+      : { ...b, firmware: live ? fw : b.firmware, fwSource: live ? 'usb' : 'midi' })),
+  };
+}
+
 class TiliquaTransport {
   // A transport is handed its hardware rather than going to look for it: finding the boards is
   // `discoverTiliquas()`'s job, below, because with more than one plugged in it is a question
@@ -482,4 +561,4 @@ async function detectBoards() {
 }
 
 window.XLS32 = { TRANSPORTS, detectBoards, midiAccess, Aligner, countTiliquas, probeTiliquas,
-                 parseFirmware };
+                 parseFirmware, usbStamps, requestUsbStamps, withUsbStamps };

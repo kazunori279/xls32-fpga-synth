@@ -20,7 +20,9 @@
 #     .../tiliqua/gateware/.venv/bin/python check_descriptors.py
 #
 # What it *cannot* say is that the bitstream on your board carries these strings; only plugging the
-# module in can. `ioreg -p IOUSB -l -w 0 | grep -i "USB Vendor Name"` on macOS is the read-out.
+# module in can. `ioreg -p IOUSB -l -w 0 | grep -i "USB Vendor Name"` on macOS is the read-out, and
+# `webui/usb_check.html` is the same read-out from the browser -- worth preferring, because it also
+# shows what Web MIDI thinks, which on macOS is a stale CoreMIDI cache entry rather than the board.
 
 import os
 import re
