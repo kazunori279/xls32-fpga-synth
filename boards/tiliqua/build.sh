@@ -70,9 +70,9 @@ export XLS_ENGINE_V="$WORK/engine.v"
 # --- the stamp the board reports over USB (issue #27) ---
 # Two variables, both consumed by gateware/build_id.py, which turns them into iManufacturer. The
 # rule for computing them lives in that file too, so `eval` here rather than a second copy in
-# shell. Both come from HEAD, not from the clock, so the same commit builds the same bitstream --
-# read the note in build_id.py before changing that, because the alternative re-draws the seed
-# lottery below on every single build. Pre-set either variable to pin it.
+# shell. Pre-set either one to pin it -- a bit-reproducible build wants a fixed XLS32_BUILD_UTC.
+# Keep the stamp fixed-width if you change its format: the string is a ROM, and its *length* moves
+# the netlist and re-draws the seed lottery below. Its characters do not. See build_id.py.
 # Leaving both unset (which is what a bare `python top.py build` does) produces a bitstream with no
 # stamp at all, indistinguishable from a pre-#27 one; the panel reports that honestly.
 eval "$("$PY" "$REPO/boards/tiliqua/gateware/build_id.py")"
@@ -89,26 +89,27 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # shortfall (39.92 MHz against a 60 MHz constraint, unmet since M25 and so far harmless -- the
 # engine runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
 #
-# `--seed 5` is not a preference either. At 97% TRELLIS_COMB the router either converges or runs
+# `--seed 4` is not a preference either. At 97% TRELLIS_COMB the router either converges or runs
 # away, and which it does is decided by the seed. At M34 (23,729 cells) that seed was 3: the
 # default bottomed out at 135 overused nets and then the ripup cascade ran away, seed 2 bottomed
 # at 117 and did the same, seed 3 routed. The placer knobs were measured and are worse --
 # `--router2-alt-weights` plateaus at 765, `--no-tmdriv` at 2,779.
 #
 # #27's build stamp re-drew the lottery, exactly as the M34 note warned it would. The stamp adds
-# no logic -- the netlist came out 50 cells *smaller*, 23,679 -- but a different netlist is a
-# different placement, and seed 3 on this one climbs past 10,000 overused nets and never comes
-# back. Seeds 2, 4 and 5 all reach overused=0. Seed 5 was taken: it converges fastest (119
-# iterations against 183 and 252) and leaves the most margin on the one clock that matters for
-# issue #3, the `clk`/USB domain that has failed its 60 MHz constraint since M25 -- 40.54 MHz,
-# against 39.97 for seed 2 and 37.94 for seed 4, and 39.92 for the M34 bitstream this replaces.
+# no logic of its own, but it is a string descriptor, and a wider ROM is a different netlist:
+# 23,792 cells here against M34's 23,729. On that netlist seed 3 climbs past 10,000 overused nets
+# and never comes back, and so do 2, 5 and 6. Seed 4 reaches overused=0 at iteration 158, and
+# leaves 40.95 MHz on the `clk`/USB domain that has failed its 60 MHz constraint since M25 (issue
+# #3) -- more margin than the 39.92 of the M34 bitstream it replaces. Roughly one seed in four
+# won here; budget for that.
 #
 # Redrawing costs an afternoon unless you skip the front of the build. nextpnr reads `top.json`,
 # which yosys already wrote, so run it by hand out of `build/tiliqua/build/xls32-r5/` with
-# `--log w$S.tim --textcfg w$S.config` per seed and the inputs shared read-only. Four at once
+# `--log x$S.tim --textcfg x$S.config` per seed and the inputs shared read-only. Four at once
 # finish in about fifteen minutes on an M-series laptop; one process still cannot take two seeds.
+# A losing seed never terminates on its own -- watch `overused=` and kill the ones that climb.
 # See DEVELOPMENT_tiliqua.md M34 "The area squeeze".
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 5}"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 4}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then

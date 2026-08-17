@@ -40,19 +40,19 @@
 #
 # `webui/static/transport.js` has the matching parser, and the two formats have to agree.
 #
-# **The timestamp is the commit's, not the clock's, and that is not a shortcut.** The first cut
-# stamped the build instant, and it made the gateware unbuildable in practice. A string descriptor
-# is a ROM, yosys constant-folds it, and the *characters* decide how much logic it takes: two
-# stamps of identical length, thirty-four minutes apart, placed at 23,679 and 23,792 TRELLIS_COMB
-# -- 113 cells apart on a design with 559 to spare. Worse, a different netlist re-draws the router
-# seed lottery (build.sh's `--seed`), and at 97% about half the tickets lose. Stamping the clock
-# therefore meant every build -- including a rebuild of untouched source -- was a fresh coin flip
-# on whether the bitstream routes at all, and the recorded seed was never valid for the build in
-# front of you. Stamping the commit date restores the pre-#27 rule: the netlist changes when the
-# *source* changes, the seed stays drawn until then, and two builds of one commit are identical.
-# The trade is real and worth naming -- two bitstreams built from the same commit now carry the
-# same stamp, so the panel cannot tell a rebuild from the shipped artefact. It can still tell the
-# thing #27 is about, which is whether your board is running the code this repo has.
+# **Keep the stamp a fixed width.** A string descriptor is a ROM, and on a design sitting at 97%
+# TRELLIS_COMB with a hand-picked router seed, anything that moves the netlist is expensive -- the
+# seed has to be drawn again, and at that utilisation about half the seeds lose. Measured on this
+# design: the *length* of the stamp moves the netlist and its *characters* do not. A 42-character
+# stamp placed at 23,679 cells; two different 41-character stamps, thirty-four minutes and a
+# different commit apart, both placed at 23,792 and produced byte-identical placements down to the
+# router's first-iteration wire count. So the format below is deliberately fixed-width -- 17 for
+# the timestamp, 7 for the abbreviated commit -- and a build that changes neither the width nor
+# the source keeps the seed that is written down in build.sh.
+#
+# The one thing that does change the width is the '+' on a dirty tree, which re-draws the lottery.
+# That is the right way round: a bitstream built over uncommitted edits is a development build and
+# is already a different netlist for other reasons. Commit before the build you intend to ship.
 
 import os
 import subprocess
@@ -91,41 +91,32 @@ def usb_manufacturer():
     return f"{MANUFACTURER} {TAG}{stamp}" if stamp else MANUFACTURER
 
 
-def env_from_git(repo_root, fallback_utc):
+def env_from_git(repo_root, now_utc):
     """
     The two variables `build.sh` exports, computed here so the rule lives in one place.
 
-    The timestamp is HEAD's committer date, to the minute, in UTC -- see the note above on why it
-    is not the build instant. `fallback_utc` is used only when there is no git to ask, which is the
-    one case where the clock is all there is; pass a fixed string to keep even that reproducible.
+    `now_utc` is the build instant -- passed in rather than read, so a caller that wants a
+    bit-reproducible build can pin it. It is the clock rather than HEAD's commit date because the
+    question is when this bitstream was made, and because it costs nothing to be the clock: the
+    format is fixed-width, so the netlist does not move (see the note above).
 
     A dirty tree gets a trailing '+' on the commit: a bitstream built over uncommitted edits is not
-    the commit it names, and the one character says so wherever the stamp is displayed. Such a
-    build is a fresh netlist and a fresh seed draw no matter what we stamp, which is the honest
-    cost of building from edits you have not committed.
+    the commit it names, and the one character says so wherever the stamp is displayed.
     """
-
-    # TZ=UTC because `format-local` means "the machine's local zone", and the whole point is that
-    # the stamp reads the same whoever builds it. Without this the string is the builder's clock.
-    env = dict(os.environ, TZ="UTC")
 
     def git(*args):
         try:
             return subprocess.run(("git", "-C", repo_root, *args), capture_output=True,
-                                  text=True, check=True, env=env).stdout.strip()
+                                  text=True, check=True).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return ""
 
+    # --short=7, not --short: git widens abbreviations as a repo grows, and a stamp that changes
+    # width silently is exactly what the fixed-width rule above is guarding against.
     commit = git("rev-parse", "--short=7", "HEAD") or "unknown"
     if commit != "unknown" and git("status", "--porcelain") != "":
         commit += "+"
-
-    # %cd with an explicit format, rather than %cI plus string surgery: git does the timezone
-    # conversion, so a commit made anywhere reads the same here.
-    utc = git("show", "-s", "--date=format-local:%Y-%m-%dT%H:%MZ", "--format=%cd", "HEAD")
-    if not utc:
-        utc = fallback_utc
-    return {"XLS32_BUILD_UTC": utc, "XLS32_BUILD_COMMIT": commit}
+    return {"XLS32_BUILD_UTC": now_utc, "XLS32_BUILD_COMMIT": commit}
 
 
 if __name__ == "__main__":
