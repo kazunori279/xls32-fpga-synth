@@ -4,15 +4,15 @@
     {
       "board": "Tiliqua",
       "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
-      "built": "2026-08-10 23:51",
+      "built": "2026-08-17 04:03",
       "tz": "UTC",
       "source": "tar entry mtime of the inner top.bit",
       "part": "LFE5U-25F",
       "toolchain": "yosys + nextpnr-ecp5",
-      "manifest_tag": "974552b",
-      "bytes": 437074,
-      "sha256": "fde5f51c0f5f",
-      "commit": "56eb5ef",
+      "manifest_tag": "890d4be",
+      "bytes": 438694,
+      "sha256": "a1d770c7f2aa",
+      "commit": "6cc6f99",
       "reports_over_usb": true
     },
     {
@@ -29,5 +29,5 @@
       "reports_over_usb": false
     }
   ],
-  "generated_at_commit": "729212a"
+  "generated_at_commit": "6cc6f99"
 }

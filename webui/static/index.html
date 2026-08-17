@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XLS32 — FPGA Synthesizer</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v100-firmware">
+<link rel="stylesheet" href="style.css?v101-firmware">
 </head>
 <body>
 <div id="synth">
@@ -138,7 +138,9 @@
               <code>boards/*/firmware/</code> holds right now, read out of the artefacts themselves
               — the Vivado header in <code>top.bit</code>, and the tar entry of the Tiliqua
               archive's inner bitstream, which is when it was built rather than when it was copied
-              in.</div>
+              in. The two clocks are minutes apart on purpose: the module names the instant its
+              build <i>started</i>, the archive the instant it <i>finished</i>. The commit is the
+              part to compare.</div>
           </div>
 
           <div class="setsec">
@@ -208,7 +210,7 @@
   </div>
   <div class="cheek right"></div>
 </div>
-<script src="transport.js?v100-firmware"></script>
-<script src="app.js?v100-firmware"></script>
+<script src="transport.js?v101-firmware"></script>
+<script src="app.js?v101-firmware"></script>
 </body>
 </html>

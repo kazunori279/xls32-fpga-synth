@@ -3,7 +3,7 @@
 // Web Serial on the Basys 3. See transport.js. Knobs & switches send MIDI CCs; presets send a
 // full CC burst; the DEMO player sequences songs here rather than in a Python thread.
 
-const VERSION = 'v100-firmware';  // bump on each front-end change; shown in the header + cache-busts the worklet
+const VERSION = 'v101-firmware';  // bump on each front-end change; shown in the header + cache-busts the worklet
 window.VERSION = VERSION;          // transport.js cache-busts the worklet with it too
 let SR = 32000;                   // frame rate on the wire; the transport sets it on connect
                                   // (Basys 3 32 kHz, Tiliqua 48 kHz — see M27). The engine ticks at
@@ -277,8 +277,15 @@ async function refreshFirmware() {
           : 'no stamp — this bitstream predates it; reflash to see one', 'unset');
       }
       let v = fwStamp(b.firmware);
-      if (shipTiliqua && shipTiliqua.commit) {
-        v += b.firmware.commit.replace('+', '') === shipTiliqua.commit
+      // `manifest_tag` before `commit`: the tag is baked into the archive by the build, so it is
+      // the commit the *bitstream* was made at and therefore the one the board's own stamp names.
+      // `commit` is `built_from_commit` out of artefact_hashes.json, which is when the record was
+      // taken -- a commit or two later whenever the rebuild landed alongside anything else. Two
+      // legitimate answers to "which commit", and comparing the wrong one reports a board running
+      // exactly the shipped bitstream as not running it.
+      const shipCommit = shipTiliqua && (shipTiliqua.manifest_tag || shipTiliqua.commit);
+      if (shipCommit) {
+        v += b.firmware.commit.replace('+', '') === shipCommit
           ? ' — same commit as the shipped build'
           : ' — <b>not</b> the commit this repo ships';
       }
@@ -288,9 +295,13 @@ async function refreshFirmware() {
 
   ship.innerHTML = fwRow('This repo ships',
       `as of the commit this page was built at · <code>${shp.generated_at_commit || 'unknown'}</code>`) +
+    // Same order of preference as the comparison above, for the same reason, and when the two
+    // disagree the record commit is still worth showing -- it is what check_artefacts.py hashes
+    // the sources against, so it is the one to quote when the check calls the artefact stale.
     (shp.boards || []).map((b) => fwRow('· ' + b.board,
-      `${b.built || 'unknown'}${b.tz ? ' ' + b.tz : ''} · ${b.commit} · <code>${b.sha256}</code>` +
-      (b.manifest_tag && b.manifest_tag !== b.commit ? ` · tag ${b.manifest_tag}` : ''))).join('') +
+      `${b.built || 'unknown'}${b.tz ? ' ' + b.tz : ''} · ${b.manifest_tag || b.commit} · ` +
+      `<code>${b.sha256}</code>` +
+      (b.manifest_tag && b.manifest_tag !== b.commit ? ` · recorded at ${b.commit}` : ''))).join('') +
     (shp.error ? fwRow('· firmware.json', 'not readable: ' + shp.error, 'unset') : '');
 }
 
