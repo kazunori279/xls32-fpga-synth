@@ -44,6 +44,7 @@ ENG_NAME="engine_tlq_s${STAGES}w${WCT}_${HASH}.v"
 ENG_CACHE="$CACHE/$ENG_NAME"
 if [ ! -s "$ENG_CACHE" ]; then
   echo "==> codegen $SRCX -> $ENG_NAME (stages=$STAGES wct=$WCT)"
+  bash core/fetch_xls.sh "$CACHE" "$XLS_TAG" "$IMG"      # /tmp gets cleaned; issue #33
   cp "$SRCX" "$CACHE/synth_in.x"; cp core/codegen.sh "$CACHE/"
   docker run --rm --platform linux/amd64 -v "$CACHE":/w -w /w \
     -e XLS_DIR="/w/xls-$XLS_TAG-linux-x64" -e SRC=/w/synth_in.x -e OUT="/w/$ENG_NAME" \

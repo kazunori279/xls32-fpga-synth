@@ -14,18 +14,7 @@ F4PGA_IMG="ghcr.io/hdl/conda/f4pga/xc7/a50t"
 EX="$WORKROOT/f4pga-examples"
 mkdir -p "$WORKROOT"
 
-if [ ! -x "$XLS_DIR/codegen_main" ]; then
-  echo "==> downloading XLS $XLS_TAG"
-  curl -sSL -o "$WORKROOT/xls.tar.gz" \
-    "https://github.com/google/xls/releases/download/$XLS_TAG/xls-$XLS_TAG-linux-x64.tar.gz"
-  tar xzf "$WORKROOT/xls.tar.gz" -C "$WORKROOT"
-fi
-if ! docker image inspect "$UBUNTU_IMG" >/dev/null 2>&1; then
-  echo "==> importing ubuntu-base rootfs"
-  curl -sSL -o "$WORKROOT/ubuntu-base.tar.gz" \
-    "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.4-base-amd64.tar.gz"
-  docker import --platform linux/amd64 "$WORKROOT/ubuntu-base.tar.gz" "$UBUNTU_IMG"
-fi
+bash "$PROJ/core/fetch_xls.sh" "$WORKROOT" "$XLS_TAG" "$UBUNTU_IMG"
 
 # --- codegen the engine proc as a pipeline @ 100 MHz (core/, shared with every board) ---
 cp "$PROJ/core/synth.x" "$PROJ/core/codegen.sh" "$WORKROOT/"
