@@ -82,8 +82,24 @@ fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32)
     // cycle can't sustain full-scale (the clamp alone latches). Poles pulled just inside the
     // unit circle -> any self-oscillation decays. >>6/>>7 is ~1.5%/0.8%/sample: inaudible on
     // the frequency response but kills the latch. (Bright polyphonic patches were railing.)
-    let low2  = low1  - (low1  >> u32:7);
-    let band2 = band1 - (band1 >> u32:6);
+    //
+    // The `> 0` terms are the leak's own dead zone, and without them the leak does not reach
+    // zero. `>>` on a signed value is an *arithmetic* shift, so it rounds toward minus infinity:
+    // -100 >> 7 is -1 and the state decays, but +100 >> 7 is 0 and the state is a fixed point.
+    // Every positive residue below 128 (below 64 for `band`) latched for the rest of the power
+    // cycle, so a voice that had ever sounded left a little DC in the mix even with its envelope
+    // dead -- the VCA is *upstream* of the filter here, so nothing downstream gates it. One extra
+    // LSB of decay closes the dead zone and makes the two signs symmetric. See core/sim/tb_dc.v
+    // and issue #1. (Measured at 1 count of the 16-bit mix, not the "few hundred" the issue
+    // estimated -- the coupled low/band system settles far closer to zero than either term alone.)
+    //
+    // Costs 598 cells on the bare engine, 16,968 -> 17,566 weighted. The obvious cheaper-looking
+    // alternative -- round the shift toward zero, `(low1 + (127 & !(low1 >> 31))) >> 7` -- is far
+    // worse at 2,059, because the extra adder lands on the datapath's critical path and XLS
+    // re-schedules around it (+1,440 FFs, one MULT18X18D short). Two subtractors beat one adder
+    // when the adder is in the wrong place.
+    let low2  = low1  - (low1  >> u32:7) - ((low1  > s32:0) as s32);
+    let band2 = band1 - (band1 >> u32:6) - ((band1 > s32:0) as s32);
     (low2, band2, low2, high, band2)
 }
 
