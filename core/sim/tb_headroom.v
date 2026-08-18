@@ -98,6 +98,7 @@ module tb_headroom;
     endtask
 
     integer nv, first_clip;
+    reg [7:0] pwv;
     initial begin
         @(negedge rst); repeat (5) @(posedge clk);
 
@@ -127,6 +128,26 @@ module tb_headroom;
             measure(RUN);
             $display("  %6d | %8.1f | %7d | %6d | +%0d / -%0d",
                      nv, sum / nsamp, smin, smax, nhi, nlo);
+            release_all;
+        end
+
+        // --- and across the pulse widths the shipped bank actually uses ----------------------
+        // The demo patches' CC75 = 100 is nowhere near the worst case. Of the 76 pulse presets in
+        // webui/presets_*.json the widths run from 5 to 124 -- 4% to 97% duty -- and the DC goes
+        // as |2*duty - 1|, so pw = 5 is 1.6x further off centre than pw = 100 and of the opposite
+        // sign. Four voices, because that is what the four-part demo plays.
+        $display("\nfour voices, by pulse width (the range the shipped bank spans)");
+        $display("     pw | duty%% |     mean |     min |    max | clamp +/-");
+        for (nv = 0; nv < 8; nv = nv + 1) begin
+            case (nv)
+                0: pwv = 8'd5;   1: pwv = 8'd19;  2: pwv = 8'd48;  3: pwv = 8'd64;
+                4: pwv = 8'd74;  5: pwv = 8'd88;  6: pwv = 8'd117; default: pwv = 8'd124;
+            endcase
+            load_all(pwv, 4);
+            wait_samples(WARM);
+            measure(RUN);
+            $display("  %5d | %4d%% | %8.1f | %7d | %6d | +%0d / -%0d",
+                     pwv, (pwv * 200) / 256, sum / nsamp, smin, smax, nhi, nlo);
             release_all;
         end
 
