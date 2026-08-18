@@ -129,15 +129,22 @@ those three; git history keeps the original.)*
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
 - **Risk 3b — `sync`/`usb` fails static timing at 60 MHz, and it has now bitten.** Open since M25;
   promoted from a carried risk to an observed failure in August 2026, when the vendor ran the
-  shipped bitstream on his own two Tiliquas and it worked on one and not the other. The shipped
+  shipped bitstream on their own two Tiliquas and it worked on one and not the other. The shipped
   shortfall is **40.95 MHz** against 60. Two things this item used to say are wrong: the failing
   path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
   clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
   ~45 MHz since M25 and is depth-limited, not congestion-limited: 4.79 ns of pure logic against a
   16.7 ns period. Measured and dead: 24 voices (+5.8 MHz, ceiling 46.79), 16 voices (not smaller),
   nextpnr 0.11.1 (bit-identical), `--placer static` (never legalises), `REGION`/`UGROUP` (absent
-  from the wasm). The only remaining lever is registering a stage inside luna
-  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)), which blocks
+  from the wasm), and **SDC timing exceptions** — `nextpnr-ecp5` parses only `create_clock`,
+  `get_ports`, `get_cells` and `set_false_path`, has no `set_multicycle_path` at all, and prints
+  *"set_false_path from: %s, to: %s does not do anything(yet)"* for the one exception it does
+  parse. The cone is a genuine multicycle and we cannot say so. The only remaining lever is a
+  register: the path is the isochronous IN endpoint's combinational `ready` running from the ULPI
+  transmit mux into `ChannelsToUSBStream`'s FIFO level counter, and a skid buffer at that module
+  boundary splits 22.11 ns into 17.69 and ~4.7, i.e. ~56 MHz
+  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)). That clears the vendor's
+  55 MHz bar by 1.5 MHz and no more. It blocks
   [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and therefore the webflasher PR
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).

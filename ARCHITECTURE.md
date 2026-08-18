@@ -746,11 +746,26 @@ fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32)
     // DE-LATCH: leak the integrator state a hair each sample so a fixed-point overflow limit
     // cycle can't sustain full-scale (the clamp alone latches). Poles pulled just inside the
     // unit circle -> any self-oscillation decays. >>6/>>7 is ~1.5%/0.8%/sample.
-    let low2  = low1  - (low1  >> u32:7);
-    let band2 = band1 - (band1 >> u32:6);
+    // The `> 0` terms are the leak's own dead zone: `>>` on a signed value is an *arithmetic*
+    // shift, so -100 >> 7 is -1 and decays but +100 >> 7 is 0 and is a fixed point.
+    let low2  = low1  - (low1  >> u32:7) - ((low1  > s32:0) as s32);
+    let band2 = band1 - (band1 >> u32:6) - ((band1 > s32:0) as s32);
     (low2, band2, low2, high, band2)
 }
 ```
+
+**The leak had a dead zone until August 2026, and it cost 1 count of DC.** Arithmetic shift rounds
+toward minus infinity, so every positive integrator residue below 128 (below 64 for `band`) was a
+fixed point and latched for the rest of the power cycle. Because the VCA sits *upstream* of the
+filter — `amp = w * g7t`, then `svf(..., amp >> 2, ...)` — nothing downstream gates that state, so a
+voice that had ever sounded left DC in the mix with its envelope long dead. Subtracting one more LSB
+when the state is positive makes the two signs symmetric, for 598 cells on the bare engine.
+[`core/sim/tb_dc.v`](core/sim/tb_dc.v) is the test: it asserts the mix returns to *exactly* 0 after
+All Sound Off, at one voice and at all 32 slots with cutoff and resonance at maximum, and it fails
+on the old kernel. The obvious cheaper-looking alternative — round the shift toward zero with
+`(low1 + (127 & !(low1 >> 31))) >> 7` — measures **2,059** cells, because the extra adder lands on
+the shared datapath's critical path and XLS re-schedules around it. Two subtractors beat one adder
+when the adder is in the wrong place.
 
 Cutoff assembly + multimode select + 4× input attenuation ([`synth.x:264`](core/synth.x)):
 

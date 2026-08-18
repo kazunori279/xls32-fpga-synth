@@ -1447,6 +1447,25 @@ That is, almost line for line, what M25 recorded: *"about twenty LUT levels from
 through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
 register."* **It was never stale.**
 
+**Read the middle of that listing with suspicion.** nextpnr names a packed cell after *a* net it
+drives, so a shared intermediate LUT can carry a name from anywhere in its fanout, and two of the
+lines above are artefacts of that: an output pin does not feed back into a request handler, and
+`usb_audio_in_active` is already a register, written only under `with m.If(usb.sof_detected)` — once
+per USB frame. Only the two ends are load-bearing, because only they are real flops:
+`SetupPacket.request[4]` in luna's control endpoint, and `out_fifo.r_level[8]`, the read-side level
+counter of the `SyncFIFO` inside `ChannelsToUSBStream`. Between them the mechanism is ordinary
+stream backpressure — `USBIsochronousStreamInEndpoint` drives `self.stream.ready` from `m.d.comb`
+gated by `tx_stream.ready`, so the ULPI transmit path's readiness runs combinationally into the
+audio FIFO's `r_en` and from there into its level counter. It is the textbook long-`ready` path.
+
+Which also means it is not luna's file. `ChannelsToUSBStream` is Tiliqua's, and the one live
+combinational input crossing into it is `usb_stream_out.ready`: `data_requested_in` and
+`frame_finished_in` are endpoint strobes and `audio_in_active` is already registered. A one-deep
+skid buffer on that connection splits the 22.11 ns into **17.69 and ~4.7** — about **56 MHz**, which
+clears the vendor's 55 MHz bar by 1.5 MHz and not a hop more. For real margin the luna half has to
+be split too, and the balanced place is the endpoint mux at 8.65 ns, which would put both halves
+near 105 MHz.
+
 ### The arithmetic, which is the part that was never stated
 
 - 60 MHz is a **16.7 ns** period.
@@ -1458,7 +1477,7 @@ register."* **It was never stale.**
   placement exists on this silicon. It needs far more empty die than a synth will ever leave.
 
 **So the depth has to come down.** Registering one stage inside that cone roughly halves both terms,
-and it is the only lever that attacks the 4.79 ns floor. It is luna's code rather than ours —
+and it is the only lever that attacks the 4.79 ns floor —
 [#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34).
 
 ### What has been ruled out
@@ -1484,6 +1503,15 @@ other side. Three more, measured against the shipped and the 24-voice netlists:
 | **nextpnr 0.11.1** vs the pinned 0.10 | **bit-identical Fmax** on both netlists — 40.95 and 46.79 |
 | `--placer static` (the electrostatic placer) | **never legalises at 97%** — COMB overlap flat at 23–24% over 27,500+ iterations, penalty climbing |
 | `REGION`/`UGROUP` to fence luna into a die corner | **absent from the wasm in both 0.10 and 0.11.1** |
+| an SDC multicycle on the cone | **`set_multicycle_path` does not exist**, and the one exception nextpnr does parse is a no-op |
+
+The last row deserves its own sentence, because the cone *is* a genuine multicycle and knowing that
+buys nothing. `SetupPacket.request` and `.recipient` are written only when a complete eight-byte
+SETUP DATA packet lands, in `USBSetupDecoder`'s `READ_DATA` state, so they hold still for an entire
+control transfer — hundreds of cycles. But `nextpnr-ecp5`'s SDC parser knows four commands,
+`create_clock`, `get_ports`, `get_cells` and `set_false_path`, and the binary's own log line for the
+fourth is `set_false_path from: %s, to: %s does not do anything(yet).` There are no timing
+exceptions on this toolchain. A register is not the best lever, it is the only one.
 
 **Gotcha — do not test for `REGION` by feeding nextpnr an LPF.** The reader silently ignores
 statements it does not know, so a `REGION` line and a line of pure garbage both "succeed" and the
