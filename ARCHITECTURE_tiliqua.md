@@ -42,7 +42,7 @@ are gone, so the question is never whether the idea works but what it displaces.
 - [Part D — The beam-raced visualiser](#part-d--the-beam-raced-visualiser)
   - [D1 No framebuffer](#d1-no-framebuffer) · [D2 32 voices as 32 tiles](#d2-32-voices-as-32-tiles) · [D3 What deleting PSRAM bought](#d3-what-deleting-psram-bought)
 - [Part E — Constraints, area and timing](#part-e--constraints-area-and-timing)
-  - [E1 The six hard constraints](#e1-the-six-hard-constraints) · [E2 The area census](#e2-the-area-census) · [E3 Multipliers: 28 of 28](#e3-multipliers-28-of-28) · [E4 The timing shortfall that runs anyway](#e4-the-timing-shortfall-that-runs-anyway)
+  - [E1 The six hard constraints](#e1-the-six-hard-constraints) · [E2 The area census](#e2-the-area-census) · [E3 Multipliers: 28 of 28](#e3-multipliers-28-of-28) · [E4 The timing shortfall, and the die it does not run on](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)
 
 ---
 
@@ -148,7 +148,7 @@ Three of the five fabric resources are at or above 94%.
 
 For **what the 23,557 is spent on**, block by block, see [E2](#e2-the-area-census); for **how it got
 to 96%** over the milestones, and what that occupancy costs in timing, see
-[E4](#e4-the-timing-shortfall-that-runs-anyway).
+[E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
 **The screen.** The panel's own EDID resolves to
 `DVIModeline { h_active: 720, v_active: 720, pixel_clk_mhz: 39.07, rotate: Left }`, and the
@@ -240,7 +240,7 @@ flowchart LR
 | Cadence | Period | Cycles | Where |
 |---|---|---:|---|
 | `audio` clock | 81.4 ns | 1 | SI5351 `clk0`, 12.288 MHz |
-| `sync` / `usb` clock | 16.7 ns | 1 | ECP5 PLL, 60 MHz — one net, see [E4](#e4-the-timing-shortfall-that-runs-anyway) |
+| `sync` / `usb` clock | 16.7 ns | 1 | ECP5 PLL, 60 MHz — one net, see [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
 | `dvi` pixel clock | 25.6 ns | 1 | SI5351 `clk1` → second ECP5 PLL, 39.07 MHz |
 | engine voice scan | 18.2 µs | **224** `audio` | `STAGES=12`; the whole cost of one sample |
 | **engine sample period** | **31.25 µs** | **384** `audio` | 32 kHz — 58% occupancy, 160 cycles idle |
@@ -256,7 +256,7 @@ drift to correct — the 3/2 is exact by construction, not approximately right.
 
 **Nothing is tight except the die.** The engine uses 58% of its own period, the effects 7% of
 theirs, and the video block is a pair of counters. Every timing problem this board has is
-placement, not throughput ([E4](#e4-the-timing-shortfall-that-runs-anyway)).
+placement, not throughput ([E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
 
 ---
 
@@ -1047,7 +1047,7 @@ fbm.eq((mul_g + Mux(nlp_r < 0, 32767, 0)) >> 15)     # ceil for negatives, floor
 The select comes from `nlp_r` and not from the product: `rvg` is always positive, so the signs
 agree, and `nlp_r` is a register output that settles long before the multiplier does. Deriving it
 from `mul_g` instead — a 15-bit sticky-OR of the discarded bits — costs a further 2.6 MHz on `sync`
-by serialising behind the multiply ([E4](#e4-the-timing-shortfall-that-runs-anyway)).
+by serialising behind the multiply ([E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
 
 Measured on hardware, the tail's octile RMS went from `… 142 → 195 → 206 → 206 → 206` to
 `… 139 → 85 → 82 → 82`, and `stress_fx_tail` from FAIL 45.0 to PASS 100.0. **A floor of ~82 remains**
@@ -1247,7 +1247,7 @@ is 1.5 MB/s. The Basys 3's UART transport does not carry over, which is why the 
 [Part B](#part-b--usb-and-midi) exists: audio up over UAC2 and MIDI down over USB-MIDI on the FPGA's
 own USB HS PHY.
 
-**5 · The engine crowds luna off the die.** [E4](#e4-the-timing-shortfall-that-runs-anyway).
+**5 · The engine crowds luna off the die.** [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
 **6 · The loop needed a human finger.** The SI5351 is programmed per boot by the bootloader, and
 every cold boot autoboots `last_boot_slot` with that slot's `clk0`. Resolved by writing XLS32 to
@@ -1307,13 +1307,33 @@ reported `serialrx` at 87 and then 61, `arb` at 93 and then 109, and `common_fil
 
 **One block is 71% of the die and the other thirteen share the rest.** That shape is the whole
 budget argument on this board: nothing outside `core` is large enough for trimming it to matter, so
-the only lever with real travel is voice count.
+the only lever with real travel is voice count — and that lever is shorter than it looks, for the
+reason below.
 
 **The engine has no soft area.** XLS unrolls the voice loop: `____state_0_tuple_element_*` are
 32-entry arrays read at all 32 constant indices every cycle, so they are a flat register file, not an
 inferrable memory. That is why 3 of 56 DP16KD were in use while 11,225 flip-flops were not. There is
-no BRAM or LUT-RAM win hiding in there; engine area is proportional to voice count, at roughly **440
-LUTs per voice**.
+no BRAM or LUT-RAM win hiding in there.
+
+**But engine area is not proportional to voice count, and a per-voice average is not a derivative.**
+This section said "roughly 440 LUTs per voice" for four milestones, and the 32 → 24 → 16 fallback
+ladder was sized by dividing. M21's sweep only ever measured the two endpoints (32 and 16, on the
+bare engine), so nothing in it could have caught the shape between them. Both intermediate variants
+have now been built through the real flow:
+
+| voices | `TRELLIS_COMB` | % of 25k | `TRELLIS_FF` | Δ from the row above |
+|---|---:|---:|---:|---|
+| 32 (shipped) | 23,792 | 97% | 13,179 | — |
+| 24 | 19,631 | 80% | 9,456 | **−4,161** cells, −17 points |
+| 16 | 19,222 | 79% | 8,381 | **−409** cells, −1.7 points |
+
+**The ladder has two rungs, not three.** The engine time-shares one datapath — one voice per proc
+tick, 32 ticks per sample ([A2](#a2-the-engine-as-an-amaranth-submodule)) — so the oscillators, the
+filter, the VCA and the envelopes are *the same size at any voice count*. What scales is the voice
+register file, which the flip-flop column tracks honestly, and the unrolled `apply_on`/`apply_off`
+allocation scans. Below about 24 voices the fixed datapath dominates and there is nothing left to
+give back. Neither `MULT18X18D` (28/28) nor `DP16KD` (53/56) moves at all across the three, so
+cutting voices does not relieve [E3](#e3-multipliers-28-of-28) either.
 
 **Gotcha — the model misses in both directions, and neither miss is understood.**
 
@@ -1351,81 +1371,149 @@ multiplier.
 
 **Gotcha.** `MULT18X18D` at 28/28 means **any new inferred multiply pushes the design into soft
 multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with 731 TRELLIS_COMB free — and that
-figure has been as low as ~515, at the 98% of [E4](#e4-the-timing-shortfall-that-runs-anyway)'s
+figure has been as low as ~515, at the 98% of [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)'s
 second-to-last row. The brightness fold in
 `tile_rgb` is written the way it is — reusing `v` and `v - fv` for the `255` and `255-f` cases
 instead of scaling them properly — to save two multipliers for a difference no panel can show. That
 is the standing style for anything added here.
 
-## E4 The timing shortfall that runs anyway
+## E4 The timing shortfall, and the die it does not run on
 
-**The claim.** Static timing says this part is out of spec. It has run correctly across many loads
-over many working days. Both halves of that sentence are true and neither cancels the other; this is
-**a risk being carried, not a risk retired.**
+**The claim.** Static timing says this part is out of spec, and **on one Tiliqua out of two it does
+not run.** The vendor tried the shipped bitstream on their own two boards in August 2026: it failed
+on the first and worked on the second. Every earlier version of this section reported the shortfall
+as a risk being carried on the strength of a loop that kept passing. That loop was one die. **The
+risk is no longer hypothetical, and this section is now a bug report** — see
+[#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).
 
 **`sync` and `usb` are one net.** `pll.py` drives both from `feedback60`, so yosys merges them and
 nextpnr reports a single `$glbnet$clk`. The engine cannot be given a slower clock than luna, and
 luna's 60 MHz is fixed by ULPI. (This is also why the engine gets an entirely separate, off-chip
 clock rather than a divided one — [A1](#a1-clock-domains).)
 
+### There are two paths, stacked
+
+This is the fact that makes the trajectory table below readable, and it took until the 24-voice build
+to see it:
+
+- **A luna floor whose *depth* has never changed** — ~20 LUT levels, 4.79 ns of logic, measured the
+  same at M25 and today. Its Fmax moves with placement (48.7–55.3 at M25, 41.5–46.8 at 80% now,
+  because the netlist around it is a different shape), but the depth is invariant and it is the term
+  that will not go away.
+- **An `fx` path stacked on top of it that only exists at high occupancy.** It is
+  *congestion*-limited, and it is what the shipped netlist reports.
+
+Take the die pressure off, `fx` drops away, and luna is back on top. Everything below follows from
+that shape — and note that the table's Fmax column, read alone, cannot show it. That is how the
+correct M25 diagnosis came to be written off as stale.
+
 **The trajectory.**
 
-| build | occupancy | `sync` Fmax vs 60 MHz required |
-|---|---|---|
-| vendor `usb_audio` shell, ~20% | — | 58.66 MHz fail → **66.49 MHz pass** after retiming |
-| M25, engine + USB | 86% | 48.7–55.3 MHz across sixteen seeds |
-| M26, + effects | 97% | **43.40 MHz** |
-| M29, + video | 96% | 44.71 MHz |
-| M31 | 97% | 42.51 MHz |
-| + comb magnitude truncation | 98% | 39.92 MHz |
-| shipped (M33) | 96% | 39.42 MHz |
+| build | occupancy | critical path | `sync` Fmax vs 60 MHz required |
+|---|---|---|---|
+| vendor `usb_audio` shell, ~20% | — | luna | 58.66 MHz fail → **66.49 MHz pass** after retiming |
+| M25, engine + USB | 86% | luna | 48.7–55.3 MHz across sixteen seeds |
+| M26, + effects | 97% | — | **43.40 MHz** |
+| M29, + video | 96% | — | 44.71 MHz |
+| M31 | 97% | `fx.nlp_r[12]` → `fx.acc[16]` | 42.51 MHz |
+| + comb magnitude truncation | 98% | `fx.rsize[0]` → `fx.mul_g[22]` | 39.92 MHz |
+| **shipped**, 32 voices, `--seed 4` | **97%** | `fx.rsize[0]` → `fx.mul_g[22]` | **40.95 MHz** |
+| 24-voice variant, best of 5 seeds | **80%** | **luna** | **46.79 MHz** |
 
-**The failing path used to be entirely inside luna** — about twenty LUT levels from an interpacket
-timer through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
-register. Logic accounted for roughly 5 ns of it and routing for roughly 15 ns, with single hops of
-0.9–1.2 ns between adjacent tiles. **That ratio was the diagnosis: congestion, not depth.** The same
-block makes 66.49 MHz in the stock bitstream at ~20% occupancy.
+The last two rows are measured; the `shipped` row supersedes an entry that read `M33 | 96% |
+39.42 MHz` and was two netlists out of date.
 
-**It is not luna's any more, and has not been for some time.** Both sides of the M31→M32 comparison
-above report the endpoints inside the effects block:
+**The luna cone, measured on the 24-voice netlist** where nothing of ours is in front of it:
 
-| build | critical path | Fmax |
-|---|---|---|
-| M31, shipped at the time | `fx.nlp_r[12]` → `fx.acc[16]` — comb damping into the 8-comb running sum | 42.51 MHz |
-| M32 onward, incl. the shipped build | `fx.rsize[0]` → `fx.mul_g[22]` — the RVG room-size mux into the feedback multiply | 39.92 MHz |
+```
+usbif.usb.USBControlEndpoint.request[4]            (clk-to-q)
+  -> USBControlEndpoint.recipient
+  -> USBControlEndpoint.setup_decoder.received
+  -> usb.endpoint_mux.valid
+  -> StandardRequestHandler.transmitter.position_in_stream
+  -> USBIsochronousStreamInEndpoint.next_data_pid
+  -> usb.translator.phy_ready
+  -> pin_ulpi_0__data.buf.o[6]                     (the ULPI TX data mux)
+  -> UAC2RequestHandlers.transmitter.bytes_sent
+  -> USBIsochronousStreamInEndpoint.bytes_left_in_packet
+  -> usbif.usb_audio_in_active
+  -> channels_to_usb_stream.frame_finished_seen
+  -> channels_to_usb_stream.level[8]               (setup)
 
-This was found by rebuilding M31's netlist unmodified for a like-for-like comparison, so it is a
-property of the shipped design and not of the change beside it: **`fx` overtook luna somewhere
-between M26 and M31 and the trajectory table above never noticed**, because it records only the
-number. The congestion diagnosis still holds — routing still dominates — but the levers in the two
-paragraphs below are aimed at a block that is no longer the one setting the number.
+22.11 ns  =  4.79 ns logic  +  17.32 ns routing,  ~20 LUT levels
+```
 
-The 2.59 MHz the magnitude truncation costs is real and is not placement noise: same seed, same
-flow, one netlist edit. It buys the tank a decay to zero ([C3](#c3-the-freeverb-tank-at-half-length)) and it was
-measured, twice, against a 175-case run with **zero glitches in either direction** — the same
-evidence the 60 MHz shortfall itself rests on.
+That is, almost line for line, what M25 recorded: *"about twenty LUT levels from an interpacket timer
+through the control endpoint, the endpoint mux and `ChannelsToUSBStream` to the ULPI TX data
+register."* **It was never stale.**
 
-**Which kills the obvious levers.** Dropping `nr_channels` from 4 to 2 saves ~100 LUTs; dropping the
+### The arithmetic, which is the part that was never stated
+
+- 60 MHz is a **16.7 ns** period.
+- **4.79 ns of it is logic** — 20 LUT levels at ~0.24 ns. No placer, no router, no seed and no speed
+  grade touches that. 29% of the budget is gone before a single wire.
+- That leaves **11.9 ns for 20 routing hops = 0.60 ns/hop.** At 80% occupancy we measure
+  **0.87 ns/hop**, which is *ordinary ECP5 inter-tile delay*, not congestion.
+- The vendor's stock `usb_audio` reaches 0.60 ns/hop with the same luna at ~20% occupancy, so the
+  placement exists on this silicon. It needs far more empty die than a synth will ever leave.
+
+**So the depth has to come down.** Registering one stage inside that cone roughly halves both terms,
+and it is the only lever that attacks the 4.79 ns floor. It is luna's code rather than ours —
+[#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34).
+
+### What has been ruled out
+
+**Shrinking our design.** Cutting to 24 voices moves 97% → 80% and buys **+5.8 MHz, ceiling
+46.79.** Cutting to 16 is not smaller ([E2](#e2-the-area-census)). 46.79 → the vendor's 55 MHz bar is
+a further +17.5% with no area left to pay for it. What the cut *does* buy is routability, below.
+
+**Trimming luna instead.** Dropping `nr_channels` from 4 to 2 saves ~100 LUTs; dropping the
 host→device audio direction saves ~10. Neither touches the thing doing the crowding — **luna is not
 big; the engine is** ([E2](#e2-the-area-census)).
 
-**And the tool flow does not close it either.** Sixteen placer seeds span 48.74–55.33 MHz, and seed
-rankings do *not* transfer between netlists: seed 11 gave 55.98 MHz on one netlist and 51.27 MHz on
-the next, and seed 2's 55.33 MHz became 52.27 MHz on the rebuild that actually emitted `top.bit`. A
-seed is not a fix you can bank; it is a lottery you have to re-run after every edit and win again at
-build time. `--placer-heap-timingweight` buys 1–5 MHz; `--tmg-ripup` is marginal;
+**The tool flow.** Sixteen placer seeds span 48.74–55.33 MHz, and seed rankings do *not* transfer
+between netlists: seed 11 gave 55.98 MHz on one netlist and 51.27 MHz on the next, and seed 2's
+55.33 MHz became 52.27 MHz on the rebuild that actually emitted `top.bit`. A seed is not a fix you
+can bank. `--placer-heap-timingweight` buys 1–5 MHz; `--tmg-ripup` is marginal;
 `--placer-heap-critexp` and `--placer-heap-beta` change nothing at all. Adding `-abc9` to
 `synth_ecp5` gives no improvement and a slightly larger design, confirming the diagnosis from the
-other side. nextpnr-0.10 from `yowasp` has no Python bindings and its LPF reader has no
-`REGION`/`UGROUP`, so luna cannot simply be fenced into a corner of the die, which is what this
-design actually wants.
+other side. Three more, measured against the shipped and the 24-voice netlists:
 
-**Why it runs.** The failing cone is control-transfer logic that only toggles during enumeration,
-and that is exactly how it behaves: the bitstream enumerates, accepts USB-MIDI, and streams audio the
-host can grade, repeatedly. Three consecutive runs of basic and of stress have returned byte-identical
-verdicts and 0.000% frame gaps. What this is *not* is proof of margin at temperature, over voltage,
-or on another die. **The number to watch is the frame gap rate, which every report prints.** Cutting
-voices stays available if the loop ever proves flaky.
+| lever | result |
+|---|---|
+| **nextpnr 0.11.1** vs the pinned 0.10 | **bit-identical Fmax** on both netlists — 40.95 and 46.79 |
+| `--placer static` (the electrostatic placer) | **never legalises at 97%** — COMB overlap flat at 23–24% over 27,500+ iterations, penalty climbing |
+| `REGION`/`UGROUP` to fence luna into a die corner | **absent from the wasm in both 0.10 and 0.11.1** |
+
+**Gotcha — do not test for `REGION` by feeding nextpnr an LPF.** The reader silently ignores
+statements it does not know, so a `REGION` line and a line of pure garbage both "succeed" and the
+build carries on unconstrained. The decisive check is the binary:
+
+```bash
+strings nextpnr-ecp5.wasm | grep -x -c REGION      # 0.10 -> 0,  0.11.1 -> 0
+strings nextpnr-ecp5.wasm | grep -x -c LOCATE      # both -> 1
+```
+
+`LOCATE`, `SYSCONFIG` and `FREQUENCY` are in there. `REGION` and `UGROUP` are not, in either.
+
+### What the 24-voice cut is actually worth
+
+Not 55 MHz. But **five of five seeds routed** at 80%, in about four minutes each, against roughly one
+in four at 97%. The seed lottery in the gotcha below is a symptom of occupancy and it disappears —
+`build.sh` would not need a pinned seed, and an edit that moves the cell count would stop being an
+afternoon of re-drawing the lottery. That is a real and separable win, and it is on the table
+independently of #3.
+
+**The 2.59 MHz** the comb magnitude truncation costs is real and is not placement noise: same seed,
+same flow, one netlist edit. It buys the tank a decay to zero
+([C3](#c3-the-freeverb-tank-at-half-length)) and it was measured, twice, against a 175-case run with
+**zero glitches in either direction**.
+
+**Gotcha — a non-converged run still writes a timing report, and it reads high.** Timing on a
+partially routed design is optimistic, so a seed whose router ran away reports a *better* Fmax than
+one that finished. Such a run leaves a zero-byte `.out` and no `.config`; **only compare runs that
+reached `overused=0`.** This is the likeliest explanation for the ~45 MHz the vendor measured on a
+netlist that actually makes 40.95.
 
 **Gotcha — the router.** At 97% occupancy nextpnr's default router does not converge on this design.
 router1 spent **two hours** ripping up more arcs than it laid — 62,719 of 105,900 still unrouted with
@@ -1439,16 +1527,20 @@ turns the known shortfall from a warning into an error that fails the build *aft
 successfully. All three flags go in `build.sh` together:
 
 ```bash
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 3}"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 4}"
 ```
 
-**Gotcha — the seed is load-bearing now.** At M34's 23,729 cells even router2 does not converge on
-the default placement: it bottoms out at 135 overused nets and then the ripup cascade runs away.
-`--seed 3` routes. This is a property of *this* netlist — a seed that wins here says nothing about
-the next one — so any edit that moves the cell count means drawing the lottery again, one run at a
-time (the wasm nextpnr traps if two are in flight). The knobs that sound like the right answer at
-97.7% are not: `--router2-alt-weights` plateaus at 765 and `--no-tmdriv` bottoms at 2,779, i.e.
-timing-driven placement is *helping* the density here, not costing it.
+**Gotcha — the seed is load-bearing at 97%, and only at 97%.** At M34's 23,729 cells even router2
+does not converge on the default placement: it bottoms out at 135 overused nets and then the ripup
+cascade runs away. Seed 3 routed *that* netlist; the shipped one is 23,792 cells and seed 3 climbs
+past 10,000 overused on it, which is the whole point — **a seed that wins here says nothing about the
+next netlist.** Seed 4 routes the shipped build, at iteration 158. Roughly one seed in four does.
+Any edit that moves the cell count means drawing the lottery again, one run at a time (the wasm
+nextpnr traps if two are in flight); a losing seed never terminates on its own, so watch `overused=`
+and kill the ones that climb. The knobs that sound like the right answer at 97% are not:
+`--router2-alt-weights` plateaus at 765 and `--no-tmdriv` bottoms at 2,779, i.e. timing-driven
+placement is *helping* the density here, not costing it. **All of this is a symptom of occupancy** —
+at the 24-voice build's 80%, five seeds out of five routed.
 
 ---
 

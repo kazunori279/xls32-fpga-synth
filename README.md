@@ -928,7 +928,7 @@ uv run boards/tiliqua/area.py             # per-block cell census out of yosys' 
 > default router does not converge — it ripped up more arcs than it laid for two hours and never
 > finished; router2 routes the same netlist in 81 s with `overused=0`. `build.sh` sets it, together
 > with `--timing-allow-fail` for the known `sync`-domain shortfall
-> ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway)).
+> ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
 
 The build leaves two things worth having in `build/tiliqua/build/xls32-r5/`: `top.bit`, and a
 `xls32-<tag>-r5.tar.gz` **bitstream archive** pairing it with a generated `manifest.json`. Load
@@ -1203,7 +1203,7 @@ almost none of the answers match:
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
 | **Visual feedback** | 16 LEDs, a voice-activity comet | 32 voices as 32 tiles on a 720×720p60 DVI beam-raced display, 32 bytes of state and no framebuffer |
-| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz (39.92 MHz Fmax, inside the effects block) and runs anyway — carried, watched via the frame-gap rate |
+| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — 40.95 MHz Fmax, and **on one Tiliqua out of two the bitstream does not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
 
 Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8) are **built and timing-closed but not yet
 hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART. On Tiliqua both

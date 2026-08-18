@@ -127,13 +127,20 @@ those three; git history keeps the original.)*
   `nrel * HUE_K` frees two multipliers, at the cost of the resource that is *actually* scarce.
   Worth doing only when a feature needs a multiplier and cannot have one. See
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
-- **Risk 3b — `sync`/`usb` fails static timing at 60 MHz and runs anyway.** Open since M25, but two
-  of the things it used to say are no longer true. The shortfall is now **39.92 MHz**, not the
-  42.51 MHz quoted through M31 (the comb magnitude-truncation fix cost 2.59 MHz), and the failing
-  path is **not inside luna** — rebuilding M31's netlist unmodified puts it in `fx`, so the
-  characterisation had already gone stale before this change. Both figures fail the 60 MHz
-  constraint by a wide margin and both run clean; that is the part that has not changed. See
-  [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway).
+- **Risk 3b — `sync`/`usb` fails static timing at 60 MHz, and it has now bitten.** Open since M25;
+  promoted from a carried risk to an observed failure in August 2026, when the vendor ran the
+  shipped bitstream on his own two Tiliquas and it worked on one and not the other. The shipped
+  shortfall is **40.95 MHz** against 60. Two things this item used to say are wrong: the failing
+  path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
+  clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
+  ~45 MHz since M25 and is depth-limited, not congestion-limited: 4.79 ns of pure logic against a
+  16.7 ns period. Measured and dead: 24 voices (+5.8 MHz, ceiling 46.79), 16 voices (not smaller),
+  nextpnr 0.11.1 (bit-identical), `--placer static` (never legalises), `REGION`/`UGROUP` (absent
+  from the wasm). The only remaining lever is registering a stage inside luna
+  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)), which blocks
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and therefore the webflasher PR
+  ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
+  [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 - ~~**M24's DIN/TRS MIDI passes in simulation and has never had a cable in it.**~~ **Done — the
   Tiliqua TRS MIDI-In jack plays on hardware**, alongside USB-MIDI, as the arbiter was written to
   allow. This was open from M24 to now purely for want of a Type A cable. Basys 3's DIN input is a

@@ -496,7 +496,7 @@ give back: XLS unrolls the voice loop into 32-entry arrays read at all 32 consta
 cycle, so voice state is a flat register file, not an inferrable memory — that is why 3 of 56
 DP16KD are used while 11,225 FFs are not. Engine area is ~440 LUTs per voice, full stop.
 Details and the full negative-result list are in
-[ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway).
+[ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
 One trap worth carrying forward: `--timing-allow-fail` on the nextpnr command line comes from the
 *Tiliqua SDK's* `nextpnr_opts`, not from Amaranth's default template. Overriding
@@ -638,7 +638,7 @@ the reference given.
 | | Where |
 |---|---|
 | `echo` · `reverb` · `reverb_cathedral` fail on Tiliqua — M23 never ported the effects FSM, so there is nothing to measure | M26's exit criteria, already red in the report |
-| `sync`/`usb` close at 48–50 MHz against a 60 MHz requirement. It enumerates, streams and takes MIDI anyway, but static timing fails, so there is no proof of margin over temperature or across dies | Risk 3b — [ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway) |
+| `sync`/`usb` close at 48–50 MHz against a 60 MHz requirement. It enumerates, streams and takes MIDI anyway, but static timing fails, so there is no proof of margin over temperature or across dies | Risk 3b — [ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
 | The loop needs one encoder click to recover after a vendor slot is booted by hand. Recommendation is to program the SI5351 from our own gateware; the flash-slot alternative needs the owner's consent, and no flash write has been made in this port | [ARCHITECTURE_tiliqua.md → A1](ARCHITECTURE_tiliqua.md#a1-clock-domains) |
 | ~~M24's TRS MIDI jack passes in simulation but has never had a cable in it~~ — **closed**: a keyboard on the jack plays the module | M24 section; roadmap row 24 ✅ |
 | `pitch_a4` (reads an octave low) and `filter_sweep` fail on **Basys 3**, long-standing and unrelated to the port — the Tiliqua sim check proves the engine itself is in tune | M23 section |
@@ -1551,7 +1551,7 @@ struck through were retired, the rows in bold were hit. Two are still open.
 | 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` became the binding resource instead |
 | 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **Hit in M28.** M26's effects build left 488 spare cells and the CV jacks wanted 639, so nextpnr refused to place at 24,848 / 24,288 (102%). A per-block census (`core` 70.5% on its own) ruled out shrinking, so the design split along `fx` into an `fx` slot (97%) and a `cv` slot (90%). **Undone by M29** and the `cv` variant deleted in M31 |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Did not bite. The engine closes at 27.5 MHz at `STAGES=12` and needs 7.2 MHz; it runs at 12.288 MHz with 1.7× margin |
-| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired.** Not the engine's own path and not fixable in the tool flow — occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. The bitstream enumerates, takes MIDI and streams; static timing still fails. Cutting voices remains the fallback. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-that-runs-anyway) |
+| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired.** Not the engine's own path and not fixable in the tool flow — occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. The bitstream enumerates, takes MIDI and streams; static timing still fails. Cutting voices remains the fallback. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
 | 3c | Stale SI5351 `clk0` silently detunes everything | **Hit in M25.** Only the bootloader programs `clk0`; an SRAM load inherits the last-booted slot's rate, and neither a JTAG refresh nor a power cycle clears it. The ratio-only sim checks cannot see it. *Mitigated in M25*: the USB tee carries a 31-bit `audio`-cycle counter, and both `check_loop.py` and `run_tests.py` measure the clock and refuse to grade before reporting anything else. *Closed in M29* by giving XLS32 a flash slot whose manifest sets `clk0_hz` |
 | 4 | 115200 CDC can't carry audio | **Certain, and retired as a design risk.** UAC2 over `usb2` records 4×24-bit on real hardware; M25 was integration work, not research |
 | 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce.** See [below](#the-usb-dropout-report-that-was-withdrawn) |
