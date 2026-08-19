@@ -58,8 +58,16 @@ static std::vector<MidiEvent> script_pitch() {
 // from the loud channel 1 overlapping the quiet channel 4 would inflate the later segments and
 // could fail the amplitude ordering for a reason that has nothing to do with routing.
 //
-// boards/tiliqua/check_midi.py mirrors these four constants to locate the segments. Keep them
+// The echo and the chorus are switched off first, exactly as script_panic() does and for the
+// same reason: `revwet` boots at 0 but `echodep` and `chdep` boot at 64 (fx.py:186-188), and
+// XLS_SIM_OUT captures out0, the *wet* side of StereoFx. Without this the echo drops a copy of
+// channel 1 into every later gap -- measured 327 rms still ringing at A4 800 ms after the note
+// went off, which is not a release tail and is not what this script is asking about. The echo
+// and the chorus have their own cases (`echo`, `stress_fx_tail`); the question here is routing.
+//
+// boards/tiliqua/check_midi.py mirrors these constants to locate the segments. Keep them
 // in step.
+#define PARTS_FX_OFF_MS 1
 #define PARTS_LEAD_MS 100
 #define PARTS_HOLD_MS 250
 #define PARTS_GAP_MS  150
@@ -67,6 +75,8 @@ static std::vector<MidiEvent> script_parts() {
     const uint8_t note[4] = {69, 63, 78, 60};   // A4, D#4, F#5, C4
     const uint8_t vol[4]  = {110, 80, 55, 30};  // strictly descending; check_midi.py asserts it
     std::vector<MidiEvent> s;
+    s.push_back({PARTS_FX_OFF_MS, 0xB0}); s.push_back({0, 95}); s.push_back({0, 0});  // echo   0
+    s.push_back({0, 0xB0});               s.push_back({0, 94}); s.push_back({0, 0});  // chorus 0
     for (int ch = 0; ch < 4; ch++) {
         uint64_t lead = ch == 0 ? PARTS_LEAD_MS : PARTS_GAP_MS;
         s.push_back({lead, (uint8_t)(0xB0 | ch)});          // CC7 volume

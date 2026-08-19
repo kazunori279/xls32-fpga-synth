@@ -366,6 +366,16 @@ tail is real and harmless — the assertion was measuring the wrong thing, not f
 version of that overlap that *did* contaminate the amplitude comparison would have been invisible
 without it.
 
+**And then M26 broke it, quietly, for nine milestones.** `StereoFx` boots with `echodep` and
+`chdep` at 64 (only `revwet` is 0), and `XLS_SIM_OUT` captures `out0`, the *wet* side. So from M26
+on, every gap held an echo of channel 1: rms 327 in two of the three gaps, still ringing at A4
+800 ms after its note-off, not decaying. The check went red and stayed red — the isolation guard
+was doing its job, on the effects rather than on MIDI. M34's `script_panic()` had already hit this
+and switched both depths off before measuring; `script_parts()` never got the same two lines. It
+has them now, and the capture comes back *identical to the M24 table above* — 1061.5 / 763.1 /
+556.1 / 285.7 against 1062 / 763 / 557 / 285, pitch errors 0.042 / 0.114 / 0.052%. The lesson is
+not about the echo. It is that a red exit check is only a guard while somebody is reading it.
+
 **The boot patch lost its note-on.** `BOOT_MIDI` is now CCs only — cutoff, resonance and volume,
 broadcast on all four channels because a CC on channel 1 alone leaves parts 2–4 at their DSLX
 defaults. 36 bytes. The module comes up silent and sounds when you play it, which is what an

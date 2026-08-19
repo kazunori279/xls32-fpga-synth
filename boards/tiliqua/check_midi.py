@@ -24,9 +24,12 @@ polyphonic, so if routing collapsed and all four channels landed on part 0 the n
 sound correct one after another. They would not have four different volumes -- with one part,
 the last CC7 wins and every segment comes out the same.
 
-Segment boundaries are computed from the four constants the harness's ``script_parts()`` uses,
-then sanity-checked against the envelope, so a drift between the two shows up as a clear failure
-rather than as nonsense numbers.
+Segment boundaries are computed from the constants the harness's ``script_parts()`` uses, then
+sanity-checked against the envelope, so a drift between the two shows up as a clear failure
+rather than as nonsense numbers. That includes the CC95/CC94 pair the script now sends first:
+``out0`` is the wet side of StereoFx and ``echodep`` boots at 64, so until M35 every gap held an
+echo of channel 1 -- 327 rms still ringing at A4 800 ms after its note-off -- and the isolation
+check below failed on the effects rather than on anything about MIDI.
 """
 
 import argparse
@@ -39,6 +42,7 @@ LEAD_MS, HOLD_MS, GAP_MS = 100, 250, 150
 NOTES = [69, 63, 78, 60]        # A4, D#4, F#5, C4
 VOLS  = [110, 80, 55, 30]       # CC7 per channel, strictly descending
 RESET_MS = 0.002                # reset_ns in the harness
+FX_OFF_MS = 1                   # delay before the first CC95 byte
 
 # The harness derives its bit period from the receiver's divisor rather than from 31250 baud
 # (see the comment there), so a byte on the simulated wire lasts 10 * 1920 sync cycles. In the
@@ -56,7 +60,7 @@ ANALYSE_FROM_MS, ANALYSE_TO_MS = 90, HOLD_MS - 5
 
 def segment_starts_ms():
     """Time at which each channel's note-on finishes transmitting, in the harness's ms."""
-    t = RESET_MS
+    t = RESET_MS + FX_OFF_MS + 6 * BYTE_MS      # CC95 then CC94, the echo and chorus switch-off
     starts = []
     for ch in range(4):
         t += LEAD_MS if ch == 0 else GAP_MS
@@ -111,9 +115,9 @@ def main():
         return data[int(t0_ms / 1000 * FS_CAPTURE):int(t1_ms / 1000 * FS_CAPTURE)]
 
     segs = [window(t + ANALYSE_FROM_MS, t + ANALYSE_TO_MS) for t in starts]
-    # The last 35 ms before each note-on. The release runs about 60 ms, so by here the previous
-    # note must have reached silence; anything else means the notes overlap and the amplitudes
-    # below are not measuring one part each.
+    # The last 35 ms before each note-on. The release runs about 60 ms and the effects are off,
+    # so by here the previous note must have reached silence; anything else means the notes
+    # overlap and the amplitudes below are not measuring one part each.
     gaps = [window(t - 45, t - 10) for t in starts[1:]]
 
     freqs = [peak_norm_freq(s) for s in segs]
