@@ -98,6 +98,12 @@ fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32)
     // worse at 2,059, because the extra adder lands on the datapath's critical path and XLS
     // re-schedules around it (+1,440 FFs, one MULT18X18D short). Two subtractors beat one adder
     // when the adder is in the wrong place.
+    //
+    // Do not budget the 598 against a die, though: that is `stub_top`, the engine on its own.
+    // In the full Tiliqua top yosys optimises across the whole design and the same edit costs
+    // +38 pre-pack cells (23,760 -> 23,798) and +67 post-pack (23,792 -> 23,859 of 24,288, 98%).
+    // It fits -- but the 32-voice build's pinned `--seed 4` does not survive the netlist change,
+    // so at 98% this needs a fresh seed. 24 voices at 80% has no such problem. See #30.
     let low2  = low1  - (low1  >> u32:7) - ((low1  > s32:0) as s32);
     let band2 = band1 - (band1 >> u32:6) - ((band1 > s32:0) as s32);
     (low2, band2, low2, high, band2)

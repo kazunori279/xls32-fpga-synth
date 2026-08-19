@@ -767,6 +767,14 @@ on the old kernel. The obvious cheaper-looking alternative — round the shift t
 the shared datapath's critical path and XLS re-schedules around it. Two subtractors beat one adder
 when the adder is in the wrong place.
 
+The 598 is `stub_top`, the engine alone, and it is not what the change costs a board. Yosys
+optimises across the whole design, and in the full Tiliqua top the same edit measures **+38**
+pre-pack cells (23,760 → 23,798) and **+67** post-pack (23,792 → 23,859 of 24,288, 98%). Nearly 90%
+of the bare-engine figure disappears into the rest of the netlist. It fits — but a netlist that
+changes at 98% re-draws the seed lottery, and the 32-voice build's pinned `--seed 4` no longer
+converges with the fix in (`overused` climbing 13,623 → 15,694 over iterations 110–116). That is an
+argument for [24 voices at 80%](ARCHITECTURE_tiliqua.md), not against the fix.
+
 Cutoff assembly + multimode select + 4× input attenuation ([`synth.x:264`](core/synth.x)):
 
 ```rust
