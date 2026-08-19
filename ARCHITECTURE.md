@@ -681,6 +681,37 @@ parameters unchanged and scores both against the target it was fitted to, under 
 median +0.324, sign test p = 0.029), with all 340 non-pulse presets identical to the count as a
 control. The fits were being charged for an offset the targets never had.
 
+**Confirmed on the module.** Reading the clamp back through the USB tee is not as simple as it
+sounds, because two stages stand in the way and each destroys the obvious evidence:
+[`dc_block.py`](boards/tiliqua/gateware/dc_block.py) high-passes the tee at 7.5 Hz (and
+`record_stop` subtracts the mean again on the host), so the offset itself is gone twice over;
+and the FIR resampler in [`xls_core.py`](boards/tiliqua/gateware/xls_core.py) rings on the corners
+a clamp makes, so the flat top is gone too — captures that should be pinned at ±1.0 come back
+spanning 2.17, and the fraction of samples sitting on one identical value is 0.0 %.
+
+[`boards/tiliqua/check_headroom_hw.py`](boards/tiliqua/check_headroom_hw.py) measures the one thing
+that no linear stage can touch: it plays each patch twice, loud and quiet, normalises each
+capture's two peaks by that capture's own RMS, and reads how far the peak *asymmetry* moved between
+the two. The high-pass, the mean removal, the resampler and the codec all cancel in that ratio,
+because all of them apply equally to both captures. The clamp does not cancel — it is the only
+stage in the path whose behaviour depends on level.
+
+The sign is what makes it a verdict rather than a number. With the DC gone the pulse is still
+lopsided, but that is the *shape*: above 50 % duty what is left is a short deep trough, so the mix
+reaches the negative rail first and the asymmetry moves *away* from it, giving a shift with the
+sign of `pw − 128`. A pulse still carrying its offset rides the whole mix the other way and clips
+the side the offset pushes into, so every row comes out on the opposite sign. Both bitstreams
+JTAG-loaded back to back:
+
+| | rows carrying the DC | 78 % duty, 16 voices |
+|---|---|---|
+| `890d4be` (before) | 10 of 11 | peak **+0.07 / −1.88** |
+| `3aa0227` (after) | **0 of 9** | peak **+1.04 / −1.10** |
+
+The before capture has essentially no positive half left; the clamp ate it. The 50 % control rows
+held to within 0.026 on *both* bitstreams, which is what says the two runs differ by the adder in
+`voice_wave` and not by anything else that moved between the builds.
+
 ## B4 Detuned dual oscillator
 
 **What it does.** A second oscillator (`ph2`) runs slightly faster than the main one; summed with

@@ -114,6 +114,15 @@ those three; git history keeps the original.)*
   against 22 before, and the die goes 23,859 → 24,023 of 24,288 (98.9 %) and re-draws the seed
   lottery. `presetgen/pulse_dc.py` retired the objection that this re-scores the bank: 48W/28L over
   76 pulse presets under their own fitted loss, p = 0.029, 340/340 non-pulse controls identical.
+  Confirmed on the module, not just in the testbench: `boards/tiliqua/check_headroom_hw.py` reads
+  the clamp through the USB tee — which no direct measurement survives, since the tee's DC blocker
+  and the FIR resampler between them destroy both the offset and the flat top — by taking each
+  patch twice, loud and quiet, and watching whether its peak asymmetry *moves* with level. Nothing
+  linear can do that; the clamp is the only stage in the path whose behaviour depends on how loud
+  it is played. Both bitstreams loaded back to back over JTAG: `890d4be` fails 10 of 11 clipping
+  rows, `3aa0227` fails 0 of 9, and the 50 % control holds to 0.026 on both. At 78 % duty and 16
+  voices the before capture peaks at **+0.07 against −1.88** — the positive half of the waveform
+  eaten whole — and the after capture at **+1.04 against −1.10**.
   See the pulse-DC section of [ARCHITECTURE.md](../ARCHITECTURE.md#b3-pwm).
 - **Every voice's filter latches a small DC when its envelope dies, and never lets go.** The
   Chamberlin SVF leaks with `low2 = low1 - (low1 >> 7)`, and that shift rounds to zero for any

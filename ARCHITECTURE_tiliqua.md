@@ -789,6 +789,15 @@ filter costs a shift and two adders per channel. What changed is that the tee is
 thing protecting the mix; the clamp in `scale_mix` sits *upstream* of the tee and could not be
 protected from downstream at all.
 
+That last point is also why proving the fix on hardware took a different instrument. The blocker
+does its job on the tee, so the offset is invisible to the host by design, and the FIR resampler
+above rings on the corners a clamp leaves, so the flat top does not arrive either.
+[`check_headroom_hw.py`](boards/tiliqua/check_headroom_hw.py) reads the clamp indirectly instead —
+by how far a patch's peak asymmetry moves between a loud pass and a quiet one, which is invariant
+under every linear stage in this path and is not invariant under a clamp. Against the two
+bitstreams loaded back to back it separates them 10-of-11 to 0-of-9; see
+[B3](ARCHITECTURE.md#b3-pwm).
+
 **The filter is `x − lowpass(x)`, and the lowpass has no multiplier.** `dsp.OnePole` is
 `state += (input − state) >> shift`, which is a shift and two adders. That is not a stylistic
 preference: `MULT18X18D` is **28 of 28** on this bitstream ([E3](#e3-multipliers-28-of-28)), which

@@ -36,7 +36,10 @@ addition rather than a rewrite.
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone
     exit checks), `check_panic_hw.py` (the same channel mode messages on the module, over
-    USB-MIDI, judged on the USB audio capture) and `check_descriptors.py` (the three USB strings,
+    USB-MIDI, judged on the USB audio capture), `check_headroom_hw.py` (issue #2 on the module:
+    plays each pulse patch loud and quiet and reads how far its peak asymmetry moved, which is the
+    only signature of one-sided clipping that survives the tee's DC blocker and the FIR resampler)
+    and `check_descriptors.py` (the three USB strings,
     read back out of the descriptor collection without a board — that the stamp matches the parser
     in `transport.js`, that `iProduct` and `iSerialNumber` have not moved, and that the stamp is
     still the fixed width the router seed was drawn against),
