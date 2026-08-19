@@ -14,7 +14,7 @@
 // that the mix stops *moving* after All Sound Off. This testbench asserts the stronger thing the
 // message actually promises, and prints the residual either way so the number is on the record.
 //
-//   bash boards/tiliqua/build.sh SKIP_BUILD=1   # produces build/tiliqua/engine.v
+//   SKIP_BUILD=1 bash boards/tiliqua/build.sh   # produces build/tiliqua/engine.v
 //   iverilog -g2012 -o /tmp/tbdc core/sim/tb_dc.v build/tiliqua/engine.v && vvp /tmp/tbdc
 //
 // See issue #1. The measurement is the audio mix, in offset binary: silence is 32768.

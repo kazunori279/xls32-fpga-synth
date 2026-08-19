@@ -9,7 +9,7 @@
 // squared off on one side only, and no test downstream of the clamp can see it. That is the open
 // half of issue #2, and it is a question about the clamp, so this counts clamp hits.
 //
-//   bash boards/tiliqua/build.sh SKIP_BUILD=1   # produces build/tiliqua/engine.v
+//   SKIP_BUILD=1 bash boards/tiliqua/build.sh   # produces build/tiliqua/engine.v
 //   iverilog -g2012 -o /tmp/tbhr core/sim/tb_headroom.v build/tiliqua/engine.v && vvp /tmp/tbhr
 //
 // The mix is offset binary: silence 32768, positive clamp 65535, negative clamp 1.

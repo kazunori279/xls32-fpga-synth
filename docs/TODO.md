@@ -103,10 +103,18 @@ those three; git history keeps the original.)*
   with `fx_model.py` and Basys 3 — so the offset is still there in the engine and on `out0`/`out1`,
   where the AC coupling removes it before anyone hears it.
 
-  What still has not been checked is whether the offset costs any headroom *inside* the engine
-  before the output stage. If it does, loud four-part passages are clipping asymmetrically, no test
-  would say so, and the tee's DC blocker will not tell you either — it is downstream of the
-  clipping. Confirming that needs an instrumented engine build, not a recording.
+  **Paid off.** The open half was whether the offset costs headroom *inside* the engine, upstream
+  of the output stage, where the tee's blocker cannot reach. `core/sim/tb_headroom.v` answered it:
+  at the demo patches' 78 % duty four voices sit at a mean of **13,099** counts and the mix clamps
+  on the positive rail only — 25 hits in 1,200 samples, the negative rail never touched — while the
+  50 % control clamps symmetrically. `voice_wave` now subtracts the term, and the same testbench
+  reports means of −11 to 683 counts from 1 to 32 voices, two-sided clipping matching the control,
+  and the first clamping polyphony moved from 4 voices to 8. It is not free: re-centring grows the
+  peak excursion, so `|voice_wave| ≤ 3904` rather than 2048, four voices at `pw = 88` clamp 48 times
+  against 22 before, and the die goes 23,859 → 24,023 of 24,288 (98.9 %) and re-draws the seed
+  lottery. `presetgen/pulse_dc.py` retired the objection that this re-scores the bank: 48W/28L over
+  76 pulse presets under their own fitted loss, p = 0.029, 340/340 non-pulse controls identical.
+  See the pulse-DC section of [ARCHITECTURE.md](../ARCHITECTURE.md#b3-pwm).
 - **Every voice's filter latches a small DC when its envelope dies, and never lets go.** The
   Chamberlin SVF leaks with `low2 = low1 - (low1 >> 7)`, and that shift rounds to zero for any
   value under 128 — so the state stops decaying at a small constant instead of reaching it. A part

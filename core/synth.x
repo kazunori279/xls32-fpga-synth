@@ -102,8 +102,9 @@ fn svf(low: s32, band: s32, x: s32, f: s32, q: s32) -> (s32, s32, s32, s32, s32)
     // Do not budget the 598 against a die, though: that is `stub_top`, the engine on its own.
     // In the full Tiliqua top yosys optimises across the whole design and the same edit costs
     // +38 pre-pack cells (23,760 -> 23,798) and +67 post-pack (23,792 -> 23,859 of 24,288, 98%).
-    // It fits -- but the 32-voice build's pinned `--seed 4` does not survive the netlist change,
-    // so at 98% this needs a fresh seed. 24 voices at 80% has no such problem. See #30.
+    // It fits -- but the pinned `--seed 4` did not survive the netlist change, so at 98% this
+    // needs a fresh seed. `--seed 5` routes it, together with the pulse-DC fix in voice_wave that
+    // landed on top of it. 24 voices at 80% has no such problem. See #30.
     let low2  = low1  - (low1  >> u32:7) - ((low1  > s32:0) as s32);
     let band2 = band1 - (band1 >> u32:6) - ((band1 > s32:0) as s32);
     (low2, band2, low2, high, band2)
@@ -122,7 +123,7 @@ fn adsr(env: u16, st: Env, att: u16, dec: u16, sus: u16, rel: u16) -> (u16, Env)
         _ => (u16:0, Env::OFF),
     }
 }
-// Returns a 12-bit-ish sample in s16 (|v| <= 2048). The narrow return type gives the
+// Returns a 12-bit-ish sample in s16 (|v| <= 3904). The narrow return type gives the
 // optimizer a tight range bound so the downstream amp multiply narrows to ~16x7 bits
 // instead of a full 32x32 soft-multiplier (F4PGA/VPR does not infer DSP48 blocks).
 fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
@@ -130,7 +131,16 @@ fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
     match wave {
         u3:0 => SINE[t],
         u3:1 => ((t as s16) * s16:16) - s16:2048,
-        u3:2 => if t < pw { s16:2047 } else { s16:0 - s16:2047 },   // pulse: pw=duty (PWM)
+        // pulse: pw=duty (PWM), minus its own DC term (issue #2). A square at duty pw/256 has
+        // mean 2047*(2*pw/256 - 1), i.e. (pw - 128) << 4 to within a count, and every part of the
+        // chain below is linear until scale_mix's clamp -- so the offset survives all the way to
+        // the mix, adds coherently across voices and eats one-sided headroom there. One adder
+        // here removes it at the source. This re-centres rather than shrinks: at pw=244 the
+        // output runs +191/-3903, so |v| <= 3904 and not 2048. That is the bound the annotations
+        // downstream carry, and it is why this is not free: core/sim/tb_headroom.v measures it
+        // both ways, and one width in its sweep (pw=88) clamps more often after the fix, not less.
+        u3:2 => (if t < pw { s16:2047 } else { s16:0 - s16:2047 })
+                - (((pw as s16) - s16:128) << u16:4),
         u3:3 => { let f = if t < u8:128 { t } else { u8:255 - t }; ((f as s16) * s16:32) - s16:2048 },
         u3:4 => noise,                                          // white noise (LFSR)
         _    => SINE[t],
@@ -300,7 +310,7 @@ fn process_voice(v: Voice, wave: u3, cutoff: u16, reso: u16, lfo_mod: s32, fdept
                     let midx = (modsig as s32) * (xdepth as s32);
                     (midx << (if xmode == u2:2 { u32:12 } else { u32:13 })) as u32
                 } else { u32:0 };
-    let main = voice_wave(wave, phase_n + fmoff, noise, pw);   // s16, |main| <= 2048
+    let main = voice_wave(wave, phase_n + fmoff, noise, pw);   // s16, |main| <= 3904 (pulse, DC removed)
     // RING (xmode==1): main * modsig -- the ONE new soft-multiply -- blended dry->ring by
     // depth in 4 shift-based steps (no blend multiply).
     let ring = (((main as s32) * (modsig as s32)) >> u32:11) as s16;
@@ -318,7 +328,7 @@ fn process_voice(v: Voice, wave: u3, cutoff: u16, reso: u16, lfo_mod: s32, fdept
     // multiply (an extra soft-mult overflows VPR's SLICE packer).
     let sub = if subhi_n == u1:1 { s16:1800 } else { s16:0 - s16:1800 };
     let subm = match subsel { u2:0 => s16:0, u2:1 => sub >> u16:2, u2:2 => sub >> u16:1, _ => sub };
-    let w = o12 + subm;                                         // |w| <= ~3850, fits s16
+    let w = o12 + subm;                                         // |w| <= ~5710, fits s16
     // Collapse envelope (7-bit) and velocity (7-bit) into one 7-bit gain via a tiny
     // 8x8 multiply, then a single ~16x8 multiply for the sample. Both stay small.
     let e7 = (env_n >> u16:9) as u8;                            // 0..127
@@ -342,7 +352,8 @@ fn process_voice(v: Voice, wave: u3, cutoff: u16, reso: u16, lfo_mod: s32, fdept
     // of the 22-bit operands that made yosys emit cascaded DSPs nextpnr can't route. No behavior change.
     let (lo, bd, lp, hp, bp) = svf(v.flo as s32, v.fbnd as s32, amp >> u32:2, f & s32:8191, (reso as s32) & s32:8191);
     let filt = match fmode { u2:0 => lp, u2:1 => hp, u2:2 => bp, _ => lp + hp };  // LP/HP/BP/notch
-    // clamp bounds the returned amp to ~22 bits (|filt<<2| <= ~1.24M anyway) so the downstream
+    // clamp bounds the returned amp to ~22 bits (|filt<<2| <= ~1.84M anyway, up from 1.24M since
+    // the pulse's DC removal widened |w| to ~5710 -- still inside the clamp) so the downstream
     // mix multiply amp*comp fits one DSP48 (else amp stays 30-bit -> cascaded DSP). No behavior change.
     (Voice { phase: phase_n, subhi: subhi_n, ph2: ph2_n, cinc: cinc_n, env: env_n, env_st: est_n,
              flo: lo as s19, fbnd: bd as s19, fenv: fenv_n, fenv_st: fest_n, ..v }, clampx(filt << u32:2, s32:2097151))

@@ -599,7 +599,8 @@ fn voice_wave(wave: u3, phase: u32, noise: s16, pw: u8) -> s16 {
     match wave {
         u3:0 => SINE[t],
         u3:1 => ((t as s16) * s16:16) - s16:2048,                  // saw
-        u3:2 => if t < pw { s16:2047 } else { s16:0 - s16:2047 },  // pulse: pw = duty (PWM)
+        u3:2 => (if t < pw { s16:2047 } else { s16:0 - s16:2047 })
+                - (((pw as s16) - s16:128) << u16:4),              // pulse: pw = duty, DC removed
         u3:3 => { let f = if t < u8:128 { t } else { u8:255 - t }; ((f as s16) * s16:32) - s16:2048 },  // tri
         u3:4 => noise,                                             // white noise (LFSR)
         _    => SINE[t],
@@ -627,7 +628,7 @@ It's a **single shared/global generator** (it lives in `Eng`, not per-`Part`), a
 double duty: besides the noise waveform, its value seeds each unison voice's decorrelated start
 phase ([B12](#b12-unison)) — one cheap entropy source for both jobs.
 
-**Gotcha.** `voice_wave` returns `s16` (|v| ≤ 2048) on purpose: the narrow return type gives the
+**Gotcha.** `voice_wave` returns `s16` (|v| ≤ 3904) on purpose: the narrow return type gives the
 optimizer a tight range bound, so the downstream amplitude multiply narrows to ~16×7 instead of a
 full 32×32 soft-multiplier. The oscillators are *naive* (no band-limiting), so raw saw/pulse
 alias — you play through the low-pass, which rolls the aliases off.
@@ -648,6 +649,37 @@ let pwthr = (if pwr < s32:12 { s32:12 } else if pwr > s32:244 { s32:244 } else {
 
 **Gotcha.** PWM reuses the existing `lfo_mod` for its wobble — no new multiply. At 50 % duty the
 even harmonics vanish (odd-only, like a square); narrowing the pulse brings them back in.
+
+**And every other duty carries a DC term, which is issue #2.** A square that is high for `pw` of
+256 steps has mean `2047·(2·pw/256 − 1)`, i.e. `(pw − 128) << 4` to within a count. Everything from
+there to [`scale_mix`](#b13-mixing) is linear, so the offset reaches the mix intact, and because it
+is the *same* offset in every voice it adds coherently where the signals do not. At the demo
+patches' 78 % duty that is 3,292 counts per voice: four voices sit at 13,099 and the mix clamps on
+the positive rail only, 25 times in 1,200 samples, with the negative rail never touched.
+[`core/sim/tb_headroom.v`](core/sim/tb_headroom.v) is the measurement.
+
+Subtracting the term in `voice_wave` removes it at the source, and the same testbench with the fix
+in reports the mean at 78 % duty as −11 / 93 / −34 / 188 / 361 / 683 counts for 1 / 2 / 4 / 8 / 16 /
+32 voices, against 3,292 → 31,936 before. The clipping that remains is two-sided and matches the
+50 % control (32 voices: +217/−198 with the fix, +233/−268 for a duty that never had a DC term),
+and the first polyphony that reaches the clamp moves from 4 voices to 8.
+
+It is not free, and the cost is not the adder. Removing the DC **re-centres** the waveform rather
+than shrinking it: at 95 % duty the pulse runs +191/−3903 instead of ±2047, so a single voice's peak
+excursion grows even as its mean goes to zero. Across the duty sweep the shipped bank spans, four
+voices clamp 187 times before and 81 after — but at `pw = 88` they clamp **48** times after against
+22 before. That is the trade: a large win at the extremes, a real loss in one band near the middle.
+On the die it is +156 pre-pack cells and +164 post-pack (23,859 → 24,023 of 24,288, 98.9 %), no
+change to `MULT18X18D` or `DP16KD`, and no change to the engine's critical path — `audio_clk` closes
+at 22.94 MHz against its 12.29 MHz constraint. What it does cost is the seed lottery, again.
+
+The presets were fitted by CMA-ES against an engine model that *had* the offset, which was the
+standing objection to touching this. [`presetgen/pulse_dc.py`](presetgen/pulse_dc.py) tests that
+objection without re-fitting anything: it renders every pulse preset twice with its fitted
+parameters unchanged and scores both against the target it was fitted to, under the bank's own
+`clap+stft` distance. Over 76 pulse presets in 8 banks the no-DC render wins 48 to 28 (mean −0.081,
+median +0.324, sign test p = 0.029), with all 340 non-pulse presets identical to the count as a
+control. The fits were being charged for an offset the targets never had.
 
 ## B4 Detuned dual oscillator
 
@@ -771,9 +803,11 @@ The 598 is `stub_top`, the engine alone, and it is not what the change costs a b
 optimises across the whole design, and in the full Tiliqua top the same edit measures **+38**
 pre-pack cells (23,760 → 23,798) and **+67** post-pack (23,792 → 23,859 of 24,288, 98%). Nearly 90%
 of the bare-engine figure disappears into the rest of the netlist. It fits — but a netlist that
-changes at 98% re-draws the seed lottery, and the 32-voice build's pinned `--seed 4` no longer
-converges with the fix in (`overused` climbing 13,623 → 15,694 over iterations 110–116). That is an
-argument for [24 voices at 80%](ARCHITECTURE_tiliqua.md), not against the fix.
+changes at 98% re-draws the seed lottery, and the pinned `--seed 4` did not survive it (`overused`
+climbing 13,623 → 15,694 over iterations 110–116), so for a while this fix had no bitstream. It has
+one now: the pulse-DC fix below landed on top, took the design to 24,023 cells, and the sweep that
+found a seed for that netlist found one for both. `--seed 5` is what [`build.sh`](boards/tiliqua/build.sh)
+pins today. The lottery is still the argument for [24 voices at 80%](ARCHITECTURE_tiliqua.md).
 
 Cutoff assembly + multimode select + 4× input attenuation ([`synth.x:264`](core/synth.x)):
 

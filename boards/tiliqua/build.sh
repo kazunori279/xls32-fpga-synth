@@ -90,7 +90,7 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # shortfall (39.92 MHz against a 60 MHz constraint, unmet since M25 and so far harmless -- the
 # engine runs in `audio_clk`) from a warning into an error that fails the build after it has routed.
 #
-# `--seed 4` is not a preference either. At 97% TRELLIS_COMB the router either converges or runs
+# `--seed 5` is not a preference either. At 97% TRELLIS_COMB the router either converges or runs
 # away, and which it does is decided by the seed. At M34 (23,729 cells) that seed was 3: the
 # default bottomed out at 135 overused nets and then the ripup cascade ran away, seed 2 bottomed
 # at 117 and did the same, seed 3 routed. The placer knobs were measured and are worse --
@@ -104,13 +104,23 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # #3) -- more margin than the 39.92 of the M34 bitstream it replaces. Roughly one seed in four
 # won here; budget for that.
 #
+# And then the DC fixes re-drew it twice more, which is the pattern now: any netlist change at
+# this occupancy costs a seed sweep. #1's SVF rounding took the design to 23,859 cells and seed 4
+# ran away on it (overused climbing 13,623 -> 15,694 over iterations 110-116), so that netlist
+# never had a bitstream. #2's pulse-DC subtraction took it to 24,023 (98.9%, 265 cells free) and
+# seed 4 ran away again, faster. Of 1, 2, 3, 5, 6, 7 run in parallel on that netlist, three won:
+# seed 2 at iteration 112, seed 5 at 132, seed 7 at 115. Seed 5 is pinned here because it is the
+# best of the three on both domains -- 22.94 MHz on `audio_clk` (constraint 12.29) and 46.35 MHz
+# on `clk`, against 22.79/44.74 for seed 2 and 21.53/42.22 for seed 7. Three in six is a better
+# draw than the one in four above, but do not read anything into that; it is the same lottery.
+#
 # Redrawing costs an afternoon unless you skip the front of the build. nextpnr reads `top.json`,
 # which yosys already wrote, so run it by hand out of `build/tiliqua/build/xls32-r5/` with
 # `--log x$S.tim --textcfg x$S.config` per seed and the inputs shared read-only. Four at once
 # finish in about fifteen minutes on an M-series laptop; one process still cannot take two seeds.
 # A losing seed never terminates on its own -- watch `overused=` and kill the ones that climb.
 # See DEVELOPMENT_tiliqua.md M34 "The area squeeze".
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 4}"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 5}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then

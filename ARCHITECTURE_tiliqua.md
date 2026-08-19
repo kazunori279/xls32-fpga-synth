@@ -776,10 +776,18 @@ The counter on channels 2 and 3 is [A3](#a3-the-rate-is-set-by-the-pull)'s; it g
 FIFO word and is deliberately **not** filtered.
 
 **Why the tee needs a DC blocker and the jacks do not.** A pulse wave at duty `d` sits at a mean of
-`2d − 1`, and the engine emits it that way. The eurorack jacks are AC-coupled, so out0/out1 have
-never cared. The tee is a direct digital copy and cares a great deal: measured over a 110 s capture
+`2d − 1`, and the engine emitted it that way. The eurorack jacks are AC-coupled, so out0/out1 have
+never cared. The tee is a direct digital copy and cared a great deal: measured over a 110 s capture
 the mean was **+0.286** with **89.6% of the energy below 5 Hz**, which pushes everything audible down
 to −25.9 dBFS and, in a DAW, pins the waveform against the top of the window.
+
+The engine has since stopped emitting it — `voice_wave` subtracts the pulse's own DC term, which is
+issue #2 and [B3](ARCHITECTURE.md#b3-pwm) — so the blocker no longer has a standing source to
+remove. It stays. The offset was never the only reason for it: the SVF's integrator state, the
+oscillator LUTs and any future waveform can all leave a slow term in a direct digital copy, and the
+filter costs a shift and two adders per channel. What changed is that the tee is no longer the only
+thing protecting the mix; the clamp in `scale_mix` sits *upstream* of the tee and could not be
+protected from downstream at all.
 
 **The filter is `x − lowpass(x)`, and the lowpass has no multiplier.** `dsp.OnePole` is
 `state += (input − state) >> shift`, which is a shift and two adders. That is not a stylistic

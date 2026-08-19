@@ -1643,6 +1643,11 @@ regression. And the pulse-duty offset itself is untouched: it is still in the en
 the jacks, where AC coupling removes it. `docs/TODO.md` keeps that debt open, with a note that USB
 can no longer observe it.
 
+*(That last paragraph was overtaken later: the offset is now removed in `voice_wave` itself, which
+is the second half of issue #2 — the half about the clamp, which the tee's DC blocker could never
+reach because the clamp is upstream of the tee. See the pulse-DC section of
+[ARCHITECTURE.md](ARCHITECTURE.md#b3-pwm).)*
+
 ---
 
 ## Milestone 34 — the channel mode messages, and the TRS jack cleaning up after itself
