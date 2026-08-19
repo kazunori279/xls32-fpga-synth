@@ -1907,6 +1907,71 @@ spent its last day trying to give back a tenth of that. So the testbench
 stopped asserting silence and started asserting that the mix **stops moving**, which is what All
 Sound Off actually promises. `docs/TODO.md` carries the debt.
 
+*(Paid off after M34, and more cheaply than the estimate above — see the section below.)*
+
+---
+
+## The two DC fixes, and getting a board to say so
+
+Two of the three DC sources `docs/TODO.md` had recorded as debt were closed back to back, and both
+are engine changes rather than shell changes, so they land on Basys 3 too — this is the first time
+the two boards' `engine.v` deliberately stopped being bit-exact.
+
+**Issue #1, the SVF's latched residue.** `290d00b`. The M34 note above priced the obvious fix at
+~1,200 LUTs and declined it. The dead zone turned out to be closable at the leak itself instead:
+`>>` on a signed value in DSLX rounds toward minus infinity, so negative state decays and positive
+state below 128 is a fixed point. Subtracting one more LSB when the state is positive makes the two
+signs symmetric — **598 cells**, and `apply_off` is untouched. Rounding the shift toward zero is the
+version that looks cheaper and measures **2,059**, because the extra adder lands on the datapath's
+critical path and XLS re-schedules the whole pipeline around it. `core/sim/tb_dc.v` now asserts the
+strong thing the M34 testbench had to give up on: reset, one voice, all 32 slots, and all 32 at
+maximum cutoff and resonance, each checked for a mix of *exactly* zero. Four for four.
+
+**Issue #2, the pulse's own DC.** `3aa0227`. M33's DC blocker cleaned the tee, but the clamp in
+`scale_mix` is *upstream* of the tee and no downstream filter could ever have protected it — a duty
+offset that adds coherently across voices eats one-sided headroom at the mix and nothing later can
+give it back. `voice_wave` subtracts the term at the source. The full accounting is in
+[ARCHITECTURE.md](ARCHITECTURE.md#b3-pwm); the shell-side cost is 23,859 → **24,023 of 24,288
+(98.9%)** and one more spin of the seed lottery, `--seed 4` → `--seed 5`.
+
+**The part that needed a new instrument.** Proving #2 on hardware is harder than it sounds, because
+the two stages between the clamp and the host each destroy the obvious evidence: the tee's DC
+blocker (and `record_stop`'s own mean removal) take the offset out twice over, and the FIR
+resampler in `xls_core.py` rings on the corners a clamp leaves, so the flat top does not survive
+either — measured, captures that should be pinned at ±1.0 come back spanning **2.17** with **0.0%**
+of samples sitting on one value. Both of the direct measurements are dead on arrival.
+
+`boards/tiliqua/check_headroom_hw.py` measures a ratio instead. Each patch is played twice, loud
+and quiet; each capture's two peaks are normalised by that capture's own RMS; the reading is how
+far the *asymmetry* moved between them. Every linear stage in the path cancels, because all of them
+apply equally to both captures. The clamp does not cancel — it is the only stage whose behaviour
+depends on level. And the sign is the verdict: a DC-free pulse clips whichever rail its own shape
+reaches first, giving a shift with the sign of `pw − 128`, while a pulse still carrying the offset
+clips the side the offset pushes into and lands on the opposite sign on **every** row.
+
+Both bitstreams JTAG-loaded back to back on the module:
+
+| | rows carrying the DC | 78% duty, 16 voices |
+|---|---|---|
+| `890d4be` (before) | 10 of 11 | peak **+0.07 / −1.88** |
+| `3aa0227` (after) | **0 of 9** | peak **+1.04 / −1.10** |
+
+The before capture has essentially no positive half left. The 50%-duty control rows — the one width
+with no DC term at any volume — held to within 0.026 on *both* bitstreams, which is what says the
+two runs differ by the adder in `voice_wave` and not by anything else that moved between builds.
+
+**And the graded suite, on the new bitstream.** 175 cases, `--no-reflash` so it grades the SRAM
+load rather than the release archive: **99.8/100 (A+), 174 pass / 1 warn / 0 fail** in 626 s, USB
+frame gaps 0.00% worst-case, audio clock 12.288 MHz mean over 175 captures. The single warn is
+`filter_sweep` at 80.7, its long-standing Tiliqua score and still open in `docs/TODO.md`. Nothing
+regressed: `stress_32voice`, `stress_fx_tail` and `stress_silence_recovery` all 100.0 with
+`clip 0.0%`.
+
+The lesson worth carrying is the second one. A fix upstream of a filter cannot be verified through
+that filter by looking for the thing the filter removes; you have to find a quantity the filter
+preserves and the defect does not. Here that quantity was level-invariance, and it separated the
+two bitstreams 10-of-11 to 0-of-9 on a path where the direct measurement read 0.0% either way.
+
 ---
 
 # Friction logs & learnings (Tiliqua)

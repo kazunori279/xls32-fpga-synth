@@ -130,10 +130,21 @@ those three; git history keeps the original.)*
   that has ever sounded contributes a few hundred counts of DC for the rest of the power cycle,
   and thirty-two of them add. Found by M34's `tb_panic`, which expected literal silence after All
   Sound Off and did not get it; the testbench now asserts that the mix stops *moving*, which is
-  what the message actually promises. Clearing `flo`/`fbnd` in `apply_off` is the obvious fix and
-  costs about 38 bits of mux across 32 slots — roughly 1,200 `TRELLIS_COMB` against a few hundred
-  free. Note this is a *third* DC source, distinct from both of the two above: it is per-voice, it
-  is inside the engine, and it is latched rather than signal-dependent.
+  what the message actually promises. Note this is a *third* DC source, distinct from both of the
+  two above: it is per-voice, it is inside the engine, and it is latched rather than
+  signal-dependent.
+
+  **Paid off**, and not the way this entry proposed. Clearing `flo`/`fbnd` in `apply_off` was the
+  obvious fix and the expensive one — about 38 bits of mux across 32 slots, roughly 1,200
+  `TRELLIS_COMB` against a few hundred free. `290d00b` closed the dead zone instead, by subtracting
+  one more LSB when the state is positive so that the leak is symmetric about zero: **598 cells**
+  on the bare engine, and no need to touch the note-off path at all. (Rounding the shift toward
+  zero looks cheaper and measures 2,059, because the extra adder lands on the datapath's critical
+  path and XLS re-schedules around it.) `core/sim/tb_dc.v` is the assertion the workaround could
+  not make — reset, one voice, all 32 slots, and all 32 at maximum cutoff and resonance, each
+  checked for a mix of *exactly* zero, all four passing. On the module, `check_panic_hw.py` reports
+  `ptp 0.000` on all six of its silence cases; that is the weaker "stops moving" claim, since a
+  latched constant also has zero peak-to-peak, so the exact-zero half of it rests on `tb_dc.v`.
 - **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
   the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
   the 48 kHz coefficient set as the difference.
