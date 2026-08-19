@@ -21,7 +21,7 @@ import sys
 from amaranth import *
 from amaranth.lib import wiring
 from amaranth.lib.cdc import FFSynchronizer
-from amaranth.lib.fifo import AsyncFIFO, SyncFIFO
+from amaranth.lib.fifo import AsyncFIFO, SyncFIFO, SyncFIFOBuffered
 
 from tiliqua import midi
 from tiliqua.build import sim
@@ -43,6 +43,39 @@ from xls_core import XlsSynth
 # accordingly on every cold boot -- so a bitstream built against it inherits a live pixel clock
 # without writing anything to flash. See ARCHITECTURE_tiliqua.md A1.
 MODELINE = "720x720p60r2"
+
+
+def stream_buf(m, src, dst, name):
+    """Break the combinational handshake between two byte streams.
+
+    `wiring.connect` on a stream is a wire, in both directions: `valid` and `payload` run forward
+    combinationally and `ready` runs *backwards* combinationally, so a chain of N connected
+    modules is one cone N modules deep in each direction. The MIDI path here is five of them --
+    arbiter, running-status filter, SysEx filter, System Common filter, engine -- and nextpnr
+    measured the result at **23.40 ns**, ~22 LUT levels from the USB CDC FIFO's read pointer to a
+    payload register. That is 42.7 MHz on a 60 MHz domain, and after M35 registered the reverb's
+    comb feedback it was the worst path on the die.
+
+    A two-deep `SyncFIFOBuffered` cuts both directions at once, because `w_rdy` and `r_rdy` both
+    come off its level register: `ready` terminates at a flop going backwards and `valid` starts
+    at one going forwards. The cost is one cycle of latency per stage on a stream whose fastest
+    source is a 31.25 kbaud UART, and 2 bytes of storage.
+
+    Not a `SyncFIFO`: that one's `r_data` is a combinational memory read, which would leave the
+    payload path uncut. `w_en` and `r_en` are safe to drive unconditionally -- amaranth ignores
+    both unless the matching `rdy` is asserted.
+    """
+    fifo = SyncFIFOBuffered(width=8, depth=2)
+    m.submodules[name] = fifo
+    m.d.comb += [
+        fifo.w_data.eq(src.payload),
+        fifo.w_en.eq(src.valid),
+        src.ready.eq(fifo.w_rdy),
+        dst.payload.eq(fifo.r_data),
+        dst.valid.eq(fifo.r_rdy),
+        fifo.r_en.eq(dst.ready),
+    ]
+    return fifo
 
 
 class CoreTop(Elaboratable):
@@ -167,7 +200,11 @@ class CoreTop(Elaboratable):
         # room during the M34 area squeeze bought nothing, which is why it is still here.
         n_src = 1 + 2 * int(sim.is_hw(platform))
         m.submodules.arb = arb = MidiArbiter(n_src)
-        wiring.connect(m, arb.o, rt_filter.i)
+        # Not `wiring.connect(m, arb.o, rt_filter.i)`: that made the arbiter's round-robin pick,
+        # three filters' FSMs and the engine's input handshake one combinational cone, 23.40 ns
+        # of it. Cutting it here splits the chain nearly in half -- sources plus arbiter on one
+        # side, the three filters plus the engine on the other. See stream_buf above.
+        stream_buf(m, arb.o, rt_filter.i, "midi_buf")
         wiring.connect(m, serialrx.o, arb.i[0])
 
         if not sim.is_hw(platform):

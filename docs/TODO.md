@@ -147,10 +147,18 @@ those three; git history keeps the original.)*
   2026-08-19** ([`boards/tiliqua/patches/0001-usb-in-skid-buffer.patch`](../boards/tiliqua/patches/README.md)):
   the split lands — the cone leaves the report — but Fmax goes only 45.23 → **46.54 MHz**, because
   a path of ours was hiding 0.62 ns behind it. The new worst path is `fx.rsize` → `fx.csr`, 21.49
-  ns, **9.96 ns of it logic**, all inside `boards/tiliqua/gateware/fx.py`. So the blocker is now
-  the reverb, not USB, and it is ours: register `rvg` (~1.2 ns, free), then pipeline the three
-  cascaded carry chains behind the comb-feedback multiply. Keep the patch — 60 MHz needs both
-  cuts — but expect to find the next path each time. It blocks
+  ns, **9.96 ns of it logic**, all inside `boards/tiliqua/gateware/fx.py`. So the blocker was
+  never USB at all. **M35, 2026-08-20:** two cuts of our own — a fourth tank phase plus a
+  registered `rvg` in `fx.py`, and a `SyncFIFOBuffered` between the MIDI arbiter and the filter
+  chain in `top.py`, which was the *next* path to surface at 23.40 ns — take five-seed post-route
+  `clk` from **44.1–45.8 MHz (median 44.95)** to **47.3–50.9 (median 49.47)**. Both are
+  behaviour-transparent: `test_fx.py` stays bit-exact and the 1,650 ms `XLS_SIM_MIDI=parts`
+  capture is byte-identical. The skid-buffer patch is **not applied** — rebuilt with it, M35
+  measures 48.90, inside the no-patch spread, and it cannot help further because both remaining
+  cones now end *inside* luna (`transmitter.fsm_state`, `IsoStreamInEndpoint.bytes_left_in_frame`)
+  behind the buffer rather than in front of it. The vendor's 50 MHz bar is met at the pinned seed
+  and missed by 0.5 MHz at the median, so the next cut still has to come from somewhere. It
+  blocks
   [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and therefore the webflasher PR
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).

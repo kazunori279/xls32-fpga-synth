@@ -32,4 +32,22 @@ is.** `fx.rsize` → `Array(RVG)[rsize]` → `MULT18X18D` → the `fbm` shift-an
 → the 20-bit `acc` chain → `csr` is 21.49 ns, and unlike the luna cone nearly half of it (9.96 ns)
 is logic depth we put there. That one is ours to fix, in `boards/tiliqua/gateware/fx.py`.
 
-So keep the patch — 60 MHz needs both cuts — but do not expect a number from it on its own.
+### …and then M35 made it unnecessary
+
+Once `fx.py` registered the comb feedback and `top.py` put a buffer in the MIDI stream chain, the
+patch stopped paying for itself. Same source, same seed, 24 voices:
+
+| build                            | Fmax          | worst path                                                       |
+|----------------------------------|---------------|------------------------------------------------------------------|
+| M35, **no** patch                | **50.92 MHz** | `USBControlEndpoint.index[11]` → `usb.transmitter.fsm_state[2]`  |
+| M35 **with** the patch           | 48.90 MHz     | `USBControlEndpoint.request[4]` → `IsoStreamInEndpoint.bytes_left_in_frame[1]` |
+
+48.90 sits inside the no-patch seed spread (47.30–50.92 over five seeds), so the honest reading is
+**no measurable difference**, not a 2 MHz regression. What the patch cannot do is help any more:
+it cuts the `ready` path into `ChannelsToUSBStream`, and the cones that cap the design now both
+start at luna's control endpoint and end inside luna — `bytes_left_in_frame` is *behind* the skid
+buffer, not in front of it.
+
+So the patch is kept for the record and not applied. It also answers the question the vendor
+raised, which was whether his libraries needed changing at all: **they did not.** The two paths
+that were actually costing us the clock were both ours.

@@ -37,11 +37,17 @@
 # Timing
 # ------
 # `core.o` is already 48 kHz in `sync` at 60 MHz -- 1,250 cycles per sample. The Basys 3 FSM had
-# to run at `ce8`; here the whole thing takes ~90 cycles, so there is room to spend cycles buying
-# slack instead of saving them. Each tank step is therefore split into three phases (address /
-# read+damp / multiply+write) rather than crammed into one, which keeps the memory output, the
-# Q15 feedback multiply and the saturating add off the same 16.6 ns path. M25 left `sync` placing
-# at 48-51 MHz against 60 MHz required; this file is not going to be what makes that worse.
+# to run at `ce8`; here the whole thing takes ~114 cycles, so there is room to spend cycles buying
+# slack instead of saving them. Each tank step is therefore split into four phases (address /
+# read+damp / feedback multiply / accumulate+write) rather than crammed into one, which keeps the
+# memory output, the Q15 feedback multiply and the saturating adds off the same 16.6 ns path.
+# M25 left `sync` placing at 48-51 MHz against 60 MHz required; this file is not going to be what
+# makes that worse.
+#
+# The fourth phase is M35 and was bought with measurement, not caution. Three were not enough:
+# `rsize -> rvg -> MULT18X18D -> fbm -> cbn -> acc -> csr` measured 21.49 ns, and the moment a
+# skid buffer took luna's 22.11 ns USB cone out of the report, *this file* was the worst path on
+# the die. See the `cbn_r` note below and ARCHITECTURE_tiliqua.md E4.
 #
 # Deliberate departures from the Verilog, each with a reason
 # ---------------------------------------------------------
@@ -309,12 +315,20 @@ class StereoFx(wiring.Component):
         m.d.comb += [
             echo_on.eq(ctrl.echodep != 0),         # top.v:210 -- depth-gated, no mode selector
             chorus_on.eq(ctrl.chdep != 0),
-            rvg.eq(Array(RVG)[ctrl.rsize]),
             edly.eq(dtime_c * ECHO_STEP + ECHO_MIN),
             wetgn.eq(ctrl.revwet << 8),            # CC 0..127 -> Q15 0..~0.99
             chdep_q15.eq(ctrl.chdep << 8),
             echdep_q15.eq(ctrl.echodep << 8),
         ]
+        # `rvg` is registered, not wired, and that is a timing fix rather than a style choice.
+        # `Array(RVG)[ctrl.rsize]` is a 4:1 mux over 15 bits sitting directly on the A input of
+        # the comb-feedback MULT18X18D, so it lands at the *front* of the longest path in this
+        # module and drags a LUT plus its inter-tile hop -- 1.18 ns measured -- in front of a
+        # 3.93 ns multiplier. `rsize` is CC91: it changes at MIDI rate, and its effect does not
+        # reach the output until a comb pointer has wrapped 1,215 samples later (see
+        # test_fx.py's note on why the CC test cannot go through the DSP). One cycle of extra
+        # latency on a knob like that is not observable by any means we have.
+        m.d.sync += rvg.eq(Array(RVG)[ctrl.rsize])
 
         # CC82 still accepts its full 0..127 -- presets in the wild carry values the BRAM line
         # cannot reach, and rejecting them would mean editing every one. The tap is clamped here
@@ -457,6 +471,22 @@ class StereoFx(wiring.Component):
             fbm.eq((mul_g + Mux(nlp_r < 0, 32767, 0)) >> 15),
         ]
         cbn = sat16(m, rin_r + fbm, "cbn")
+
+        # `cbn_r` buys the fourth tank phase, and it is the reason this module stopped being what
+        # caps the board. Until M35 the comb feedback was one combinational cycle: the multiply,
+        # the round-toward-zero shift, the `rin_r + fbm` saturating add and the 20-bit `acc`
+        # chain all landed between the same pair of flops. nextpnr measured that at 21.49 ns --
+        # `rsize -> rvg -> MULT18X18D -> fbm -> cbn -> acc -> csr`, 9.96 ns of it logic -- which
+        # is 46.5 MHz, and once the USB skid buffer took luna's 22.11 ns cone out of the report
+        # it was the worst path in the design. Splitting it at `cbn` leaves the multiply and its
+        # two adders in one cycle and the accumulator in the next; neither half is close.
+        #
+        # The cost is 24 cycles per sample -- one per region per channel, ~90 -> ~114 of the
+        # 1,250 the sample period has -- which is the same trade the three-phase split already
+        # made at the top of this file. Nothing about the arithmetic changes: `nlp_r` is
+        # registered in RVB-READ and `rin_r` once per sample, so `cbn` is settled and constant
+        # for the whole of the new state, and RVB-WRITE sees the identical value one cycle later.
+        cbn_r = Signal(signed(16))
 
         # All-pass stage input: the comb sum for stage 0, the previous stage's output after that.
         apin = Signal(signed(16))
@@ -618,12 +648,20 @@ class StereoFx(wiring.Component):
 
             with m.State("RVB-READ"):
                 m.d.sync += nlp_r.eq(nlp)
+                m.next = "RVB-FB"
+
+            with m.State("RVB-FB"):
+                # The comb feedback, alone in its own cycle: MULT18X18D, the round-toward-zero
+                # shift and the saturating add. The all-pass regions pass through here too --
+                # `cbn_r` is simply unused for them -- because a conditional transition would put
+                # `ridx < NCOMB` on the FSM's next-state logic to save 4 idle cycles out of 1,250.
+                m.d.sync += cbn_r.eq(cbn)
                 m.next = "RVB-WRITE"
 
             with m.State("RVB-WRITE"):
                 with m.If(ridx < NCOMB):
                     # comb: y = damp(tank); tank <= in + g*y
-                    m.d.comb += [tank_wr[0].data.eq(cbn), tank_wr[1].data.eq(cbn),
+                    m.d.comb += [tank_wr[0].data.eq(cbn_r), tank_wr[1].data.eq(cbn_r),
                                  tank_wr[0].en.eq(~chan), tank_wr[1].en.eq(chan)]
                     # Retire this comb's damping register into the tail of its channel's ring.
                     for c in range(2):
@@ -631,9 +669,9 @@ class StereoFx(wiring.Component):
                             for i in range(NCOMB - 1):
                                 m.d.sync += dlp[c][i].eq(dlp[c][i + 1])
                             m.d.sync += dlp[c][NCOMB - 1].eq(nlp_r)
-                    m.d.sync += acc.eq(acc + cbn)
+                    m.d.sync += acc.eq(acc + cbn_r)
                     with m.If(ridx == NCOMB - 1):
-                        m.d.sync += csr.eq(sat16(m, (acc + cbn) >> 2, "csr_n"))
+                        m.d.sync += csr.eq(sat16(m, (acc + cbn_r) >> 2, "csr_n"))
                 with m.Else():
                     # all-pass: y = tank - 0.5*in; tank <= in + 0.5*tank
                     m.d.comb += [tank_wr[0].data.eq(apo), tank_wr[1].data.eq(apo),

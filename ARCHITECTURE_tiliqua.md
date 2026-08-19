@@ -1489,6 +1489,44 @@ The lesson generalises to the whole exercise: at 80% occupancy this design has s
 within a nanosecond of each other, so *no single cut moves Fmax*. Budget for finding the next one
 each time.
 
+### M35: two cuts of our own, +4.5 MHz, and the patch turned out to be unnecessary
+
+Both cuts are the same shape — put a flop where a `ready` or a product was running through half a
+module — and both are in files we own.
+
+**One, the reverb's comb feedback** ([`fx.py`](boards/tiliqua/gateware/fx.py)). `rvg` was
+`Array(RVG)[ctrl.rsize]` recomputed every cycle from a CC that moves at MIDI rate, sitting on the
+A input of a `MULT18X18D`; it is now registered. And the tank's third phase was doing the
+multiply, the round-toward-zero shift, the saturating add *and* the 20-bit accumulator between one
+pair of flops; a fourth phase now splits it at `cbn`. Cost: 24 cycles per sample, ~90 → ~114 of
+the 1,250 a sample period has, and `test_fx.py` is still bit-exact against `fx_model`.
+
+**Two, the MIDI stream chain** ([`top.py`](boards/tiliqua/gateware/top.py)). `wiring.connect` on a
+stream is a wire in *both* directions, so arbiter → running-status filter → SysEx filter → System
+Common filter → engine was one cone about 22 LUT levels deep each way, and with `fx` fixed it
+became the worst path in the design at **23.40 ns**. A two-deep `SyncFIFOBuffered` between the
+arbiter and the first filter cuts `valid` and `ready` at once, because both `w_rdy` and `r_rdy`
+come off the level register. One cycle of latency on a 31.25 kbaud stream.
+
+Five seeds each, 24 voices, `--router router2`, post-route `clk`:
+
+| build     | s1    | s2    | s3    | s4        | s5    | median    | worst path at s4                       |
+|-----------|-------|-------|-------|-----------|-------|-----------|----------------------------------------|
+| baseline  | 45.80 | 44.95 | 45.40 | 44.08     | 44.29 | 44.95     | `fx.rsize[1]` → `fx.csr[4]`, 22.69 ns  |
+| M35       | 48.89 | 47.30 | 49.47 | **50.92** | 49.50 | **49.47** | luna `index[11]` → `transmitter.fsm_state[2]`, 19.64 ns |
+
+**+4.5 MHz on the median, and the whole M35 distribution sits above the baseline's best seed.**
+Note how wide each row is: ±1.8 MHz from the seed alone, which is why the two single-seed
+measurements above this section are worth less than they look.
+
+And the skid buffer is now moot. Rebuilding M35 with it applied gives 48.90 MHz — inside the
+no-patch spread, i.e. no measurable difference — and it *cannot* help any more: both remaining
+cones start at luna's control endpoint and end inside luna, at `transmitter.fsm_state` and
+`IsoStreamInEndpoint.bytes_left_in_frame`, which sit behind the skid buffer rather than in front
+of it. The vendor's guess that his libraries did not need changing was right, for a reason neither
+of us had: the two paths actually costing the clock were both ours. What is left at ~50 MHz
+genuinely is luna's, and it is a different cone from the one this section started with.
+
 ### The arithmetic, which is the part that was never stated
 
 - 60 MHz is a **16.7 ns** period.
