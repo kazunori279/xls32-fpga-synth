@@ -143,8 +143,14 @@ those three; git history keeps the original.)*
   register: the path is the isochronous IN endpoint's combinational `ready` running from the ULPI
   transmit mux into `ChannelsToUSBStream`'s FIFO level counter, and a skid buffer at that module
   boundary splits 22.11 ns into 17.69 and ~4.7, i.e. ~56 MHz
-  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)). That clears the vendor's
-  55 MHz bar by 1.5 MHz and no more. It blocks
+  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)). **Built and measured
+  2026-08-19** ([`boards/tiliqua/patches/0001-usb-in-skid-buffer.patch`](../boards/tiliqua/patches/README.md)):
+  the split lands — the cone leaves the report — but Fmax goes only 45.23 → **46.54 MHz**, because
+  a path of ours was hiding 0.62 ns behind it. The new worst path is `fx.rsize` → `fx.csr`, 21.49
+  ns, **9.96 ns of it logic**, all inside `boards/tiliqua/gateware/fx.py`. So the blocker is now
+  the reverb, not USB, and it is ours: register `rvg` (~1.2 ns, free), then pipeline the three
+  cascaded carry chains behind the comb-feedback multiply. Keep the patch — 60 MHz needs both
+  cuts — but expect to find the next path each time. It blocks
   [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and therefore the webflasher PR
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).

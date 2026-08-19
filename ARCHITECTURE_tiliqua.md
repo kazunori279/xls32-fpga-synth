@@ -1466,6 +1466,29 @@ clears the vendor's 55 MHz bar by 1.5 MHz and not a hop more. For real margin th
 be split too, and the balanced place is the endpoint mux at 8.65 ns, which would put both halves
 near 105 MHz.
 
+**We built it, and it did what it was predicted to do — and Fmax barely moved.**
+[`boards/tiliqua/patches/0001-usb-in-skid-buffer.patch`](boards/tiliqua/patches/0001-usb-in-skid-buffer.patch)
+is a two-deep `SyncFIFOBuffered` on that connection. At 24 voices, post-route `clk`:
+
+| build           | Fmax          | worst path                                   | logic / routing |
+|-----------------|---------------|----------------------------------------------|-----------------|
+| baseline        | 45.23 MHz     | `USBControlEndpoint.request[4]` → `level[8]` | 4.79 / 17.32 ns |
+| with the patch  | **46.54 MHz** | `fx.rsize[0]` → `fx.csr[8]`                  | 9.96 / 11.53 ns |
+
+The 22.11 ns cone is gone from the report entirely, so it is now somewhere under 21.49 ns — the
+split landed. The gain is 1.31 MHz because a path of *our* own was sitting 0.62 ns behind it the
+whole time: `fx.rsize` → `Array(RVG)[rsize]` → `MULT18X18D` → the `fbm` round-toward-zero shift →
+`rin_r + fbm` → the 20-bit `acc` chain → `csr`, at 21.49 ns. **The USB cone is no longer the
+blocker; the reverb is**, and unlike the luna cone nearly half of that path — 9.96 ns — is logic
+depth we chose, in a file we own. Two obvious cuts are free: `rvg` is `Array(RVG)[ctrl.rsize]`
+recomputed combinationally every cycle from a knob that moves at MIDI rate, and registering it
+takes the LUT and its 0.94 ns of routing off the front of the multiply (~1.2 ns, ~49 MHz); past
+that the three cascaded carry chains behind the multiplier want a pipeline stage.
+
+The lesson generalises to the whole exercise: at 80% occupancy this design has several paths
+within a nanosecond of each other, so *no single cut moves Fmax*. Budget for finding the next one
+each time.
+
 ### The arithmetic, which is the part that was never stated
 
 - 60 MHz is a **16.7 ns** period.

@@ -1,0 +1,46 @@
+diff --git a/gateware/src/tiliqua/usb_audio/__init__.py b/gateware/src/tiliqua/usb_audio/__init__.py
+index 46c405a..5a3eebe 100644
+--- a/gateware/src/tiliqua/usb_audio/__init__.py
++++ b/gateware/src/tiliqua/usb_audio/__init__.py
+@@ -12,6 +12,7 @@ from amaranth import *
+ from amaranth.build import *
+ from amaranth.lib import data, stream, wiring
+ from amaranth.lib.cdc import FFSynchronizer
++from amaranth.lib.fifo import SyncFIFOBuffered
+ from amaranth.lib.wiring import In, Out
+ from luna.gateware.stream.generator import StreamSerializer
+ from luna.gateware.usb.stream import USBInStreamInterface
+@@ -403,7 +404,32 @@ class USB2AudioInterface(wiring.Component):
+         usb_audio_in_active = detect_active_audio_in(m, "usb", usb, ep2_in)
+ 
+         wiring.connect(m, wiring.flipped(usb_to_channel_stream.usb_stream_in), ep1_out.stream)
+-        wiring.connect(m,  wiring.flipped(ep2_in.stream), channels_to_usb_stream.usb_stream_out)
++
++        # A two-deep elastic buffer, in place of
++        #     wiring.connect(m, wiring.flipped(ep2_in.stream), channels_to_usb_stream.usb_stream_out)
++        #
++        # USBIsochronousStreamInEndpoint drives `self.stream.ready` from `m.d.comb`, gated by
++        # `tx_stream.ready`, so without this the ULPI transmit path's readiness reaches
++        # `out_fifo.r_en` inside ChannelsToUSBStream combinationally, and from there the FIFO's
++        # level counter. On an ECP5 at 80% occupancy that cone measures 22.11 ns end to end --
++        # 4.79 ns of it pure logic over ~20 LUT levels -- which caps the `usb` domain at ~45 MHz
++        # against a 60 MHz target. Both `w_rdy` and `r_rdy` of SyncFIFOBuffered come off the
++        # level register, so this splits the cone into 17.69 ns and ~4.7 ns.
++        #
++        # Note the endpoint does not stall on `valid` low: in SEND_DATA it asserts
++        # `tx_stream.valid` unconditionally and consumes a byte whenever `tx_stream.ready` fires.
++        # That is safe here only because ChannelsToUSBStream holds `valid` high for the whole
++        # frame, padding with zeros from its FILL state, so this buffer is primed and stays full.
++        m.submodules.usb_in_skid = usb_in_skid = \
++            DomainRenamer("usb")(SyncFIFOBuffered(width=8, depth=2))
++        m.d.comb += [
++            usb_in_skid.w_data.eq(channels_to_usb_stream.usb_stream_out.payload),
++            usb_in_skid.w_en.eq(channels_to_usb_stream.usb_stream_out.valid),
++            channels_to_usb_stream.usb_stream_out.ready.eq(usb_in_skid.w_rdy),
++            ep2_in.stream.payload.eq(usb_in_skid.r_data),
++            ep2_in.stream.valid.eq(usb_in_skid.r_rdy),
++            usb_in_skid.r_en.eq(ep2_in.stream.ready),
++        ]
+ 
+         m.d.comb += [
+             channels_to_usb_stream.no_channels_in.eq(self.nr_channels),
