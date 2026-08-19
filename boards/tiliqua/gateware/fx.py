@@ -411,7 +411,7 @@ class StereoFx(wiring.Component):
         # here costs 24 parallel 11-bit compare-and-increments, about 500 LUT4, which is the
         # difference between fitting on this die and not. Since the FSM already visits every region
         # exactly once per sample, one shared compare-and-increment written back through the region
-        # decode is the same computation spread over the 72 cycles the tank was using anyway.
+        # decode is the same computation spread over the 96 cycles the tank was using anyway.
         cur_len = Signal(11)
         cp_next = Signal(11)
         m.d.comb += [
@@ -633,14 +633,14 @@ class StereoFx(wiring.Component):
                     m.d.sync += [cwaddr.eq(Mux(cwaddr == CH_WORDS - 1, 0, cwaddr + 1)),
                                  rin_r.eq((ecw_c[0] + ecw_c[1]) >> 6),
                                  chan.eq(0), ridx.eq(0), acc.eq(0)]
-                    # The tank runs even when `revwet` is 0. It costs 72 of the 1,250 cycles in
+                    # The tank runs even when `revwet` is 0. It costs 96 of the 1,250 cycles in
                     # a sample period and `rwet` comes out as zero anyway, but it means the tank
                     # is primed when the wet knob comes up, instead of starting from whatever
                     # was frozen in it -- which is also what the Basys 3 does, since its FSM has
                     # no bypass branch either.
                     m.next = "RVB-ADDR"
 
-            # --- the tank: 12 regions x 2 channels, three cycles each ---------------------------
+            # --- the tank: 12 regions x 2 channels, four cycles each ----------------------------
             with m.State("RVB-ADDR"):
                 # tank_addr is driven combinationally; this cycle exists only so the memory
                 # output is settled by RVB-READ.
