@@ -108,19 +108,25 @@ def _adsr(env, st, att, dec, sus, rel):
 
 
 @njit(cache=True, fastmath=False)
-def _voice_wave(wave, t, noise, pwthr, sine):
+def _voice_wave(wave, t, noise, pwthr, sine, pwdc):
     """One oscillator sample, mirroring core/synth.x:voice_wave (a u3 selector over FIVE waves).
 
     Kept as a function, and called for the detune oscillator too, because the two used to be
     written out separately and drifted: `wave` selects only 0..4, and the RTL's catch-all `_` is
     SINE, so indices 5-7 (CC70 >= 80) are sine on the board. The model returned noise there.
+
+    `pwdc` is the candidate engine fix for #2, not something the board does: a pulse at duty
+    `pwthr/256` carries a DC term of `2047 * (2*duty - 1)`, i.e. `(pwthr - 128) << 4` to within a
+    count, and subtracting it here is the one adder the RTL change would need. Off by default --
+    with pwdc=0 this file is bit-identical to what every shipped bank was fitted against.
     """
     if wave == 0:
         return sine[t]
     elif wave == 1:
         return t * 16 - 2048
     elif wave == 2:
-        return 2047 if t < pwthr else -2047
+        sq = 2047 if t < pwthr else -2047
+        return sq - ((pwthr - 128) << 4) if pwdc else sq
     elif wave == 3:
         ff = t if t < 128 else 255 - t
         return ff * 32 - 2048
@@ -133,7 +139,7 @@ def _voice_wave(wave, t, noise, pwthr, sine):
 def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
           wave, pwbase, subsel, detsel, cutoff_base, reso, fdepth, fmode,
           lfo_rate, lfo_depth, trdep, xmode, xdepth, xratio,
-          a_att, a_dec, a_sus, a_rel, f_att, f_dec, f_sus, f_rel, comp, sine):
+          a_att, a_dec, a_sus, a_rel, f_att, f_dec, f_sus, f_rel, comp, sine, pwdc):
     nv = ph.shape[0]
     out = np.zeros(n, dtype=np.float64)
     env = np.zeros(nv, dtype=np.int64); env_st = np.ones(nv, dtype=np.int64)
@@ -212,13 +218,13 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
                 fmoff = 0
             tt = ((newph + fmoff) & MASK) >> 24 & 255
             noise = (lfsr & 0xFFF) - 2048
-            main = _voice_wave(wave, tt, noise, pwthr, sine)
+            main = _voice_wave(wave, tt, noise, pwthr, sine, pwdc)
             ring = (main * modsig) >> 11                        # ring product, ±2047
             # DETUNE 2nd osc uses the SAME waveform as the main. This was a hardcoded saw here,
             # which turned e.g. sine+detune into sine+saw -- core/synth.x:264 fixed it and the
             # model kept the old behaviour, so every preset with detune>0 over a non-saw wave was
             # scored against a sound the board has never made.
-            det2 = _voice_wave(wave, (nph2 >> 24) & 255, noise, pwthr, sine)
+            det2 = _voice_wave(wave, (nph2 >> 24) & 255, noise, pwthr, sine, pwdc)
             if xmode == 0:
                 o12 = main if detsel == 0 else (main + det2) >> 1
             elif xmode == 1:                                    # ring: blend dry->ring by depth
@@ -449,11 +455,14 @@ def _fx(dry, revwet, chdep, echodep, edly, rvg, delays, region, tank_words):
     return out
 
 
-def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None):
+def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None, pwdc=False):
     """Render a preset (raw-CC dict) to mono float audio at SR. Returns np.float32 in [-1,1].
 
     `board` defaults to $XLS32_BOARD and only reaches echo_delay() -- the one constant the two
     boards do not share. Everything else is rate-scaled on Tiliqua to keep the same times.
+
+    `pwdc=True` subtracts the pulse wave's closed-form DC in the oscillator; see _voice_wave and
+    issue #2. It models a board that does not exist yet, so it defaults off.
     """
     d = decode(preset)
     n = int((gate_s + tail_s) * SR)
@@ -475,7 +484,7 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None
                 d['fdepth'], d['fmode'], d['lfo_rate'], d['lfo_depth'], d['trdep'],
                 d['xmode'], d['xdepth'], d['xratio'],
                 d['a_att'], d['a_dec'], d['a_sus'], d['a_rel'],
-                d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE)
+                d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE, 1 if pwdc else 0)
     # Skipping a fully-dry chain is not just an optimisation: the tank is 12 regions x 2 channels
     # per sample, and every bank preset is dry, so this is the common path.
     if fx and (d['revwet'] or d['chdep'] or d['echodep']):
