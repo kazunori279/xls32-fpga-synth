@@ -39,6 +39,10 @@ and the 50 % control held to within 0.026 on *both*, which is what says the two 
 adder in ``voice_wave`` and not by anything else that moved between the two builds. The rawest
 number in it is 78 % duty at 16 voices: before, the capture peaked at +0.07 against -1.88, the
 positive half of the waveform essentially eaten whole by the clamp; after, +1.04 against -1.10.
+
+That A/B ran at ``CAP_S = 0.40``, which was later tripled -- see ``row``. Which rows clear ``RAIL``
+shifts a little with the window, so a run today grades 10 rather than 9 or 11; the signs did not
+change, and the sign is the verdict. From flash slot 6 the current build reads PASS, 10 of 10.
 """
 import os
 import sys
@@ -52,13 +56,14 @@ os.environ.setdefault("XLS32_BOARD", "tiliqua")
 import synth as u                                                     # noqa: E402
 from transport.base import open_transport                             # noqa: E402
 
-CAP_S = 0.40            # capture length; ~19k samples, enough for a stable peak and RMS
+CAP_S = 1.20            # capture length; see `row` -- 0.4 s was too short to hold the peak still
 SETTLE = 0.40           # let the attack finish and the capture pipeline catch up
 HOT = 127               # CC7 for the loud pass: whatever the engine does at full tilt
 COLD = 40               # CC7 for the reference pass: ~0.31x, far below the clamp
 BASE = 40               # lowest note of the stack, then every other semitone (as the sim does)
 TOL = 0.06              # below this a row is called flat and carries no verdict either way
 RAIL = 0.98             # a row is only graded once its loud pass actually reaches the clamp
+REPEATS = 3             # pairs per row; the verdict is their median (see `row`)
 
 
 def patch(tp, ch, pw, vol):
@@ -112,8 +117,8 @@ def shape(tp, pw, nv, vol):
     return p, n, float(s.max()), float(s.min())
 
 
-def row(tp, pw, nv):
-    """Loud against quiet, and how far the peak asymmetry moved between them."""
+def pair(tp, pw, nv):
+    """One loud/quiet pair -> the asymmetry of each, and how far it moved between them."""
     cold = shape(tp, pw, nv, COLD)
     hot = shape(tp, pw, nv, HOT)
     if cold is None or hot is None:
@@ -125,6 +130,37 @@ def row(tp, pw, nv):
     ac = (pc - nc) / (pc + nc)
     ah = (ph - nh) / (ph + nh)
     return ac, ah, ah - ac, hi, lo
+
+
+def row(tp, pw, nv):
+    """The median of `REPEATS` pairs, and the spread across them.
+
+    One pair is not enough on the rows with few voices. Two notes a tone apart beat at ~11 Hz, and
+    both halves of the ratio move with the beat: the peak is an extreme value, so it depends on
+    whether the window happened to contain a beat maximum, and the RMS is an average over however
+    much of the beat cycle the window covered. At the original `CAP_S = 0.40` that was four beat
+    periods, and `CC75 = 100` at 2 voices returned shifts of +0.056, -0.053 and -0.097 on three
+    consecutive runs of a *known-good* bitstream -- straddling the threshold and flipping its
+    verdict with it.
+
+    The median of three stopped the verdict flapping but did not make it mean anything: the same
+    row came back at -0.113 with the three repeats spanning 0.157, a scatter wider than the number
+    it was reporting. The fix is the capture, not the statistic. At 1.2 s the window holds thirteen
+    beat periods instead of four, and the scatter on every row falls with it.
+
+    The median stays, and so does the spread column, because they are what makes the remaining
+    instability visible: a row whose repeats disagree says so in the output rather than deciding on
+    whichever run happened to be last. A check that intermittently fails on a good bitstream is one
+    people learn to skip, which is worse than not having it.
+    """
+    rs = [pair(tp, pw, nv) for _ in range(REPEATS)]
+    rs = [r for r in rs if r is not None]
+    if not rs:
+        return None
+    ds = sorted(r[2] for r in rs)
+    d = ds[len(ds) // 2]
+    med = next(r for r in rs if r[2] == d)                  # report the run the verdict came from
+    return med[0], med[1], d, med[3], med[4], ds[-1] - ds[0]
 
 
 def grade(pw, d, hi, lo):
@@ -152,17 +188,18 @@ def grade(pw, d, hi, lo):
 
 def table(tp, title, header, rows):
     print(f"\n{title}")
-    print(f"  {header} | asym quiet | asym loud |   shift | peak+ | peak- | verdict")
+    print(f"  {header} | asym quiet | asym loud |   shift | spread | peak+ | peak- | verdict")
     out = []
     for label, pw, nv in rows:
         r = row(tp, pw, nv)
         if r is None:
             print(f"  {label} |  -- capture failed --")
             continue
-        ac, ah, d, hi, lo = r
+        ac, ah, d, hi, lo, sp = r
         g = grade(pw, d, hi, lo)
-        print(f"  {label} |    {ac:+7.4f} |   {ah:+7.4f} | {d:+7.4f} | {hi:5.2f} | {lo:5.2f} | {g}")
-        out.append((label, pw, nv, ac, ah, d, g))
+        print(f"  {label} |    {ac:+7.4f} |   {ah:+7.4f} | {d:+7.4f} |  {sp:5.3f} | {hi:5.2f} "
+              f"| {lo:5.2f} | {g}")
+        out.append((label, pw, nv, ac, ah, d, g, sp))
     return out
 
 
@@ -180,10 +217,17 @@ def main():
         # Two things have to hold, and they check each other. The 50 % rows are the method's own
         # control: pwthr 128 has no DC term at any volume, so if those rows move, the measurement
         # is picking up something other than the clamp and none of the rest can be trusted.
+        #
+        # Only the control rows that actually *reach* the clamp can say that, though. The claim
+        # being checked is that a clipping row with no DC term does not move with level, and a row
+        # that never clips is not evidence for or against it -- it is two notes beating inside a
+        # 0.4 s window, which is the noisiest thing this script measures (spread 0.10 at 2 voices,
+        # against 0.02 once four voices are sounding). Counting those rows made the whole run come
+        # back INVALID on a bitstream whose nine clipping rows were unanimous.
         rows = poly + sweep
         graded = [r for r in rows if r[6] in ("shape", "DC <--")]
         bad = [r for r in rows if r[6] == "DC <--"]
-        moved = [r for r in ctrl if abs(r[5]) > TOL]
+        moved = [r for r in ctrl if r[6] != "no clip" and abs(r[5]) > TOL]
         print("\nverdict")
         if moved:
             print(f"  INVALID: {len(moved)} of the 50% control rows moved by more than {TOL}; "
@@ -194,9 +238,9 @@ def main():
             print("  no row reached the clamp -- nothing to grade")
             return 1
         if bad:
-            for label, pw, nv, _, _, d, _ in bad:
-                print(f"  CC75={pw} at {nv} voices: shift {d:+.4f}, clamped on the side the duty "
-                      "offset pushes into")
+            for label, pw, nv, _, _, d, _, sp in bad:
+                print(f"  CC75={pw} at {nv} voices: shift {d:+.4f} (spread {sp:.3f}), clamped on "
+                      "the side the duty offset pushes into")
             print(f"  FAIL: {len(bad)} of {len(graded)} clipping rows still carry the pulse DC")
             return 1
         print(f"  PASS: all {len(graded)} clipping rows clamp on the shape's own side, "
