@@ -173,7 +173,12 @@ those three; git history keeps the original.)*
   path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
   clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
   ~45 MHz since M25 and is depth-limited, not congestion-limited: 4.79 ns of pure logic against a
-  16.7 ns period. Measured and dead: 24 voices (+5.8 MHz, ceiling 46.79), 16 voices (not smaller),
+  16.7 ns period. **The "24 voices is measured and dead (+5.8 MHz, ceiling 46.79)" entry that used
+  to sit here was wrong, and it was the load-bearing one** — it was measured on a netlist whose
+  voice ring had been pruned away by a broken variant generator
+  ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)). Built correctly, 24 voices is
+  93.9 % occupancy and **55.48 MHz**, +9.1 over the 32-voice build, and it is what the repo now
+  ships (see the next item). Still measured and dead:
   nextpnr 0.11.1 (bit-identical), `--placer static` (never legalises), `REGION`/`UGROUP` (absent
   from the wasm), and **SDC timing exceptions** — `nextpnr-ecp5` parses only `create_clock`,
   `get_ports`, `get_cells` and `set_false_path`, has no `set_multicycle_path` at all, and prints
@@ -201,6 +206,33 @@ those three; git history keeps the original.)*
   [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and therefore the webflasher PR
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
+
+  **M36 routes around it rather than closing it.** At 24 voices the shortfall is 55.48 against 60 —
+  a bet that the silicon is 8 % faster than modelled, where 32 voices bets on 29 %. That is the
+  formal bitstream now; the 32-voice build stays available and stays a risk. The gap itself is
+  unchanged and still needs a register in luna's cone
+  ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
+- **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
+  the formal build — 24 voices, 93.9 % of the die, `clk` at 55.48 MHz, graded 99.8/100 (A+) on the
+  module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
+  in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
+  two modules. Anyone flashing slot 6 is carrying that. The two differ only in the voice count, which
+  is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so
+  `check_artefacts.py` has to hash the generator and the count or it cannot tell them apart
+  ([#10](https://github.com/kazunori279/xls32-fpga-synth/issues/10)).
+- **Reduced-voice variants were unmeasurable for four milestones and nobody noticed.**
+  `voices_variant.py` asserted a match count for every substitution it knew about and had no rule
+  for one site — `rotate_in`'s tail writeback — so a 24-voice copy wrote the new voice to index 31
+  of a 24-entry array. `update` out of range is a no-op, the ring never fills, and yosys prunes the
+  voice state as unreachable: 91 % occupancy, 50.53 MHz and total silence, which reads as the best
+  result in the table. Fixed 2026-08-20
+  ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)); the corrected area curve is in
+  [E1](../ARCHITECTURE_tiliqua.md#e1-the-area-budget) and the withdrawn conclusions in
+  [#36](https://github.com/kazunori279/xls32-fpga-synth/issues/36). The lesson is not about regexes.
+  A generator whose failure mode is *smaller and faster* will be believed, and the 32-voice
+  byte-for-byte self-check that was supposed to guard it passes trivially at the one setting where
+  every rewrite is the identity. The 16-voice rung is still unmeasured
+  ([#38](https://github.com/kazunori279/xls32-fpga-synth/issues/38)).
 - ~~**M24's DIN/TRS MIDI passes in simulation and has never had a cable in it.**~~ **Done — the
   Tiliqua TRS MIDI-In jack plays on hardware**, alongside USB-MIDI, as the arbiter was written to
   allow. This was open from M24 to now purely for want of a Type A cable. Basys 3's DIN input is a

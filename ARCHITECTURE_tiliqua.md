@@ -1335,21 +1335,40 @@ no BRAM or LUT-RAM win hiding in there.
 **But engine area is not proportional to voice count, and a per-voice average is not a derivative.**
 This section said "roughly 440 LUTs per voice" for four milestones, and the 32 → 24 → 16 fallback
 ladder was sized by dividing. M21's sweep only ever measured the two endpoints (32 and 16, on the
-bare engine), so nothing in it could have caught the shape between them. Both intermediate variants
-have now been built through the real flow:
+bare engine), so nothing in it could have caught the shape between them.
+
+**And then the intermediate builds that were supposed to settle it were measured on netlists with
+the voice ring deleted.** `boards/tiliqua/spike/voices_variant.py` had no rewrite rule for the tail
+writeback at the end of `rotate_in`, so a reduced-voice copy kept `update(shifted, u32:31, tail)`
+against a `Voice[24]`. That index is out of range, `update` becomes a no-op, the newly allocated
+voice never enters the ring, and yosys prunes the whole register file as unreachable. The build
+reports a *smaller* area and a *better* Fmax than the real variant and plays silence
+([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)). The count assertions could not
+catch it — there was no rule to under-match — and `--voices 32` still passed its byte-for-byte
+self-check, because at 32 the correct replacement is the identity.
+
+Rebuilt with the generator fixed, M36:
 
 | voices | `TRELLIS_COMB` | % of 25k | `TRELLIS_FF` | Δ from the row above |
 |---|---:|---:|---:|---|
-| 32 (shipped) | 23,792 | 97% | 13,179 | — |
-| 24 | 19,631 | 80% | 9,456 | **−4,161** cells, −17 points |
-| 16 | 19,222 | 79% | 8,381 | **−409** cells, −1.7 points |
+| 32 (32-voice build) | 24,023 | 98.9% | 13,223 | — |
+| 28 | 23,358 | 96.2% | 12,660 | **−665** cells, −2.7 points |
+| 24 (shipped) | 22,796 | 93.9% | 11,931 | **−562** cells, −2.3 points |
+| 16 | not measured on a correct netlist — [#38](https://github.com/kazunori279/xls32-fpga-synth/issues/38) | | | |
 
-**The ladder has two rungs, not three.** The engine time-shares one datapath — one voice per proc
-tick, 32 ticks per sample ([A2](#a2-the-engine-as-an-amaranth-submodule)) — so the oscillators, the
-filter, the VCA and the envelopes are *the same size at any voice count*. What scales is the voice
-register file, which the flip-flop column tracks honestly, and the unrolled `apply_on`/`apply_off`
-allocation scans. Below about 24 voices the fixed datapath dominates and there is nothing left to
-give back. Neither `MULT18X18D` (28/28) nor `DP16KD` (53/56) moves at all across the three, so
+The old table read 19,631 cells / 9,456 FF at 24 voices. Its 32-voice row is within 231 cells of
+this one, which is ordinary tree drift; the 24-voice row is out by **3,165**, which is not, and the
+flip-flop column agrees at +2,475. That is the register file coming back.
+
+**The ladder's shape is not known.** The withdrawn claim was that it has two rungs rather than
+three, on the evidence that 24 and 16 differed by only 409 cells. Two netlists both pruned down to
+the same fixed datapath would look exactly like that, so the observation cannot carry the claim.
+What is still true is the mechanism: the engine time-shares one datapath — one voice per proc tick,
+32 ticks per sample ([A2](#a2-the-engine-as-an-amaranth-submodule)) — so the oscillators, the
+filter, the VCA and the envelopes are *the same size at any voice count*, and only the voice
+register file and the unrolled `apply_on`/`apply_off` scans scale. The corrected points put that at
+roughly 150 cells per voice, which predicts ~21,600 at 16 voices rather than a floor. Nobody has
+built it. Neither `MULT18X18D` (28/28) nor `DP16KD` (53/56) moves across the three measured, so
 cutting voices does not relieve [E3](#e3-multipliers-28-of-28) either.
 
 **Gotcha — the model misses in both directions, and neither miss is understood.**
@@ -1560,9 +1579,32 @@ and it is the only lever that attacks the 4.79 ns floor —
 
 ### What has been ruled out
 
-**Shrinking our design.** Cutting to 24 voices moves 97% → 80% and buys **+5.8 MHz, ceiling
-46.79.** Cutting to 16 is not smaller ([E2](#e2-the-area-census)). 46.79 → the vendor's 55 MHz bar is
-a further +17.5% with no area left to pay for it. What the cut *does* buy is routability, below.
+**Shrinking our design — this one was ruled out wrongly, and it works.** The entry here used to
+read "24 voices moves 97% → 80% and buys +5.8 MHz, ceiling 46.79", which is two mistakes in one
+sentence: the occupancy came from a pruned netlist ([E1](#e1-the-area-budget),
+[#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)), and the ceiling was measured on
+it. Rebuilt correctly, converged runs only:
+
+| voices | `TRELLIS_COMB` / 24,288 | best post-route `clk` | seeds converged |
+|---|---|---|---|
+| 32 | 24,023 (98.9%) | 46.35 MHz | 3 of 6 |
+| 28 | 23,358 (96.2%) | 48.85 MHz | 7 of 8 |
+| **24** | **22,796 (93.9%)** | **55.48 MHz** (seed 4) | 4 of 5 |
+
+So the cut is *smaller* than the old table claimed and worth **+9.1 MHz**, clearing the vendor's
+55 MHz bar. 28 voices buys only +2.4 and is not the knee.
+
+The path composition is what makes the knee sharp, and it inverts across it. At 98.9% the worst path
+is **4.49 ns logic / 15.30 ns routing** — congestion, as this section has always said. At 93.9% it
+is **7.73 ns logic / 10.29 ns routing**, and 5.61 ns of that logic is the descriptor ROM's own
+DP16KD clk-to-q. The routing pressure comes off and the depth-limited cone above is what is left
+standing. Occupancy was worth 9.1 MHz and is now spent; the remaining 4.5 to 60 MHz is the cone, and
+nothing but a register in it will move it.
+
+Voice count costs no gateware change — the engine's sample rate is set by the codec's backpressure
+rather than the ring length ([A2](#a2-the-engine-as-an-amaranth-submodule)), so pitch is unaffected
+(measured 440.01 Hz, +0.1 cents). The 24-voice build is what this repo ships
+([#37](https://github.com/kazunori279/xls32-fpga-synth/issues/37)).
 
 **Trimming luna instead.** Dropping `nr_channels` from 4 to 2 saves ~100 LUTs; dropping the
 host→device audio direction saves ~10. Neither touches the thing doing the crowding — **luna is not
@@ -1571,10 +1613,26 @@ big; the engine is** ([E2](#e2-the-area-census)).
 **The tool flow.** Sixteen placer seeds span 48.74–55.33 MHz, and seed rankings do *not* transfer
 between netlists: seed 11 gave 55.98 MHz on one netlist and 51.27 MHz on the next, and seed 2's
 55.33 MHz became 52.27 MHz on the rebuild that actually emitted `top.bit`. A seed is not a fix you
-can bank. `--placer-heap-timingweight` buys 1–5 MHz; `--tmg-ripup` is marginal;
-`--placer-heap-critexp` and `--placer-heap-beta` change nothing at all. Adding `-abc9` to
-`synth_ecp5` gives no improvement and a slightly larger design, confirming the diagnosis from the
-other side. Three more, measured against the shipped and the 24-voice netlists:
+can bank. `--placer-heap-timingweight` buys 1–5 MHz on some netlists and on the 98.9% one will not
+route at all (`overused` ~9,400, twice); `--placer-heap-critexp` and `--placer-heap-beta` change
+nothing at all; `--placer-heap-alpha 0.3` is worse (45.43).
+
+**Two entries here were wrong, and one of them hid a real lever**
+([#39](https://github.com/kazunori279/xls32-fpga-synth/issues/39)). This list recorded `--tmg-ripup`
+as marginal — but that flag belongs to router1, and `build.sh` pins `--router router2`, so what was
+measured was largely inert. **`--router2-tmg-ripup` is a different flag** and it helps: +1.04 MHz at
+32 voices (46.35 → 47.39), and at 24 voices it lifts the weak seeds without moving the ceiling —
+seed 1 51.17 → 53.19, seed 6 54.03 → 55.33, seed 4 55.48 → 55.40. That is worth more than the
+megahertz, given how much of this section is about the seed lottery.
+
+And `-abc9` was never switched on by the experiment that ruled it out: `synth_ecp5` enables abc9 by
+**default**, and the flag that exists is `-noabc9`. Far from marginal, it is load-bearing for fit —
+24,023 cells with it, **27,679 without**. That is also why `-retime`, the transform that took the
+vendor's own `usb_audio` shell from 58.66 to 66.49 MHz, is unavailable to us: yosys refuses it
+alongside abc9 (*"-retime option not currently compatible with -abc9!"*), and `-retime -noabc9`
+lands at 27,679 / 24,288 = **113% of the die**.
+
+Three more, measured against the 32-voice and 24-voice netlists:
 
 | lever | result |
 |---|---|
@@ -1620,6 +1678,13 @@ partially routed design is optimistic, so a seed whose router ran away reports a
 one that finished. Such a run leaves a zero-byte `.out` and no `.config`; **only compare runs that
 reached `overused=0`.** This is the likeliest explanation for the ~45 MHz the vendor measured on a
 netlist that actually makes 40.95.
+
+**And the same trap on the time axis: a run still in progress reports its post-placement estimate.**
+`top.tim` carries two Fmax tables — the placement estimate around line 288 and the routed result
+around line 1112 — and reading the log while nextpnr is still working gets you the first one. The
+`--router2-tmg-ripup` experiment showed **49.19 MHz** mid-flight and finished at **47.39**. Between
+this and the paragraph above, no Fmax off this flow means anything until the run has printed
+"Routing complete" *and* left a `.config` behind.
 
 **Gotcha — the router.** At 97% occupancy nextpnr's default router does not converge on this design.
 router1 spent **two hours** ripping up more arcs than it laid — 62,719 of 105,900 still unrouted with

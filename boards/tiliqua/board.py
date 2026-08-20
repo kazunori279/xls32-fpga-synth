@@ -6,11 +6,19 @@ channels 0/1; M25 added the host loop the automated suite needs — audio up ove
 Class 2, MIDI down over USB-MIDI, both on the `usb2` port, so `run_tests.py --board tiliqua`
 has something to drive. `unsupported` is therefore clear.
 
-The bitstream places `sync` at ~48-50 MHz against a 60 MHz requirement (ARCHITECTURE_tiliqua.md E4)
-and is loaded anyway, deliberately: on the module it enumerates and streams at that speed, so
-the shortfall is a known risk being carried rather than a blocker. Point
-`boards/tiliqua/check_loop.py` at it before the 175-case suite: it isolates a broken
-transport from a broken synth, which the suite cannot.
+The formal bitstream is the **24-voice** build (M36): 93.9% of the die, `sync` at 55.48 MHz
+against a 60 MHz requirement (ARCHITECTURE_tiliqua.md E4), graded 99.8/100 on the module. It is
+loaded despite the shortfall, deliberately — it enumerates and streams at that speed — but the
+shortfall is smaller than it looks written down: the 32-voice build it replaces closed at 46.35,
+which is a bet on the silicon being 29% faster than modelled, and this one bets on 8%. That build
+is still available as `VOICES=32 bash boards/tiliqua/build.sh` and is experimental: it runs here
+and it did not run on one of the vendor's two modules (issue #3). Point
+`boards/tiliqua/check_loop.py` at whichever is loaded before the 175-case suite: it isolates a
+broken transport from a broken synth, which the suite cannot.
+
+At 24 voices the `stress_32voice` and unison-chord cases become voice-stealing tests rather than
+exact-capacity ones. They still pass, and stealing is the behaviour that matters, but the numbers
+in their titles are the 32-voice engine's.
 
 Audio reaches the host over the FPGA's own USB HS PHY as a UAC2 device (4 in, 4 out, 24-bit),
 not over the RP2040's 115200-baud CDC port. Channels 2 and 3 carry a counter rather than
@@ -43,6 +51,6 @@ BOARD = Board(
     # Worth the paragraph because the symptom is silent: the engine simply runs at 4x and the
     # whole instrument is 2400 cents sharp. M25 spent most of a day on it, twice -- once on
     # the rate, once on believing a power cycle was the cure.
-    load_cmd="openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit",
+    load_cmd="openFPGALoader -c dirtyJtag build/tiliqua/build/xls24-r5/top.bit",
     root="boards/tiliqua",
 )

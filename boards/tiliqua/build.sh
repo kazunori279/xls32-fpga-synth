@@ -1,12 +1,35 @@
 #!/usr/bin/env bash
 # M24: XLS engine -> Tiliqua bitstream (or Verilator simulation).
 #
-#   bash boards/tiliqua/build.sh              # build build/tiliqua/build/xls32-<hw>/top.bit
+#   bash boards/tiliqua/build.sh              # build build/tiliqua/build/xls24-<hw>/top.bit
+#   VOICES=32 bash boards/tiliqua/build.sh    # the experimental full-ring build
 #   SIM=1 bash boards/tiliqua/build.sh        # verilate + run, leaves build/tiliqua/out0.txt
 #   SKIP_BUILD=1 bash boards/tiliqua/build.sh # elaborate only (fast wiring check)
 #
-# One bitstream. M28 added an XLS32_VARIANT=cv build because CV in and the effects did not fit on
-# one die; M29 freed the space and M31 removed the variant. Override NAME for a one-off.
+# M28 added an XLS32_VARIANT=cv build because CV in and the effects did not fit on one die; M29
+# freed the space and M31 removed the variant. Override NAME for a one-off.
+#
+# --- Why the default is 24 voices (M36) ---
+#
+# The 32-voice build fills 98.9% of the die and closes `clk` at 46.35 MHz against a 60 MHz
+# constraint -- a bet that the silicon is 29% faster than nextpnr models it. It runs here. It did
+# not run on one of the vendor's two modules (issue #3). 24 voices is 93.9% and 55.48 MHz: the same
+# bet at +8%, and graded 99.8/100 on the module. So 24 is what this repo stands behind and 32 is
+# kept as the experimental one (issue #37).
+#
+# The knee is at 24, not 28 -- 28 voices buys only +2.4 MHz -- because the critical path changes
+# character across it: 4.49 ns logic / 15.30 ns routing at 98.9%, against 7.73 / 10.29 at 93.9%.
+# Below the congestion, what is left is a depth-limited cone inside luna (#34) that area cannot buy
+# back. See ARCHITECTURE_tiliqua.md E4.
+#
+# Voice count is not a gateware parameter and does not need to be: the engine's sample rate is set
+# by the codec's backpressure, not by the ring length (gateware/xls_core.py), so a 24-voice engine
+# runs at the same pitch with the same everything else. What it needs is a rewritten copy of
+# core/synth.x, because the count lives there as bare literals -- core/synth.x itself stays at 32
+# since it is also the shipping Basys 3 gateware. spike/voices_variant.py does the rewrite and
+# asserts a match count for every site, which matters more than it sounds: when it silently missed
+# one, the resulting build pruned its whole voice ring and reported a *better* Fmax at a *smaller*
+# area while playing nothing at all (#35).
 #
 # In SIM mode, XLS_SIM_MS, XLS_SIM_OUT and XLS_SIM_MIDI reach the harness; see sim_xls_core.cpp.
 #
@@ -25,11 +48,11 @@ cd "$(dirname "$0")/../.."                     # repo root
 REPO="$PWD"
 
 STAGES="${STAGES:-12}"; WCT="${WCT:-$STAGES}"
-SRCX="${SRCX:-core/synth.x}"
+VOICES="${VOICES:-24}"                         # see the header; 32 is the experimental build
 CACHE="${CACHE:-/tmp/xls-synth-work}"          # docker-side, outside the repo
 XLS_TAG="${XLS_TAG:-v0.0.0-10214-gcf49d0e31}"
 IMG="${IMG:-xls-ubuntu:24.04}"
-NAME="${NAME:-XLS32}"
+NAME="${NAME:-XLS$VOICES}"
 TILIQUA_SDK="${TILIQUA_SDK:-$HOME/Documents/GitHub/tiliqua/gateware}"
 WORK="$REPO/build/tiliqua"
 
@@ -39,6 +62,21 @@ PY="$TILIQUA_SDK/.venv/bin/python"
 
 # --- 1. synth.x -> engine.v (cached on the DSLX hash, so an edit rebuilds) ---
 mkdir -p "$CACHE" "$WORK"
+
+# Resolve the DSLX source. An explicit SRCX wins; otherwise 32 voices is core/synth.x as-is and
+# anything else is a generated copy. Regenerated every run rather than cached -- it costs
+# milliseconds, and a stale variant sitting next to a freshly edited synth.x is precisely the
+# class of mistake #35 was. The generator asserts every substitution count, so a literal that
+# moves in synth.x stops the build instead of quietly shipping the wrong ring.
+if [ -z "${SRCX:-}" ]; then
+  if [ "$VOICES" = 32 ]; then
+    SRCX="core/synth.x"
+  else
+    SRCX="$WORK/synth$VOICES.x"
+    uv run boards/tiliqua/spike/voices_variant.py --voices "$VOICES" --out "$SRCX"
+  fi
+fi
+
 HASH="$(shasum -a 256 "$SRCX" core/fix_verilog.py | shasum -a 256 | cut -c1-12)"
 ENG_NAME="engine_tlq_s${STAGES}w${WCT}_${HASH}.v"
 ENG_CACHE="$CACHE/$ENG_NAME"
@@ -115,12 +153,29 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # draw than the one in four above, but do not read anything into that; it is the same lottery.
 #
 # Redrawing costs an afternoon unless you skip the front of the build. nextpnr reads `top.json`,
-# which yosys already wrote, so run it by hand out of `build/tiliqua/build/xls32-r5/` with
+# which yosys already wrote, so run it by hand out of `build/tiliqua/build/xls<N>-r5/` with
 # `--log x$S.tim --textcfg x$S.config` per seed and the inputs shared read-only. Four at once
 # finish in about fifteen minutes on an M-series laptop; one process still cannot take two seeds.
 # A losing seed never terminates on its own -- watch `overused=` and kill the ones that climb.
 # See DEVELOPMENT_tiliqua.md M34 "The area squeeze".
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 5}"
+#
+# M36: the 24-voice netlist has its own lottery and its own winner. Converged seeds measured
+# 51.17 (1), 55.48 (4), 48.45 (5), 54.03 (6) -- four of five, against three of six at 32 voices, so
+# 6% of the die back is worth something in routability as well as in megahertz. Seed 4 is pinned
+# below for 24 voices and seed 5 stays pinned for 32. Note the winners do not transfer: seed 5 is
+# the best of the 32-voice draw and among the worst of the 24-voice one.
+#
+# `--router2-tmg-ripup` is measured and deliberately not enabled here (#39). It is worth +1.04 MHz
+# at 32 voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
+# raising the ceiling (4: 55.48 -> 55.40). Turning it on means a new bitstream, and the one this
+# repo ships is the one that was graded on the module. Adopt it at the next netlist change, when a
+# re-sweep and a re-verify are being paid for anyway. Do not confuse it with `--tmg-ripup`, which
+# is router1's and therefore inert here.
+case "$VOICES" in
+  32) SEED="${SEED:-5}" ;;
+  *)  SEED="${SEED:-4}" ;;
+esac
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed $SEED}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then

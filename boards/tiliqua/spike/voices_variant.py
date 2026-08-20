@@ -45,6 +45,16 @@ RULES = [
     (r"\bu5\b",                "@IDX@",                    1),   # vidx: u5
     (r"u32:0\.\.u32:32",       f"u32:0..u32:{N}",          2),   # apply_on / apply_off scans
     (r"u32:0\.\.u32:31",       f"u32:0..u32:{N - 1}",      1),   # rotate_in shift
+    # The tail writeback at the end of rotate_in. Missed until M36 and the miss is silent in the
+    # worst way: `update` with an out-of-range index is a no-op, so the new voice never lands in
+    # the ring, every voice slot becomes unreachable state, and yosys prunes the lot. The build
+    # then reports a *better* Fmax at a *smaller* area than the real variant and plays nothing at
+    # all -- 28 voices read 50.53 MHz at 91% that way, against 48.72 at 96% once fixed. Anchored
+    # on the whole call rather than a bare `u32:31` so it cannot eat the loop bound above.
+    (r"update\(shifted, u32:31, tail\)",
+                               f"update(shifted, u32:{N - 1}, tail)", 1),
+    # Cosmetic, but this file's whole claim is that the copy does not lie about itself.
+    (r"v\[31\], tail\]",       f"v[{N - 1}], tail]",       1),   # the rotate_in comment
 ]
 
 for pat, rep, want in RULES:
