@@ -1,37 +1,48 @@
 #!/usr/bin/env python3
-"""Read a saved ab_check.html vote file and say what it does and does not establish (#22).
+"""Pool ab_check.html sessions and say what they do and do not establish (#20, #22).
 
-The page prints its own summary when the last vote lands, which is the right thing to show a
-listener mid-session and not enough to close an issue on. What this adds:
+A session is one question, one listener, one pass over the counterbalanced sequence, saved as its
+own file under `presetgen/listening/<incumbent>-vs-<challenger>/`. This reads any number of them --
+files, or a directory -- and reports per session and pooled. That is #20's "a way to pool votes from
+more than one listener" and its "stored result format that accumulates across sessions": a second
+ear is a second file dropped in the directory, not a re-run that replaces the first.
 
-  THE ORDER CHECK, first, because it decides whether the rest is worth reading. The first run of
+What it checks, in the order it checks it:
+
+  THE ORDER CHECK, first, because it decides whether the rest is worth reading. The original run of
   this rig was void on exactly this: the listener picked the first-played clip in 19 of 22 decided
   trials (p = 0.001) against a bank split of 13-9 (p = 0.52). Balancing which bank plays first --
   which ab_render.py already did -- keeps a position preference from favouring a bank and leaves it
-  free to decide every trial, so the bank number was noise with a p-value attached.
+  free to decide every trial, so the bank number was noise with a p-value attached. Playing the
+  target immediately before each candidate removed the whole effect: the re-run came back 19-18,
+  p = 1.000.
 
-  CONCORDANCE. Each pair is now heard twice, once each way round, and only a pair naming the same
-  bank both times counts. A discordant pair is not a tie: a tie is the listener saying the two are
-  alike, and a discordant pair is this protocol failing to ask a question.
+  CONCORDANCE. Each pair is heard twice, once each way round, and only a pair naming the same bank
+  both times counts. A discordant pair is not a tie: a tie is the listener saying the two are alike,
+  a discordant pair is the protocol failing to ask.
 
-  WHETHER THE VOTE TRACKS THE SPREAD. Trials come from the widest CLAP gaps per category, so every
-  pair audibly differs -- but if the winner is unrelated to how far apart the two fits are, CLAP is
-  ordering pairs by something the listener does not respond to. That is a statement about the
-  metric, separate from which bank won.
+  WHETHER THE VOTE TRACKS THE SPREAD, by the band the pair was sampled from. `ab_render.py` used to
+  take the widest-spread pairs per category on the assumption that the pairs the metric separates
+  are the pairs an ear separates. The counterbalanced run measured it: rho = +0.07 among decided
+  pairs, and the order-dependent pairs spanned nearly the whole range. Stratified sampling is what
+  makes this table answerable at all.
 
-  WHETHER `closer` AND `better` AGREE. Fidelity to the GM target, and whether the patch is worth
-  playing. The bank was fit for the first and is shipped for the second, so a disagreement is the
-  most useful thing here.
+  AGREEMENT BETWEEN LISTENERS, on the pairs more than one of them decided. #20's second item is
+  that the one listener also built the banks -- blinded to the assignment, not to the hypothesis.
+  Two ears that disagree bound what any pooled number can mean.
 
-A null result is a result. `bank_compare.py` reported the shipped bank 29% closer under CLAP; if
-the pairs that survive counterbalancing cannot separate the banks, that 29% is not a claim about
-anything audible, and the honest move is to say so rather than re-run with a different seed.
+  WHETHER THE QUESTIONS COLLAPSED. Asked on one screen, `closer` and `better` came back identical
+  on all 48 hearings. They are separate sessions now, with different audio; if they still agree
+  everywhere, that is worth knowing and it is no longer explicable as button-copying.
 
-Old single-hearing vote files (one record per pair, no `first` field) still read: the concordance
-section is skipped and the flat split is printed with a warning naming what is wrong with it.
+A null result is a result. `bank_compare.py` reported the shipped bank 29% closer under CLAP; if the
+pairs that survive counterbalancing cannot separate the banks, that 29% is not a claim about
+anything audible.
 
-    uv run python presetgen/ab_tally.py ~/Downloads/ab_votes.json
+    uv run python presetgen/ab_tally.py presetgen/listening/prev128-vs-soundfont
+    uv run python presetgen/ab_tally.py ~/Downloads/ab_*.json
 """
+import glob
 import json
 import os
 import sys
@@ -39,8 +50,7 @@ from collections import defaultdict
 from math import comb
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
-MANIFEST = os.path.join(REPO, "webui", "ab", "manifest.json")
+STORE = os.path.join(HERE, "listening")
 
 
 def sign_p(k, n):
@@ -52,165 +62,201 @@ def sign_p(k, n):
     return min(1.0, 2 * sum(comb(n, j) for j in range(lo + 1)) / 2 ** n)
 
 
-def spearman(x, y):
-    """Rank correlation, ties averaged. Spearman rather than Pearson because the vote is ordinal
-    (a win is not twice a tie) and n is too small to trust a linear fit."""
-    def rank(v):
-        order = sorted(range(len(v)), key=lambda i: v[i])
-        r = [0.0] * len(v)
-        i = 0
-        while i < len(order):
-            j = i
-            while j + 1 < len(order) and v[order[j + 1]] == v[order[i]]:
-                j += 1
-            for k in range(i, j + 1):
-                r[order[k]] = (i + j) / 2 + 1
-            i = j + 1
-        return r
-    rx, ry = rank(x), rank(y)
-    n = len(x)
-    mx, my = sum(rx) / n, sum(ry) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
-    den = (sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry)) ** 0.5
-    return num / den if den else 0.0
+def pfmt(p):
+    """Three decimals, except where that would round a decisive result to 0.000."""
+    return f"{p:.3f}" if p >= 5e-4 else f"{p:.1e}"
 
 
-def order_check(out, b0, b1):
-    """Did the first-played clip win, whichever bank it was? Returns True if it decided anything."""
-    if not all("first" in r for r in out):
-        # Pre-counterbalancing vote files did not record it; the manifest can supply it if the run
-        # that produced them is still on disk. It is gitignored, so often it is not.
-        if not os.path.exists(MANIFEST):
-            print("order check skipped: no `first` in the votes and no webui/ab/manifest.json")
-            return False
-        m = json.load(open(MANIFEST))
-        if m.get("seed") != json.load(open(MANIFEST)).get("seed"):
-            return False
-        pos = {t["id"]: t["a"] for t in m["trials"]}
-        for r in out:
-            r["first"] = pos.get(r["id"])
-        if not all(r.get("first") for r in out):
-            print("order check skipped: the manifest on disk is from a different run")
-            return False
-    hit = False
-    print("order check -- did the first-played clip win, whichever bank it was?")
-    for k in ("closer", "better"):
-        d = [r for r in out if r[k] != "tie"]
-        f = sum(1 for r in d if r[k] == r["first"])
-        p = sign_p(f, len(d))
-        hit = hit or p < 0.05
-        print(f"  {k:7}  first {f:2}   second {len(d) - f:2}   p = {p:.3f}"
-              f"{'   * order is deciding trials' if p < 0.05 else ''}")
-    return hit
+def load(args):
+    """Sessions from files or directories. Pre-split files are fanned out into one per question."""
+    paths = []
+    for a in args:
+        if os.path.isdir(a):
+            paths += sorted(glob.glob(os.path.join(a, "*.json"))
+                            + glob.glob(os.path.join(a, "*", "*.json")))
+        else:
+            paths += sorted(glob.glob(a)) or [a]
+    out = []
+    for p in paths:
+        try:
+            d = json.load(open(p))
+        except (OSError, ValueError) as e:
+            print(f"skipped {p}: {e}")
+            continue
+        if "votes" not in d:
+            continue
+        if d.get("void"):
+            # A run kept as evidence about the protocol rather than about the banks. It stays in the
+            # directory so the next person can see what went wrong; it must not reach the pool.
+            print(f"skipped {os.path.basename(p)}: marked void -- "
+                  + (d.get("_note", "").split(" -- ")[0] or "no reason recorded"))
+            continue
+        d["_path"] = os.path.basename(p)
+        d.setdefault("listener", "author")   # every pre-#20 session was the author's
+        # The pre-split format asked both questions per hearing and had no `vote`. Fan it out into
+        # one pseudo-session per question so the old runs stay readable, and flag them: nothing in
+        # them controls for the collapse, and the closer/better agreement in them means nothing.
+        if "question" not in d:
+            for q in ("closer", "better"):
+                if all(q in r for r in d["votes"]):
+                    e = dict(d, question=q, _legacy=True,
+                             votes=[dict(r, vote=r[q]) for r in d["votes"]])
+                    out.append(e)
+            continue
+        out.append(d)
+    return out
+
+
+def concord(votes):
+    """{pair id: winning bank | 'tie' | 'flip' | '?'} over both hearings of each pair."""
+    by = defaultdict(list)
+    for r in votes:
+        by[r["id"]].append(r["vote"])
+    v = {}
+    for pid, h in by.items():
+        v[pid] = ("?" if len(h) < 2 else "tie" if all(x == "tie" for x in h)
+                  else h[0] if h[0] == h[1] else "flip")
+    return v
+
+
+def counts(verdict, b0, b1, ids=None):
+    ids = list(verdict) if ids is None else ids
+    g = lambda k: [p for p in ids if verdict.get(p) == k]
+    return g(b0), g(b1), g("tie"), g("flip")
 
 
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Downloads/ab_votes.json")
-    v = json.load(open(path))
-    b0, b1 = v["banks"]
-    out = v["votes"]
+    args = sys.argv[1:]
+    if not args:
+        have = sorted(d for d in glob.glob(os.path.join(STORE, "*")) if os.path.isdir(d))
+        sys.exit("name a comparison directory or some session files. In the store:\n  "
+                 + ("\n  ".join(os.path.relpath(d) for d in have) or "(nothing yet)"))
+    sess = load(args)
+    if not sess:
+        sys.exit(f"no sessions found in {' '.join(args)}")
+    banks = sess[0]["banks"]
+    b0, b1 = banks
+    odd = [s for s in sess if s["banks"] != banks]
+    if odd:
+        sys.exit(f"{odd[0]['_path']} compares {odd[0]['banks']}, not {banks}; tally one at a time")
 
-    by_id = defaultdict(list)
-    for r in out:
-        by_id[r["id"]].append(r)
-    paired = all(len(h) == 2 for h in by_id.values())
+    print(f"{len(sess)} session(s), {b0} (incumbent) vs {b1}")
+    for s in sess:
+        print(f"  {s['_path']:56} {s['question']:7} {s['listener']:8} "
+              f"{len(s['votes'])} hearings" + ("   [pre-split format]" if s.get("_legacy") else ""))
 
-    print(f"{len(out)} hearings over {len(by_id)} pairs   {b0} (incumbent) vs {b1}   "
-          f"seed {v.get('seed')}")
-    print()
-    ordered = order_check(out, b0, b1)
-    print()
+    # --- per session
+    for s in sess:
+        v = s["votes"]
+        print(f"\n=== {s['question']} · {s['listener']}")
+        if all("first" in r for r in v):
+            d = [r for r in v if r["vote"] != "tie"]
+            f = sum(1 for r in d if r["vote"] == r["first"])
+            p = sign_p(f, len(d))
+            print(f"  order   first {f:2}   second {len(d) - f:2}   p = {pfmt(p)}"
+                  f"{'   * order is deciding trials' if p < 0.05 else ''}")
+        else:
+            print("  order   not checkable: this file has no `first`")
+        verdict = concord(v)
+        once = [p for p, x in verdict.items() if x == "?"]
+        if len(once) == len(verdict):
+            # Every pair heard once. There is no concordance to compute, and the raw split is the
+            # number the order check above is about -- print it, but never as a verdict.
+            r0 = sum(1 for r in v if r["vote"] == b0)
+            r1 = sum(1 for r in v if r["vote"] == b1)
+            print(f"  raw     {b0} {r0:2}   {b1} {r1:2}   tie {len(v) - r0 - r1:2}   "
+                  f"p = {pfmt(sign_p(r0, r0 + r1))}")
+            print("  !! one hearing per pair: nothing here separates a bank preference from a")
+            print("  !! position preference. Re-render and re-run to get a concordance column.")
+            continue
+        if once:
+            print(f"  {len(once)} pair(s) heard once and dropped; partial session")
+        w0, w1, tie, flip = counts(verdict, b0, b1)
+        p = sign_p(len(w0), len(w0) + len(w1))
+        print(f"  result  {b0} {len(w0):2}   {b1} {len(w1):2}   both-ways tie {len(tie):2}   "
+              f"order-dependent {len(flip):2}   p = {pfmt(p)}{'  *' if p < 0.05 else ''}")
 
-    if not paired:
-        print("!! this vote file has one hearing per pair, so nothing here controls for order.")
-        print("!! re-render with the current ab_render.py and run it again; the flat split follows")
-        print("!! only so the file is not silently unreadable.")
-        print()
-        for k in ("closer", "better"):
-            w0 = sum(1 for r in out if r[k] == b0)
-            w1 = sum(1 for r in out if r[k] == b1)
-            tie = sum(1 for r in out if r[k] == "tie")
-            print(f"  {k:7}  {b0} {w0:2}   {b1} {w1:2}   tie {tie:2}   p = {sign_p(w0, w0 + w1):.3f}")
-    else:
-        verdict = {}
-        for k in ("closer", "better"):
-            w = {b0: [], b1: []}
-            flip, tie = [], []
-            for pid, h in by_id.items():
-                a, b = h[0][k], h[1][k]
-                if a == "tie" and b == "tie":
-                    tie.append(pid)
-                elif a == b:
-                    w[a].append(pid)
-                else:
-                    flip.append(pid)
-            verdict[k] = {"w": w, "flip": flip, "tie": tie}
-            p = sign_p(len(w[b0]), len(w[b0]) + len(w[b1]))
-            print(f"  {k:7}  {b0} {len(w[b0]):2}   {b1} {len(w[b1]):2}   "
-                  f"both-ways tie {len(tie):2}   order-dependent {len(flip):2}   "
-                  f"p = {p:.3f}{'  *' if p < 0.05 else ''}")
+        bands = defaultdict(list)
+        for r in v:
+            bands[r.get("band")].append(r["id"])
+        if len(bands) > 1:
+            print("  by CLAP spread band the pair was sampled from (0 = narrowest):")
+            for b in sorted(x for x in bands if x is not None):
+                ids = sorted(set(bands[b]))
+                c0, c1, ct, cf = counts(verdict, b0, b1, ids)
+                sp = [r["spread"] for r in v if r["id"] in set(ids)]
+                print(f"    band {b}  {b0} {len(c0)}  {b1} {len(c1)}  tie {len(ct)}  "
+                      f"order-dependent {len(cf)}   spread {min(sp):.3f}-{max(sp):.3f}")
+        else:
+            print("  spread bands: not recorded, or all pairs from one band -- re-render to get "
+                  "the stratified set")
 
-        # A pair that survives counterbalancing is the only kind that carries a bank preference,
-        # so the spread correlation is computed over those and nothing else.
-        print("\ndoes a surviving preference track the CLAP spread between the two fits?")
-        spread = {pid: h[0]["spread"] for pid, h in by_id.items()}
-        for k in ("closer", "better"):
-            w = verdict[k]["w"]
-            ids = w[b0] + w[b1]
-            if len(ids) < 4:
-                print(f"  {k:7}  only {len(ids)} decided pairs; not worth a correlation")
+    # --- pooled per question, across listeners
+    byq = defaultdict(list)
+    for s in sess:
+        byq[s["question"]].append(s)
+    print("\n=== pooled by question")
+    print("  a pair counts once if every listener who decided it named the same bank; `contested`")
+    print("  is the rest. Pairs only one listener decided still count, so with unequal sessions the")
+    print("  pooled split leans on whoever heard more -- read it next to the agreement line.")
+    per_q = {}
+    for q, ss in byq.items():
+        # Two sessions from the same ear are more hearings of the same pairs, not two opinions --
+        # concatenate them before concording, so a pair split across sittings still resolves.
+        by_who = defaultdict(list)
+        for s in ss:
+            by_who[s["listener"]] += s["votes"]
+        verdicts = {who: concord(v) for who, v in by_who.items()}
+        per_q[q] = verdicts
+        ids = sorted({p for v in verdicts.values() for p in v})
+        # A pair counts for the pool only if every listener who decided it named the same bank.
+        # Pooling by majority would let one confident ear outvote a genuine disagreement, and with
+        # two listeners there is no majority to take.
+        pooled, split = {}, []
+        for pid in ids:
+            named = {v[pid] for v in verdicts.values() if v.get(pid) in (b0, b1)}
+            if len(named) == 1:
+                pooled[pid] = named.pop()
+            elif len(named) > 1:
+                split.append(pid)
+                pooled[pid] = "split"
+        w0 = sum(1 for x in pooled.values() if x == b0)
+        w1 = sum(1 for x in pooled.values() if x == b1)
+        who = f"{len(verdicts)} listener(s), {len(ss)} session(s)"
+        if not w0 + w1:
+            print(f"  {q:7}  {who}   no pair survived concordance; nothing to pool")
+        else:
+            p = sign_p(w0, w0 + w1)
+            print(f"  {q:7}  {who}   {b0} {w0:2}   {b1} {w1:2}   "
+                  f"contested {len(split):2}   p = {pfmt(p)}{'  *' if p < 0.05 else ''}")
+        if len(verdicts) > 1:
+            names = sorted(verdicts)
+            for x in range(len(names)):
+                for y in range(x + 1, len(names)):
+                    va, vb = verdicts[names[x]], verdicts[names[y]]
+                    both = [pid for pid in ids
+                            if va.get(pid) in (b0, b1) and vb.get(pid) in (b0, b1)]
+                    same = sum(1 for pid in both if va[pid] == vb[pid])
+                    print(f"    {names[x]} vs {names[y]}: agree on {same}/{len(both)} pairs "
+                          f"both decided" + ("  -- coin-flip agreement" if both
+                                             and abs(same / len(both) - .5) < .2 else ""))
+
+    # --- did the two questions collapse again?
+    if len(per_q) == 2 and "closer" in per_q and "better" in per_q:
+        legacy = any(s.get("_legacy") for s in sess)
+        for who in sorted(set(per_q["closer"]) & set(per_q["better"])):
+            a, b = per_q["closer"][who], per_q["better"][who]
+            both = [p for p in a if a.get(p) in (b0, b1) and b.get(p) in (b0, b1)]
+            if not both:
                 continue
-            rho = spearman([spread[p] for p in ids], [1 if p in w[b1] else 0 for p in ids])
-            print(f"  {k:7}  rho = {rho:+.2f} over {len(ids)} decided pairs")
-        allsp = sorted(spread.values())
-        flipsp = sorted(spread[p] for p in verdict["closer"]["flip"])
-        if flipsp:
-            print(f"  order-dependent pairs span spread {flipsp[0]:.3f}-{flipsp[-1]:.3f}; "
-                  f"all pairs span {allsp[0]:.3f}-{allsp[-1]:.3f}")
-
-        both = set(verdict["closer"]["w"][b0] + verdict["closer"]["w"][b1]) & \
-               set(verdict["better"]["w"][b0] + verdict["better"]["w"][b1])
-        split = [pid for pid in both
-                 if (pid in verdict["closer"]["w"][b0]) != (pid in verdict["better"]["w"][b0])]
-        print(f"\n{len(both)} pairs decided on both questions; "
-              f"{len(split)} of them name a different bank for each")
-        for pid in split:
-            h = by_id[pid][0]
-            print(f"  {h['category']:8} {h['name']:20} closer {h['closer']:9} "
-                  f"better {h['better']}")
-
-        # The two questions sit on one screen with identical buttons, so the cheapest way to answer
-        # the second is to repeat the first. If they never once diverge across every hearing, that
-        # is what happened: `better` collected no independent evidence and must not be reported as
-        # a second, agreeing result. Perfect agreement is a warning, not a corroboration.
-        lock = sum(1 for r in out if r["closer"] == r["better"])
-        if lock == len(out):
-            print(f"\n!! `closer` and `better` are identical on all {len(out)} hearings, ties")
-            print("!! included. Two questions with the same answer every time are one question;")
-            print("!! read the `better` line as a copy of `closer`, not as confirmation of it.")
-            print("!! Ask them in separate passes if `better` is wanted as evidence.")
-
-        print(f"\nby category (closer / better; 0 = {b0}, 1 = {b1}, ~ = order-dependent, "
-              f"- = tie both ways)")
-        for c in sorted({r["category"] for r in out}):
-            ids = [pid for pid, h in by_id.items() if h[0]["category"] == c]
-            def col(k):
-                s = ""
-                for pid in ids:
-                    v_ = verdict[k]
-                    s += ("0" if pid in v_["w"][b0] else "1" if pid in v_["w"][b1]
-                          else "-" if pid in v_["tie"] else "~")
-                return s
-            print(f"  {c:8} {col('closer')}  {col('better')}")
-
-        n = len(by_id)
-        print(f"\n{n} pairs. Requiring both hearings to agree shrinks n on purpose. A pile of")
-        print("order-dependent pairs is not a tie -- it means this ear cannot separate the banks")
-        print("at single notes, which is the answer to a 29% CLAP improvement, not a failed test.")
-
-    if ordered:
-        print("\nThe order effect is significant. Whatever the bank columns say above, most of what")
-        print("was voted on was which button came first; treat the result as provisional.")
+            same = sum(1 for p in both if a[p] == b[p])
+            print(f"\n  {who}: closer and better name the same bank on {same}/{len(both)} pairs "
+                  "decided on both")
+            if same == len(both):
+                print("  !! identical. If these came from separate sessions with different audio,")
+                print("  !! that is a real finding; if from one screen, it is button-copying and")
+                print("  !! the `better` line is a copy rather than a second result."
+                      + ("  THIS FILE IS PRE-SPLIT." if legacy else ""))
 
 
 if __name__ == "__main__":

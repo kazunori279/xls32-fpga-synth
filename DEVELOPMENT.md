@@ -1147,11 +1147,11 @@ The arms are gitignored (`webui/presets_arm*.json`); the listening test is the g
 **The gate answered: no.** Same rig that settled the `$LOSS` question — 24 blind trials, the pairs
 the two arms disagree on most under CLAP, A/B coin-flipped, answer key unread until the last vote —
 came back **armbase 9, armfx 7, tie 8** on both questions, sign test **p = 0.80**
-(`presetgen/ab_votes_space.json`). A 48–16 margin on both objective yardsticks does not reach an
-ear at all. n=16 decided trials only rules out a *large* effect, but 48–16 is not a small claim:
-the `$LOSS` test cleared p = 7.6e-05 on the same n with an 18–1 vote, and the mean pair spread here
-is **0.255** against that test's **0.385** — the two arms simply differ less than the two losses
-did. `presets_soundfont.json` stays as fitted at `SPACE=base`.
+(`presetgen/listening/armbase-vs-armfx/`). A 48–16 margin on both objective yardsticks does not
+reach an ear at all. n=16 decided trials only rules out a *large* effect, but 48–16 is not a small
+claim: the `$LOSS` test cleared p = 7.6e-05 on the same n with an 18–1 vote, and the mean pair spread
+here is **0.255** against that test's **0.385** — the two arms simply differ less than the two
+losses did. `presets_soundfont.json` stays as fitted at `SPACE=base`.
 
 > **What the widening is still worth.** `$SPACE` stays in `params.py`: it is the only way `room`
 > (CC91) is reachable at all, it is what made both negatives measurable, and the arms can be re-run

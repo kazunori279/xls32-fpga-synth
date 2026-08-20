@@ -17,11 +17,20 @@ which is a larger and cleaner effect than anything the banks produced. Balancing
 it free to decide every individual trial, so the bank split it reported was noise wearing a number.
 `ab_tally.py` reads the pairs back and reports the order effect alongside the result.
 
-Trials are drawn evenly across categories and, within a category, spread across the loss gap
-between the banks rather than sampled at random: the pairs where the two distances disagree most
-are the ones that carry information, and a trial where both banks landed on the same patch just
-spends a listener's attention. `manifest.json` records `spread` per trial so a null result can be
-told apart from a set that never asked a hard question.
+Trials are drawn evenly across categories and, within a category, sampled across the CLAP spread in
+bands rather than taken from the top of it. Taking the top was the original rule, on the assumption
+that the pairs the metric separates most are the pairs an ear separates most; the counterbalanced
+run measured that assumption and it does not hold. Among the pairs the listener decided, spread did
+not predict which bank won (rho = +0.07), and the order-dependent pairs spanned 0.069-0.320. So the
+set now samples the range and records the band, and the relationship can be estimated instead of
+relied on.
+
+The two questions are two SESSIONS, not two rows of one screen. Asked together they came back
+identical on all 48 hearings, ties included, which is #20's first item and was reproduced exactly.
+They also get different audio, because they are different questions: `closer` is a single note with
+the target played immediately before each candidate, since one note is all the target exists as;
+`better` is a short phrase and no target, since whether a patch is worth playing is the thing a
+single held note answers worst.
 
 The two banks are arguments, not constants. They were once the `_stft`/`_clapstft` pair spelled
 into this file; those filenames no longer exist, and the question this rig answers is asked again
@@ -50,8 +59,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.abspath(os.path.join(HERE, "..", "webui", "ab"))
 CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 SEED = int(os.environ.get("SEED", 20260816))
-BLOCK = 6                # pairs per counterbalancing block; see the sequence build in main()
+BLOCK = 6                # pairs per counterbalancing block; see build_sequence()
 MIN_SEP = 4              # trials between the two hearings of one pair
+
+# The phrase for the `better` pass, as semitone offsets from the preset's fitted note and onsets in
+# seconds. Not a tune -- an ascending figure, a step back down, and a held last note, which is the
+# smallest thing that exercises what a single held note cannot: how the attack behaves when notes
+# arrive faster than the envelope finishes, whether the filter tracks pitch, and what the release
+# sounds like under overlap. The last onset gets the corpus window so the tail is the same tail the
+# fit was scored on.
+#
+# Deliberately short and deliberately dull. A phrase with any musical character of its own starts
+# collecting votes about the phrase.
+PHRASE = [(0, 0.00), (7, 0.30), (12, 0.60), (7, 0.90), (0, 1.20), (12, 1.50)]
 # argv is read inside main(), not here: build_previews.py imports write_wav from this module and
 # would otherwise inherit this file's idea of what argv[1] means.
 
@@ -68,6 +88,95 @@ def write_wav(path, x, sr):
         w.setsampwidth(2)
         w.setframerate(int(sr))
         w.writeframes((np.clip(x, -1, 1) * 32767).astype("<i2").tobytes())
+
+
+def render_phrase(values, note, win):
+    """PHRASE as one buffer: each note rendered on its own and summed at its onset.
+
+    engine.render() is one note per call, so this is addition rather than the RTL's voice
+    allocation -- overlapping notes here share an oscillator seed and an LFO reset, and a real
+    polyphonic board would not. That is a fair approximation for a listening test, where both banks
+    get exactly the same treatment and the comparison is between them, and it would NOT be fair as
+    a target for fitting. Nothing in the search path calls this.
+
+    Short notes get a short gate; the last one gets the corpus window so its release is the release
+    the bank was fitted with.
+    """
+    last = max(t for _, t in PHRASE)
+    step = min(t2 - t1 for (_, t1), (_, t2) in zip(PHRASE, PHRASE[1:]))
+    out = np.zeros(int((last + win[0] + win[1]) * engine.SR) + 1, dtype=np.float64)
+    for semis, at in PHRASE:
+        gate = win[0] if at == last else step
+        w = engine.render(values, note=note + semis, gate_s=gate, tail_s=win[1])
+        k = int(at * engine.SR)
+        out[k:k + len(w)] += np.asarray(w, dtype=np.float64)[:len(out) - k]
+    return out
+
+
+def stratified(rows, per_cat, rng):
+    """Per category, one pair from each band of the CLAP spread rather than the widest `per_cat`.
+
+    Taking the top of the spread was the original rule and it selected for pairs the METRIC finds
+    hard, which is not the same as pairs an ear can separate -- #20 flagged the assumption and the
+    counterbalanced run measured it: among the pairs the listener decided, spread did not predict
+    which bank won (rho = +0.07), and the pairs that came back order-dependent spanned 0.069-0.320,
+    nearly the whole range. Sampling the range instead lets the relationship be estimated rather
+    than assumed, and stops the set consisting entirely of pairs that turn out to be ties.
+    """
+    out = []
+    for cat in CATS:
+        pool = sorted([r for r in rows if r["category"] == cat], key=lambda r: r["spread"])
+        if not pool:
+            continue
+        n = min(per_cat, len(pool))
+        edges = [round(k * len(pool) / n) for k in range(n + 1)]
+        for k in range(n):
+            band = pool[edges[k]:edges[k + 1]] or [pool[min(edges[k], len(pool) - 1)]]
+            pick = dict(band[int(rng.integers(len(band)))])
+            pick["band"] = k                       # 0 = narrowest spread in its category
+            out.append(pick)
+    return out
+
+
+def build_sequence(ids, rng):
+    """Each pair asked twice, once in each playback order, as [{id, rev}, ...].
+
+    The first run of this rig balanced which bank was A and thought that was enough; it is not.
+    Balancing stops a position preference from favouring one bank and leaves it free to decide
+    individual trials -- and it did, hard: the listener picked the first-played clip in 19 of 22
+    decided trials, p = 0.001, against a bank split at p = 0.52. A balanced design converts that
+    bias into noise rather than removing it, so the split it produced was 22 votes about playback
+    order and 3 about the banks.
+
+    Asking each pair both ways makes the order effect measurable instead of invisible: a pair where
+    the same bank wins both ways is a preference, a pair that follows the order is not, and the
+    count of each says how much of the result was ever about audio.
+
+    Interleaved in blocks rather than as two passes, so that a listener who stops early still
+    leaves whole pairs behind. MIN_SEP is not decoration: concordance is evidence only if the second
+    hearing is an independent judgement, and a pair heard again two trials later can be answered
+    from memory of the first answer, which manufactures agreement and reads as a preference.
+    """
+    order = list(range(len(ids)))
+    rng.shuffle(order)
+    seq = []
+    for s in range(0, len(order), BLOCK):
+        blk = order[s:s + BLOCK]
+        rev = [j % 2 == 1 for j in range(len(blk))]          # balanced within the block too
+        rng.shuffle(rev)
+        by_pair = dict(zip(blk, rev))
+        first = list(blk)
+        rng.shuffle(first)
+        for _ in range(2000):
+            second = list(blk)
+            rng.shuffle(second)
+            if min(len(blk) + second.index(k) - j for j, k in enumerate(first)) >= MIN_SEP:
+                break
+        else:                                                # only for a tiny final block
+            second = first[MIN_SEP // 2:] + first[:MIN_SEP // 2]
+        seq += [{"id": ids[k], "rev": by_pair[k]} for k in first]
+        seq += [{"id": ids[k], "rev": not by_pair[k]} for k in second]
+    return seq
 
 
 def main():
@@ -111,10 +220,7 @@ def main():
           f"min {min(r['spread'] for r in rows):.3f} max {max(r['spread'] for r in rows):.3f}")
 
     rng = np.random.default_rng(SEED)
-    trials = []
-    for cat in CATS:
-        pool = sorted([r for r in rows if r["category"] == cat], key=lambda r: -r["spread"])
-        trials.extend(pool[:per_cat])                     # the pairs that actually differ
+    trials = stratified(rows, per_cat, rng)
     rng.shuffle(trials)                                   # category order must not cue the listener
 
     # Which bank plays as A. Balanced and then shuffled, NOT an independent coin per trial: an
@@ -126,7 +232,6 @@ def main():
     rng.shuffle(flips)
 
     manifest = []
-
     for i, t in enumerate(trials):
         flip = flips[i]
         first, second = (banks_in[1][0], banks_in[0][0]) if flip else (banks_in[0][0], banks_in[1][0])
@@ -134,58 +239,40 @@ def main():
         audio, sr = ns.load(targets[t["name"]])
         write_wav(os.path.join(OUT, f"{stem}_target.wav"), audio, sr)
         for slot, tag in (("a", first), ("b", second)):
-            w = engine.render(banks[tag][t["name"]]["values"], note=t["note"],
-                              gate_s=win[0], tail_s=win[1])
-            write_wav(os.path.join(OUT, f"{stem}_{slot}.wav"), w, engine.SR)
+            vals = banks[tag][t["name"]]["values"]
+            # Single note for the `closer` pass -- it is the only thing the target exists as -- and
+            # the phrase for `better`, which does not use the target and is the question a single
+            # held note answers worst.
+            write_wav(os.path.join(OUT, f"{stem}_{slot}.wav"),
+                      engine.render(vals, note=t["note"], gate_s=win[0], tail_s=win[1]), engine.SR)
+            write_wav(os.path.join(OUT, f"{stem}_{slot}P.wav"),
+                      render_phrase(vals, t["note"], win), engine.SR)
         manifest.append({"id": stem, "name": t["name"], "category": t["category"],
-                         "spread": round(t["spread"], 4), "a": first, "b": second})
-        print(f"  {stem}  {t['category']:8} {t['name']:22} spread {t['spread']:.3f}")
+                         "spread": round(t["spread"], 4), "band": t["band"],
+                         "a": first, "b": second})
+        print(f"  {stem}  {t['category']:8} {t['name']:22} spread {t['spread']:.3f}  band {t['band']}")
 
-    # Every pair is asked TWICE, once in each playback order. The first run of this rig balanced
-    # which bank was A and thought that was enough; it is not. Balancing stops a position preference
-    # from favouring one bank, and leaves it free to decide individual trials -- and it did, hard:
-    # the listener picked the first-played clip in 19 of 22 decided trials (sign test p = 0.001).
-    # A balanced design converts that bias into noise rather than removing it, so the 13-9 bank
-    # split it produced was 22 votes about playback order and 3 about the banks.
-    #
-    # Asking each pair in both orders makes the order effect measurable instead of invisible: a pair
-    # where the same bank wins both ways is a preference, a pair that follows the order is not, and
-    # the count of each says how much of the result was ever about audio. Ties still count as ties.
-    #
-    # Interleaved in blocks rather than as two passes, for two reasons. The two hearings of a pair
-    # need distance between them or the second is a memory test, and a listener who stops early must
-    # still leave whole pairs behind -- two passes would mean quitting at the halfway point yields
-    # nothing at all.
-    #
-    # MIN_SEP is not decoration. Concordance is only evidence if the second hearing is an
-    # independent judgement; a pair heard again two trials later can be answered from memory of the
-    # first answer, which manufactures agreement and would read as a preference.
-    order = list(range(len(manifest)))
-    rng.shuffle(order)
-    sequence = []
-    for s in range(0, len(order), BLOCK):
-        blk = order[s:s + BLOCK]
-        rev = [j % 2 == 1 for j in range(len(blk))]      # balanced within the block too
-        rng.shuffle(rev)
-        by_pair = dict(zip(blk, rev))
-        first = list(blk)
-        rng.shuffle(first)
-        for _ in range(2000):
-            second = list(blk)
-            rng.shuffle(second)
-            sep = min(len(blk) + second.index(k) - j for j, k in enumerate(first))
-            if sep >= MIN_SEP:
-                break
-        else:                                            # only reachable for a tiny final block
-            second = first[MIN_SEP // 2:] + first[:MIN_SEP // 2]
-        sequence += [{"id": manifest[k]["id"], "rev": by_pair[k]} for k in first]
-        sequence += [{"id": manifest[k]["id"], "rev": not by_pair[k]} for k in second]
+    # One sequence per question, drawn from separate shuffles, because the two questions are now
+    # separate sessions. Asked on one screen they came back identical on all 48 hearings, ties
+    # included -- two rows of the same buttons, and the cheapest way to answer the second is to
+    # repeat the first, which is #20's first item. Splitting them means the `better` judgement
+    # cannot see the `closer` one: different session, different order, different audio.
+    ids = [t["id"] for t in manifest]
+    sequences = {q: build_sequence(ids, rng) for q in ("closer", "better")}
 
+    comparison = "-vs-".join(b[0] for b in banks_in)
     json.dump({"source": source, "banks": [b[0] for b in banks_in], "seed": SEED,
-               "block": BLOCK, "trials": manifest, "sequence": sequence},
+               "comparison": comparison, "block": BLOCK, "phrase": PHRASE,
+               "trials": manifest, "sequences": sequences},
               open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
-    print(f"\nwrote {len(manifest)} pairs, asked twice each = {len(sequence)} trials -> {OUT}")
-    print("  python3 -m http.server 8765 -d webui   # then open http://127.0.0.1:8765/ab_check.html")
+    n = len(manifest)
+    print(f"\nwrote {n} pairs -> {OUT}")
+    print(f"  each question is its own session of {2 * n} trials: {n} pairs x 2 playback orders")
+    print("  closer  single note, target played immediately before each candidate")
+    print(f"  better  a {len(PHRASE)}-note phrase, no target")
+    print("\n  python3 -m http.server 8765 -d webui")
+    print("  http://127.0.0.1:8765/ab_check.html      # pick the question and enter a listener id")
+    print(f"  uv run python presetgen/ab_tally.py presetgen/listening/{comparison}")
 
 
 if __name__ == "__main__":

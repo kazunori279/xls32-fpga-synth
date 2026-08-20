@@ -1,4 +1,5 @@
 {
+ "void": true,
  "source": "soundfont",
  "banks": [
   "prev128",
