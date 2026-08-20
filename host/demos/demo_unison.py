@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M15 unison showcase (CC80 voice-stacking: assign N of 32 voices to one note, each
+"""M15 unison showcase (CC80 voice-stacking: assign N of the ring's voices to one note, each
 detuned + phase-decorrelated). Part 1: a saw lead phrase with unison OFF. Part 2: the
 same phrase with 4-voice unison (thick, detuned super-saw). Part 3: a held power chord
 swept off -> 2 -> 3 -> 4 voices so it audibly fattens. Recorded via the drain Recorder;

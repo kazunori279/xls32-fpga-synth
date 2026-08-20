@@ -319,17 +319,21 @@ async function refreshFirmware() {
       // taken -- a commit or two later whenever the rebuild landed alongside anything else. Two
       // legitimate answers to "which commit", and comparing the wrong one reports a board running
       // exactly the shipped bitstream as not running it.
-      const shipCommits = shipTiliquas.map((t) => t.manifest_tag || t.commit).filter(Boolean);
-      if (shipCommits.length) {
+      const withCommit = shipTiliquas.filter((t) => t.manifest_tag || t.commit);
+      if (withCommit.length) {
         const onboardCommit = b.firmware.commit.replace('+', '');
-        const hit = shipCommits.filter((c) => c === onboardCommit);
+        const hit = withCommit.filter((t) => (t.manifest_tag || t.commit) === onboardCommit);
+        // How much the stamp can say depends on whether the two archives happen to have been built
+        // from the same commit, which is not a property either of them promises. Rebuilt together
+        // they share one tag and the stamp cannot tell them apart -- nothing in the bitstream
+        // reports its voice count. Rebuilt separately the tags differ and the match is decisive.
+        // Both are normal; the wording tracks whichever is true rather than picking one and hoping.
         v += !hit.length ? ' — <b>not</b> the commit this repo ships'
-           // One commit, two bitstreams, and the stamp names only the commit. Saying "the shipped
-           // build" here would be a guess about which; saying nothing would let a 32-voice board
-           // read as the formal one.
-           : hit.length < shipCommits.length || shipCommits.length === 1
-             ? ' — same commit as the shipped build'
-             : ' — same commit as the shipped builds, which does not say which voice count';
+           : hit.length > 1
+             ? ' — same commit as the shipped builds, which does not say which voice count'
+             : withCommit.length === 1 || !hit[0].voices
+               ? ' — same commit as the shipped build'
+               : ` — the shipped ${hit[0].voices}-voice build`;
       }
       return fwRow(name, v + stale);
     }).join('');
