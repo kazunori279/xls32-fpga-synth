@@ -359,7 +359,14 @@ def main():
               + (f" ({len(weak)} marginal, not counted either way)" if weak else ""))
         return 0
     finally:
+        # `hush` stops the notes and leaves every CC where this script put them, and the last row
+        # it runs is CC75 = 124 -- a 2 % duty pulse with almost no fundamental. Whatever runs next
+        # inherits that: `check_loop.py` measured A440 as 2639.97 Hz, its sixth harmonic, and
+        # reported a 3102-cent pitch failure on a board that was working perfectly. Hand the next
+        # script something neutral instead.
         hush(tp)
+        for ch in range(4):
+            patch(tp, ch, 64, 100)
         tp.close()
 
 

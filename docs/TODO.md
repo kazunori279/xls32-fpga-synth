@@ -454,9 +454,42 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   It also runs in 2.9 s instead of 6.2, since the 50 ms pause was longer than the 45 ms read.
 
   What is left. `test/analysis.py` still picks the loudest window, deliberately: the graded suite's
-  published 0–100 scores would move and re-running it is a board-day. And the discard mechanism
-  being unidentified is still the uncomfortable part — the Tiliqua's UAC2 path has no equivalent
-  flush-then-pause that anyone has looked for, but nobody has looked.
+  published 0–100 scores would move and re-running it is a board-day. And *which layer* discards on
+  the UART side is still unidentified — only the condition that provokes it.
+
+  **The Tiliqua half, looked at 2026-08-21** (`boards/tiliqua/probe/probe_discard.py`, 24-voice
+  build from flash slot 7). The instrument is the frame counter the gateware already tees onto
+  channels 2 and 3: 256 audio cycles per frame, counting what the *device* produced whether or not
+  any of it arrived. So between two delivered frames the counter must advance by exactly 256 per
+  frame of separation, and it needs no wall clock and no reference — the board timestamps its own
+  output and the arithmetic closes or it does not. That also separates two failures `gap_rate`
+  conflates: a **zero-filled** frame arrived carrying nothing and holds its slot, which is what
+  `_repair` rests on; a **missing** frame never arrived, leaves no zeros behind, and makes the
+  capture simply short while every rate computed from it still reads clean.
+
+  Four findings, and the useful one is the last.
+
+  1. **The production path cannot reach this bug**, and that is now measured rather than argued.
+     `record_start`/`record_stop` only move a buffer pointer — the `InputStream` runs from `open()`
+     to `close()`, so there is no interval where the host stops collecting. Sweeping an idle pause
+     between captures out to a full second: 0 missing, 0 zeroed, 0 flags, at every step.
+  2. **The mechanism does exist**, and its shape is the UART's. Sleeping *inside* the callback so
+     the host genuinely stops collecting is clean to 0.90 of a block period and falls off a cliff
+     at 1.10 — 24576 frames delivered of ~216000 produced. The threshold is one callback period,
+     85 ms here against the UART's 5 ms, about seventeen times the tolerance. Losses quantise to
+     multiples of 12000 frames (exactly 250 ms), and a few deliveries come back *out of order* —
+     the counter steps backwards by thousands of frames, meaning a superseded buffer was handed
+     over. The first version of the probe reported 75 million frames missing out of 16384 delivered
+     because it read the counter's wrap unsigned, which turns any backwards step into an 8.4 M-frame
+     jump forward.
+  3. **`input_overflow` is never raised. Not once, at any stall.** The obvious fix before measuring
+     was to have `usbaudio.py` watch PortAudio's `status`, which its callback takes and ignores.
+     That would have watched a flag that never sets. Worth writing down, because it is the second
+     time on this issue that the plausible explanation was the wrong one.
+  4. So the counter arithmetic is the only thing that can see it, and it is cheap. `record_stop`
+     now reports `missing_frames` alongside `gap_rate`, and `run_tests.py` prints it when non-zero.
+     The suite has therefore never been able to distinguish "no dropouts" from "a capture that was
+     silently short"; it can now.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted

@@ -87,6 +87,7 @@ def run(args):
     results = []
     gaps = []
     clocks = []
+    missing = []
     t0 = time.time()
     for i, tc in enumerate(cases, 1):
         s, res = H.run_case(t, tc)
@@ -99,6 +100,12 @@ def run(args):
         # measurement would have caught months earlier.
         if getattr(t, "gap_rate", None) is not None:
             gaps.append(t.gap_rate)
+        # And the other failure, which `gap_rate` is blind to by construction: frames that never
+        # arrived leave no zeros behind, so the capture is simply short and every rate computed
+        # from it still reads clean. #9 measured this reaching 89% of a capture with no flag from
+        # PortAudio at all, so nothing but this number would say it had happened.
+        if getattr(t, "missing_frames", None):
+            missing.append((tc.id, t.missing_frames))
         if getattr(t, "audio_clock_hz", None) is not None:
             clocks.append(t.audio_clock_hz)
         wav = os.path.join(OUT, "wav", f"{tc.id}.wav")
@@ -110,6 +117,11 @@ def run(args):
     print(f"captured {len(cases)} tests in {time.time()-t0:.0f}s")
     if gaps:
         print(f"USB frame gaps: mean {100*sum(gaps)/len(gaps):.2f}%, worst {100*max(gaps):.2f}%")
+    if missing:
+        worst_id, worst_n = max(missing, key=lambda m: m[1])
+        print(f"frames that never arrived: {sum(n for _, n in missing)} over "
+              f"{len(missing)} of {len(cases)} captures (worst {worst_n} in {worst_id}) -- "
+              "the host stalled; these are not in the gap rate")
     if clocks:
         print(f"audio clock: mean {sum(clocks)/len(clocks)/1e6:.3f} MHz over {len(clocks)} captures "
               f"(spread {(max(clocks)-min(clocks))/1e3:.1f} kHz)")

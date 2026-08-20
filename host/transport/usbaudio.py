@@ -163,6 +163,9 @@ class UsbAudioTransport(Transport):
         self._sink_done = None
         #: Fraction of frames dropped in the most recent record_stop, or None.
         self.gap_rate = None
+        #: Frames the device produced that never arrived at all, in the most recent capture.
+        #: A different failure from `gap_rate` -- see `_measure_clock`.
+        self.missing_frames = None
         #: Longest uninterrupted run in the most recent capture, in frames.
         self.longest_clean = None
         #: Longest single dropout in the most recent capture, in frames.
@@ -371,7 +374,7 @@ class UsbAudioTransport(Transport):
         import numpy as np
 
         self.audio_clock_hz = self.device_frames_per_host_frame = None
-        self.host_fs = None
+        self.host_fs = self.missing_frames = None
         if frames.shape[1] < 4 or len(stamps) < 2:
             return
 
@@ -397,6 +400,23 @@ class UsbAudioTransport(Transport):
         lo, hi = int(live[0]), int(live[-1])
         word = (frames[:, 2].astype(np.int64) >> 16) & 0x7FFF
         word |= ((frames[:, 3].astype(np.int64) >> 16) & 0xFFFF) << 15
+
+        # Frames that never arrived. `gap_rate` cannot see these and never could: a dropped frame
+        # *arrives* as zeros and holds its slot, so the timeline stays intact, which is the whole
+        # premise `_repair` rests on. A frame the host never received leaves nothing behind -- the
+        # samples either side sit adjacent in the array and the capture is simply short. The
+        # counter is the only witness, because it counts what the device produced.
+        #
+        # The wrap is read as signed. 31 bits at 12.288 MHz wraps every 175 s so it cannot happen
+        # inside a capture, and an unsigned read turns a counter that stepped *backwards* -- which
+        # it does when the host is handed a superseded buffer -- into an 8.4 M-frame forward jump.
+        #
+        # -1 is not a lost frame: the count is latched crossing into the frame's own domain, so a
+        # boundary can be seen one cycle early. It happens a few hundred times per second and only
+        # ever downwards. Only positive jumps are counted.
+        step = ((np.diff(word[live].astype(np.int64)) + (1 << 30)) % (1 << 31)) - (1 << 30)
+        short = (step - np.diff(live) * CYCLES_PER_FRAME) // CYCLES_PER_FRAME
+        self.missing_frames = int(short[short > 0].sum())
 
         cycles = int(word[hi] - word[lo]) % (1 << 31)
         seconds = (hi - lo) * spf
