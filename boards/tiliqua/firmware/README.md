@@ -18,6 +18,15 @@ Controllers, CC123 All Notes Off — so the panic button on a keyboard in the TR
 instrument with nothing else attached, and pointing the jack at a different part silences the one
 it leaves. There is no sustain pedal: CC64 arrives and is ignored.
 
+This archive (`tag: 3aa0227`) is the first to carry both engine DC fixes: the SVF no longer latches
+a residue when a voice's envelope dies, so All Sound Off gives *exactly* zero rather than a few
+hundred counts per part that has ever played; and the pulse wave subtracts its own duty-cycle DC,
+which stops a loud pulse passage clipping on one rail only. The second one is why a 78 %-duty stack
+of 16 voices now peaks at +1.04 / −1.10 where the previous archive peaked at +0.07 / −1.88 with its
+positive half eaten by the clamp. Graded on the module at **99.8/100 (A+)**, 174 pass / 1 warn /
+0 fail over the 175-case suite. Note these fixes are Tiliqua-only for now — the Basys 3 bitstream in
+`boards/basys3/firmware/` predates them and has not been rebuilt.
+
 ## Flash it
 
 Either way round writes it to a slot. **Slot 6 is what this repo's docs and tooling assume**, but

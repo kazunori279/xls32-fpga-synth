@@ -251,7 +251,12 @@ Command-line examples below are shown from that **project root**, and the Python
 > Tiliqua transport needs to send MIDI (it builds from C++ source, so skip it on locked-down
 > machines — e.g. Santa on corp Macs blocks the compiler; the Basys 3 sends MIDI down its UART and
 > the browser has its own Web MIDI). `--extra presetgen` adds the preset-generation toolchain
-> (`dawdreamer` etc.), only for dev work.
+> (`dawdreamer` etc.), only for dev work; `--extra deepfit` adds the learned audio distances on top
+> of it, and `--extra docs` the diagram renderer.
+>
+> `uv sync` syncs the environment to *exactly* what you name, so `--extra localmidi` on its own
+> **uninstalls** any other extra you had. Name every extra you want each time — e.g.
+> `uv sync --extra localmidi --extra deepfit` — rather than adding them one at a time.
 
 ### A · Basys 3 — flash and go
 

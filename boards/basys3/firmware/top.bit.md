@@ -6,6 +6,16 @@ run the synth **without building** (no Vivado / F4PGA toolchain needed — just 
 It is the full XLS32 engine: 32-voice polyphony, 4 multitimbral parts, resonant multimode filter,
 LFO, unison, cross-osc FM/ring-mod, and the block-RAM effects (chorus / delay / reverb).
 
+> **Stale as of 2026-08-20, and knowingly so.** Two engine fixes have landed in `core/synth.x`
+> since this was built — `290d00b` (the SVF's latched DC residue) and `3aa0227` (the pulse wave's
+> own duty-cycle DC) — so what you flash from here is a measurably different synth from what the
+> source tree describes. Both are DC defects; neither stops it playing. `check_artefacts.py`
+> reports the drift, and this note exists for anyone who flashes without running it.
+>
+> It is stale rather than unfixed because refreshing it needs Vivado on an x86 machine, and the
+> Tiliqua fixes were verified on hardware that is on the desk. Until it is rebuilt, `core/synth.x`
+> is no longer *bit-exact* across the two boards — the first time that has been deliberate.
+
 ## Flash it
 
 ```bash

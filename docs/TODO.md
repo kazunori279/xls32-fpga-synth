@@ -79,6 +79,17 @@ those three; git history keeps the original.)*
 
 ## Known debt — recorded, not scheduled
 
+- **The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
+  bit-exact.** `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both
+  boards, but only the Tiliqua archive has been rebuilt: `boards/tiliqua/firmware/xls32-r5.tar.gz`
+  is at `3aa0227` and passes `check_artefacts.py`, while `boards/basys3/firmware/top.bit` is still
+  the 2026-08-11 M34 build and reports stale. Refreshing it needs Vivado on an x86 machine — the
+  GCE build VM in `remote_build.sh`, which is not something CI can provide — and then a Basys 3 on
+  the desk for `verify.sh`, since timing closure has come apart from what the synth sounds like on
+  this project before. Until both happen, anyone flashing the Basys 3 blob gets a synth with the
+  latched SVF residue and the pulse's duty offset still in it. Neither stops it playing; the note
+  is in [`top.bit.md`](../boards/basys3/firmware/top.bit.md) for people who flash without running
+  the check.
 - **A residual DC offset on Tiliqua that is not the reverb tank's.** Fixing the comb dead band
   (see [ARCHITECTURE_tiliqua.md → C3](../ARCHITECTURE_tiliqua.md#c3-the-freeverb-tank-at-half-length))
   took `stress_fx_tail`'s late-window level from +206 to +82.3, but not to zero, and
