@@ -1,0 +1,58 @@
+# Check the committed bitstreams against the sources they were built from.
+#
+# This does NOT build gateware -- no XLS codegen, no yosys, no Vivado. Building on push was
+# considered and cancelled, not deferred: Vivado needs a licence and ~100 GB, so no hosted runner
+# can produce the Basys 3 half, and a green tick covering one board of two claims more than it
+# checks. See #10 and docs/TODO.md.
+#
+# What it does instead is cheap and answers a real question: scripts/check_artefacts.py hashes
+# every source that feeds each artefact and compares against scripts/artefact_hashes.json. Pure
+# stdlib, no toolchain, seconds to run. Until now nothing ran it automatically -- which is exactly
+# how the Basys 3 bitstream sat stale for four months while two engine DC fixes landed without it.
+#
+# Known-stale artefacts pass. The Basys 3 blob is stale for a reason that is written down and
+# cannot currently be fixed (#41), and a job that is permanently red is a job people stop reading.
+# Its waiver names the sources it covers -- core/synth.x alone -- and lapses the moment anything
+# else in that artefact's source set changes, so this still fails on drift nobody has seen before.
+# `--strict` fails on the waived ones too, for running by hand.
+
+name: Artefacts match their sources
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artefacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check_artefacts.py names the commits that touched a stale artefact's sources, which
+          # is most of what makes its output actionable. That needs real history, not a shallow
+          # clone -- with fetch-depth 1 the git log call finds nothing and the report loses the
+          # "here is what changed and when" half of itself.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The stripping is the load-bearing part: every hash is taken after comments and docstrings
+      # are removed, so a bug here makes the check blind to real edits rather than noisy about
+      # prose. It has its own test; run it first, because a false green from this job is worse
+      # than no job.
+      - name: Self-test the comment stripping
+        run: python scripts/check_artefacts.py --self-test
+
+      - name: Check artefacts
+        run: python scripts/check_artefacts.py

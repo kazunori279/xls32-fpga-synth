@@ -430,9 +430,23 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   time and asserts every one of them moves the hash — 0 blind, with the blindness deliberately
   reintroduced once to confirm the test fails when it should.
 
-  Two gaps remain in the check itself. It covers no **Tiliqua SDK** checkout (outside this repo,
-  unhashable from here). And **nothing runs it automatically** — no hook, no CI step, so it only
-  helps someone who thinks to run it.
+  ~~And **nothing runs it automatically** — no hook, no CI step, so it only helps someone who
+  thinks to run it.~~ **Fixed 2026-08-20.** `.github/workflows/artefacts.yml` runs it on every push
+  and PR. The script is pure stdlib and builds nothing, so the job needs no toolchain and finishes
+  in seconds; it runs `--self-test` first, because a false green here is worse than no job.
+
+  What made this possible was not the workflow — that part is six lines — but working out how a
+  permanently-red check could be made to mean something. The Basys 3 blob **is** stale, for a
+  reason that is written down and cannot currently be fixed (#41), so an unconditional check would
+  have failed on its first run and been ignored by its second. A blanket "skip basys3" flag would
+  have been worse than no automation at all: it would hide the drift nobody has seen yet along with
+  the drift everybody knows about. So the waiver is **scoped** — `known_stale` in the record names
+  the sources it covers, here `core/synth.x` alone, and lapses the moment anything outside that set
+  changes. Verified by changing a second source: the verdict goes `known-stale` → `stale` and the
+  exit code 0 → 1. `--strict` fails on the waived ones too, for running by hand.
+
+  One gap remains in the check itself: it covers no **Tiliqua SDK** checkout, which is outside this
+  repo and unhashable from here.
 
   The record now has a second consumer, which raises the cost of it being stale.
   `scripts/build_firmware_json.py` reads `built_from_commit` out of `artefact_hashes.json` and
@@ -448,4 +462,6 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   **Building on push was considered and cancelled**, not deferred: Vivado needs a licence and
   ~100 GB, so no hosted runner can produce the Basys 3 half, and a green tick covering one board of
   two claims more than it checks. `.github/workflows/pages.yml` deploys `webui/static/` and
-  `docs/slides/` — it does not build, and it never will.
+  `docs/slides/` — it does not build, and it never will. `artefacts.yml` does not change this: it
+  hashes sources, it does not compile, and it makes no claim about whether an artefact *works* —
+  only about whether it was made from the tree it sits in.

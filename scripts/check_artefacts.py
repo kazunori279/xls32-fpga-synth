@@ -6,6 +6,13 @@ gateware; the test suite needs a board on the desk. So an artefact under `boards
 can quietly fall behind `core/synth.x`, and the only symptom is that someone downloads it,
 flashes it, hears the wrong synth, and goes looking at their cables.
 
+`.github/workflows/artefacts.yml` runs this on every push and PR (#10). It could not, until the
+`known_stale` waiver existed: the Basys 3 blob is stale for a reason that is written down and
+cannot currently be fixed, so an unconditional check would have been red from its first run and
+ignored by its second. The waiver is deliberately narrow -- it names the sources it covers and
+lapses if anything outside them changes -- because a blanket skip would hide the drift nobody has
+seen yet along with the drift everybody knows about.
+
 This builds nothing and needs no toolchain. It records the SHA-256 of every source that feeds
 each artefact and compares them on demand -- cheap enough to run on any commit, and unlike
 `git log` it also catches drift from edits you have not committed yet.
@@ -15,6 +22,7 @@ bitstream does not change when a comment does, and a check that fails on prose i
 learn to skip.
 
     uv run --no-project python scripts/check_artefacts.py             # check; exit 1 if stale
+    uv run --no-project python scripts/check_artefacts.py --strict    # ...and on known-stale too
     uv run --no-project python scripts/check_artefacts.py --update    # re-record, after a rebuild
     uv run --no-project python scripts/check_artefacts.py --self-test # the stripping's own check
 
@@ -346,8 +354,25 @@ def measure(spec):
     return {src: source_sha256(src) for src in spec["sources"]}
 
 
+def waived(record, stale_sources):
+    """Is this exact staleness already known and accepted? Returns the reason, or None.
+
+    A blanket "ignore this artefact" flag would be worse than no automation at all: the Basys 3
+    bitstream is stale for a reason we have written down and cannot currently fix (#41 -- Vivado
+    needs an x86 machine and a licence), but it could *also* go stale for a reason nobody has seen,
+    and a flag that hides the first hides the second too. So the waiver names the sources it
+    covers, and only holds while the stale set stays inside them. One new changed file and the
+    waiver stops applying, which is the whole point of it.
+    """
+    known = record.get("known_stale")
+    if not known:
+        return None
+    covered = set(known.get("sources", ()))
+    return known.get("reason", "known stale") if set(stale_sources) <= covered else None
+
+
 def check(name, spec, record):
-    """Return (status, lines). status is one of ok / stale / unrecorded / missing."""
+    """Return (status, lines). status is one of ok / stale / known-stale / unrecorded / missing."""
     artefact = ROOT / spec["artefact"]
     if not artefact.exists():
         return "missing", [f"{spec['artefact']} is not in the tree"]
@@ -376,13 +401,17 @@ def check(name, spec, record):
         return "unrecorded", lines
 
     was = record["sources"]
+    stale_sources = []
     for src in sorted(set(was) | set(now)):
         if src not in was:
             lines.append(f"added since the build:   {src}")
+            stale_sources.append(src)
         elif src not in now:
             lines.append(f"dropped since the build: {src}")
+            stale_sources.append(src)
         elif was[src] != now[src]:
             lines.append(f"changed since the build: {src}")
+            stale_sources.append(src)
 
     if record.get("params") != spec["params"]:
         lines.append(f"build parameters changed: {record.get('params')} -> {spec['params']}")
@@ -397,6 +426,12 @@ def check(name, spec, record):
     if lines:
         for c in changed_since(record.get("built_from_commit"), spec["sources"]):
             lines.append(f"  {c}")
+        # Only source drift can be waived. A params change or a swapped artefact returns above,
+        # before this point, because neither is the situation a waiver was written to describe.
+        reason = waived(record, stale_sources)
+        if reason:
+            lines.append(f"accepted: {reason}")
+            return "known-stale", lines
         return "stale", lines
 
     built = record.get("built_from_commit", "?")
@@ -409,6 +444,9 @@ def main():
     ap.add_argument("--update", action="store_true", help="re-record, after a rebuild")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the comment-stripping is not blind to real edits")
+    ap.add_argument("--strict", action="store_true",
+                    help="fail on known-stale artefacts too (they pass by default, so this can "
+                         "run in CI without being permanently red)")
     # A prefix selects a family, so `tiliqua` still means "the Tiliqua ones" now that there are
     # two of them, and every call site that predates the split keeps working.
     ap.add_argument("only", nargs="?", metavar="ARTEFACT",
@@ -464,7 +502,16 @@ def main():
     if "stale" in seen or "missing" in seen:
         print("A stale artefact is one that will be flashed and will misbehave. Rebuild it")
         print("(README §3), then re-record with --update.")
-    return 0 if seen <= {"ok"} else 1
+    if "known-stale" in seen and not args.strict:
+        print("known-stale artefacts are stale for a reason already written down; the waiver")
+        print("names the sources it covers and lapses if anything else changes. --strict fails")
+        print("on them anyway.")
+
+    # `known-stale` passes by default so this can run unattended -- see #10. It is the difference
+    # between a check that runs on every push and one that is permanently red and therefore
+    # ignored, which is the failure mode that let the Basys 3 bitstream sit stale for four months.
+    ok = {"ok"} if args.strict else {"ok", "known-stale"}
+    return 0 if seen <= ok else 1
 
 
 if __name__ == "__main__":

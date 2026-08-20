@@ -3,9 +3,11 @@
 # This copies files and uploads them. It does NOT build the gateware -- no XLS codegen, no yosys,
 # no Vivado -- so a green run here says nothing about whether the bitstreams committed under
 # boards/*/firmware/ still match their sources. That question has its own answer,
-# scripts/check_artefacts.py, run by hand. Building both boards on push was considered for M32 and
-# cancelled, because Vivado needs a licence and ~100 GB and no hosted runner can produce the
-# Basys 3 half. See docs/TODO.md.
+# scripts/check_artefacts.py, and since #10 its own workflow -- artefacts.yml, which runs it on
+# every push and PR. Building both boards on push was considered for M32 and cancelled, because
+# Vivado needs a licence and ~100 GB and no hosted runner can produce the Basys 3 half. That is
+# still cancelled and artefacts.yml does not change it: it hashes sources, it does not compile.
+# See docs/TODO.md.
 #
 # The site is assembled, not moved: webui/static/ becomes the root and docs/slides/ becomes
 # /slides/. Both keep their relative asset paths, so nothing is rewritten on the way out.

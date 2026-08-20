@@ -5,6 +5,12 @@
     "built_from_commit": "56eb5ef",
     "built_on": "2026-08-11",
     "hash_scheme": "normalized-v1",
+    "known_stale": {
+      "reason": "#41 -- 290d00b and 3aa0227 are core/synth.x fixes that belong to both boards, but rebuilding this one needs Vivado on an x86 machine and then a Basys 3 on the desk for verify.sh. Waives core/synth.x only: anything else changing here is new and should fail.",
+      "sources": [
+        "core/synth.x"
+      ]
+    },
     "params": {
       "STAGES": "48",
       "WCT": "48",
