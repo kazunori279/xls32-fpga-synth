@@ -29,6 +29,7 @@ there as a resolved fact, with the code that resolves it.
   - [What is left — M32, and the risk register](#what-is-left--m32-and-the-risk-register)
   - [M33 — the USB capture path](#milestone-33--the-usb-capture-path-done-hardware-verified)
   - [M34 — the channel mode messages](#milestone-34--the-channel-mode-messages-and-the-trs-jack-cleaning-up-after-itself)
+  - [M36 — 24 voices, and the measurement that had been wrong for four milestones](#milestone-36--24-voices-and-the-measurement-that-had-been-wrong-for-four-milestones)
 - [Friction logs & learnings (Tiliqua)](#friction-logs--learnings-tiliqua)
   - [Toolchain setup](#toolchain-setup)
   - [Repair what the counter names, not what the waveform looks like](#repair-what-the-counter-names-not-what-the-waveform-looks-like)
@@ -62,6 +63,7 @@ graded automatically, everything before it by hand or by simulation.
 
 | **33 ✅** | **The USB capture path**: the UAC2 IN endpoint sizes its own packets from `adc_fifo_level` instead of echoing the host's nominal rate, and the tee gets a multiplier-free DC blocker | **measured over 120 s on hardware: 0 frames lost in 0 events (was 652 of 5,902,732, in 12), mean +0.00003 (was +0.286), 0.000% of the energy below 5 Hz (was 89.6%).** The design got smaller doing it: 23,773 (97%) → 23,557 (96%) |
 | **34 🚧** | **The channel mode messages, and the TRS jack cleaning up after itself**: CC120/121/123 in the engine, `MidiChanWatch` + `TrsPanicInject` in the arbiter so a target change silences the part it leaves without the host's help | **on hardware, both boards**: `check_panic_hw.py` 14/14 on the module (including the injector reaping the part a target change leaves), Basys 3 `verify.sh` 4/4. Below that, `tb_panic` 10/10, `test_midi_arb.py` 9/9, `check_panic.py` PASS, Vivado **0 failing endpoints at +0.276 ns** (better than M33's +0.012), ECP5 **routed at 23,729 (97.7%), overused 0** — but only on `--seed 3`, now pinned in `build.sh`. Still unverified on hardware: `MidiChanWatch`, which needs a keyboard on the TRS jack changing its own transmit channel. CC64 was in scope and was cut for area; see [the area squeeze](#the-area-squeeze) |
+| **36 ✅** | **24 voices becomes the formal build** — and the reduced-voice ladder that ruled this out for four milestones turns out to have been measuring a netlist yosys had pruned to nothing | **the generator bug is fixed and the curve is a slope, not two rungs**: 32 → 24,023 (98.9%) / 46.35 MHz, 28 → 23,358 (96.2%) / 48.85, **24 → 22,796 (93.9%) / 55.48**, converged runs only. That takes [risk 3](#what-is-left--m32-and-the-risk-register) from a 29% bet against the silicon to 8%. On hardware: **99.8/100 (A+), 174 pass / 1 warn / 0 fail**, frame gaps 0.00%, 440.01 Hz. `xls24-r5.tar.gz` → slot 7 (formal), `xls32-r5.tar.gz` → slot 6 (experimental). Known cosmetic fallout: the visualiser's bottom row (#40) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1561,7 +1563,7 @@ struck through were retired, the rows in bold were hit. Two are still open.
 | 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` became the binding resource instead |
 | 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **Hit in M28.** M26's effects build left 488 spare cells and the CV jacks wanted 639, so nextpnr refused to place at 24,848 / 24,288 (102%). A per-block census (`core` 70.5% on its own) ruled out shrinking, so the design split along `fx` into an `fx` slot (97%) and a `cv` slot (90%). **Undone by M29** and the `cv` variant deleted in M31 |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Did not bite. The engine closes at 27.5 MHz at `STAGES=12` and needs 7.2 MHz; it runs at 12.288 MHz with 1.7× margin |
-| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired.** Not the engine's own path and not fixable in the tool flow — occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. The bitstream enumerates, takes MIDI and streams; static timing still fails. Cutting voices remains the fallback. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
+| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired — but the fallback was finally taken in M36.** Not the engine's own path and not fixable in the tool flow: occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. Cutting voices was written down as the fallback in M25 and then wrongly ruled out for four milestones by a [broken variant generator](#milestone-36--24-voices-and-the-measurement-that-had-been-wrong-for-four-milestones); once fixed, 24 voices measured **55.48 MHz at 93.9%** against 32 voices' 46.35 at 98.9%, and became the formal build. Still open — 55.48 is not 60 — but the gap is 8% rather than 29%. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
 | 3c | Stale SI5351 `clk0` silently detunes everything | **Hit in M25.** Only the bootloader programs `clk0`; an SRAM load inherits the last-booted slot's rate, and neither a JTAG refresh nor a power cycle clears it. The ratio-only sim checks cannot see it. *Mitigated in M25*: the USB tee carries a 31-bit `audio`-cycle counter, and both `check_loop.py` and `run_tests.py` measure the clock and refuse to grade before reporting anything else. *Closed in M29* by giving XLS32 a flash slot whose manifest sets `clk0_hz` |
 | 4 | 115200 CDC can't carry audio | **Certain, and retired as a design risk.** UAC2 over `usb2` records 4×24-bit on real hardware; M25 was integration work, not research |
 | 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce.** See [below](#the-usb-dropout-report-that-was-withdrawn) |
@@ -1971,6 +1973,117 @@ The lesson worth carrying is the second one. A fix upstream of a filter cannot b
 that filter by looking for the thing the filter removes; you have to find a quantity the filter
 preserves and the defect does not. Here that quantity was level-invariance, and it separated the
 two bitstreams 10-of-11 to 0-of-9 on a path where the direct measurement read 0.0% either way.
+
+## Milestone 36 — 24 voices, and the measurement that had been wrong for four milestones
+
+**The question this milestone answers is not new.** [Risk 3](#what-is-left--m32-and-the-risk-register)
+has been open since M21: the `clk` domain is 60 MHz, fixed by ULPI, and the design does not close
+it. At 32 voices nextpnr routes to **46.35 MHz**, so the bitstream only works if the silicon is 29 %
+faster than the model. It is, on this desk. It was not on one of the two modules the vendor tried,
+which is [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).
+
+The obvious lever is polyphony, and this repo had ruled it out. `ARCHITECTURE_tiliqua.md` §E1 had
+carried a ladder since M24 — 32 → 23,792 cells, 24 → 19,631, 16 → 19,222 — with the reading that 24
+voices bought 4,161 cells and only +5.8 MHz, and that 16 bought nothing at all. "Measured and dead"
+was in `docs/TODO.md`. Four milestones of timing work went around it.
+
+**The ladder was measuring a pruned netlist.** `spike/voices_variant.py` rewrites a throwaway copy
+of `core/synth.x` to N voices by regex, asserting a count on every rule so a rule that stops
+matching is loud. But `rotate_in`'s tail writeback had **no rule**:
+
+```dslx
+fn rotate_in(v: Voice[32], tail: Voice) -> Voice[32] {
+    let shifted = for (i, acc): (u32, Voice[32]) in u32:0..u32:31 {
+        update(acc, i, v[i + u32:1])
+    }(v);
+    update(shifted, u32:31, tail)      // <- the loop bound above had a rule. This did not.
+}
+```
+
+At N=24 the array became `Voice[24]` and the loop bound became `u32:23`, but the last line kept its
+literal `u32:31`. **`update` with an out-of-range index in DSLX is a no-op.** The rotated ring is
+therefore returned without the incoming voice, no voice ever enters, every slot is unreachable
+state, and yosys deletes the register file.
+
+Every consequence of that points the wrong way. The area drops — that is the 4,161 cells. Fmax
+rises, because the critical path went with it. Nothing errors, at any layer: DSLX type-checks, XLS
+codegens, yosys warns about nothing it does not warn about anyway, nextpnr routes it. The only
+symptom is that the bitstream plays silence, and nobody had ever flashed one, because the numbers
+said not to bother.
+
+**How it was caught, which was luck plus one habit.** Re-running the ladder on today's tree to
+re-check the fallback before writing to the vendor, the 32-voice row moved 23,792 → 24,023 (+231,
+consistent with four milestones of drift) and the 24-voice row moved 19,631 → 22,796 (+3,165, not
+consistent with anything). Two rows from the same generator disagreeing about how much a year of
+commits costs is not a result, it is a bug report. The flip-flop count settled it: +2,475 FF is a
+register file reappearing, not logic accreting. The habit was reading the generated file rather than
+trusting the assertion counts — `grep -n rotate_in` on the 24-voice output showed `u32:31` against a
+`Voice[24]` in one line.
+
+**Why the file's own identity check could not have caught it.** `voices_variant.py --voices 32` is
+required to reproduce `core/synth.x` byte for byte, and it does, and that test is worth having. It
+cannot find a missing rule: at N=32 every substitution is a no-op *by construction*, so the output
+is identical whether a site has a rule or not. The check proves the rules are harmless. Completeness
+is a different property and needs a reduced output to test against. Two rules were added, anchored
+on the whole `update(shifted, u32:31, tail)` call so they cannot eat the loop bound above.
+
+**The corrected curve** — same tree, same day, converged runs only (`overused=0`, "Routing
+complete", a `.config` on disk; see the trap below):
+
+| voices | TRELLIS_COMB | | FF | `clk` Fmax | converged |
+|---|---|---|---|---|---|
+| 32 | 24,023 | 98.9 % | 13,223 | 46.35 MHz | 3 of 6 seeds |
+| 28 | 23,358 | 96.2 % | 12,660 | 48.85 MHz | 7 of 8 |
+| **24** | **22,796** | **93.9 %** | **11,931** | **55.48 MHz** | 4 of 5 |
+
+Not two rungs and not a cliff: a slope, and one worth walking down. 24 voices costs 1,227 cells and
+buys **9.13 MHz**, which takes the bet against the silicon from 29 % to 8 %. 16 voices was left
+unmeasured — every prior 16-voice number is contaminated
+([#38](https://github.com/kazunori279/xls32-fpga-synth/issues/38)).
+
+**The path composition inverts across the knee**, which is why the slope is so steep here. At 98.9 %
+the critical path is 4.49 ns of logic and 15.30 ns of routing: the design is congestion-bound, and
+the router is taking detours. At 93.9 % it is 7.73 ns logic and 10.29 ns routing — of which 5.61 ns
+is the luna descriptor ROM's DP16KD clk-to-q, a fixed cost this design cannot optimise. So the
+returns keep coming until the routing term stops dominating, and then they stop hard.
+
+**Two traps, and both of them read high.** First, a nextpnr run that never converges still writes a
+timing report, and the Fmax in it is meaningless. Second — subtler, and it caught me mid-sweep — a
+run *still in progress* has already written the **post-placement estimate**, at `top.tim` line ~299,
+and it is not the routed result at line ~1112. `--router2-tmg-ripup` read 49.19 MHz that way and
+finished at 47.39. No number off this flow means anything until the log says "Routing complete" and
+a `.config` exists.
+
+**The seed is load-bearing and does not transfer.** On the 24-voice netlist, seeds 1/4/5/6 gave
+51.17 / 55.48 / 48.45 / 54.03 MHz — a 7 MHz spread on identical input. Seed 5 is the best of the
+32-voice draw and among the worst of the 24-voice one. `build.sh` pins 4 for 24 and 5 for 32, and
+any netlist change costs a fresh sweep. This is also why the build stamp matters: `build_id.py`
+bakes `<utc>-<commit>` into a ROM, a dirty tree adds a `+`, and that one character changes the
+netlist's width and re-draws the lottery.
+
+**What shipped.** 24 voices is now the default and the formal bitstream — `boards/tiliqua/build.sh`
+defaults to `VOICES=24`, `xls24-r5.tar.gz` goes to **slot 7**, and the 32-voice archive stays as
+`xls32-r5.tar.gz` on **slot 6**, relabelled experimental rather than deleted
+([#37](https://github.com/kazunori279/xls32-fpga-synth/issues/37)). On hardware the 24-voice build
+grades **99.8/100 (A+)**, 174 pass / 1 warn / 0 fail, frame gaps 0.00 % over 175 captures, pitch
+440.01 Hz (+0.1 cents) — the same grade as 32, because voice count does not touch sample rate
+(codec backpressure sets that, `gateware/xls_core.py`) and the suite's densest case only asks for 32
+simultaneous notes, which 24 voices answers by stealing cleanly.
+
+One cosmetic thing did not survive the reduction: `gateware/viz.py` fixes the visualiser grid at 8×4
+and never sees `VOICES`, so the 24-voice build's bottom row of tiles is drawn from slots that are
+never written and sits at the idle floor forever
+([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)). It is eight dim tiles and no
+audio consequence, and fixing it means a netlist change, a fresh seed sweep and another hardware
+run — so it waits for the next time the netlist moves anyway.
+
+**The lesson.** An optimisation that makes a design *smaller and faster* is the one nobody audits,
+which makes silent-pruning the most expensive class of bug a generator can have. The specific
+mechanism — an out-of-range `update` being a legal no-op rather than an error — is a DSLX property
+worth knowing; the general one is that a code generator's assertions can only cover the rules it
+has, so its real test is reading the output it produces at the setting it is used at. This one had
+been asserting confidently and correctly about the wrong thing for four milestones, and it changed
+a roadmap.
 
 ---
 

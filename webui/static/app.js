@@ -285,7 +285,12 @@ async function refreshFirmware() {
   const usb = await window.XLS32.withUsbStamps(boards);
   boards = usb.boards;
   const shp = await shippedFirmware();
-  const shipTiliqua = (shp.boards || []).find((b) => b.board === 'Tiliqua');
+  // Since #37 the repo ships two Tiliqua bitstreams -- 24 voices (formal, slot 7) and 32
+  // (experimental, slot 6) -- built from the same commit. So they carry the *same* `manifest_tag`,
+  // the board's USB stamp is that commit, and nothing in either bitstream reports its voice count.
+  // The stamp therefore answers "is this the shipped build" and cannot answer "which one", which
+  // is what the wording below is careful about. Matching any of them is the honest test.
+  const shipTiliquas = (shp.boards || []).filter((b) => b.board === 'Tiliqua');
 
   if (!boards.length) {
     onboard.innerHTML = fwRow('On the board',
@@ -314,11 +319,17 @@ async function refreshFirmware() {
       // taken -- a commit or two later whenever the rebuild landed alongside anything else. Two
       // legitimate answers to "which commit", and comparing the wrong one reports a board running
       // exactly the shipped bitstream as not running it.
-      const shipCommit = shipTiliqua && (shipTiliqua.manifest_tag || shipTiliqua.commit);
-      if (shipCommit) {
-        v += b.firmware.commit.replace('+', '') === shipCommit
-          ? ' — same commit as the shipped build'
-          : ' — <b>not</b> the commit this repo ships';
+      const shipCommits = shipTiliquas.map((t) => t.manifest_tag || t.commit).filter(Boolean);
+      if (shipCommits.length) {
+        const onboardCommit = b.firmware.commit.replace('+', '');
+        const hit = shipCommits.filter((c) => c === onboardCommit);
+        v += !hit.length ? ' — <b>not</b> the commit this repo ships'
+           // One commit, two bitstreams, and the stamp names only the commit. Saying "the shipped
+           // build" here would be a guess about which; saying nothing would let a 32-voice board
+           // read as the formal one.
+           : hit.length < shipCommits.length || shipCommits.length === 1
+             ? ' — same commit as the shipped build'
+             : ' — same commit as the shipped builds, which does not say which voice count';
       }
       return fwRow(name, v + stale);
     }).join('');
@@ -344,9 +355,15 @@ async function refreshFirmware() {
     // Same order of preference as the comparison above, for the same reason, and when the two
     // disagree the record commit is still worth showing -- it is what check_artefacts.py hashes
     // the sources against, so it is the one to quote when the check calls the artefact stale.
-    (shp.boards || []).map((b) => fwRow('· ' + b.board,
+    (shp.boards || []).map((b) => fwRow('· ' + (b.label || b.board),
       `${b.built || 'unknown'}${b.tz ? ' ' + b.tz : ''} · ${b.manifest_tag || b.commit} · ` +
       `<code>${b.sha256}</code>` +
+      // Which slot, and whether the repo stands behind it. The 32-voice build fills 98.9% of the
+      // die and misses its clock constraint by 29%; it runs here and did not run on one of the
+      // vendor's two modules, so offering it unlabelled beside the formal one would be a lie of
+      // omission.
+      (b.slot ? ` · slot ${b.slot}` : '') +
+      (b.status && b.status !== 'formal' ? ` · <b>${b.status}</b>` : '') +
       (b.manifest_tag && b.manifest_tag !== b.commit ? ` · recorded at ${b.commit}` : ''))).join('') +
     (shp.error ? fwRow('· firmware.json', 'not readable: ' + shp.error, 'unset') : '');
 }

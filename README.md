@@ -80,27 +80,33 @@ want the panel.
 ### 1 · Flash it — once, from Chrome
 
 1. **Download one file** —
-   **[`xls32-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz)**
-   (430 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
+   **[`xls24-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz)**
+   (410 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
    given at boot.
 2. **Write it to the module** — connect USB-C to the module's **`dbg`** port, open
    **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
-   upload the file, and write it to **slot 6**. Power-cycle the case; the bootloader counts down
-   for five seconds — pick slot 6 from the menu once, and every cold boot after that goes straight
+   upload the file, and write it to **slot 7**. Power-cycle the case; the bootloader counts down
+   for five seconds — pick slot 7 from the menu once, and every cold boot after that goes straight
    there.
 
-This is the **only** step that needs a computer at all, so borrow one if you have to. Once slot 6
+This is the **only** step that needs a computer at all, so borrow one if you have to. Once slot 7
 is written the module never asks again.
+
+> There is a second archive beside it, `xls32-r5.tar.gz`, which is the same synth with **32** voices
+> instead of 24 and belongs in **slot 6**. It fills 98.9 % of the FPGA where 24 voices fill 93.9 %,
+> and this repo labels it *experimental* for exactly that reason: it runs here, and it did not run
+> on one of the two modules the module's maker tried it on. Start with slot 7.
+> [`boards/tiliqua/firmware/README.md`](boards/tiliqua/firmware/) is the long answer.
 
 ### 2 · Play it — no computer at all
 
 Move the cable to **`usb2`** and plug in a **USB-MIDI keyboard**, or put a keyboard straight into
-the **TRS MIDI-In** jack and leave the computer out of it entirely. It is 32 voices across 4 parts,
+the **TRS MIDI-In** jack and leave the computer out of it entirely. It is 24 voices across 4 parts,
 on MIDI channels 1–4, and a TRS keyboard's own transmit channel picks which part it plays.
 
 Sound comes out of **`out0`/`out1`** — the stereo pair; the other two jacks are silent by design —
 and, whenever `usb2` is connected, back up that same cable as a 48 kHz USB audio input at the same
-time. If you fitted a screen, it shows 32 tiles, one per voice.
+time. If you fitted a screen, it shows one tile per voice.
 
 ### 3 · Control it — the panel
 
@@ -139,10 +145,10 @@ play the thing.
 
 | Spec | Value |
 |------|-------|
-| **Polyphony** | 32 voices, time-multiplexed — one voice enters the pipeline every ~24 engine cycles |
+| **Polyphony** | time-multiplexed — one voice enters the pipeline every ~24 engine cycles. **32** voices on Basys 3, **24** on the Tiliqua bitstream this repo ships (32 there too, as an experimental build) |
 | **Multitimbral** | 4 parts — MIDI channels 1–4, each an independent patch |
 | **Synthesis** | subtractive: oscillators → per-voice resonant filter → VCA, with 2× ADSR + LFO |
-| **Oscillators** | 2 per voice (detuned dual) + sub-osc → up to 64 oscillators across the 32 voices; 5 waveforms (sine/saw/square/triangle/noise), PWM, cross-osc ring/FM/FM+ (8 ratios) |
+| **Oscillators** | 2 per voice (detuned dual) + sub-osc → up to 64 oscillators across a 32-voice build, 48 across a 24; 5 waveforms (sine/saw/square/triangle/noise), PWM, cross-osc ring/FM/FM+ (8 ratios) |
 | **Filter** | per-voice state-variable, resonant — LP / HP / BP / notch |
 | **Envelopes** | 2× ADSR per voice (amplitude + filter) |
 | **Modulation** | per-part LFO (vibrato + tremolo), pitch bend (±2 st), portamento/glide |
@@ -153,8 +159,9 @@ play the thing.
 ### Two boards, one synth
 
 The same instrument ships on two very different pieces of hardware. Both run the identical engine
-with the identical feature set; what differs is how you hear it, how you play it, and what it takes
-to get going.
+with the identical feature set — down to the same `core/synth.x`; what differs is how you hear it,
+how you play it, what it takes to get going, and one number, how many notes sound at once before
+the engine steals a voice.
 
 | | **Basys 3** | **Tiliqua** |
 |---|---|---|
@@ -162,9 +169,10 @@ to get going.
 | **How you hear it** | 16-bit audio back up the USB cable, through the panel or the `host/` tools | Eurorack jacks `out0`/`out1` — **and** the same audio up the USB cable at once |
 | **How you play it** | over USB: the panel, or any MIDI source the host can reach | USB-MIDI, **or a keyboard straight into the TRS MIDI-In jack** with no computer at all |
 | **Sample rate** | 32 kHz | 48 kHz |
-| **You can also watch** | 16 LEDs as a voice-activity comet, and the 7-segment display | a **720×720p60 DVI visualiser** — 32 voices as 32 tiles — plus 8 level LEDs and an encoder |
+| **Polyphony** | 32 voices | **24** voices, or 32 from the experimental build — see below |
+| **You can also watch** | 16 LEDs as a voice-activity comet, and the 7-segment display | a **720×720p60 DVI visualiser** — one tile per voice — plus 8 level LEDs and an encoder |
 | **To flash it** | a clone of this repo and [`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/) — one command | a Chrome tab, and nothing installed |
-| **Prebuilt bitstream** | ✅ [`boards/basys3/firmware/top.bit`](boards/basys3/firmware/top.bit.md) | ✅ [`boards/tiliqua/firmware/xls32-r5.tar.gz`](boards/tiliqua/firmware/) |
+| **Prebuilt bitstream** | ✅ [`boards/basys3/firmware/top.bit`](boards/basys3/firmware/top.bit.md) | ✅ [`xls24-r5.tar.gz`](boards/tiliqua/firmware/) (slot 7) and [`xls32-r5.tar.gz`](boards/tiliqua/firmware/) (slot 6) |
 
 Neither needs an FPGA toolchain — the bitstream is committed for both, and building from source is
 optional ([§3](#3-builders-guide)). **Tiliqua is the gentler start**: flashing it is a web page, and
@@ -311,15 +319,27 @@ You need a **Tiliqua R5** in a Eurorack case with power and **one USB-C cable to
 `usb2`** carries the UAC2 audio and USB-MIDI link — add it when you want to play from the browser
 or from the `host/` tools, which is [Run the web UI](#run-the-web-ui) below.
 
-[`boards/tiliqua/firmware/xls32-r5.tar.gz`](boards/tiliqua/firmware/) is a committed **bitstream
-archive** — the bitstream plus the manifest the bootloader needs — so you can run the synth without
-building. **Download it directly**
-([raw link](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz),
-430 KB) if you have not cloned the repo. Then write it to a slot.
+[`boards/tiliqua/firmware/`](boards/tiliqua/firmware/) holds two committed **bitstream archives** —
+each the bitstream plus the manifest the bootloader needs — so you can run the synth without
+building. They are the same engine and differ in polyphony:
+
+| | voices | die | `clk` post-route | slot | |
+|---|---|---|---|---|---|
+| **`xls24-r5.tar.gz`** ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz), 410 KB) | 24 | 93.9 % | 55.48 MHz | **7** | **formal** — what this repo stands behind |
+| `xls32-r5.tar.gz` ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz), 430 KB) | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** |
+
+**Take the 24-voice one.** Neither closes the 60 MHz `clk` constraint — that is
+[issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3), and it is why this repo exists
+— so both are a bet that the silicon beats nextpnr's model. At 32 voices the bet is **29 %** and it
+has already failed on one of the two modules the module's maker tried. At 24 it is **8 %**, for four
+fewer simultaneous notes. Both archives are graded on hardware here;
+[`boards/tiliqua/firmware/README.md`](boards/tiliqua/firmware/) has the numbers and the history.
+
+Then write it to a slot.
 
 **A · The web flasher — the default, and nothing to install.** Open
 [**tiliqua-webflash**](https://apfaudio.github.io/tiliqua-webflash/) in Chrome, pick the module over
-WebUSB, upload `xls32-r5.tar.gz`, and choose **slot 6**.
+WebUSB, upload `xls24-r5.tar.gz`, and choose **slot 7**.
 
 **B · `pdm flash`, if you already have the vendor SDK checked out** (see
 [§3 · Tiliqua](#b--tiliqua--build-flash-verify) for what `pdm` needs). `openFPGALoader --scan-usb`
@@ -328,13 +348,14 @@ not talking and nothing below will work:
 
 ```bash
 cd ~/Documents/GitHub/tiliqua/gateware
-pdm flash archive ~/Documents/GitHub/xls32-fpga-synth/boards/tiliqua/firmware/xls32-r5.tar.gz \
-    --slot 6
+pdm flash archive ~/Documents/GitHub/xls32-fpga-synth/boards/tiliqua/firmware/xls24-r5.tar.gz \
+    --slot 7
 ```
 
-Any slot 0–7 works; **slot 6 is what this repo's docs and tooling assume**, and it is where the
-vendor DSP-MDIFF example used to live. Catch the five-second countdown, pick the slot from the menu
-once, and every cold boot from then on loads it directly.
+Any slot 0–7 works, and the archive does not care which. **Slot 7 for 24 voices and slot 6 for 32**
+is what this repo's docs and tooling assume — keeping them apart means you can A/B the two without
+reflashing, and slot 6 is where the vendor DSP-MDIFF example used to live. Catch the five-second
+countdown, pick the slot from the menu once, and every cold boot from then on loads it directly.
 
 > **Flashing to a slot is also how you avoid the clock trap — take the archive path if you can.**
 > The `audio` domain is the SI5351's `clk0` wired straight into the fabric, with no FPGA PLL, and
@@ -353,8 +374,10 @@ once, and every cold boot from then on loads it directly.
 
 What you should see and hear when it comes up:
 
-- **The screen** — 720×720p60 on the DVI output: 32 tiles, one per voice, brightness the envelope
-  and hue the pitch. It is beam-raced, with no framebuffer.
+- **The screen** — 720×720p60 on the DVI output: an 8×4 grid of tiles, one per voice, brightness the
+  envelope and hue the pitch. Beam-raced, with no framebuffer. On the 24-voice build the bottom row
+  never lights — the grid's size is fixed in gateware, which is
+  [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40) and is cosmetic only.
 - **The jacks** — `out0`/`out1` are the stereo effects pair, and the only two that make sound;
   `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
   show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
@@ -371,7 +394,7 @@ What you should see and hear when it comes up:
 > **If it does not work.** In rough order of how often each one bites:
 >
 > - **Everything plays wildly sharp.** You SRAM-loaded instead of booting a slot, and the module
->   inherited the previous slot's clock — see the clock trap above. Flash the archive to slot 6 and
+>   inherited the previous slot's clock — see the clock trap above. Flash the archive to a slot and
 >   boot it from the menu.
 > - **No sound at all.** Patch from **`out0`/`out1`**. `out2`/`out3` are silent by design, and the
 >   bottom four of the eight LEDs stay dark for the same reason.
@@ -923,37 +946,48 @@ cd ~/Documents/GitHub/tiliqua/gateware && pdm install     # creates the .venv bu
 Then, from this repo:
 
 ```bash
-bash boards/tiliqua/build.sh              # engine.v + Amaranth + yosys/nextpnr -> build/tiliqua/build/xls32-r5/top.bit
+bash boards/tiliqua/build.sh              # engine.v + Amaranth + yosys/nextpnr -> build/tiliqua/build/xls24-r5/top.bit
+VOICES=32 bash boards/tiliqua/build.sh    # the experimental 32-voice build, into build/tiliqua/build/xls32-r5/
 SIM=1 bash boards/tiliqua/build.sh        # verilate + run instead; leaves build/tiliqua/out0.txt
 SKIP_BUILD=1 bash boards/tiliqua/build.sh # elaborate only (a fast wiring check, no P&R)
 uv run boards/tiliqua/area.py             # per-block cell census out of yosys' top.json
 ```
 
-> **nextpnr needs `--router router2` here, and it is not a preference.** At 97% TRELLIS_COMB the
-> default router does not converge — it ripped up more arcs than it laid for two hours and never
-> finished; router2 routes the same netlist in 81 s with `overused=0`. `build.sh` sets it, together
-> with `--timing-allow-fail` for the known `sync`-domain shortfall
-> ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
+`VOICES` defaults to **24**. The voice count is not in the tree: `core/synth.x` is 32 voices and
+stays that way for the Basys 3, and `spike/voices_variant.py` rewrites a throwaway copy at build
+time (`--voices 32` must reproduce the original byte for byte, which is asserted, not hoped for).
 
-The build leaves two things worth having in `build/tiliqua/build/xls32-r5/`: `top.bit`, and a
-`xls32-<tag>-r5.tar.gz` **bitstream archive** pairing it with a generated `manifest.json`. Load
+> **nextpnr needs `--router router2` here, and it is not a preference.** At 94–99% TRELLIS_COMB the
+> default router does not converge — it ripped up more arcs than it laid for two hours and never
+> finished; router2 routes the same netlist in ~80 s with `overused=0`. `build.sh` sets it, together
+> with `--timing-allow-fail` for the known `clk`-domain shortfall and a **pinned `--seed`**, which
+> is load-bearing at this occupancy: seeds 1/4/5/6 gave 51.17 / 55.48 / 48.45 / 54.03 MHz on the
+> same 24-voice netlist, and the winners do not transfer between netlists
+> ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
+> Build from a **clean tree**: the build stamp gains a `+` on a dirty one, and because it is a
+> string baked into a ROM, that one character changes the netlist and re-draws the lottery.
+
+The build leaves two things worth having in `build/tiliqua/build/xls24-r5/`: `top.bit`, and a
+`xls24-<tag>-r5.tar.gz` **bitstream archive** pairing it with a generated `manifest.json`. Load
 whichever suits — but read the bootloader warning in
 [§2 · Tiliqua](#b--tiliqua--flash-and-go) before the SRAM one:
 
 ```bash
 # SRAM — fast, but inherits whatever clk0 the last-booted slot left behind:
-openFPGALoader -c dirtyJtag build/tiliqua/build/xls32-r5/top.bit
+openFPGALoader -c dirtyJtag build/tiliqua/build/xls24-r5/top.bit
 
 # Slot — slower, and programs clk0 from the archive's own manifest. `pdm` must run from the SDK,
 # so pass an absolute path back to this repo:
-ARCHIVE="$PWD"/build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz
-(cd ~/Documents/GitHub/tiliqua/gateware && pdm flash archive $ARCHIVE --slot 6)
+ARCHIVE="$PWD"/build/tiliqua/build/xls24-r5/xls24-*-r5.tar.gz
+(cd ~/Documents/GitHub/tiliqua/gateware && pdm flash archive $ARCHIVE --slot 7)
 ```
 
-To refresh the committed archive, copy it over with its tag stripped:
+To refresh a committed archive, copy it over with its tag stripped, then re-record its provenance:
 
 ```bash
-cp build/tiliqua/build/xls32-r5/xls32-*-r5.tar.gz boards/tiliqua/firmware/xls32-r5.tar.gz
+cp build/tiliqua/build/xls24-r5/xls24-*-r5.tar.gz boards/tiliqua/firmware/xls24-r5.tar.gz
+uv run --no-project python scripts/check_artefacts.py --update tiliqua-24
+uv run --no-project python scripts/build_firmware_json.py
 ```
 
 Verify, cheapest check first — each isolates one layer, and each was a milestone's exit gate:
@@ -1181,10 +1215,11 @@ this table is [§1](#two-boards-one-synth).)
 | **Audio out** | 16-bit PCM over the UART; I2S Pmod (built, HW-pending) | Eurorack jacks `out0`/`out1` as a stereo pair (AK4619 codec), plus the USB tee — a monitoring copy, not a lossless one |
 | **MIDI in** | over the same USB UART; DIN @ 31.25 kbaud (built, HW-pending) | USB-MIDI, **plus a TRS MIDI-In jack** (arbitrated in gateware; both play on hardware) |
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
-| **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — 32 voices as 32 tiles, no framebuffer; 8 level LEDs; encoder |
-| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 23,729 / 24,288 TRELLIS_COMB (97%) · 28/28 MULT18X18D · 53/56 DP16KD |
-| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 6, over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
-| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls32-r5.tar.gz` (bitstream archive) |
+| **Polyphony** | 32 voices | **24** (formal) or 32 (experimental) — `VOICES=` on `build.sh` |
+| **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — one tile per voice, no framebuffer; 8 level LEDs; encoder |
+| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 22,796 / 24,288 TRELLIS_COMB (93.9%) at 24 voices, 24,023 (98.9%) at 32 · 28/28 MULT18X18D · 53/56 DP16KD |
+| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 7 (or 6 for the 32-voice one), over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
+| **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls24-r5.tar.gz` and `xls32-r5.tar.gz` |
 
 Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the
 transport is chosen by `$XLS32_BOARD` (default `basys3`). The per-board shells are documented in

@@ -35,7 +35,15 @@ def add(**kw): CASES.append(TestCase(category="stress", **kw))
 
 NOTES32 = list(range(40, 72))     # 32 distinct notes
 
-# 1) 32-voice max polyphony
+# 1) maximum polyphony -- 32 notes at once
+#
+# 32 notes because that is the engine's ring on Basys 3 and on the experimental Tiliqua build. The
+# formal Tiliqua bitstream has 24 (#37), where the same stimulus oversubscribes by 8 and this
+# becomes a voice-stealing test instead of an exact-capacity one. The stimulus stays at 32 either
+# way, deliberately: stealing cleanly is the behaviour that matters, a board that mangles it fails
+# here, and dropping to 24 would both retire a real check and move published scores that were
+# graded against this one. The `stress_32voice` id is likewise left alone -- the suite's 0-100
+# history is keyed on it.
 def _perf_32(fd):
     for n in NOTES32: H.send(fd, note_on(n, 45))   # moderate vel: 32 voices shouldn't clip the mix
     time.sleep(1.6)
@@ -43,9 +51,10 @@ def _perf_32(fd):
     time.sleep(0.9)
 def _chk_32(s):
     score, g, clip, latched = stress_score(s)
-    return mk(score, metric(g, clip, latched, f", peak {A.peak(s)}"), "32 voices, no glitch/clip/latch")
+    return mk(score, metric(g, clip, latched, f", peak {A.peak(s)}"), "32 notes, no glitch/clip/latch")
 def _setup_32(fd): w(fd, set_wave(1), set_cutoff(70), set_reso(20), set_fmode(0), cc(20, 2), cc(22, 100), cc(23, 30))
-add(id="stress_32voice", title="32-voice maximum polyphony", desc="All 32 physical voices at once, then released — must stay clean.",
+add(id="stress_32voice", title="Maximum polyphony — 32 notes at once",
+    desc="32 notes together, then released. A 32-voice build plays them all; a 24-voice one steals, and must do it cleanly.",
     expected="no glitches, no clipping, silent after release", setup=_setup_32, perform=_perf_32, check=_chk_32, capture_s=3.0)
 
 # 2) rapid retrigger (stuck-voice check)
@@ -62,7 +71,8 @@ def _setup_retrig(fd): w(fd, set_wave(1), set_cutoff(90), set_reso(20), cc(20, 2
 add(id="stress_retrigger", title="Rapid retrigger", desc="Machine-gun note on/off — voices must free correctly (no hang).",
     expected="clean, returns to silence", setup=_setup_retrig, perform=_perf_retrig, check=_chk_retrig, capture_s=3.0)
 
-# 3) unison 4 × 8-note chord = 32 voices (allocation stress)
+# 3) unison 4 x 8-note chord = 32 voice-slots (allocation stress). Same note as case 1: on the
+# 24-voice build this asks for more than there are and grades the stealing.
 def _perf_unichord(fd):
     ch = [40, 43, 47, 50, 54, 57, 61, 64]
     for n in ch: H.send(fd, note_on(n, 70))
@@ -71,9 +81,10 @@ def _perf_unichord(fd):
     time.sleep(0.9)
 def _chk_unichord(s):
     score, g, clip, latched = stress_score(s)
-    return mk(score, metric(g, clip, latched), "unison×chord = 32 voices, clean")
+    return mk(score, metric(g, clip, latched), "unison×chord = 32 voice-slots, clean")
 def _setup_unichord(fd): w(fd, set_wave(1), set_unison(3), set_cutoff(80), set_reso(20), cc(20, 2), cc(22, 100), cc(23, 30))
-add(id="stress_unison_chord", title="Unison × chord (32 voices)", desc="4-voice unison on an 8-note chord saturates voice allocation.",
+add(id="stress_unison_chord", title="Unison × chord (32 voice-slots)",
+    desc="4-voice unison on an 8-note chord saturates voice allocation, and oversubscribes a 24-voice build.",
     expected="no glitch/clip/latch", setup=_setup_unichord, perform=_perf_unichord, check=_chk_unichord, capture_s=3.0)
 
 # 4) all-effects + cathedral tail (long feedback, must not rail)

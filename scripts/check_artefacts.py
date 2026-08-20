@@ -63,37 +63,58 @@ ARTEFACTS = {
             "boards/basys3/scripts/vmbuild_vivado.sh",
         ],
     },
-    "tiliqua": {
-        "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
-        "doc": "boards/tiliqua/firmware/README.md",
-        "params": {"STAGES": "12", "WCT": "12", "hw_rev": "5"},
-        # What boards/tiliqua/build.sh runs and what gateware/top.py imports. fx_model.py is
-        # the NumPy reference, test_*.py are the Amaranth/Verilator harnesses, and
-        # sim_xls_core.cpp is simulation-only -- none of them reach the bitstream. Neither
-        # does core/gen_lut.py, which no build script calls.
-        #
-        # NOT covered: the Tiliqua SDK checkout ($TILIQUA_SDK) that build.sh builds against.
-        # It lives outside this repo and cannot be hashed from here, so an SDK bump will not
-        # show up below. That is a real hole; it is just not one this script can close.
-        "sources": [
-            "core/synth.x",
-            "core/codegen.sh",
-            "core/fix_verilog.py",
-            "boards/tiliqua/build.sh",
-            "boards/tiliqua/gateware/top.py",
-            "boards/tiliqua/gateware/xls_core.py",
-            "boards/tiliqua/gateware/usb_iface.py",
-            # Reaches the bitstream through iManufacturer -- one string descriptor, no logic. Its
-            # *output* changes on every build by design (it is a timestamp), which this check does
-            # not see and should not: the record is about whether the sources drifted, and a
-            # bitstream that differs only in the minute it names has not drifted.
-            "boards/tiliqua/gateware/build_id.py",
-            "boards/tiliqua/gateware/midi_filter.py",
-            "boards/tiliqua/gateware/midi_arb.py",
-            "boards/tiliqua/gateware/fx.py",
-            "boards/tiliqua/gateware/dc_block.py",
-            "boards/tiliqua/gateware/viz.py",
-        ],
+    # Two Tiliqua bitstreams since M36: 24 voices is the formal build (slot 7) and 32 is kept as
+    # experimental (slot 6). See boards/tiliqua/firmware/README.md.
+    #
+    # They are built from nearly the same committed sources, and the difference between them is
+    # not in the tree at all: the voice count is rewritten into a throwaway copy of core/synth.x by
+    # voices_variant.py at build time. So `voices` is a build param here, exactly like STAGES. Left
+    # out, the two records would differ only by their artefact hash, and this script would report a
+    # 24-voice archive as matching a 32-voice source set -- while --self-test still printed 0 blind,
+    # because no line of any tracked file would move either one. `SEED` is here for a weaker version
+    # of the same reason: it does not change the netlist, but it decides which bitstream comes out
+    # of it, and at this occupancy the two seeds are not interchangeable.
+    **{
+        f"tiliqua-{voices}": {
+            "artefact": f"boards/tiliqua/firmware/xls{voices}-r5.tar.gz",
+            "doc": "boards/tiliqua/firmware/README.md",
+            "params": {"STAGES": "12", "WCT": "12", "hw_rev": "5",
+                       "voices": str(voices), "SEED": seed},
+            # What boards/tiliqua/build.sh runs and what gateware/top.py imports. fx_model.py is
+            # the NumPy reference, test_*.py are the Amaranth/Verilator harnesses, and
+            # sim_xls_core.cpp is simulation-only -- none of them reach the bitstream. Neither
+            # does core/gen_lut.py, which no build script calls.
+            #
+            # NOT covered: the Tiliqua SDK checkout ($TILIQUA_SDK) that build.sh builds against.
+            # It lives outside this repo and cannot be hashed from here, so an SDK bump will not
+            # show up below. That is a real hole; it is just not one this script can close.
+            "sources": [
+                "core/synth.x",
+                # Only for the reduced-voice build, because only that one runs it: at VOICES=32
+                # build.sh hands core/synth.x straight to codegen and never calls the generator.
+                # "sources that actually reach the bitstream, nothing more" -- listing it for 32
+                # would mean an edit to a script that build could not have executed reporting the
+                # 32-voice archive stale.
+                *(["boards/tiliqua/spike/voices_variant.py"] if voices != 32 else []),
+                "core/codegen.sh",
+                "core/fix_verilog.py",
+                "boards/tiliqua/build.sh",
+                "boards/tiliqua/gateware/top.py",
+                "boards/tiliqua/gateware/xls_core.py",
+                "boards/tiliqua/gateware/usb_iface.py",
+                # Reaches the bitstream through iManufacturer -- one string descriptor, no logic.
+                # Its *output* changes on every build by design (it is a timestamp), which this
+                # check does not see and should not: the record is about whether the sources
+                # drifted, and a bitstream that differs only in the minute it names has not.
+                "boards/tiliqua/gateware/build_id.py",
+                "boards/tiliqua/gateware/midi_filter.py",
+                "boards/tiliqua/gateware/midi_arb.py",
+                "boards/tiliqua/gateware/fx.py",
+                "boards/tiliqua/gateware/dc_block.py",
+                "boards/tiliqua/gateware/viz.py",
+            ],
+        }
+        for voices, seed in ((24, "4"), (32, "5"))
     },
 }
 
@@ -388,14 +409,21 @@ def main():
     ap.add_argument("--update", action="store_true", help="re-record, after a rebuild")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the comment-stripping is not blind to real edits")
-    ap.add_argument("only", nargs="?", choices=sorted(ARTEFACTS), help="just this one")
+    # A prefix selects a family, so `tiliqua` still means "the Tiliqua ones" now that there are
+    # two of them, and every call site that predates the split keeps working.
+    ap.add_argument("only", nargs="?", metavar="ARTEFACT",
+                    help=f"just this one, or a prefix ({', '.join(sorted(ARTEFACTS))})")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
 
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
-    names = [args.only] if args.only else list(ARTEFACTS)
+    names = list(ARTEFACTS)
+    if args.only:
+        names = [n for n in names if n == args.only or n.startswith(args.only + "-")]
+        if not names:
+            ap.error(f"unknown artefact {args.only!r}; known: {', '.join(sorted(ARTEFACTS))}")
 
     if args.update:
         for name in names:
@@ -419,7 +447,7 @@ def main():
         spec = ARTEFACTS[name]
         status, lines = check(name, spec, state.get(name))
         seen.add(status)
-        print(f"{name:9} {spec['artefact']}")
+        print(f"{name:11} {spec['artefact']}")
         for i, line in enumerate(lines):
             head = f"  {status:11} " if i == 0 else " " * 14
             # Indented lines are the git log; leave them alone. Prose gets wrapped, because
