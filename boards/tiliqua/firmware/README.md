@@ -30,7 +30,7 @@ not pay on one of the vendor's two modules, which is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and the reason any of this
 exists. At 24 voices the same design is 93.9 % and closes at **55.48 MHz** — the same bet at **8 %**.
 
-Four fewer notes of polyphony for roughly a quarter of the risk. If a module refuses to enumerate,
+Eight fewer notes of polyphony for roughly a quarter of the risk. If a module refuses to enumerate,
 drops audio intermittently, or gets worse as it warms up, try slot 7 before you try anything else.
 
 The 24-voice build is graded **99.8/100 (A+)** on the module — 174 pass / 1 warn / 0 fail over the
