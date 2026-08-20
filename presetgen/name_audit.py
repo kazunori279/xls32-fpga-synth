@@ -9,7 +9,12 @@ Pad <- organ, FX <- reed), and the fits stop at a median loss of 22.9-28.5, whic
 This renders every preset in a bank on `engine.py` and scores it against text with CLAP:
 
   category    which of the 8 category prompts CLAP ranks first, against the label the bank carries.
-              An accuracy and a confusion matrix -- the headline number.
+              An accuracy and a confusion matrix -- the headline number. Each prompt is centred
+              on its own mean before the ranking: the captions are not on a common scale, and
+              uncentred the ranking largely reports which sentence CLAP likes rather than what
+              the audio is. It is worth a lot -- on presets_soundfont.json, Pad, Strings and FX
+              all scored a flat 0% uncentred and go to 25/50/25% once centred, and the bank's
+              agreement rises 20.3% -> 29.7%. See category_report, and #19.
   own-name    where the preset's own name lands when every name in the bank is a candidate.
               Rank, not cosine: CLAP similarities are not calibrated and a bare 0.31 means nothing,
               while "your own name came 64th of 128" means exactly what it says.
@@ -61,7 +66,9 @@ CATEGORY_PROMPT = {
 
 # The render window. Defaults to the one the fits used (search.GATE_S/TAIL_S) so the audit hears
 # what the search heard; GATE=4 is the sensitivity check that asks how much of a slow category's
-# score is the 1.6 s window cutting its attack off rather than the patch.
+# score is the 1.6 s window cutting its attack off rather than the patch. Bank path only:
+# --targets plays each corpus WAV at its own full length, so GATE does nothing there and the
+# ceiling cannot be re-asked this way -- quote the sensitivity check about banks, not about #19.
 GATE_S = float(os.environ.get("GATE", search.GATE_S))
 TAIL_S = float(os.environ.get("TAIL", search.TAIL_S))
 
@@ -93,13 +100,9 @@ def clean_name(name):
     return _ID_RE.sub("", _NOTE_RE.sub("", name)).strip() or name
 
 
-def category_report(A, truth):
-    """Which category prompt does CLAP rank first, against the label the corpus/bank carries?"""
-    cats = list(CATEGORY_PROMPT)
-    C = loss_deep.clap_text_emb([CATEGORY_PROMPT[c] for c in cats])
-    pred = (A @ C.T).argmax(axis=1)
+def _confusion(cats, truth, pred, title):
     acc = float((pred == truth).mean())
-    print(f"category agreement: {acc*100:5.1f}%  (chance {100/len(cats):.1f}%)")
+    print(f"{title}: {acc*100:5.1f}%  (chance {100/len(cats):.1f}%)")
     conf = np.zeros((len(cats), len(cats)), dtype=int)
     for t, q in zip(truth, pred):
         conf[t, q] += 1
@@ -108,6 +111,48 @@ def category_report(A, truth):
         n = conf[i].sum()
         hit = conf[i, i] / n * 100 if n else 0
         print(f"  {c:9} " + "".join(f"{v:6d}" for v in conf[i]) + f"   {hit:5.1f}% kept")
+    return acc
+
+
+def category_report(A, truth):
+    """Which category prompt does CLAP rank first, against the label the corpus/bank carries?
+
+    Ranks the prompts per sample, but only after subtracting each prompt's own mean, because a
+    bare argmax over CLAP cosines compares numbers that are not on the same scale. Each caption
+    carries a baseline affinity of its own, and it swamps the audio: on --targets soundfont the
+    baselines run 0.02 (FX) to 0.33 (Keys), a 0.31 spread against a within-prompt sd of 0.11
+    across all 128 samples, so the ranking largely reports which sentence CLAP likes in the
+    abstract. Uncorrected, "a strange synthesizer sound effect" peaks below five other prompts'
+    *averages* -- no audio can make it win -- and the columns for the low-baseline prompts come
+    out empty, which reads as a category the corpus got wrong rather than a question this audit
+    asked badly. The printed spread is the tell: while it stays well above the within-prompt sd,
+    the uncentred matrix is mostly measuring the prompts. See #19 for what that cost.
+
+    Centring assumes the categories are balanced -- true of every bank and of --targets, both
+    8 or 16 per category by construction, but LIMIT slices the head off a bank and breaks it,
+    so that case says so and falls back. The uncentred number is printed either way: it is what
+    every earlier reading of this audit reported, and dropping it would silently rebase them.
+    """
+    cats = list(CATEGORY_PROMPT)
+    C = loss_deep.clap_text_emb([CATEGORY_PROMPT[c] for c in cats])
+    S = A @ C.T                                                            # [N, 8], uncalibrated
+    counts = np.bincount(truth, minlength=len(cats))
+    balanced = len(set(counts.tolist())) == 1
+
+    raw_pred = S.argmax(axis=1)
+    if not balanced:
+        print("category prompts left uncentred: the sample is unbalanced "
+              f"({', '.join(f'{c}={n}' for c, n in zip(cats, counts))}), so a per-prompt mean "
+              "would absorb the class skew along with the prompt bias")
+        return _confusion(cats, truth, raw_pred, "category agreement"), raw_pred
+
+    bias = S.mean(axis=0)
+    print(f"prompt bias: {' '.join(f'{c[:4]} {m:.2f}' for c, m in zip(cats, bias))}  "
+          f"(spread {bias.max()-bias.min():.2f} vs within-prompt sd {S.std(axis=0).mean():.2f})")
+    _confusion(cats, truth, raw_pred, "category agreement, uncentred")
+    print()
+    pred = (S - bias).argmax(axis=1)
+    acc = _confusion(cats, truth, pred, "category agreement")
     return acc, pred
 
 
