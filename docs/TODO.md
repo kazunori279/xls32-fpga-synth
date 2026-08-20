@@ -81,10 +81,25 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
    pipeline would catch a slow slide between the panel and the sound on a different one.
 
    It is now the README's hero, published as
-   [`sWc6g7cgsd4`](https://youtu.be/sWc6g7cgsd4). One thing is still open, and it is not about the
+   [`sWc6g7cgsd4`](https://youtu.be/sWc6g7cgsd4). ~~One thing is still open, and it is not about the
    take. The acceptance was a listening judgement, not a measurement: there is still no check that
-   says whether a declick landed on a dropout or on a knob, which only matters now for takes made
-   before the counter fix.
+   says whether a declick landed on a dropout or on a knob.~~ **Fixed 2026-08-20**
+   ([#12](https://github.com/kazunori279/xls32-fpga-synth/issues/12)). `declick.py --audit` runs
+   both detectors over one take and matches them: a waveform hit with no counter event under it is
+   a knob move the heuristic was about to rebuild. It exits 1 if it finds any.
+
+   The reason this could be a measurement rather than a listening judgement is that the ground
+   truth was always in the same file as the music — ch2/3 carry the counter, so nothing had to be
+   inferred, only lined up. Tolerance is `MERGE_S`, the window the detector already uses to call
+   two hits one seam. Verified against a synthesised take with one real dropout and three knob
+   steps: **1 corroborated, 3 spurious (75%), 0 missed, exit 1** — and `--heuristic --dry-run` on
+   the same file duly reports four seams, which is the bug the audit exists to name.
+
+   Misses are reported and do **not** fail, deliberately. A spurious bridge lands ~0.18 from what
+   was there against a CC step of 0.0078, so it is about twenty times louder than the thing it
+   aimed at; a miss just leaves a click that was already there. Scoring them the same would give no
+   reason to prefer the counter path. With no counter on the take it exits 2 rather than guessing,
+   because an audit against nothing is the listening judgement again with a number on it.
 2. ~~**The Aligner's mid-stream re-lock has not been demonstrated in the browser.**~~ **Done
    2026-08-10, and it found the re-lock was dead.** Writing the demonstration is what exposed it:
    the check scored `self.buf`, which `feed` empties of whole frames every call, so the guard

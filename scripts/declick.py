@@ -38,9 +38,18 @@ This conceals; it does not restore. The ~1 ms that never arrived is still gone, 
 of a seam are not in phase, so the cross-fade thins the tone for those 5 ms. That is inaudible
 where a click is not.
 
+`--audit` is the check that says which of those two things a bridge would be doing (#12). It only
+works because the counter is ground truth sitting in the same file as the music: run both detectors
+over one take, match them up, and every waveform hit with no counter event under it is a knob move
+the heuristic was about to rebuild. It exits 1 if it finds any, which makes "would `--heuristic`
+damage this take?" a question with an answer rather than something to listen for. Misses -- real
+dropouts the waveform walked past -- are reported but do not fail, because a miss leaves a click
+that was already there while a spurious bridge replaces material that was fine.
+
 Usage:
     uv run scripts/declick.py in.wav out.wav
     uv run scripts/declick.py in.wav --dry-run          # locate the seams, write nothing
+    uv run scripts/declick.py in.wav --audit            # score the heuristic against the counter
 """
 
 import argparse
@@ -157,6 +166,40 @@ def _extrapolate(seg, order, n):
     return np.array(out) + mu
 
 
+def audit(counter, heuristic, sr, tol_s=MERGE_S):
+    """Match what the waveform detector found against what the board says actually happened.
+
+    This is the check #12 asked for, and the reason it can exist at all is that the Tiliqua's tee
+    carries ground truth alongside the music: ch2/3 are a 12.288 MHz counter, so for any take made
+    through `rec_audio.py` there is no need to *infer* which seams were dropouts. Running both
+    detectors over the same file turns "is this bridge repairing damage or repairing the
+    performance?" from a listening judgement into a matching problem.
+
+    A heuristic hit with no counter event under it is a knob move -- or an attack, or anything else
+    the music did -- and bridging it replaces real material with an AR guess that measures ~0.18
+    away from what was there, against a CC step of 0.0078. A counter event with no heuristic hit is
+    the opposite failure: a real dropout the waveform detector walked past.
+
+    Returns (matched, false_positives, missed), each a list of sample indices, all in heuristic
+    coordinates except `missed` which is in counter coordinates. Tolerance is `MERGE_S`, the same
+    window the detector already uses to decide two hits are one seam -- a counter event and the
+    step it causes are the same sample give or take the resampler's smear.
+    """
+    tol = int(tol_s * sr)
+    c = sorted(counter)
+    matched, false_positives, hit = [], [], set()
+    for i in heuristic:
+        # Nearest counter event, by scan. Both lists are tens of entries on a two-minute take;
+        # a bisect here would be faster and harder to read for no measurable gain.
+        near = [j for j in c if abs(j - i) <= tol]
+        if near:
+            matched.append(i)
+            hit.add(min(near, key=lambda j: abs(j - i)))
+        else:
+            false_positives.append(i)
+    return matched, false_positives, [j for j in c if j not in hit]
+
+
 def repair(x, sr, seams, xfade_s=XFADE_S, order=LPC_ORDER):
     """Bridge each seam with an LPC continuation cross-faded into what follows.
 
@@ -195,6 +238,56 @@ def repair(x, sr, seams, xfade_s=XFADE_S, order=LPC_ORDER):
     return out, done, skipped
 
 
+def run_audit(args, x, sub, sr):
+    """--audit: report where the waveform detector and the counter disagree. Returns an exit code.
+
+    Deliberately refuses to guess when there is no counter. An audit against nothing is the same
+    listening judgement this is meant to replace, dressed up as a number.
+    """
+    counter = counter_seams(args.infile)
+    if counter is None:
+        print(f"{args.infile}: no counter on this take, so there is nothing to audit against.\n"
+              "  ch2/3 must carry rec_audio.py's 12.288 MHz counter. Without it the only\n"
+              "  available answer is the waveform detector's own, which is the thing being\n"
+              "  checked.", file=sys.stderr)
+        return 2
+
+    found = find_seams(sub.mean(axis=1), sr, args.thresh)
+    matched, fp, missed = audit(counter, found, sr)
+    print(f"{args.infile}: {len(x) / sr:.3f}s, counter says {len(counter)} dropout(s), "
+          f"the waveform detector finds {len(found)} seam(s)", file=sys.stderr)
+    # Chronological, not grouped by verdict. Someone reading this has the take open next to it and
+    # wants to scrub to a timestamp; three separate ascending lists make that harder than one.
+    rows = ([(i, "real    ", "dropout, corroborated") for i in matched]
+            + [(i, "SPURIOUS", "no dropout here — a knob move or an attack") for i in fp]
+            + [(j, "MISSED  ", "real dropout the waveform detector walked past") for j in missed])
+    for i, verdict, why in sorted(rows):
+        print(f"  {i / sr:8.3f}s  {verdict} {why}", file=sys.stderr)
+
+    pct = 100.0 * len(fp) / len(found) if found else 0.0
+    print(f"\n  {len(matched)} corroborated, {len(fp)} spurious ({pct:.0f}% of what --heuristic "
+          f"would bridge), {len(missed)} missed", file=sys.stderr)
+    # Only spurious hits fail. The asymmetry is deliberate: a spurious bridge *damages* the take --
+    # on this material the AR continuation lands ~0.18 from what was there against a 7-bit CC step
+    # of 0.0078, so the repair is about twenty times louder than the thing it was aimed at. A miss
+    # merely leaves a click that was already there. One is worse than the other, and a check that
+    # scores them the same gives no reason to prefer the counter path.
+    if fp:
+        print("  --heuristic on this take would rebuild the performance, not the damage.",
+              file=sys.stderr)
+        return 1
+    if missed:
+        print("  no spurious bridges, but the waveform detector is not finding everything;",
+              file=sys.stderr)
+        print("  the counter path repairs the misses too. Not a failure: a miss leaves a click,",
+              file=sys.stderr)
+        print("  where a spurious bridge would replace good material.", file=sys.stderr)
+        return 0
+    print("  every seam the waveform detector found is a real dropout, and it found them all.",
+          file=sys.stderr)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -210,6 +303,10 @@ def main():
                                        "to leave the counter on ch2/3 alone, and out of the "
                                        "detection, where its sawtooth would swamp the music")
     ap.add_argument("--dry-run", action="store_true", help="report the seams, write nothing")
+    ap.add_argument("--audit", action="store_true",
+                    help="score the waveform detector against the board's counter and write "
+                         "nothing. Exits 1 if any heuristic seam has no dropout under it, i.e. "
+                         "if --heuristic on this take would bridge over the performance")
     args = ap.parse_args()
 
     x, sr = sf.read(args.infile, dtype="float64", always_2d=True)
@@ -218,10 +315,13 @@ def main():
     if any(c < 0 or c >= x.shape[1] for c in chans):
         sys.exit(f"{args.infile} has {x.shape[1]} channels; "
                  f"--channels {args.channels} is out of range")
-    if not args.outfile and not args.dry_run:
-        sys.exit("outfile is required unless --dry-run is given")
+    if not args.outfile and not (args.dry_run or args.audit):
+        sys.exit("outfile is required unless --dry-run or --audit is given")
 
     sub = x[:, chans]
+    if args.audit:
+        return run_audit(args, x, sub, sr)
+
     seams, how = counter_seams(args.infile), "the board's counter"
     if seams is None or args.heuristic:
         seams, how = find_seams(sub.mean(axis=1), sr, args.thresh), "the waveform"
@@ -229,14 +329,17 @@ def main():
     for i in seams:
         print(f"  {i / sr:8.3f}s  step {np.abs(sub[i + 1] - sub[i]).max():.4f}", file=sys.stderr)
     if args.dry_run:
-        return
+        return 0
 
     out = x.copy()
     out[:, chans], done, skipped = repair(sub, sr, seams)
     sf.write(args.outfile, out, sr, subtype="FLOAT")
     print(f"wrote {args.outfile} — bridged {len(done)}"
           + (f", skipped {len(skipped)} (no usable fit)" if skipped else ""), file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    # main() returns a code rather than printing and falling off the end, because --audit is a
+    # check and a check that cannot fail is decoration.
+    sys.exit(main())
