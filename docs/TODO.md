@@ -474,8 +474,28 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   changes. Verified by changing a second source: the verdict goes `known-stale` → `stale` and the
   exit code 0 → 1. `--strict` fails on the waived ones too, for running by hand.
 
-  One gap remains in the check itself: it covers no **Tiliqua SDK** checkout, which is outside this
-  repo and unhashable from here.
+  ~~One gap remains in the check itself: it covers no **Tiliqua SDK** checkout, which is outside
+  this repo and unhashable from here.~~ **Closed 2026-08-21**, by giving up on hashing it. Half of
+  a Tiliqua bitstream is the vendor's — luna, luna-soc and the `tiliqua` gateware, linked in from
+  `$TILIQUA_SDK` — and a file-by-file digest of it would not have travelled: CI has no checkout, so
+  the one machine that could compute the hashes is the one machine that never needed them. A
+  **commit** is the thing both ends can name. `sdk_state()` reads it out of the checkout (walking up
+  for the repo root rather than assuming `$TILIQUA_SDK` is `<repo>/gateware`, since that variable is
+  the user's to set), `--update` records it beside `built_from_commit`, and `check()` compares. It
+  reaches further than one repo, too: luna and luna-soc are pinned by the `pdm.lock` inside that
+  same checkout, so the single sha covers all three. A dirty vendor tree gets a `-` on the sha,
+  which matters more here than anywhere else in this file — `build.sh` treats the SDK as read-only,
+  so a dirty one means somebody was editing it.
+
+  Three outcomes, and only one of them is a failure. Recorded and different is **stale**, and
+  deliberately not waivable: `known_stale` names *sources*, and an SDK bump is exactly the drift a
+  source-scoped waiver should not quietly cover. Recorded but with no checkout to compare against
+  — CI, or anyone else's clone — says so and stays **ok**, because "cannot verify" is not "wrong".
+  And **never recorded**, which is every archive built before today, stays ok with a note. That
+  last one is the tempting mistake: backfilling the current sha into those records would make them
+  look complete and would be a false provenance claim, because `--update` can only see the SDK as
+  it is *now*, not as it was in August. The two shipped archives will carry the note until their
+  next rebuild, and that is the honest state of what is known about them.
 
   The record now has a second consumer, which raises the cost of it being stale.
   `scripts/build_firmware_json.py` reads `built_from_commit` out of `artefact_hashes.json` and

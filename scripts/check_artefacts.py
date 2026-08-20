@@ -36,6 +36,7 @@ import datetime
 import hashlib
 import io
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -88,14 +89,18 @@ ARTEFACTS = {
             "doc": "boards/tiliqua/firmware/README.md",
             "params": {"STAGES": "12", "WCT": "12", "hw_rev": "5",
                        "voices": str(voices), "SEED": seed},
+            # Half of this bitstream is the vendor's: luna, luna-soc and the tiliqua gateware,
+            # linked in from $TILIQUA_SDK. See sdk_state() for why it is a commit and not hashes.
+            # The Basys 3 has no equivalent -- Vivado reads only the files listed under it.
+            "sdk": True,
             # What boards/tiliqua/build.sh runs and what gateware/top.py imports. fx_model.py is
             # the NumPy reference, test_*.py are the Amaranth/Verilator harnesses, and
             # sim_xls_core.cpp is simulation-only -- none of them reach the bitstream. Neither
             # does core/gen_lut.py, which no build script calls.
             #
-            # NOT covered: the Tiliqua SDK checkout ($TILIQUA_SDK) that build.sh builds against.
-            # It lives outside this repo and cannot be hashed from here, so an SDK bump will not
-            # show up below. That is a real hole; it is just not one this script can close.
+            # The Tiliqua SDK checkout ($TILIQUA_SDK) that build.sh builds against is not in this
+            # list and cannot be -- it lives outside this repo. It is covered separately, by
+            # commit rather than by hash; see the "sdk" flag below and sdk_state().
             "sources": [
                 "core/synth.x",
                 # Only for the reduced-voice build, because only that one runs it: at VOICES=32
@@ -312,6 +317,69 @@ def head_commit():
     return h + ("-" if dirt - expected else "")
 
 
+def sdk_state():
+    """The Tiliqua SDK checkout's commit, or None if it is not on this machine.
+
+    The other half of a Tiliqua bitstream comes from `$TILIQUA_SDK` -- luna, luna-soc and the
+    vendor's own gateware -- and it is not in this repo, so `sources` cannot reach it. Hashing it
+    file-by-file would not travel anyway: CI has no checkout, and a hash set that only one machine
+    can compute is not a record, it is a local opinion. A commit is the thing both ends can agree
+    on, so that is what gets written down. It reaches further than it looks, too: luna and luna-soc
+    are pinned by the `pdm.lock` inside that same checkout, so the one sha covers all three.
+
+    Returns `{"commit": <short sha, '-' suffixed if dirty>, "path": <where>}`. `build.sh` treats
+    the checkout as read-only, so a dirty one means someone was editing the vendor's tree, and
+    that belongs in the record more than almost anything else here.
+    """
+    path = os.environ.get("TILIQUA_SDK") or os.path.expanduser(
+        "~/Documents/GitHub/tiliqua/gateware")
+    # `$TILIQUA_SDK` points at `<repo>/gateware` by convention (build.sh:56), but walk up for the
+    # repo root rather than assuming one level: the variable is the user's to set, and a wrong
+    # guess here would silently report "no checkout" on a machine that plainly has one.
+    if not os.path.isdir(path):
+        return None
+    root = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=path,
+                          capture_output=True, text=True)
+    if root.returncode != 0 or not root.stdout.strip():
+        return None
+    root = root.stdout.strip()
+    def g(*a):
+        out = subprocess.run(["git", *a], cwd=root, capture_output=True, text=True)
+        return out.stdout.strip() if out.returncode == 0 else None
+    h = g("rev-parse", "--short", "HEAD")
+    if not h:
+        return None
+    return {"commit": h + ("-" if g("status", "--porcelain") else ""), "path": root}
+
+
+def sdk_lines(record):
+    """How the recorded SDK compares with the one on this machine, as (stale?, lines).
+
+    Three outcomes, and only one of them is a failure:
+
+    * recorded and matching, or recorded and unverifiable here -- nothing to say, or a note.
+    * recorded and different -- the bitstream was built against another vendor tree. Stale.
+    * never recorded -- every archive built before this check existed. Informational, because
+      calling those stale would be inventing a fact: nobody wrote down what they were built
+      against, and that is not the same as knowing they drifted.
+
+    Deliberately not waivable. `known_stale` names *sources*, and an SDK bump is exactly the kind
+    of drift a source-level waiver should not quietly cover.
+    """
+    was = record.get("sdk")
+    now = sdk_state()
+    if not was:
+        return False, ["the SDK checkout was not recorded when this was built -- an SDK bump "
+                       "between then and now would not be visible here (recorded from the next "
+                       "build onwards)"]
+    if not now:
+        return False, [f"SDK recorded at {was['commit']}; no checkout on this machine, so it "
+                       "could not be verified"]
+    if now["commit"] != was["commit"]:
+        return True, [f"SDK checkout changed since the build: {was['commit']} -> {now['commit']}"]
+    return False, []
+
+
 def _at(commit, src):
     """`src` as of `commit`, normalised. None if it was not there."""
     try:
@@ -379,6 +447,7 @@ def check(name, spec, record):
 
     now = measure(spec)
     lines = []
+    sdk_stale, sdk_notes = (False, []) if not spec.get("sdk") else sdk_lines(record or {})
 
     # A record written under an older `normalize` would show every source as changed at once,
     # which reads as catastrophe and means only that the recipe moved. Say so instead.
@@ -429,14 +498,17 @@ def check(name, spec, record):
         # Only source drift can be waived. A params change or a swapped artefact returns above,
         # before this point, because neither is the situation a waiver was written to describe.
         reason = waived(record, stale_sources)
-        if reason:
+        if reason and not sdk_stale:
             lines.append(f"accepted: {reason}")
-            return "known-stale", lines
-        return "stale", lines
+            return "known-stale", lines + sdk_notes
+        return "stale", lines + sdk_notes
 
     built = record.get("built_from_commit", "?")
     on = record.get("built_on", "?")
-    return "ok", [f"matches the recorded build {built} ({on}), {len(now)} sources"]
+    head = f"matches the recorded build {built} ({on}), {len(now)} sources"
+    if sdk_stale:
+        return "stale", [f"the repo sources match the recorded build {built} ({on})"] + sdk_notes
+    return "ok", [head] + sdk_notes
 
 
 def main():
@@ -475,7 +547,16 @@ def main():
                 "params": spec["params"],
                 "sources": measure(spec),
             }
-            print(f"recorded {name} at {state[name]['built_from_commit']}")
+            sdk = sdk_state() if spec.get("sdk") else None
+            if sdk:
+                state[name]["sdk"] = sdk
+            print(f"recorded {name} at {state[name]['built_from_commit']}"
+                  + (f", SDK {sdk['commit']}" if sdk else ""))
+            if spec.get("sdk") and not sdk:
+                # Silence here would write a record that looks complete and is not. --update is a
+                # provenance claim; the one thing it must never do is quietly omit half of it.
+                print(f"  warning: no SDK checkout found (set $TILIQUA_SDK), so {name} is being "
+                      "recorded without one -- an SDK bump will not be detected for this build")
         STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
         print(f"wrote {STATE.relative_to(ROOT)}")
         return 0

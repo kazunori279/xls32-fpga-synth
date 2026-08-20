@@ -79,8 +79,14 @@ uv run --no-project python scripts/check_artefacts.py tiliqua      # both
 uv run --no-project python scripts/check_artefacts.py tiliqua-24   # just the formal one
 ```
 
-That catches uncommitted edits too, which the `tag` cannot. It does **not** cover the Tiliqua SDK
-checkout the build links against — that lives outside this repo and cannot be hashed from here.
+That catches uncommitted edits too, which the `tag` cannot.
+
+The other half of the bitstream is the vendor's — luna, luna-soc and the `tiliqua` gateware, linked
+in from `$TILIQUA_SDK`. That lives outside this repo, so it is recorded by **commit** rather than by
+hash, and the check reports it changing since the build as staleness like any other source. Two
+caveats, both of which the output states rather than papers over: with no checkout on the machine
+(CI, or a fresh clone) it can only say it could not verify, and the two archives above were built
+before this was recorded at all, so they will say so until their next rebuild.
 
 One thing the record has to work harder at since there are two archives. They are built from *the
 same committed sources*: the voice count is not in the tree, it is rewritten into a throwaway copy
