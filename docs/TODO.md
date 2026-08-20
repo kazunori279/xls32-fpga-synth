@@ -297,7 +297,21 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   the formal build — 24 voices, 93.9 % of the die, `clk` at 55.48 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
   in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
-  two modules. Anyone flashing slot 6 is carrying that. The two differ only in the voice count, which
+  two modules. Anyone flashing slot 6 is carrying that.
+
+  Both were verified on 2026-08-20 — flashed, then SRAM-loaded from the same archive and confirmed
+  by the build stamp in `iManufacturer` before any test ran, so neither number is off a stale
+  image. They grade **identically**: 99.8/100 (A+), 174 pass / 1 warn / 0 fail, 175 cases in ~616 s,
+  0.00 % USB frame gaps, and the same lone WARN — `filter_sweep` at 81 and 82, which is
+  [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) and not a timing symptom. Worth
+  stating plainly what that is and is not evidence of: the 32-voice build misses 60 MHz by 22.8 %
+  and still returns zero glitches across 175 cases *on the die that has always worked*. It says
+  nothing about the die that did not, and if anything it sharpens the case that the failure is a
+  marginal path some silicon wins and some loses
+  ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3),
+  [#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
+
+  The two differ only in the voice count, which
   is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so
   `check_artefacts.py` has to hash the generator and the count or it cannot tell them apart
   ([#10](https://github.com/kazunori279/xls32-fpga-synth/issues/10)).
