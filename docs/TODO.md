@@ -81,8 +81,8 @@ those three; git history keeps the original.)*
 
 - **The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
   bit-exact.** `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both
-  boards, but only the Tiliqua archive has been rebuilt: `boards/tiliqua/firmware/xls32-r5.tar.gz`
-  is at `3aa0227` and passes `check_artefacts.py`, while `boards/basys3/firmware/top.bit` is still
+  boards, but only the Tiliqua archives have been rebuilt: both carry the fixes and pass
+  `check_artefacts.py`, while `boards/basys3/firmware/top.bit` is still
   the 2026-08-11 M34 build and reports stale. Refreshing it needs Vivado on an x86 machine — the
   GCE build VM in `remote_build.sh`, which is not something CI can provide — and then a Basys 3 on
   the desk for `verify.sh`, since timing closure has come apart from what the synth sounds like on
@@ -220,6 +220,15 @@ those three; git history keeps the original.)*
   is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so
   `check_artefacts.py` has to hash the generator and the count or it cannot tell them apart
   ([#10](https://github.com/kazunori279/xls32-fpga-synth/issues/10)).
+- **The visualiser's bottom row is dead on the formal bitstream.** `gateware/viz.py` fixes the grid
+  at `N_VOICE = 32`, `COLS, ROWS = 8, 4`, and `build.sh`'s `VOICES` never reaches the gateware — it
+  only selects which `synth*.x` the engine comes from. So the 24-voice build writes tiles 0–23 and
+  leaves 24–31 at their reset value, which `VoiceTiles` renders at `IDLE_V` in the lowest hue:
+  eight dim tiles that never change. No audio or timing consequence, and invisible to the suite,
+  which grades frame *timing* and never tile content. Not fixed with the rest of M36 because it is a
+  netlist change, and at 93.9 % occupancy that costs a fresh seed sweep (seeds 1/4/5/6 span 7 MHz on
+  this netlist) plus another hardware run — so it is queued against the next netlist change, with
+  #39, as [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40).
 - **Reduced-voice variants were unmeasurable for four milestones and nobody noticed.**
   `voices_variant.py` asserted a match count for every substitution it knew about and had no rule
   for one site — `rotate_in`'s tail writeback — so a 24-voice copy wrote the new voice to index 31
