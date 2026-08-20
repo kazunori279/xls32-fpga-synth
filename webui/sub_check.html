@@ -1,0 +1,212 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Blind substitution — did halving the bank cost a sound, or only a slot?</title>
+<!--
+  `consolidate.py` cut presets_soundfont.json from 128 slots to 64 and defended it with two
+  numbers: mean nearest-neighbour CLAP distance 0.060 -> 0.083, and "all 46 instruments kept".
+  #22's complaint is that nobody has heard either, and the second one needs hearing most, because
+  it is true by name and questionable by sound. For 48 of the 64 dropped presets the nearest-
+  SOUNDING survivor belongs to a different instrument than the one they share a name with:
+  `Choir Pad` was dropped, `Choir Pad G4` stayed at a CLAP distance of 0.317, and `Rain FX G4`
+  sits at 0.079. The instrument survived. The sound did not.
+
+  THE QUESTION, one per trial: you are given two sounds. One of them is in the shipped bank and
+  one was cut. If you kept the first and lost the second, would you miss it?
+
+  WHAT IS HIDDEN: which of the two was cut (balanced across trials, then shuffled), both names,
+  the category, and the CLAP gap. All of it is revealed at the end and none of it is read by the
+  page until the last vote is in. Names would give it away outright -- the survivors are the ones
+  still in the browser -- and the gap is the number this page exists to check, so showing it would
+  be handing the listener the answer to grade.
+
+  WHY THE TRIALS ARE STRATIFIED, not the worst n: "the worst cases are bad" is not in doubt and
+  does not test anything. The useful result is whether the answers TRACK the gap. If they do,
+  consolidate.py's metric measures substitutability and the top of the list is a re-voicing list.
+  If sounds at 0.05 are missed as often as sounds at 0.30, the metric is not measuring what it was
+  used for and the halving was defended with the wrong number. So the trials are drawn evenly from
+  the top, middle and bottom third of the gap range, and the tally reports the answer per band.
+
+  WHAT IS NOT CONTROLLED: 24 trials over 3 bands is 8 per band, which is enough to see a strong
+  trend and not enough to size one. Levels are peak-normalised at render, so loudness cannot
+  decide it. Every clip is one held note of 1.6 s at the pitch the preset was fitted at -- two
+  slots of the same instrument at DIFFERENT pitches are a fair part of what consolidation dropped,
+  and a single note is the only way this bank has ever been judged.
+
+    uv run python presetgen/consolidate_check.py
+    python3 -m http.server 8765 -d webui        # http://127.0.0.1:8765/sub_check.html
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { background:#15161a; color:#dfe1e6; font:15px/1.5 ui-sans-serif,system-ui,sans-serif;
+         margin:0; padding:28px 32px; }
+  h1 { font-size:17px; margin:0 0 4px; font-weight:600; }
+  .sub { color:#8b909b; font-size:13px; margin-bottom:22px; }
+  .bar { height:4px; background:#26282e; border-radius:2px; margin-bottom:26px; }
+  .bar i { display:block; height:100%; background:#5b8cff; border-radius:2px; transition:width .2s; }
+  .trial { color:#8b909b; font-size:13px; margin-bottom:10px; }
+  .trial b { color:#dfe1e6; font-weight:600; }
+  .row { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .q { color:#8b909b; font-size:13px; width:74px; flex:none; }
+  button { background:#22242a; color:#dfe1e6; border:1px solid #33363e; border-radius:7px;
+           padding:9px 16px; font:inherit; cursor:pointer; }
+  button:hover { background:#2b2e36; }
+  button:disabled { opacity:.4; cursor:default; }
+  button.play { min-width:104px; }
+  button.play.on { border-color:#5b8cff; color:#a9c2ff; }
+  button.pick { min-width:74px; }
+  button.pick.sel { background:#2f4a8f; border-color:#5b8cff; }
+  button.skip { min-width:auto; padding:9px 12px; color:#8b909b; }
+  kbd { font:12px ui-monospace,monospace; color:#6d727d; }
+  .foot { margin-top:26px; color:#6d727d; font-size:12px; }
+  pre { background:#1b1d22; border:1px solid #2a2d34; border-radius:8px; padding:16px;
+        overflow:auto; font:13px/1.55 ui-monospace,monospace; color:#dfe1e6; }
+  .hint { color:#6d727d; font-size:12px; margin-left:4px; }
+</style>
+
+<h1>Blind substitution — <span id="head">loading…</span></h1>
+<div class="sub" id="sub">two slots of one instrument; one of them is no longer in the bank</div>
+<div class="bar"><i id="prog" style="width:0"></i></div>
+<div id="body"></div>
+<div class="foot">
+  <kbd>1</kbd> sound 1 &nbsp; <kbd>2</kbd> sound 2 &nbsp;&nbsp;
+  <kbd>q</kbd> different &nbsp; <kbd>w</kbd> interchangeable &nbsp; <kbd>x</kbd> can't tell &nbsp;
+  <kbd>Enter</kbd> next
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let M = null, i = 0, votes = [], ctx = null, src = null, buf = {};
+
+async function boot() {
+  M = await (await fetch('sub/manifest.json')).json();
+  votes = M.trials.map(() => null);
+  $('#head').textContent = `${M.trials.length} trials, ${M.banks.join(' vs ')}`;
+  render();
+  addEventListener('keydown', key);
+}
+
+// One AudioContext, one voice. Starting a clip stops whatever is playing: this is a comparison of
+// two sounds heard one after the other, and overlapping them just makes a chord.
+async function play(id, slot, btn) {
+  ctx = ctx || new AudioContext();
+  const url = `sub/${id}_${slot}.wav`;
+  if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  if (src) { try { src.stop(); } catch (e) {} }
+  document.querySelectorAll('.play.on').forEach(b => b.classList.remove('on'));
+  src = ctx.createBufferSource();
+  src.buffer = buf[url];
+  src.connect(ctx.destination);
+  src.onended = () => btn && btn.classList.remove('on');
+  btn && btn.classList.add('on');
+  src.start();
+}
+
+function render() {
+  if (i >= M.trials.length) return results();
+  const t = M.trials[i], v = votes[i];
+  $('#prog').style.width = `${i / M.trials.length * 100}%`;
+  // Nothing about the trial is shown. Not the names -- the survivor is the one still in the
+  // browser, so a name is the answer -- and not the category, which narrows it for the same
+  // reason on a bank this small.
+  $('#body').innerHTML = `
+    <div class="trial">trial <b>${i + 1}</b> of ${M.trials.length}</div>
+    <div class="row">
+      <span class="q">listen</span>
+      <button class="play" data-slot="1">▶ sound 1</button>
+      <button class="play" data-slot="2">▶ sound 2</button>
+    </div>
+    <div class="row">
+      <span class="q">keep both?</span>
+      <button class="pick" data-v="different">different sounds</button>
+      <button class="pick" data-v="same">interchangeable</button>
+      <button class="pick skip" data-v="tie">can't tell</button>
+      <span class="hint">would a bank with only one of these be missing something?</span>
+    </div>
+    <div class="row">
+      <button id="next" ${v ? '' : 'disabled'}>next →</button>
+      <button id="back" ${i ? '' : 'disabled'}>← back</button>
+    </div>`;
+  document.querySelectorAll('.play').forEach(b =>
+    b.onclick = () => play(t.id, b.dataset.slot, b));
+  document.querySelectorAll('.pick').forEach(b => {
+    if (v === b.dataset.v) b.classList.add('sel');
+    b.onclick = () => pick(b.dataset.v);
+  });
+  $('#next').onclick = () => { i++; render(); };
+  $('#back').onclick = () => { i--; render(); };
+}
+
+function pick(v) { votes[i] = v; render(); }
+
+function key(e) {
+  if (i >= M.trials.length) return;
+  const t = M.trials[i];
+  if (e.key === '1' || e.key === '2')
+    return play(t.id, e.key, document.querySelector(`.play[data-slot="${e.key}"]`));
+  const map = {q: 'different', w: 'same', x: 'tie'};
+  if (map[e.key]) return pick(map[e.key]);
+  if (e.key === 'Enter' && votes[i]) { i++; render(); }
+}
+
+// ---- tally. Only here does the page read the gaps and the names.
+function results() {
+  $('#prog').style.width = '100%';
+  const out = M.trials.map((t, n) => ({
+    id: t.id, category: t.category, dropped: t.dropped, survivor: t.survivor,
+    dist: t.dist, nearest: t.nearest, dist_nearest: t.dist_nearest,
+    nearest_same_instrument: t.nearest_same_instrument, gone: t.gone, verdict: votes[n],
+  }));
+  const kept = out.filter(r => r.verdict === 'different').length;
+  const same = out.filter(r => r.verdict === 'same').length;
+  const tie = out.filter(r => r.verdict === 'tie').length;
+  const lines = [
+    `${kept} of ${out.length} dropped sounds would be missed; ${same} interchangeable; ${tie} can't tell`,
+    '',
+  ];
+
+  // The result that matters: does the verdict track the gap? Bands over the trials actually run,
+  // by tertile of their own gaps rather than by the render-time band, so a partial set still reads.
+  const sorted = [...out].sort((a, b) => b.dist - a.dist);
+  const b = Math.ceil(sorted.length / 3);
+  const bands = [['widest gap', sorted.slice(0, b)],
+                 ['middle', sorted.slice(b, 2 * b)],
+                 ['narrowest gap', sorted.slice(2 * b)]];
+  lines.push('would be missed, by CLAP gap:');
+  for (const [label, rs] of bands) {
+    if (!rs.length) continue;
+    const k = rs.filter(r => r.verdict === 'different').length;
+    const lo = Math.min(...rs.map(r => r.dist)), hi = Math.max(...rs.map(r => r.dist));
+    lines.push(`  ${label.padEnd(14)} ${String(k).padStart(2)}/${rs.length}   `
+             + `gap ${lo.toFixed(3)}-${hi.toFixed(3)}`);
+  }
+  lines.push('',
+    'A gradient here means consolidate.py\'s distance measures substitutability and the',
+    'wide-gap slots are a re-voicing list. A flat result means it does not, and the 128->64',
+    'cut was defended with a number that does not answer the question it was used for.', '');
+
+  lines.push('per trial (verdict / gap / dropped -> survivor):');
+  for (const r of sorted) {
+    const mark = {different: 'MISSED', same: '  ok  ', tie: '  ??  '}[r.verdict] || '  --  ';
+    const other = r.nearest_same_instrument ? ''
+                : `   [${r.nearest} sounds nearer @ ${r.dist_nearest.toFixed(3)}]`;
+    lines.push(`  ${mark}  ${r.dist.toFixed(3)}  ${r.category.padEnd(8)} `
+             + `${r.dropped.padEnd(20)} -> ${r.survivor.padEnd(20)}${other}`);
+  }
+
+  $('#sub').textContent = 'the reveal, and the vote file to keep';
+  $('#body').innerHTML = `<pre>${lines.join('\n').replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre>
+    <div class="row"><button id="save">save sub_votes.json</button>
+      <button id="again">start over</button></div>`;
+  $('#save').onclick = () => {
+    const blob = new Blob([JSON.stringify({banks: M.banks, seed: M.seed, votes: out}, null, 1)],
+                          {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sub_votes.json';
+    a.click();
+  };
+  $('#again').onclick = () => { i = 0; votes = M.trials.map(() => null); render(); };
+}
+
+boot();
+</script>

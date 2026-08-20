@@ -107,9 +107,17 @@ def main():
         trials.extend(pool[:per_cat])                     # the pairs that actually differ
     rng.shuffle(trials)                                   # category order must not cue the listener
 
+    # Which bank plays as A. Balanced and then shuffled, NOT an independent coin per trial: an
+    # independent flip is unbiased in expectation and lopsided in any one draw, and this seed gave
+    # 16/8. Position is not neutral in a forced choice -- a listener with any first-item preference
+    # would hand that to whichever bank drew the long straw, and with n=24 a 16/8 split is enough
+    # of a thumb to matter. An odd trial count leaves one extra, which goes to the incumbent.
+    flips = [i % 2 == 1 for i in range(len(trials))]
+    rng.shuffle(flips)
+
     manifest = []
     for i, t in enumerate(trials):
-        flip = bool(rng.integers(2))                      # which bank plays as A
+        flip = flips[i]
         first, second = (banks_in[1][0], banks_in[0][0]) if flip else (banks_in[0][0], banks_in[1][0])
         stem = f"t{i:02d}"
         audio, sr = ns.load(targets[t["name"]])

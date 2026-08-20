@@ -45,6 +45,9 @@ presetgen/name_audit*.json
 # ab_render.py output: ~10 MB of WAV plus the manifest that says which bank is A. Regenerable in a
 # minute from the banks, and committing the manifest would put the answer key in the repo.
 webui/ab/
+# consolidate_check.py output: same reasoning, for the substitution test -- and here the manifest
+# carries the CLAP gap as well as the answer key, which is the number the listener is grading.
+webui/sub/
 # build_previews.py output: ~60 MB of audition WAV, regenerable from the banks in one command.
 webui/static/preview/
 # xmod_probe.py output: the measurement, plus both re-fit arms as an auditionable bank. The bank
