@@ -11,6 +11,29 @@ refurbishment, not a list of patches" — was itself carried out by the rewrite 
 [DEVELOPMENT_tiliqua.md](../DEVELOPMENT_tiliqua.md). The port document's remaining content lives in
 those three; git history keeps the original.)*
 
+## Queued behind the next rebuild
+
+Three open items are each individually cheap and each blocked by the same thing, so they are
+collected here rather than left to be rediscovered separately. **Whichever of them finally forces a
+re-sweep should carry the other two.**
+
+| item | change | why it cannot land alone |
+|---|---|---|
+| [#39](https://github.com/kazunori279/xls32-fpga-synth/issues/39) | adopt `--router2-tmg-ripup` | new P&R options, so a new netlist and a new seed lottery |
+| [#43](https://github.com/kazunori279/xls32-fpga-synth/issues/43) | put the real voice count in the manifest `brief` | needs `export VOICES` in `build.sh`; the manifest is baked into the archive |
+| [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40) | make the visualiser grid follow the voice count | `N_VOICE`/`COLS`/`ROWS` are literals in the gateware |
+
+Two costs are shared, and they are what make the batching worth it rather than merely tidy. A
+rebuild **re-rolls the seed lottery** — seed rankings do not transfer between netlists, so the
+24-voice build's 55.48 MHz on seed 4 is not a number that survives a re-sweep, it is a number that
+has to be won again. And it **invalidates the board verification**: the shipped 24-voice bitstream
+scored 99.8/100 over 175 cases, which is most of a board-day to re-earn, per bitstream.
+
+There is a third, quieter cost that only #39 and #43 pay: both edit `boards/tiliqua/build.sh`, and
+`scripts/check_artefacts.py` hashes `.sh` **raw** — its comment-stripping normaliser covers Python
+but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both shipped archives
+`stale` the instant it lands, before anything has actually been rebuilt.
+
 ## Unverified — things believed to work that have not been watched working
 
 1. ~~**The re-recorded demo video has not been watched end to end.**~~ **Done — watched and
