@@ -210,15 +210,36 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   checked for a mix of *exactly* zero, all four passing. On the module, `check_panic_hw.py` reports
   `ptp 0.000` on all six of its silence cases; that is the weaker "stops moving" claim, since a
   latched constant also has zero peak-to-peak, so the exact-zero half of it rests on `tb_dc.v`.
-- **`check_headroom_hw.py` flakes on its quietest row: 1 FAIL in 4 runs of the same bitstream**
-  ([#42](https://github.com/kazunori279/xls32-fpga-synth/issues/42)). Found verifying the 24-voice
-  build. The failing row is always CC75 = 100 at **2 voices**, shift −0.0808 against the threshold —
-  the least-driven row in the sweep, so the smallest shift in the table and the one nearest the
-  line. Every loud, high-polyphony row passes on all four runs, which is the wrong way round for a
-  returning offset and the right way round for capture noise. The threshold is one constant across
-  a sweep whose signal varies by polyphony; it should scale with the row. Worth fixing because this
-  is the check that certifies the pulse DC (#2) stays fixed, so a false FAIL reads as a regression —
-  and teaches whoever hits it to re-run until green, which would hide a real one.
+- ~~**`check_headroom_hw.py` flakes on its quietest row: 1 FAIL in 4 runs of the same bitstream**~~
+  ([#42](https://github.com/kazunori279/xls32-fpga-synth/issues/42)). **Fixed 2026-08-21.** Found
+  verifying the 24-voice build. The failing row was CC75 = 100 at **2 voices**, shift −0.0808
+  against the threshold — the least-driven row in the sweep, so the smallest shift in the table and
+  the one nearest the line. Every loud, high-polyphony row passed on all four runs, which is the
+  wrong way round for a returning offset and the right way round for capture noise.
+
+  The note here used to say the threshold "should scale with the row", meaning a per-row constant
+  by polyphony. That would have been the wrong fix, and the run that fixed it proved so: on
+  2026-08-21 the row that went marginal was not the 2-voice one at all but **CC75 = 74 at 4
+  voices**, which had been comfortable at 3.1× its scatter the day before and came back at 0.42×,
+  its spread having gone 0.026 → 0.165 with nothing changed but the draw. The scatter is a property
+  of the *run*, not of the row, so no table of per-row constants can track it.
+
+  What went in instead: `row` already returned the spread across its three repeats and `grade`
+  never saw it. Now it does, and a shift must clear both `TOL` **and** its own repeat spread
+  (`MARGIN = 1.0`) before its sign is read. Self-calibrating, no constant per row. On a known-good
+  build the two populations separate cleanly — genuine rows 1.3–19×, the flake 0.35/0.53/0.72× over
+  its three recorded appearances. A row that fails it is `marginal`: printed with its numbers, not
+  failed, and not counted as a pass either, because it is evidence of nothing. If marginal rows
+  outnumber readable ones the run is `INCONCLUSIVE` rather than green off the survivors — the same
+  mistake one level up.
+
+  Raising `TOL` until the flake fitted under it was the other option and is worse: it blinds the
+  check to every genuine row below the new floor, and the 8-voice row sits at 0.12. The remaining
+  soft spot is that 1.3× is not a comfortable margin, so a noisy run will set aside a real row; that
+  costs one row of evidence out of a dozen that all have to agree, and the output says how many.
+  Also added `--self-test`, which grades 20 rows recorded off the module with no board attached —
+  the flake lives in an `if`, and finding out what a change to it did should not cost ten minutes of
+  board time.
 - **The 24-voice build calls itself XLS32 to the host, and the two builds are indistinguishable
   from a connected machine** ([#43](https://github.com/kazunori279/xls32-fpga-synth/issues/43)).
   `build.sh` gets the slot name right (`NAME="${NAME:-XLS$VOICES}"` → `XLS24`), but `iProduct`,

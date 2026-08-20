@@ -2,6 +2,7 @@
 """Issue #2 on the module: does a loud pulse passage clip on one rail only?
 
     XLS32_BOARD=tiliqua uv run python boards/tiliqua/check_headroom_hw.py
+    uv run python boards/tiliqua/check_headroom_hw.py --self-test    # grading rule, no module
 
 The hardware rung above ``core/sim/tb_headroom.v``. That one counts clamp hits inside the engine,
 where the mix is a plain ``s32`` and the rails are literally +-32767. Getting at the same fact from
@@ -43,6 +44,11 @@ positive half of the waveform essentially eaten whole by the clamp; after, +1.04
 That A/B ran at ``CAP_S = 0.40``, which was later tripled -- see ``row``. Which rows clear ``RAIL``
 shifts a little with the window, so a run today grades 10 rather than 9 or 11; the signs did not
 change, and the sign is the verdict. From flash slot 6 the current build reads PASS, 10 of 10.
+
+A row also has to out-measure its own repeat scatter before its sign is read at all (``grade``,
+``MARGIN``), which is what finally stopped this check failing at random on good bitstreams (#42).
+``--self-test`` exercises that rule against rows recorded off the module, so the logic can be
+changed without booking ten minutes of board time to find out what it did.
 """
 import os
 import sys
@@ -64,6 +70,7 @@ BASE = 40               # lowest note of the stack, then every other semitone (a
 TOL = 0.06              # below this a row is called flat and carries no verdict either way
 RAIL = 0.98             # a row is only graded once its loud pass actually reaches the clamp
 REPEATS = 3             # pairs per row; the verdict is their median (see `row`)
+MARGIN = 1.0            # and it must also beat its own repeat scatter -- see `grade`
 
 
 def patch(tp, ch, pw, vol):
@@ -163,7 +170,7 @@ def row(tp, pw, nv):
     return med[0], med[1], d, med[3], med[4], ds[-1] - ds[0]
 
 
-def grade(pw, d, hi, lo):
+def grade(pw, d, hi, lo, sp):
     """Which rail did the clamp take, and is that the rail the fixed engine should be taking?
 
     Once the DC term is gone the pulse is still lopsided -- that is the *shape*, not an offset. At
@@ -176,6 +183,38 @@ def grade(pw, d, hi, lo):
     ``pw - 64`` and it rides the whole mix that way, so the clamp catches the side the offset
     pushed into and the shift lands on the other sign. Fourteen rows, and the fix flips all of
     them: that is a far stronger signature than any single number.
+
+    All of which reads the *sign* of ``d``, so the row has to have earned one. ``TOL`` is a fixed
+    floor and it is not enough on its own: it says the shift is big in absolute terms, not that it
+    is big compared to how much this particular row wanders between repeats. ``CC75 = 100`` at
+    2 voices is where this was first caught -- it clears ``TOL`` on a bad draw while its three
+    repeats span two or three times the number being reported, and a sign read off that is a coin
+    toss. So a row must also beat its own scatter, which needs no per-row constant because each row
+    measures its own.
+
+    ``MARGIN = 1.0`` -- the shift at least as large as the range of the repeats it came from.
+    Measured on a known-good build, the two populations do separate there and not by accident:
+
+        genuine shape rows   |d| / spread   1.3 to 19    (12 rows)
+        the flake            |d| / spread   0.35, 0.53, 0.72 across its recorded appearances
+
+    It is not one bad row, which is the argument against ever fixing this with a constant. On the
+    2026-08-21 run ``CC75 = 74`` at 4 voices -- 3.1x and comfortable the day before -- came back at
+    0.42x, its spread having gone from 0.026 to 0.165 with nothing changed but the draw. It read
+    ``shape`` under the old rule and passed, but its median was +0.069 inside a scatter of 0.165, so
+    the sign it passed on was luck; a draw a little the other way is a ``DC <--`` and a red run on a
+    good bitstream. Each row's scatter is a property of that run, not of the row, and only the row
+    itself can report it.
+
+    A row that fails it is ``marginal``: not evidence of the bug, and not evidence against it
+    either, so it is neither failed nor quietly counted as a pass. The alternative -- raising
+    ``TOL`` until the flake fits under it -- would have blinded the check to every genuine row
+    below the new floor, and the 8-voice row sits at 0.12.
+
+    1.3 is not a comfortable margin, and on a noisier run that row will go marginal. That is the
+    direction to be wrong in: the cost is one row of evidence out of a dozen that all have to agree,
+    and ``main`` says so and says how many. The cost of being wrong the other way is a red check on
+    a good build, which is the thing that gets a check deleted.
     """
     if max(hi, -lo) < RAIL:
         return "no clip"
@@ -183,6 +222,8 @@ def grade(pw, d, hi, lo):
         return "no DC term"
     if abs(d) <= TOL:
         return "flat"
+    if abs(d) < MARGIN * sp:
+        return "marginal"
     return "shape" if (d > 0) == (pw > 64) else "DC <--"
 
 
@@ -196,14 +237,69 @@ def table(tp, title, header, rows):
             print(f"  {label} |  -- capture failed --")
             continue
         ac, ah, d, hi, lo, sp = r
-        g = grade(pw, d, hi, lo)
+        g = grade(pw, d, hi, lo, sp)
         print(f"  {label} |    {ac:+7.4f} |   {ah:+7.4f} | {d:+7.4f} |  {sp:5.3f} | {hi:5.2f} "
               f"| {lo:5.2f} | {g}")
         out.append((label, pw, nv, ac, ah, d, g, sp))
     return out
 
 
+# Real rows off the module, verdict written down by hand. Every one of these took ten minutes of
+# board time to produce and none of it should have to be spent again to check an `if`.
+#
+# `flake-*` are the three recorded appearances of the row this check kept tripping over -- a
+# known-good bitstream, so `DC <--` on any of them is the bug being guarded against. Their `hi`/`lo`
+# come from the 2-voice row of the 2026-08-20 baseline run; only the shift and spread differ, which
+# is the point of them.
+CASES = [
+    # pw,   d,      hi,    lo,     spread, expected
+    (100, -0.0009, 0.33, -0.52, 0.003, "no clip"),      # 78% duty by polyphony, 2026-08-20
+    (100, -0.0013, 0.63, -1.00, 0.038, "flat"),
+    (100, +0.2292, 0.87, -1.07, 0.012, "shape"),
+    (100, +0.2365, 1.04, -1.11, 0.181, "shape"),        # widest spread that still reads: 1.3x
+    (100, +0.1223, 1.06, -1.11, 0.027, "shape"),
+    (100, -0.0306, 1.06, -1.15, 0.003, "flat"),
+    (64, +0.0001, 0.47, -0.47, 0.005, "no clip"),       # the 50% control
+    (64, -0.0211, 1.11, -1.09, 0.087, "no DC term"),
+    (5, -0.1129, 1.01, -0.48, 0.028, "shape"),          # by pulse width, four voices
+    (19, -0.2424, 1.04, -0.70, 0.013, "shape"),
+    (48, -0.1136, 1.10, -1.06, 0.069, "shape"),
+    (74, +0.0813, 1.08, -1.09, 0.026, "shape"),         # smallest genuine shift, 3.1x its spread
+    (88, +0.1716, 1.07, -1.09, 0.087, "shape"),
+    (124, +0.1491, 0.49, -1.01, 0.099, "shape"),
+    (74, +0.0690, 1.07, -1.10, 0.165, "marginal"),      # same row, 2026-08-21: 3.1x -> 0.42x
+    (100, -0.0530, 0.63, -1.00, 0.153, "flat"),         # flake-1: under TOL as well, 0.35x
+    (100, -0.0808, 0.63, -1.00, 0.153, "marginal"),     # flake-2: over TOL, 0.53x -- the FAIL
+    (100, -0.1130, 0.63, -1.00, 0.157, "marginal"),     # flake-3: bigger still, 0.72x
+    (100, -0.2000, 0.63, -1.00, 0.010, "DC <--"),       # what the bug actually looks like
+    (48, +0.2000, 1.10, -1.06, 0.010, "DC <--"),        # and below 50% duty, the other way round
+]
+
+
+def self_test():
+    """Check `grade` against recorded rows, without a module.
+
+    Two claims, and the second is the one that matters: the rule still calls every genuine row on a
+    known-good build, and it no longer calls the flake. A rule that only did the second could be had
+    by returning "marginal" always.
+    """
+    bad = 0
+    for pw, d, hi, lo, sp, want in CASES:
+        got = grade(pw, d, hi, lo, sp)
+        ratio = abs(d) / sp if sp else float("inf")
+        flag = "   " if got == want else "!! "
+        bad += got != want
+        print(f"  {flag}CC75={pw:3d}  shift {d:+7.4f}  spread {sp:5.3f}  ({ratio:5.1f}x)  "
+              f"-> {got}" + ("" if got == want else f", expected {want}"))
+    kept = sum(1 for c in CASES if c[5] == "shape")
+    print(f"\n{len(CASES)} recorded rows, {bad} disagree; {kept} genuine shape rows still read, "
+          "3 of 3 flake draws no longer do")
+    return 1 if bad else 0
+
+
 def main():
+    if "--self-test" in sys.argv:
+        return self_test()
     tp = open_transport().open()
     try:
         hush(tp)
@@ -227,6 +323,7 @@ def main():
         rows = poly + sweep
         graded = [r for r in rows if r[6] in ("shape", "DC <--")]
         bad = [r for r in rows if r[6] == "DC <--"]
+        weak = [r for r in rows if r[6] == "marginal"]
         moved = [r for r in ctrl if r[6] != "no clip" and abs(r[5]) > TOL]
         print("\nverdict")
         if moved:
@@ -234,8 +331,22 @@ def main():
                   "the shift is not measuring the clamp")
             return 1
         print(f"  control holds: every 50% row within {TOL} between quiet and loud")
+        # Say what was thrown out and why. A row silently dropped is indistinguishable in the
+        # output from a row that was never run, and this check exists precisely because a number
+        # nobody could see was deciding the verdict.
+        for label, pw, nv, _, _, d, _, sp in weak:
+            print(f"  set aside: CC75={pw} at {nv} voices, shift {d:+.4f} against a repeat spread "
+                  f"of {sp:.3f} -- too close to its own scatter to carry a sign")
         if not graded:
-            print("  no row reached the clamp -- nothing to grade")
+            print(f"  no row reached the clamp with a readable sign ({len(weak)} marginal) -- "
+                  "nothing to grade")
+            return 1
+        if len(weak) > len(graded):
+            # Not a failure of the engine, a failure of the run: most of what clipped came back
+            # unreadable. Reporting PASS off the minority that survived would be the same mistake
+            # the marginal verdict was added to stop, one level up.
+            print(f"  INCONCLUSIVE: {len(weak)} marginal rows against {len(graded)} readable ones; "
+                  "the captures were too unstable to grade this build")
             return 1
         if bad:
             for label, pw, nv, _, _, d, _, sp in bad:
@@ -244,7 +355,8 @@ def main():
             print(f"  FAIL: {len(bad)} of {len(graded)} clipping rows still carry the pulse DC")
             return 1
         print(f"  PASS: all {len(graded)} clipping rows clamp on the shape's own side, "
-              "not the duty offset's")
+              "not the duty offset's"
+              + (f" ({len(weak)} marginal, not counted either way)" if weak else ""))
         return 0
     finally:
         hush(tp)
