@@ -202,7 +202,34 @@ def _factory():
 
 FACTORY = _factory()
 
-import os as _os, json as _json, glob as _glob
+import os as _os, json as _json, glob as _glob, re as _re
+
+_NOTE_TAG = _re.compile(r"\s+[A-G]#?-?\d$")     # trailing "G3" / "C4", as presetgen/name_audit.py reads it
+
+def _display(presets):
+    """Preset name -> the name to show, with a pitch tag dropped where it no longer separates
+    anything (#25).
+
+    `consolidate.py` halved each bank by keeping, for most instruments, one pitch out of six. The
+    names came along whole, so the browser reads `Kalimba G4` where nothing is called `Kalimba`
+    anything else. Where an instrument did keep several -- `E-Piano 2 G4`, `E-Piano 2 G3`,
+    `E-Piano 2` -- the tag is the only thing telling them apart and every one of them keeps it.
+
+    Done here, at the one place the browser's copy of the bank is assembled, and NOT by rewriting
+    `presets_*.json`. The stored name is not just a label: `name_audit.note_of()` parses the pitch
+    out of it (a record has no note field), and bank_compare/pulse_dc/ab_render/xmod_probe join
+    each preset to its corpus target by that exact string. Stripping the tag at the source would
+    silently refit `Kalimba G4` at C4 -- seven semitones out -- and drop it from every audit that
+    looks its target up. The tag is data; only its appearance in the list was the complaint.
+
+    Per bank, since each source is its own tab and its own list.
+    """
+    groups = {}
+    for p in presets:
+        stem = _NOTE_TAG.sub("", p["name"]).strip()
+        groups.setdefault(stem or p["name"], []).append(p["name"])
+    return {n: (stem if len(names) == 1 else n)
+            for stem, names in groups.items() for n in names}
 
 def _factory_bank():
     """Concatenate every matched source bank (webui/presets_*.json, e.g. presets_nsynth.json)
@@ -214,9 +241,11 @@ def _factory_bank():
         source = _os.path.basename(path)[len("presets_"):-len(".json")]
         try:
             d = _json.load(open(path))
-            for p in (d.get("presets") if isinstance(d, dict) else d):
+            presets = d.get("presets") if isinstance(d, dict) else d
+            shown = _display(presets)
+            for p in presets:
                 vals = dict(DEFAULTS); vals.update(p["values"])
-                out.append({"name": p["name"], "category": p["category"],
+                out.append({"name": shown[p["name"]], "category": p["category"],
                             "source": source, "values": vals})
         except Exception:
             pass
