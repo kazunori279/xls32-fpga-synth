@@ -6,7 +6,8 @@ bitstream places at all, but when it says 102% -- as it did in M28 -- it says no
 *where* to look, and the answer to that question has twice now decided the shape of a milestone
 (M28 split the design into two slots on the strength of ``core`` being 70.5% on its own).
 
-    uv run boards/tiliqua/area.py
+    uv run boards/tiliqua/area.py                    # the formal 24-voice build
+    uv run boards/tiliqua/area.py --voices 32        # the experimental one
     uv run boards/tiliqua/area.py --top 5 --path build/tiliqua/build/xls32-r5/top.json
 
 **What is being counted, and why it is a proxy.** ``top.json`` is yosys' output, so it predates
@@ -24,6 +25,7 @@ unattributed remainder is printed rather than hidden for exactly that reason.
 
 import argparse
 import collections
+import os
 import re
 import sys
 from pathlib import Path
@@ -73,15 +75,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--path", help="an explicit top.json (default: the build.sh output)")
+    ap.add_argument("--voices", type=int, help="which build to read (default: $VOICES, else 24)")
     ap.add_argument("--top", type=int, default=12, help="how many blocks to name (default: 12)")
     ap.add_argument("--capacity", type=int, default=24288,
                     help="TRELLIS_COMB on the part (default: 24288, an LFE5U-25F)")
     args = ap.parse_args()
 
-    # build.sh names the build directory after NAME=XLS32.
-    path = Path(args.path) if args.path else (REPO / "build/tiliqua/build/xls32-r5/top.json")
+    # build.sh names the build directory after NAME=XLS$VOICES, and since M36 there are two of
+    # them -- 24 voices is the formal build and the default here for the same reason it is the
+    # default there. Reading $VOICES means `VOICES=32 bash build.sh && VOICES=32 area.py` lines up
+    # without a flag, and a wrong guess is a missing-file error rather than a silent census of the
+    # other build, which would be the expensive failure: the two differ by 1,227 cells.
+    if args.path:
+        path = Path(args.path)
+    else:
+        voices = args.voices or int(os.environ.get("VOICES") or 24)
+        path = REPO / f"build/tiliqua/build/xls{voices}-r5/top.json"
     if not path.exists():
-        sys.exit(f"no netlist at {path} -- run boards/tiliqua/build.sh first")
+        sys.exit(f"no netlist at {path} -- run boards/tiliqua/build.sh first "
+                 f"(or pass --voices / --path for a build other than the default 24)")
 
     comb, ff, other = census(path)
     total = sum(comb.values())

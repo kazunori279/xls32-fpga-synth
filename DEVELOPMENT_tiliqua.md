@@ -2042,7 +2042,7 @@ unmeasured — every prior 16-voice number is contaminated
 ([#38](https://github.com/kazunori279/xls32-fpga-synth/issues/38)).
 
 **The path composition inverts across the knee**, which is why the slope is so steep here. At 98.9 %
-the critical path is 4.49 ns of logic and 15.30 ns of routing: the design is congestion-bound, and
+the critical path is 4.80 ns of logic and 16.77 ns of routing: the design is congestion-bound, and
 the router is taking detours. At 93.9 % it is 7.73 ns logic and 10.29 ns routing — of which 5.61 ns
 is the luna descriptor ROM's DP16KD clk-to-q, a fixed cost this design cannot optimise. So the
 returns keep coming until the routing term stops dominating, and then they stop hard.

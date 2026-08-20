@@ -1237,13 +1237,13 @@ almost none of the answers match:
 |---|---|---|
 | **Clocking** | one 100 MHz clock; engine on a ÷3 clock-enable, effects FSM on ÷6 | five domains — `sync`/`usb` 60 MHz, `fast` 120, `audio` **12.288**, `dvi` 39.07 + `dvi5x`; the engine lives in `audio` |
 | **What sets the rate** | the ÷3 enable — the shell *pushes* samples | the codec *pulls*: 48 kHz demand back through a 3/2 resampler lands on the engine as exactly 32 kHz. There is no 32 kHz divider anywhere |
-| **Engine occupancy** | 768 of ~3,125 cycles per sample | 224 of 384 `audio` cycles per sample (58.3%) |
+| **Engine occupancy** | 768 of ~3,125 cycles per sample | ~168 of 384 `audio` cycles per sample at 24 voices (43.8%); 224 at 32 |
 | **Multipliers** | 26 × DSP48E1 (of 90) | 28 × MULT18X18D (of 28 — every one on the die) |
 | **Echo line** | 16K×16 BRAM → ≤508 ms | 16,384 words of BRAM → ≤340 ms (it was PSRAM until M29 gave the space to the screen) |
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
-| **Visual feedback** | 16 LEDs, a voice-activity comet | 32 voices as 32 tiles on a 720×720p60 DVI beam-raced display, 32 bytes of state and no framebuffer |
-| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — 40.95 MHz Fmax, and **on one Tiliqua out of two the bitstream does not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
+| **Visual feedback** | 16 LEDs, a voice-activity comet | a 32-tile grid on a 720×720p60 DVI beam-raced display, 32 bytes of state and no framebuffer (the bottom row is dead at 24 voices — [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)) |
+| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — **55.48 MHz** Fmax at 24 voices (46.35 at 32), and **on one Tiliqua out of two an earlier, slower bitstream did not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
 
 Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8) are **built and timing-closed but not yet
 hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART. On Tiliqua both

@@ -168,8 +168,10 @@ those three; git history keeps the original.)*
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
 - **Risk 3b — `sync`/`usb` fails static timing at 60 MHz, and it has now bitten.** Open since M25;
   promoted from a carried risk to an observed failure in August 2026, when the vendor ran the
-  shipped bitstream on their own two Tiliquas and it worked on one and not the other. The shipped
-  shortfall is **40.95 MHz** against 60. Two things this item used to say are wrong: the failing
+  shipped bitstream on their own two Tiliquas and it worked on one and not the other. The build they
+  tested measured 40.95 MHz against 60; what the repo ships now is the 24-voice build at
+  **55.48 MHz**, which is a much smaller bet but still short. Two things this item used to say are
+  wrong: the failing
   path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
   clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
   ~45 MHz since M25 and is depth-limited, not congestion-limited: 4.79 ns of pure logic against a

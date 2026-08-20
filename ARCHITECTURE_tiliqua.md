@@ -40,7 +40,7 @@ are gone, so the question is never whether the idea works but what it displaces.
 - [Part C — Effects on the ECP5](#part-c--effects-on-the-ecp5)
   - [C1 The ported FSM](#c1-the-ported-fsm) · [C2 Echo — from PSRAM to block RAM](#c2-echo--from-psram-to-block-ram) · [C3 The Freeverb tank, at half length](#c3-the-freeverb-tank-at-half-length) · [C4 The bit-exact model](#c4-the-bit-exact-model)
 - [Part D — The beam-raced visualiser](#part-d--the-beam-raced-visualiser)
-  - [D1 No framebuffer](#d1-no-framebuffer) · [D2 32 voices as 32 tiles](#d2-32-voices-as-32-tiles) · [D3 What deleting PSRAM bought](#d3-what-deleting-psram-bought)
+  - [D1 No framebuffer](#d1-no-framebuffer) · [D2 The voice grid](#d2-the-voice-grid) · [D3 What deleting PSRAM bought](#d3-what-deleting-psram-bought)
 - [Part E — Constraints, area and timing](#part-e--constraints-area-and-timing)
   - [E1 The six hard constraints](#e1-the-six-hard-constraints) · [E2 The area census](#e2-the-area-census) · [E3 Multipliers: 28 of 28](#e3-multipliers-28-of-28) · [E4 The timing shortfall, and the die it does not run on](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)
 
@@ -63,10 +63,10 @@ forced by something in it.
 | [`gateware/midi_arb.py`](boards/tiliqua/gateware/midi_arb.py) | 343 | `MidiArbiter` (round-robin, message-atomic), `MidiPartSelect` (the CC103 sniffer), `MidiChanWatch` and `TrsPanicInject` |
 | [`gateware/fx.py`](boards/tiliqua/gateware/fx.py) | 683 | Chorus, ping-pong echo and 8-comb Freeverb — a structural port of `top.v:159-400` |
 | [`gateware/fx_model.py`](boards/tiliqua/gateware/fx_model.py) | 127 | A bit-exact pure-Python transcription of the same arithmetic, for the unit tests |
-| [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 361 | `VizStore` + `VoiceTiles`: 32 voices drawn as 32 tiles with no framebuffer |
+| [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 361 | `VizStore` + `VoiceTiles`: a 32-tile voice grid with no framebuffer. `N_VOICE` is a literal, so 24-voice builds leave the bottom row dark ([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)) |
 | [`gateware/sim_xls_core.cpp`](boards/tiliqua/gateware/sim_xls_core.cpp) | 272 | The Verilator harness — bit-bangs the TRS jack and dumps samples |
 | [`build.sh`](boards/tiliqua/build.sh) | — | codegen (in Docker) → Amaranth → yosys/nextpnr (yowasp) → `top.bit` |
-| [`area.py`](boards/tiliqua/area.py) | 108 | Per-block area census, read out of yosys' `top.json` |
+| [`area.py`](boards/tiliqua/area.py) | 121 | Per-block area census, read out of yosys' `top.json` |
 | [`board.py`](boards/tiliqua/board.py) | 48 | The board descriptor the host and test suite dispatch on |
 
 Supporting, on the host side: [`check_pitch.py`](boards/tiliqua/check_pitch.py) (simulation),
@@ -88,7 +88,7 @@ port is a shell port and not a rewrite:
 |---|---|---|---|
 | Engine source | `core/synth.x` | `core/synth.x` | identical |
 | Engine Verilog | `core/codegen.sh` | `core/codegen.sh` | identical flow, different `STAGES` |
-| `--pipeline_stages` | 48 | **12** | 768 vs **224** cycles/sample |
+| `--pipeline_stages` | 48 | **12** | 768 vs **224** cycles/sample at 32 voices (~168 at the shipped 24) |
 | Engine clock | 100 MHz ÷3 clock-enable | **12.288 MHz, its own domain** | `i_ce` tied high here |
 | Engine sample rate | 32 kHz | 32 kHz | identical — set by `synth.x`'s pitch tables |
 | Output sample rate | 32 kHz | **48 kHz** (3/2 resampled) | |
@@ -119,41 +119,48 @@ Everything here was measured on the physical module, not inferred from a datashe
 contradicts a number stated anywhere else, this section wins.
 
 **Identity.** `openFPGALoader --scan-usb` reports `0x1209:0xc0ca dirtyJtag apf.audio` /
-`Tiliqua R5 apfbug-beta4-1-g9b45`. Bitstream slots are at release **v1.2.1**. XLS32 is written to
-**slot 6**, which overwrote the shipped DSP-MDIFF example — the one of the eight with no firmware
+`Tiliqua R5 apfbug-beta4-1-g9b45`. Bitstream slots are at release **v1.2.1**. The synth is written to
+**slot 7** — the 24-voice build this repo ships — and, since M36, the experimental 32-voice build to
+**slot 6**, which overwrote the shipped DSP-MDIFF example: the one of the eight with no firmware
 region, and so the cheapest to rebuild from the SDK if it is ever wanted back.
 
 **The chip.** ECP5 `LFE5U-25F-6BG256C`: 24,288 TRELLIS_COMB (LUT4) · 24,288 TRELLIS_FF ·
 **28 MULT18X18D** (18×18) · **56 DP16KD** (16 Kb of data each, ≈896 Kb) · 2 EHXPLLL. Off-chip:
 32 MB HyperRAM (APS256XXN), unused since M29 ([D3](#d3-what-deleting-psram-bought)).
 
-**What XLS32 uses, and what was on the die before it.** Both columns are nextpnr's own post-pack
-figures — the ones that decide whether a bitstream places. The left column is the shipped build. The
-right is the vendor's `dsp-mirror` reference core — PLL, I²C, eurorack-pmod codec interface, no
-video, no SoC — which is the floor any design on this module starts from:
+**What the synth uses, and what was on the die before it.** All three columns are nextpnr's own
+post-pack figures — the ones that decide whether a bitstream places. The first is the shipped
+24-voice build, the second the experimental 32-voice one. The last is the vendor's `dsp-mirror`
+reference core — PLL, I²C, eurorack-pmod codec interface, no video, no SoC — which is the floor any
+design on this module starts from:
 
-| resource | **XLS32 (shipped)** | vendor reference shell |
-|---|---|---|
-| TRELLIS_COMB | **23,729 of 24,288 (97%)** | 1,768 (7%) |
-| TRELLIS_FF | **13,178 of 24,288 (54%)** | 731 (3%) |
-| DP16KD | **53 of 56 (94%)** | 0 (0%) |
-| MULT18X18D | **28 of 28 (100%)** | 1 (4%) |
-| EHXPLLL | **2 of 2 (100%)** | 1 (50%) |
-| TRELLIS_IO | **86 of 197 (43%)** | — |
+| resource | **24 voices (shipped)** | 32 voices (experimental) | vendor reference shell |
+|---|---|---|---|
+| TRELLIS_COMB | **22,796 of 24,288 (93.9%)** | 24,023 (98.9%) | 1,768 (7%) |
+| TRELLIS_FF | **11,931 of 24,288 (49%)** | 13,223 (54%) | 731 (3%) |
+| DP16KD | **53 of 56 (94%)** | 53 (94%) | 0 (0%) |
+| MULT18X18D | **28 of 28 (100%)** | 28 (100%) | 1 (4%) |
+| EHXPLLL | **2 of 2 (100%)** | 2 (100%) | 1 (50%) |
+| TRELLIS_IO | **86 of 197 (43%)** | 86 (43%) | — |
 
-The right column is the good news: the only row where the shell is not almost nothing is the PLL, and
-that is not fabric — XLS32 needs the second one anyway, for video. So essentially all 56 BRAM tiles
-and 27 of 28 multipliers were there to spend, and the left column is what spending them looks like.
-Three of the five fabric resources are at or above 94%.
+Only the two fabric rows move with voice count, and that is the point: voices are time-multiplexed
+through one datapath ([A2](#a2-the-engine-as-an-amaranth-submodule)), so the multipliers and the BRAM are
+already saturated at any ring length, and what a voice costs is register file and scan logic —
+about 150 cells each.
 
-For **what the 23,557 is spent on**, block by block, see [E2](#e2-the-area-census); for **how it got
-to 96%** over the milestones, and what that occupancy costs in timing, see
+The last column is the good news: the only row where the shell is not almost nothing is the PLL, and
+that is not fabric — the synth needs the second one anyway, for video. So essentially all 56 BRAM
+tiles and 27 of 28 multipliers were there to spend, and the first column is what spending them looks
+like. Three of the five fabric resources are at or above 94%.
+
+For **what those cells are spent on**, block by block, see [E2](#e2-the-area-census); for **how it
+got here** over the milestones, and what that occupancy costs in timing, see
 [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
 **The screen.** The panel's own EDID resolves to
 `DVIModeline { h_active: 720, v_active: 720, pixel_clk_mhz: 39.07, rotate: Left }`, and the
 bootloader logs `detected tiliqua screen! rotate framebuffer 90 degrees`. `MODELINE` in `top.py` is
-`"720x720p60r2"` to match, and slot 6's manifest pins `clk1_hz: 39070000` so the mode does not
+`"720x720p60r2"` to match, and the slot manifest pins `clk1_hz: 39070000` so the mode does not
 depend on the EDID having been read by whatever booted last.
 
 **The clock chip is programmed per boot, not per bitstream.** This is the single most load-bearing
@@ -162,17 +169,17 @@ straight into the FPGA, and **no bitstream programs that chip** — only the boo
 I²C, from the manifest of whichever slot it is about to boot. An SRAM load over JTAG programs
 nothing at all and inherits whatever the last-booted slot left behind. Booting XBEAM by hand leaves
 `clk0` at 49.152 MHz; the engine then runs 4× fast and the whole instrument is 2,616 cents sharp,
-with no other symptom. Slot 6's manifest carries `clk0_hz: 12288000`, so once `last_boot_slot`
-points at it every cold boot lands correctly clocked — which is why the design lives in a flash
-slot at all. `check_loop.py` measures the clock before grading anything
+with no other symptom. Both slot manifests carry `clk0_hz: 12288000`, so once `last_boot_slot`
+points at one of them every cold boot lands correctly clocked — which is why the design lives in a
+flash slot at all. `check_loop.py` measures the clock before grading anything
 ([A3](#a3-the-rate-is-set-by-the-pull) explains where the measurement comes from).
 
 **That manifest is generated, not hand-written**, which is what makes it shippable. The build emits
 it beside `top.bit` from three sources — the `MODELINE`, the clock settings, and the
 `BitstreamHelp` literal in `xls_core.py` — and tars the pair into a *bitstream archive*, the format
 both `pdm flash archive` and `tiliqua-webflash` take. M32 committed one as
-`boards/tiliqua/firmware/xls32-r5.tar.gz`, so the correct `clk0` now travels with the design
-instead of being a thing the reader has to know. `BitstreamHelp` is a class attribute the manifest
+`boards/tiliqua/firmware/xls32-r5.tar.gz` and M36 added `xls24-r5.tar.gz` beside it, so the correct
+`clk0` now travels with the design instead of being a thing the reader has to know. `BitstreamHelp` is a class attribute the manifest
 generator reads and the elaborator never sees, so correcting the help text is provably free:
 the rebuild that fixed it produced a byte-identical `top.bit`.
 
@@ -457,7 +464,7 @@ USB copy usable lives on the tee, so `out0`/`out1` and the engine keep bit-exact
 
 **The LEDs.** All eight are left in the pmod's automatic mode, showing the four input levels on 0–3
 and the four output levels on 4–7. M28 drove them as an envelope comet off `viz_out`; M29's screen
-shows the same tap 32 voices at a time, so the LEDs are better spent saying something the screen
+shows the same tap a whole ring at a time, so the LEDs are better spent saying something the screen
 does not.
 
 **Gotcha.** `i_cal` and `o_cal` are in `sync`, not `audio` — `I2SCalibrator`'s `stream_domain`
@@ -1140,7 +1147,7 @@ arrive 0,1,…,31,0,… in order. Unlike the Basys 3's LED comet, this *does* re
 counter can drift where a rotation cannot, and `last` costs one comparison to make the address
 self-correcting on every scan.
 
-## D2 32 voices as 32 tiles
+## D2 The voice grid
 
 **What it does.** Eight across, four down, filling the panel exactly (90 × 180 px each, both of
 which divide 720). **Brightness is loudness** and **hue is pitch**.
@@ -1191,6 +1198,15 @@ with zero spare multipliers ([E3](#e3-multipliers-28-of-28)). The quarter circle
 eighteen 5-bit words instead. The radius is also clamped to half the shape, or the two corners on
 one edge meet and the rectangle develops a waist — only the test geometry's miniature tiles come
 near it, but clamping is one line and a waist is a confusing bug.
+
+**Gotcha — the grid does not know the voice count.** `N_VOICE = 32` and `COLS, ROWS = 8, 4` are
+literals in `viz.py`, independent of the ring length the engine was built with. On the shipped
+24-voice build slots 24–31 are therefore never written, and the bottom row sits at `IDLE_V`
+forever: eight dim red tiles that look like eight permanently silent voices. It is cosmetic — the
+top three rows are correct — and it is deliberately still there, because the fix is a netlist change
+and the netlist that shipped is the one that was measured at 55.48 MHz and graded on hardware.
+Queued behind the next build that has to be re-swept anyway
+([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)).
 
 ## D3 What deleting PSRAM bought
 
@@ -1247,11 +1263,16 @@ narrowing made the Basys 3 build cheaper too. See [E3](#e3-multipliers-28-of-28)
 against 56 available — before the engine's own inferred ROMs. Resolved by region-sizing the tank and
 halving its delays ([C3](#c3-the-freeverb-tank-at-half-length)), not by moving it off-chip.
 
-**3 · Clocking.** A sample costs 32 × (roughly `STAGES`/2) engine cycles, not 32:
+**3 · Clocking.** A sample costs `voices` × (roughly `STAGES`/2) engine cycles, not `voices`:
 
 | `STAGES` | 6 | 8 | 10 | 12 | 16 | 20 | 24 | 32 | 40 | 48 | 64 | 80 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | cycles/sample | 128 | 160 | 192 | 224 | **320** | 384 | 416 | 512 | 640 | 768 | 928 | 1216 |
+
+Measured at 32 voices; the shipped 24-voice build is three quarters of every figure to first order,
+so `STAGES`=12 is ~168 rather than 224. That does **not** raise the sample rate — the engine is
+paced by codec backpressure, not by how fast the ring empties ([A1](#a1-clock-domains)) — it only
+widens a margin that was already wide.
 
 Because both the required clock *and* the achievable Fmax rise with `STAGES`, raising it does not
 buy throughput — it buys timing slack and spends flip-flops. The sustainable sample rate is
@@ -1267,8 +1288,9 @@ own USB HS PHY.
 **5 · The engine crowds luna off the die.** [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
 **6 · The loop needed a human finger.** The SI5351 is programmed per boot by the bootloader, and
-every cold boot autoboots `last_boot_slot` with that slot's `clk0`. Resolved by writing XLS32 to
-flash slot 6, whose manifest carries `clk0_hz: 12288000` — see
+every cold boot autoboots `last_boot_slot` with that slot's `clk0`. Resolved by writing the synth to
+a flash slot of its own — **slot 7** for the shipped 24-voice build, slot 6 for the experimental
+32-voice one — whose manifest carries `clk0_hz: 12288000` — see
 [the baseline](#the-module--measured-baseline). Programming the SI5351 from gateware (the pattern is
 in the SDK: `periph/i2c.py`'s `I2CStreamer` is how `eurorack_pmod.py` configures the AK4619 with no
 softcore) remains the better answer in principle, because it would make the *bitstream*
@@ -1287,7 +1309,8 @@ bitstream places at all — but when it says 102%, as it did in M28, it says not
 look. That question has twice decided the shape of a milestone.
 
 ```
-uv run boards/tiliqua/area.py
+uv run boards/tiliqua/area.py                 # the formal 24-voice build
+uv run boards/tiliqua/area.py --voices 32     # the experimental one
 uv run boards/tiliqua/area.py --top 5 --path build/tiliqua/build/xls32-r5/top.json
 ```
 
@@ -1359,6 +1382,21 @@ Rebuilt with the generator fixed, M36:
 The old table read 19,631 cells / 9,456 FF at 24 voices. Its 32-voice row is within 231 cells of
 this one, which is ordinary tree drift; the 24-voice row is out by **3,165**, which is not, and the
 flip-flop column agrees at +2,475. That is the register file coming back.
+
+`area.py` says the saving lands where it should, and only there — which is the check that the
+reduction is real rather than another prune:
+
+| block | 32 voices | 24 voices | Δ |
+|---|---:|---:|---:|
+| `core` | 17,651 (9,386 FF) | 16,877 (8,094 FF) | **−774 cells, −1,292 FF** |
+| `usbif` | 2,363 (1,331 FF) | 2,429 (1,331 FF) | +66, FF unchanged |
+| `fx` | 1,649 (1,243 FF) | 1,652 (1,243 FF) | +3, FF unchanged |
+| `pmod0` | 907 (461 FF) | 888 (461 FF) | −19, FF unchanged |
+
+Every flip-flop that left, left `core`. The other three blocks are flat to the flip-flop and move by
+tens of cells in both directions, which is placement and packing noise rather than anything
+structural. (These are pre-pack `LUT4`/`CCU2C` counts and run ~1% over nextpnr's total; use them for
+*where*, not for *does it fit* — see [E2](#e2-the-area-census).)
 
 **The ladder's shape is not known.** The withdrawn claim was that it has two rungs rather than
 three, on the evidence that 24 and 16 differed by only 409 cells. Two netlists both pruned down to
@@ -1433,15 +1471,19 @@ This is the fact that makes the trajectory table below readable, and it took unt
 to see it:
 
 - **A luna floor whose *depth* has never changed** — ~20 LUT levels, 4.79 ns of logic, measured the
-  same at M25 and today. Its Fmax moves with placement (48.7–55.3 at M25, 41.5–46.8 at 80% now,
-  because the netlist around it is a different shape), but the depth is invariant and it is the term
-  that will not go away.
+  same at M25 and today. Its Fmax moves with placement, because the netlist around it is a different
+  shape each time, but the depth is invariant and it is the term that will not go away.
 - **An `fx` path stacked on top of it that only exists at high occupancy.** It is
-  *congestion*-limited, and it is what the shipped netlist reports.
+  *congestion*-limited, and it is what M31–M35 reported.
 
 Take the die pressure off, `fx` drops away, and luna is back on top. Everything below follows from
 that shape — and note that the table's Fmax column, read alone, cannot show it. That is how the
 correct M25 diagnosis came to be written off as stale.
+
+At M36 both shipped netlists report a path that starts *and* ends inside luna, so `fx` is off the
+top for the first time since M31. That is the shape above playing out, not a new fact — and it is
+also why the 32-voice build is still slow: at 98.9% the luna path is congestion-limited (4.80 ns
+logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a different name.
 
 **The trajectory.**
 
@@ -1453,11 +1495,14 @@ correct M25 diagnosis came to be written off as stale.
 | M29, + video | 96% | — | 44.71 MHz |
 | M31 | 97% | `fx.nlp_r[12]` → `fx.acc[16]` | 42.51 MHz |
 | + comb magnitude truncation | 98% | `fx.rsize[0]` → `fx.mul_g[22]` | 39.92 MHz |
-| **shipped**, 32 voices, `--seed 4` | **97%** | `fx.rsize[0]` → `fx.mul_g[22]` | **40.95 MHz** |
-| 24-voice variant, best of 5 seeds | **80%** | **luna** | **46.79 MHz** |
+| M35, 32 voices, `--seed 4` | 97% | `fx.rsize[0]` → `fx.mul_g[22]` | 40.95 MHz |
+| M36, **32 voices** (experimental), `--seed 5` | **98.9%** | **luna**, congestion-limited | **46.35 MHz** |
+| M36, **24 voices** (shipped), `--seed 4` | **93.9%** | **luna**, depth-limited | **55.48 MHz** |
 
-The last two rows are measured; the `shipped` row supersedes an entry that read `M33 | 96% |
-39.42 MHz` and was two netlists out of date.
+The last three rows are read from the `top.tim` of an archive that is committed in this repo. The
+M35 row superseded an entry that read `M33 | 96% | 39.42 MHz` and was two netlists out of date; the
+two M36 rows supersede a 24-voice row that read `80% | 46.79 MHz` and had been measured on a netlist
+yosys had pruned ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)).
 
 **The luna cone, measured on the 24-voice netlist** where nothing of ours is in front of it:
 
@@ -1581,7 +1626,7 @@ and it is the only lever that attacks the 4.79 ns floor —
 
 **Shrinking our design — this one was ruled out wrongly, and it works.** The entry here used to
 read "24 voices moves 97% → 80% and buys +5.8 MHz, ceiling 46.79", which is two mistakes in one
-sentence: the occupancy came from a pruned netlist ([E1](#e1-the-area-budget),
+sentence: the occupancy came from a pruned netlist ([E2](#e2-the-area-census),
 [#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)), and the ceiling was measured on
 it. Rebuilt correctly, converged runs only:
 
@@ -1594,10 +1639,12 @@ it. Rebuilt correctly, converged runs only:
 So the cut is *smaller* than the old table claimed and worth **+9.1 MHz**, clearing the vendor's
 55 MHz bar. 28 voices buys only +2.4 and is not the knee.
 
-The path composition is what makes the knee sharp, and it inverts across it. At 98.9% the worst path
-is **4.49 ns logic / 15.30 ns routing** — congestion, as this section has always said. At 93.9% it
-is **7.73 ns logic / 10.29 ns routing**, and 5.61 ns of that logic is the descriptor ROM's own
-DP16KD clk-to-q. The routing pressure comes off and the depth-limited cone above is what is left
+The path composition is what makes the knee sharp, and it inverts across it. Both builds report a
+path that lives entirely inside luna, but they are limited by opposite things. At 98.9% it is
+**4.80 ns logic / 16.77 ns routing** — 78% routing, i.e. congestion, as this section has always
+said — running from `USBControlEndpoint.request` to the descriptor ROM's *address* pins. At 93.9% it
+is **7.73 ns logic / 10.29 ns routing**, running the other way, out of the same ROM's *data* pins
+into `usb.data_crc`, and 5.61 ns of that logic is the DP16KD's own clk-to-q. The routing pressure comes off and the depth-limited cone above is what is left
 standing. Occupancy was worth 9.1 MHz and is now spent; the remaining 4.5 to 60 MHz is the cone, and
 nothing but a register in it will move it.
 
@@ -1636,7 +1683,7 @@ Three more, measured against the 32-voice and 24-voice netlists:
 
 | lever | result |
 |---|---|
-| **nextpnr 0.11.1** vs the pinned 0.10 | **bit-identical Fmax** on both netlists — 40.95 and 46.79 |
+| **nextpnr 0.11.1** vs the pinned 0.10 | **bit-identical Fmax** on both netlists it was tried on — the M35 32-voice one at 40.95 and the pruned 24-voice one at 46.79. The netlists are superseded; "the version does not matter" is not |
 | `--placer static` (the electrostatic placer) | **never legalises at 97%** — COMB overlap flat at 23–24% over 27,500+ iterations, penalty climbing |
 | `REGION`/`UGROUP` to fence luna into a die corner | **absent from the wasm in both 0.10 and 0.11.1** |
 | an SDC multicycle on the cone | **`set_multicycle_path` does not exist**, and the one exception nextpnr does parse is a no-op |
@@ -1676,8 +1723,8 @@ same flow, one netlist edit. It buys the tank a decay to zero
 **Gotcha — a non-converged run still writes a timing report, and it reads high.** Timing on a
 partially routed design is optimistic, so a seed whose router ran away reports a *better* Fmax than
 one that finished. Such a run leaves a zero-byte `.out` and no `.config`; **only compare runs that
-reached `overused=0`.** This is the likeliest explanation for the ~45 MHz the vendor measured on a
-netlist that actually makes 40.95.
+reached `overused=0`.** This is the likeliest explanation for the ~45 MHz the vendor measured on the
+M35 netlist, which actually makes 40.95.
 
 **And the same trap on the time axis: a run still in progress reports its post-placement estimate.**
 `top.tim` carries two Fmax tables — the placement estimate around line 288 and the routed result
