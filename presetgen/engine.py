@@ -161,9 +161,15 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
         # select's four steps are the board at trdep 0/32/64/127 (the first three exactly, the last
         # to within one LSB -- full swing would want trdep=128), while params.SELECTS["trem"]
         # offers 0/32/64/**96** -- so the fourth option rendered full-depth tremolo here and 75% of
-        # it on the board. No shipped preset uses 96 (the bank is {0: 38, 32: 20, 64: 6}), so this
-        # corrects the panel, where CC92 is a continuous knob and every value between the four was
-        # being rounded down to one of them. See issue #23.
+        # it on the board. That gap is not small: at 96 this used to swing the gain over 0..63,
+        # a 36 dB dip, where the board swings 16..64, which is 12 dB. See issue #23.
+        #
+        # An earlier version of this comment said no shipped preset uses 96, on the strength of
+        # presets_armbase.json being {0: 38, 32: 20, 64: 6}. Wrong: that is one bank of eight.
+        # Across all 416 shipped presets the distribution is {0: 251, 32: 115, 64: 42, 96: 8}, and
+        # those 8 -- in armfull, armfx, b3000 and pilot800 -- were fitted against the 36 dB
+        # version. Their parameters are optimal for a sound the board does not make. The model is
+        # correct now; the presets are the ones that would need a refit, which is #23's second half.
         tg = 64 - (((64 - lfoU) * trdep) >> 7)
         if tg < 0:
             tg = 0
