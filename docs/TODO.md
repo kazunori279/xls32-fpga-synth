@@ -80,9 +80,10 @@ those three; git history keeps the original.)*
 ## Known debt — recorded, not scheduled
 
 - **The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
-  bit-exact.** `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both
-  boards, but only the Tiliqua archives have been rebuilt: both carry the fixes and pass
-  `check_artefacts.py`, while `boards/basys3/firmware/top.bit` is still
+  bit-exact** ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)).
+  `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both boards, but only
+  the Tiliqua archives have been rebuilt: both carry the fixes and pass `check_artefacts.py`,
+  while `boards/basys3/firmware/top.bit` is still
   the 2026-08-11 M34 build and reports stale. Refreshing it needs Vivado on an x86 machine — the
   GCE build VM in `remote_build.sh`, which is not something CI can provide — and then a Basys 3 on
   the desk for `verify.sh`, since timing closure has come apart from what the synth sounds like on
@@ -90,7 +91,8 @@ those three; git history keeps the original.)*
   latched SVF residue and the pulse's duty offset still in it. Neither stops it playing; the note
   is in [`top.bit.md`](../boards/basys3/firmware/top.bit.md) for people who flash without running
   the check.
-- **A residual DC offset on Tiliqua that is not the reverb tank's.** Fixing the comb dead band
+- **A residual DC offset on Tiliqua that is not the reverb tank's**
+  ([#4](https://github.com/kazunori279/xls32-fpga-synth/issues/4)). Fixing the comb dead band
   (see [ARCHITECTURE_tiliqua.md → C3](../ARCHITECTURE_tiliqua.md#c3-the-freeverb-tank-at-half-length))
   took `stress_fx_tail`'s late-window level from +206 to +82.3, but not to zero, and
   `stress_silence_recovery` still settles at exactly **+115** — one unique sample value across the
@@ -100,7 +102,8 @@ those three; git history keeps the original.)*
   tail RMS 0 for the same case, so it is Tiliqua-side. Candidates not eliminated: the `>> 1` floors
   in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path. At ~−49 dBFS it fails
   no checker, which is exactly why it is written down here rather than fixed in passing.
-- **The pulse wave's DC is still inside the engine; it is only the USB tee that is clean now.**
+- **The pulse wave's DC is still inside the engine; it is only the USB tee that is clean now**
+  ([#2](https://github.com/kazunori279/xls32-fpga-synth/issues/2)).
   A pulse at anything but 50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 —
   about 78 % — so every sounding voice contributes an offset that tracks its own envelope. Measured
   on a full take of *Prelude in C* off the UAC2 input, before the fix: mean **+0.286**, with
@@ -156,13 +159,17 @@ those three; git history keeps the original.)*
   checked for a mix of *exactly* zero, all four passing. On the module, `check_panic_hw.py` reports
   `ptp 0.000` on all six of its silence cases; that is the weaker "stops moving" claim, since a
   latched constant also has zero peak-to-peak, so the exact-zero half of it rests on `tb_dc.v`.
-- **`filter_sweep` WARNs on Tiliqua at 80.7** against 86 on Basys 3 — the same DSLX filter,
-  the same sweep, a consistently worse score. Deferred rather than diagnosed; nothing yet rules out
-  the 48 kHz coefficient set as the difference.
-- **+369 TRELLIS_COMB from the part-select remap, still unexplained.** The estimate was ~50. The
-  cells were paid and the design fits, so nothing forced the question, but a sevenfold miss on a
-  design with ~515 cells free is a hole in the area model, not a rounding error.
-- **28/28 MULT18X18D, no margin at all.** One route out is known and unused: a 44-entry ROM for
+- **`filter_sweep` WARNs on Tiliqua at 80.7** ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7))
+  against 86 on Basys 3 — the same DSLX filter, the same sweep, a consistently worse score.
+  Deferred rather than diagnosed; nothing yet rules out the 48 kHz coefficient set as the
+  difference.
+- **+369 TRELLIS_COMB from the part-select remap, still unexplained**
+  ([#5](https://github.com/kazunori279/xls32-fpga-synth/issues/5)).
+  The estimate was ~50. The cells were paid and the design fits, so nothing forced the question,
+  but a sevenfold miss on a design with ~515 cells free is a hole in the area model, not a
+  rounding error.
+- **28/28 MULT18X18D, no margin at all** ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)).
+  One route out is known and unused: a 44-entry ROM for
   `nrel * HUE_K` frees two multipliers, at the cost of the resource that is *actually* scarce.
   Worth doing only when a feature needs a multiplier and cannot have one. See
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
@@ -248,8 +255,8 @@ those three; git history keeps the original.)*
   Tiliqua TRS MIDI-In jack plays on hardware**, alongside USB-MIDI, as the arbiter was written to
   allow. This was open from M24 to now purely for want of a Type A cable. Basys 3's DIN input is a
   separate item and is still untested (next).
-- **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** are built and timing-closed but not
-  hardware-tested — parts on order.
+- **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** ([#8](https://github.com/kazunori279/xls32-fpga-synth/issues/8))
+  are built and timing-closed but not hardware-tested — parts on order.
 - ~~**The committed Basys 3 bitstream is stale, and known to be.**~~ **Done — rebuilt and verified
   2026-08-10.** `boards/basys3/firmware/top.bit` had been byte-for-byte the 2026-07-13
   initial-release blob for four months, an engine from before M22's 18×18 narrowing and M29,
