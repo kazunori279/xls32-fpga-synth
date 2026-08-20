@@ -22,19 +22,35 @@
               about. A fitting loss can win the first and lose the second, and if it does, that is
               the most useful thing this page can find out.
 
-  WHAT IS HIDDEN: the manifest says which bank is A for each trial, and A/B was coin-flipped per
-  trial at render time, so a listener who noticed "the second one is always brighter" learns
-  nothing. The page does not look at that field until every trial is voted, and the tally is
-  computed only at the end. Trials are ordered so categories do not come in blocks.
+  EVERY PAIR IS ASKED TWICE, once in each playback order, and a pair only counts as a preference
+  if it names the same bank both times. The first version of this page did not do that and the run
+  it produced is void: the listener chose the first-played clip in 19 of 22 decided trials, a sign
+  test at p = 0.001, against a bank split of 13-9 at p = 0.52. The strongest signal in the data was
+  the button layout. Balancing which bank plays first -- which the renderer already did -- stops a
+  position preference from favouring a bank and does nothing to stop it deciding trials, so the
+  bank numbers were 22 votes about order and 3 about audio.
 
-  WHAT IS NOT CONTROLLED, and should be read into any result: 24 trials is a small n. A 17-7 split
-  clears a two-sided sign test at p<0.05, a 15-9 does not, and the page prints the p so the
-  difference between "won" and "did not lose" stays visible. Levels are peak-normalised at render,
-  so loudness cannot decide it. Everything is one held note of 1.6 s, which is what the search
-  optimised and is not what a patch gets used for -- a bank that wins here has won at single notes.
+  AND THE TARGET IS PLAYED IMMEDIATELY BEFORE EACH CANDIDATE, as one button, rather than sitting on
+  a third button of its own. That is the likely mechanism for most of the effect above: with
+  [target][1][2] as three buttons, whichever candidate is heard next to the target gets compared
+  against a fresh memory of it and the other is judged against a stale one. "Closer to the target"
+  is only answerable if both candidates are the same distance from hearing it. The `better`
+  question does not involve the target and gets bare playback.
 
-    uv run python presetgen/ab_render.py 3 soundfont
+  WHAT IS HIDDEN: the manifest says which bank is A for each trial, and A/B is flipped at render
+  time, so a listener who noticed "the second one is always brighter" learns nothing. The page does
+  not look at that field until every trial is voted. Trials are ordered so categories do not come
+  in blocks, and the two hearings of one pair are separated by a block of others.
+
+  WHAT IS NOT CONTROLLED, and should be read into any result: 24 pairs is a small n, and requiring
+  both hearings to agree makes it smaller -- a discordant pair is not a tie, it is a pair this
+  protocol could not ask about. Levels are peak-normalised at render, so loudness cannot decide it.
+  Everything is one held note of 1.6 s, which is what the search optimised and is not what a patch
+  gets used for -- a bank that wins here has won at single notes.
+
+    uv run python presetgen/ab_render.py bank_a.json bank_b.json 3 soundfont
     python3 -m http.server 8765 -d webui        # http://127.0.0.1:8765/ab_check.html
+    uv run python presetgen/ab_tally.py ~/Downloads/ab_votes.json
 -->
 <style>
   :root { color-scheme: dark; }
@@ -65,70 +81,93 @@
 </style>
 
 <h1>Blind A/B — <span id="head">loading…</span></h1>
-<div class="sub" id="sub">the same target fitted two ways; which bank is which flips per trial</div>
+<div class="sub" id="sub">the same target fitted two ways; every pair is asked twice, both ways round</div>
 <div class="bar"><i id="prog" style="width:0"></i></div>
 <div id="body"></div>
 <div class="foot">
-  <kbd>1</kbd> target &nbsp; <kbd>2</kbd> A &nbsp; <kbd>3</kbd> B &nbsp;&nbsp;
-  <kbd>q</kbd>/<kbd>w</kbd> closer: A/B &nbsp; <kbd>a</kbd>/<kbd>s</kbd> better: A/B &nbsp;
-  <kbd>x</kbd> can't tell (both) &nbsp; <kbd>Enter</kbd> next
+  <kbd>1</kbd>/<kbd>2</kbd> target→1 / target→2 &nbsp; <kbd>3</kbd>/<kbd>4</kbd> 1 / 2 alone &nbsp;&nbsp;
+  <kbd>q</kbd>/<kbd>w</kbd>/<kbd>e</kbd> closer: 1 / 2 / can't tell &nbsp;
+  <kbd>a</kbd>/<kbd>s</kbd>/<kbd>d</kbd> better: 1 / 2 / can't tell &nbsp;
+  <kbd>Enter</kbd> next
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-let M = null, i = 0, votes = [], ctx = null, src = null, buf = {};
+let M = null, SEQ = [], i = 0, votes = [], ctx = null, srcs = [], buf = {};
 
 async function boot() {
   M = await (await fetch('ab/manifest.json')).json();
-  votes = M.trials.map(() => ({closer: null, better: null}));
-  $('#head').textContent = `${M.trials.length} trials, ${M.banks.join(' vs ')} (${M.source})`;
+  const byId = Object.fromEntries(M.trials.map(t => [t.id, t]));
+  // The renderer supplies the counterbalanced sequence, so the seed that chose the pairs also chose
+  // the order they are heard in. An older manifest has no `sequence`; fall back to one pass so a
+  // stale render still opens, and say so in the header rather than silently running the void design.
+  SEQ = (M.sequence || M.trials.map(t => ({id: t.id, rev: false})))
+        .map(s => ({...byId[s.id], rev: s.rev}));
+  votes = SEQ.map(() => ({closer: null, better: null}));
+  $('#head').textContent = `${SEQ.length} trials over ${M.trials.length} pairs, `
+                         + `${M.banks.join(' vs ')} (${M.source})`
+                         + (M.sequence ? '' : '  — OLD MANIFEST, not counterbalanced');
   render();
   addEventListener('keydown', key);
 }
 
-// One AudioContext, one voice. Starting a clip stops whatever is playing: A/B judgement is a
-// comparison of two sounds heard one after the other, and overlapping them just makes a chord.
-async function play(id, slot, btn) {
+// One AudioContext, one voice. Starting anything stops whatever is playing: this is a comparison of
+// sounds heard one after another, and overlapping them just makes a chord.
+//
+// `slots` is a list because the closer question plays [target, candidate] back to back. Both
+// candidates must be heard at the same remove from the target or the question is unanswerable --
+// see the header. The gap is short enough to hold both in one memory and long enough not to sound
+// like one sample; the target's own tail is already in the file.
+async function play(id, slots, btn) {
   ctx = ctx || new AudioContext();
-  const url = `ab/${id}_${slot}.wav`;
-  if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
-  if (src) { try { src.stop(); } catch (e) {} }
+  const urls = slots.map(s => `ab/${id}_${s}.wav`);
+  for (const url of urls)
+    if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  srcs.forEach(s => { try { s.stop(); } catch (e) {} });
+  srcs = [];
   document.querySelectorAll('.play.on').forEach(b => b.classList.remove('on'));
-  src = ctx.createBufferSource();
-  src.buffer = buf[url];
-  src.connect(ctx.destination);
-  src.onended = () => btn && btn.classList.remove('on');
+  let at = ctx.currentTime + 0.02;
+  urls.forEach((url, n) => {
+    const s = ctx.createBufferSource();
+    s.buffer = buf[url];
+    s.connect(ctx.destination);
+    s.start(at);
+    if (n === urls.length - 1) s.onended = () => btn && btn.classList.remove('on');
+    at += buf[url].duration + 0.25;
+    srcs.push(s);
+  });
   btn && btn.classList.add('on');
-  src.start();
 }
 
+// The trial's "1" and "2" are the render-time slots a and b, swapped when this hearing of the pair
+// is the reversed one. Everything the listener touches is 1/2; a and b never leave this function.
+const slotOf = (t, n) => (t.rev ? ['b', 'a'] : ['a', 'b'])[n - 1];
+
 function render() {
-  if (i >= M.trials.length) return results();
-  const t = M.trials[i], v = votes[i];
-  $('#prog').style.width = `${i / M.trials.length * 100}%`;
+  if (i >= SEQ.length) return results();
+  const t = SEQ[i], v = votes[i];
+  $('#prog').style.width = `${i / SEQ.length * 100}%`;
   // The name and category are shown: they say what the TARGET is, which the listener hears anyway,
   // and knowing "this is meant to be a plucked note" is part of judging whether a fit got there.
-  // Neither one hints at which bank is A.
+  // Neither one hints at which bank is which -- and the pair will come round again the other way
+  // up, so recognising the name on the second hearing gives nothing away either.
   $('#body').innerHTML = `
-    <div class="trial">trial <b>${i + 1}</b> of ${M.trials.length} &nbsp;·&nbsp;
+    <div class="trial">trial <b>${i + 1}</b> of ${SEQ.length} &nbsp;·&nbsp;
       target: <b>${t.category} — ${t.name}</b></div>
     <div class="row">
-      <span class="q">listen</span>
-      <button class="play" data-slot="target">▶ target</button>
-      <button class="play" data-slot="a">▶ A</button>
-      <button class="play" data-slot="b">▶ B</button>
-    </div>
-    <div class="row">
       <span class="q">closer</span>
-      <button class="pick" data-k="closer" data-v="a">A</button>
-      <button class="pick" data-k="closer" data-v="b">B</button>
+      <button class="play" data-pair="1">▶ target → 1</button>
+      <button class="play" data-pair="2">▶ target → 2</button>
+      <button class="pick" data-k="closer" data-v="1">1</button>
+      <button class="pick" data-k="closer" data-v="2">2</button>
       <button class="pick skip" data-k="closer" data-v="tie">can't tell</button>
-      <span class="hint">to the target</span>
     </div>
     <div class="row">
       <span class="q">better</span>
-      <button class="pick" data-k="better" data-v="a">A</button>
-      <button class="pick" data-k="better" data-v="b">B</button>
+      <button class="play" data-solo="1">▶ 1</button>
+      <button class="play" data-solo="2">▶ 2</button>
+      <button class="pick" data-k="better" data-v="1">1</button>
+      <button class="pick" data-k="better" data-v="2">2</button>
       <button class="pick skip" data-k="better" data-v="tie">can't tell</button>
       <span class="hint">as a patch, target ignored</span>
     </div>
@@ -136,8 +175,11 @@ function render() {
       <button id="next" ${v.closer && v.better ? '' : 'disabled'}>next →</button>
       <button id="back" ${i ? '' : 'disabled'}>← back</button>
     </div>`;
-  document.querySelectorAll('.play').forEach(b =>
-    b.onclick = () => play(t.id, b.dataset.slot, b));
+  document.querySelectorAll('.play').forEach(b => {
+    const n = +(b.dataset.pair || b.dataset.solo);
+    const slots = b.dataset.pair ? ['target', slotOf(t, n)] : [slotOf(t, n)];
+    b.onclick = () => play(t.id, slots, b);
+  });
   document.querySelectorAll('.pick').forEach(b => {
     if (v[b.dataset.k] === b.dataset.v) b.classList.add('sel');
     b.onclick = () => pick(b.dataset.k, b.dataset.v);
@@ -152,13 +194,17 @@ function pick(k, v) {
 }
 
 function key(e) {
-  if (i >= M.trials.length) return;
-  const t = M.trials[i];
-  const slot = {'1': 'target', '2': 'a', '3': 'b'}[e.key];
-  if (slot) return play(t.id, slot, document.querySelector(`.play[data-slot="${slot}"]`));
-  const map = {q: ['closer', 'a'], w: ['closer', 'b'], a: ['better', 'a'], s: ['better', 'b']};
+  if (i >= SEQ.length) return;
+  const t = SEQ[i];
+  if ('1234'.includes(e.key)) {
+    const n = +e.key, pair = n <= 2;
+    const sel = pair ? `.play[data-pair="${n}"]` : `.play[data-solo="${n - 2}"]`;
+    const c = pair ? n : n - 2;
+    return play(t.id, pair ? ['target', slotOf(t, c)] : [slotOf(t, c)], document.querySelector(sel));
+  }
+  const map = {q: ['closer', '1'], w: ['closer', '2'], e: ['closer', 'tie'],
+               a: ['better', '1'], s: ['better', '2'], d: ['better', 'tie']};
   if (map[e.key]) return pick(...map[e.key]);
-  if (e.key === 'x') { votes[i] = {closer: 'tie', better: 'tie'}; return render(); }
   if (e.key === 'Enter' && votes[i].closer && votes[i].better) { i++; render(); }
 }
 
@@ -176,33 +222,72 @@ function binomP(k, n) {                       // two-sided sign test, exact; tie
 function results() {
   $('#prog').style.width = '100%';
   const [b0, b1] = M.banks;
-  const out = M.trials.map((t, n) => ({
-    id: t.id, name: t.name, category: t.category, spread: t.spread,
-    closer: votes[n].closer === 'tie' ? 'tie' : t[votes[n].closer],
-    better: votes[n].better === 'tie' ? 'tie' : t[votes[n].better],
+  // One record per HEARING, resolved from 1/2 to a bank, plus which bank played first. `first` is
+  // written into the file so the order check survives without the manifest, which is gitignored and
+  // regenerated per run -- the first time this was analysed the join had to go back to the manifest
+  // to find out that order had decided the whole thing.
+  const out = SEQ.map((t, n) => ({
+    id: t.id, name: t.name, category: t.category, spread: t.spread, rev: !!t.rev,
+    first: t[slotOf(t, 1)],
+    closer: votes[n].closer === 'tie' ? 'tie' : t[slotOf(t, +votes[n].closer)],
+    better: votes[n].better === 'tie' ? 'tie' : t[slotOf(t, +votes[n].better)],
   }));
-  const lines = [];
+
+  // The order check comes FIRST, because it decides whether the rest is worth reading.
+  const lines = ['order check -- did the first-played clip win, whichever bank it was?'];
+  let ordered = false;
   for (const k of ['closer', 'better']) {
-    const w0 = out.filter(r => r[k] === b0).length;
-    const w1 = out.filter(r => r[k] === b1).length;
-    const tie = out.filter(r => r[k] === 'tie').length;
-    const p = binomP(w0, w0 + w1);
-    lines.push(`${k.padEnd(7)}  ${b0} ${String(w0).padStart(2)}   ` +
-               `${b1} ${String(w1).padStart(2)}   tie ${String(tie).padStart(2)}   ` +
-               `sign test p = ${p.toFixed(3)}${p < 0.05 ? '  *' : ''}`);
+    const d = out.filter(r => r[k] !== 'tie');
+    const f = d.filter(r => r[k] === r.first).length;
+    const p = binomP(f, d.length);
+    ordered = ordered || p < 0.05;
+    lines.push(`  ${k.padEnd(7)}  first ${String(f).padStart(2)}   `
+             + `second ${String(d.length - f).padStart(2)}   p = ${p.toFixed(3)}`
+             + (p < 0.05 ? '   * order is deciding trials' : ''));
   }
-  const cats = [...new Set(out.map(r => r.category))];
-  lines.push('', `by category (closer / better, "-" = tie)`);
-  for (const c of cats) {
-    const r = out.filter(x => x.category === c);
-    const f = k => r.map(x => x[k] === 'tie' ? '-' : (x[k] === b0 ? '0' : '1')).join('');
+  lines.push('');
+
+  // A pair counts only if both hearings name the same bank. Discordant is not a tie: a tie is the
+  // listener saying the two are alike, and a discordant pair is the protocol failing to ask.
+  const ids = [...new Set(out.map(r => r.id))];
+  for (const k of ['closer', 'better']) {
+    const w = {}; w[b0] = 0; w[b1] = 0;
+    let flip = 0, tie = 0;
+    for (const id of ids) {
+      const h = out.filter(r => r.id === id).map(r => r[k]);
+      if (h.length < 2) continue;
+      if (h.every(x => x === 'tie')) tie++;
+      else if (h[0] === h[1]) w[h[0]]++;
+      else flip++;
+    }
+    const p = binomP(w[b0], w[b0] + w[b1]);
+    lines.push(`${k.padEnd(7)}  ${b0} ${String(w[b0]).padStart(2)}   ${b1} ${String(w[b1]).padStart(2)}`
+             + `   both-ways tie ${String(tie).padStart(2)}   order-dependent ${String(flip).padStart(2)}`
+             + `   p = ${p.toFixed(3)}${p < 0.05 ? '  *' : ''}`);
+  }
+
+  lines.push('', 'by category (closer / better; 0 = ' + b0 + ', 1 = ' + b1
+                 + ', ~ = order-dependent, - = tie both ways)');
+  for (const c of [...new Set(out.map(r => r.category))]) {
+    const cid = ids.filter(id => out.find(r => r.id === id).category === c);
+    const f = k => cid.map(id => {
+      const h = out.filter(r => r.id === id).map(r => r[k]);
+      if (h.length < 2) return '?';
+      if (h.every(x => x === 'tie')) return '-';
+      return h[0] === h[1] ? (h[0] === b0 ? '0' : '1') : '~';
+    }).join('');
     lines.push(`  ${c.padEnd(8)} ${f('closer')}  ${f('better')}`);
   }
-  lines.push('', `0 = ${b0}, 1 = ${b1}. n=${out.length}; a 17-7 split is p<0.05, 15-9 is not.`);
+  lines.push('', `${ids.length} pairs. Requiring both hearings to agree shrinks n, on purpose: a`,
+    'split of 17-7 over the pairs that survive clears p<0.05, and a pile of order-dependent',
+    'pairs means the two banks are not separable by this ear at single notes.');
+  if (ordered) lines.push('', 'The order effect above is significant. Read the bank result as',
+    'provisional at best -- most of what was voted on was which button came first.');
+
   $('#head').textContent = 'done';
   $('#sub').textContent = 'the reveal, and the vote file to keep';
   $('#body').innerHTML = `<pre>${lines.join('\n')}</pre>
-    <div class="row"><button id="save">save votes.json</button>
+    <div class="row"><button id="save">save ab_votes.json</button>
     <button id="again">start over</button></div>`;
   $('#save').onclick = () => {
     const blob = new Blob([JSON.stringify({source: M.source, banks: M.banks, seed: M.seed,
@@ -212,7 +297,7 @@ function results() {
     a.download = 'ab_votes.json';
     a.click();
   };
-  $('#again').onclick = () => { i = 0; votes = M.trials.map(() => ({closer: null, better: null})); render(); };
+  $('#again').onclick = () => { i = 0; votes = SEQ.map(() => ({closer: null, better: null})); render(); };
 }
 
 boot();

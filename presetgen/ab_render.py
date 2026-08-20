@@ -6,8 +6,16 @@ numbers looked fine while the patches did not. So the two banks get compared the
 settles it, and the comparison is made blind because the person judging it also built one of them.
 
 Per trial this writes three files -- the GM target, and both banks' fit of that same target -- and
-records which bank is A and which is B behind a coin flip the page does not read until a vote is
-in. Everything lands in webui/ab/, which is gitignored: ~30 MB of WAV regenerable in a minute.
+records which bank is A and which is B behind a flip the page does not read until a vote is in.
+Everything lands in webui/ab/, which is gitignored: ~30 MB of WAV regenerable in a minute.
+
+Each pair is then asked TWICE, in both playback orders, and only a pair that names the same bank
+both ways counts as a preference. That is not caution, it is a repair: the first run of this rig
+came back with the listener choosing the first-played clip in 19 of 22 decided trials, p = 0.001,
+which is a larger and cleaner effect than anything the banks produced. Balancing A/B across trials
+-- which this file already did -- keeps a position preference from favouring a bank while leaving
+it free to decide every individual trial, so the bank split it reported was noise wearing a number.
+`ab_tally.py` reads the pairs back and reports the order effect alongside the result.
 
 Trials are drawn evenly across categories and, within a category, spread across the loss gap
 between the banks rather than sampled at random: the pairs where the two distances disagree most
@@ -42,6 +50,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.abspath(os.path.join(HERE, "..", "webui", "ab"))
 CATS = ["Bass", "Lead", "Pad", "Pluck", "Keys", "Brass", "Strings", "FX"]
 SEED = int(os.environ.get("SEED", 20260816))
+BLOCK = 6                # pairs per counterbalancing block; see the sequence build in main()
+MIN_SEP = 4              # trials between the two hearings of one pair
 # argv is read inside main(), not here: build_previews.py imports write_wav from this module and
 # would otherwise inherit this file's idea of what argv[1] means.
 
@@ -116,6 +126,7 @@ def main():
     rng.shuffle(flips)
 
     manifest = []
+
     for i, t in enumerate(trials):
         flip = flips[i]
         first, second = (banks_in[1][0], banks_in[0][0]) if flip else (banks_in[0][0], banks_in[1][0])
@@ -130,9 +141,50 @@ def main():
                          "spread": round(t["spread"], 4), "a": first, "b": second})
         print(f"  {stem}  {t['category']:8} {t['name']:22} spread {t['spread']:.3f}")
 
+    # Every pair is asked TWICE, once in each playback order. The first run of this rig balanced
+    # which bank was A and thought that was enough; it is not. Balancing stops a position preference
+    # from favouring one bank, and leaves it free to decide individual trials -- and it did, hard:
+    # the listener picked the first-played clip in 19 of 22 decided trials (sign test p = 0.001).
+    # A balanced design converts that bias into noise rather than removing it, so the 13-9 bank
+    # split it produced was 22 votes about playback order and 3 about the banks.
+    #
+    # Asking each pair in both orders makes the order effect measurable instead of invisible: a pair
+    # where the same bank wins both ways is a preference, a pair that follows the order is not, and
+    # the count of each says how much of the result was ever about audio. Ties still count as ties.
+    #
+    # Interleaved in blocks rather than as two passes, for two reasons. The two hearings of a pair
+    # need distance between them or the second is a memory test, and a listener who stops early must
+    # still leave whole pairs behind -- two passes would mean quitting at the halfway point yields
+    # nothing at all.
+    #
+    # MIN_SEP is not decoration. Concordance is only evidence if the second hearing is an
+    # independent judgement; a pair heard again two trials later can be answered from memory of the
+    # first answer, which manufactures agreement and would read as a preference.
+    order = list(range(len(manifest)))
+    rng.shuffle(order)
+    sequence = []
+    for s in range(0, len(order), BLOCK):
+        blk = order[s:s + BLOCK]
+        rev = [j % 2 == 1 for j in range(len(blk))]      # balanced within the block too
+        rng.shuffle(rev)
+        by_pair = dict(zip(blk, rev))
+        first = list(blk)
+        rng.shuffle(first)
+        for _ in range(2000):
+            second = list(blk)
+            rng.shuffle(second)
+            sep = min(len(blk) + second.index(k) - j for j, k in enumerate(first))
+            if sep >= MIN_SEP:
+                break
+        else:                                            # only reachable for a tiny final block
+            second = first[MIN_SEP // 2:] + first[:MIN_SEP // 2]
+        sequence += [{"id": manifest[k]["id"], "rev": by_pair[k]} for k in first]
+        sequence += [{"id": manifest[k]["id"], "rev": not by_pair[k]} for k in second]
+
     json.dump({"source": source, "banks": [b[0] for b in banks_in], "seed": SEED,
-               "trials": manifest}, open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
-    print(f"\nwrote {len(manifest)} trials -> {OUT}")
+               "block": BLOCK, "trials": manifest, "sequence": sequence},
+              open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
+    print(f"\nwrote {len(manifest)} pairs, asked twice each = {len(sequence)} trials -> {OUT}")
     print("  python3 -m http.server 8765 -d webui   # then open http://127.0.0.1:8765/ab_check.html")
 
 

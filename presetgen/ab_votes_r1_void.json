@@ -1,0 +1,203 @@
+{
+ "source": "soundfont",
+ "banks": [
+  "prev128",
+  "soundfont"
+ ],
+ "seed": 20260816,
+ "votes": [
+  {
+   "id": "t00",
+   "name": "Vibraphone",
+   "category": "Pluck",
+   "spread": 0.2386,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t01",
+   "name": "Echoes",
+   "category": "FX",
+   "spread": 0.1399,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t02",
+   "name": "Choir Pad G4",
+   "category": "Pad",
+   "spread": 0.3327,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t03",
+   "name": "Synth Brass 1",
+   "category": "Brass",
+   "spread": 0.0693,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t04",
+   "name": "Sci-Fi",
+   "category": "FX",
+   "spread": 0.155,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t05",
+   "name": "E-Piano 2 G4",
+   "category": "Keys",
+   "spread": 0.2935,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t06",
+   "name": "Calliope",
+   "category": "Lead",
+   "spread": 0.1253,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t07",
+   "name": "Bass Lead G3",
+   "category": "Bass",
+   "spread": 0.1062,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t08",
+   "name": "E-Piano 2",
+   "category": "Keys",
+   "spread": 0.2099,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t09",
+   "name": "Rain FX G4",
+   "category": "FX",
+   "spread": 0.2865,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t10",
+   "name": "New Age Pad G4",
+   "category": "Pad",
+   "spread": 0.1637,
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t11",
+   "name": "Synth Bass 2 G2",
+   "category": "Bass",
+   "spread": 0.1993,
+   "closer": "prev128",
+   "better": "tie"
+  },
+  {
+   "id": "t12",
+   "name": "Synth Brass 2 G4",
+   "category": "Brass",
+   "spread": 0.1054,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t13",
+   "name": "Synth Bass 2 G3",
+   "category": "Bass",
+   "spread": 0.104,
+   "closer": "prev128",
+   "better": "tie"
+  },
+  {
+   "id": "t14",
+   "name": "Voice Lead G4",
+   "category": "Lead",
+   "spread": 0.1407,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t15",
+   "name": "Glockenspiel G4",
+   "category": "Pluck",
+   "spread": 0.2598,
+   "closer": "prev128",
+   "better": "tie"
+  },
+  {
+   "id": "t16",
+   "name": "Voice Lead",
+   "category": "Lead",
+   "spread": 0.37,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t17",
+   "name": "Brass Section",
+   "category": "Brass",
+   "spread": 0.2158,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t18",
+   "name": "E-Piano 2 G3",
+   "category": "Keys",
+   "spread": 0.1633,
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t19",
+   "name": "Bowed Pad G4",
+   "category": "Pad",
+   "spread": 0.1413,
+   "closer": "soundfont",
+   "better": "tie"
+  },
+  {
+   "id": "t20",
+   "name": "Xylophone",
+   "category": "Pluck",
+   "spread": 0.3202,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t21",
+   "name": "Synth Strings 1 C5",
+   "category": "Strings",
+   "spread": 0.1322,
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t22",
+   "name": "Synth Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.1919,
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t23",
+   "name": "Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.197,
+   "closer": "soundfont",
+   "better": "soundfont"
+  }
+ ],
+ "_note": "VOID -- kept as the evidence for the counterbalancing in ab_render.py, not as a result. One hearing per pair, so playback order was free to decide each trial and did: the first-played clip won 19 of 22 decided closer votes (sign test p=0.001) and 15 of 18 better votes (p=0.008), against bank splits of 13-9 (p=0.52) and 10-8 (p=0.82). Read it with ab_tally.py, which prints the order check and refuses to treat the bank columns as an answer."
+}
