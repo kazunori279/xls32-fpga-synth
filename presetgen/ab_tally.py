@@ -168,9 +168,6 @@ def main():
             print(f"  order-dependent pairs span spread {flipsp[0]:.3f}-{flipsp[-1]:.3f}; "
                   f"all pairs span {allsp[0]:.3f}-{allsp[-1]:.3f}")
 
-        agree = [pid for pid in by_id
-                 if (pid in verdict["closer"]["w"][b0]) != (pid in verdict["better"]["w"][b0])
-                 and (pid in verdict["closer"]["w"][b1]) != (pid in verdict["better"]["w"][b1])]
         both = set(verdict["closer"]["w"][b0] + verdict["closer"]["w"][b1]) & \
                set(verdict["better"]["w"][b0] + verdict["better"]["w"][b1])
         split = [pid for pid in both
@@ -179,8 +176,19 @@ def main():
               f"{len(split)} of them name a different bank for each")
         for pid in split:
             h = by_id[pid][0]
-            print(f"  {h['category']:8} {h['name']:20} closer {by_id[pid][0]['closer']:9} "
-                  f"better {by_id[pid][0]['better']}")
+            print(f"  {h['category']:8} {h['name']:20} closer {h['closer']:9} "
+                  f"better {h['better']}")
+
+        # The two questions sit on one screen with identical buttons, so the cheapest way to answer
+        # the second is to repeat the first. If they never once diverge across every hearing, that
+        # is what happened: `better` collected no independent evidence and must not be reported as
+        # a second, agreeing result. Perfect agreement is a warning, not a corroboration.
+        lock = sum(1 for r in out if r["closer"] == r["better"])
+        if lock == len(out):
+            print(f"\n!! `closer` and `better` are identical on all {len(out)} hearings, ties")
+            print("!! included. Two questions with the same answer every time are one question;")
+            print("!! read the `better` line as a copy of `closer`, not as confirmation of it.")
+            print("!! Ask them in separate passes if `better` is wanted as evidence.")
 
         print(f"\nby category (closer / better; 0 = {b0}, 1 = {b1}, ~ = order-dependent, "
               f"- = tie both ways)")

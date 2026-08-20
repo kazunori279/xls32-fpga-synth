@@ -1,0 +1,491 @@
+{
+ "source": "soundfont",
+ "banks": [
+  "prev128",
+  "soundfont"
+ ],
+ "seed": 20260816,
+ "votes": [
+  {
+   "id": "t22",
+   "name": "Synth Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.1919,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t21",
+   "name": "Synth Strings 1 C5",
+   "category": "Strings",
+   "spread": 0.1322,
+   "rev": true,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t19",
+   "name": "Bowed Pad G4",
+   "category": "Pad",
+   "spread": 0.1413,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t20",
+   "name": "Xylophone",
+   "category": "Pluck",
+   "spread": 0.3202,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t02",
+   "name": "Choir Pad G4",
+   "category": "Pad",
+   "spread": 0.3327,
+   "rev": true,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t01",
+   "name": "Echoes",
+   "category": "FX",
+   "spread": 0.1399,
+   "rev": false,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t19",
+   "name": "Bowed Pad G4",
+   "category": "Pad",
+   "spread": 0.1413,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t20",
+   "name": "Xylophone",
+   "category": "Pluck",
+   "spread": 0.3202,
+   "rev": true,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t22",
+   "name": "Synth Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.1919,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t01",
+   "name": "Echoes",
+   "category": "FX",
+   "spread": 0.1399,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t02",
+   "name": "Choir Pad G4",
+   "category": "Pad",
+   "spread": 0.3327,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t21",
+   "name": "Synth Strings 1 C5",
+   "category": "Strings",
+   "spread": 0.1322,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t04",
+   "name": "Sci-Fi",
+   "category": "FX",
+   "spread": 0.155,
+   "rev": false,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t00",
+   "name": "Vibraphone",
+   "category": "Pluck",
+   "spread": 0.2386,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t14",
+   "name": "Voice Lead G4",
+   "category": "Lead",
+   "spread": 0.1407,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t08",
+   "name": "E-Piano 2",
+   "category": "Keys",
+   "spread": 0.2099,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t16",
+   "name": "Voice Lead",
+   "category": "Lead",
+   "spread": 0.37,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t09",
+   "name": "Rain FX G4",
+   "category": "FX",
+   "spread": 0.2865,
+   "rev": false,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t00",
+   "name": "Vibraphone",
+   "category": "Pluck",
+   "spread": 0.2386,
+   "rev": true,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t04",
+   "name": "Sci-Fi",
+   "category": "FX",
+   "spread": 0.155,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t16",
+   "name": "Voice Lead",
+   "category": "Lead",
+   "spread": 0.37,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t14",
+   "name": "Voice Lead G4",
+   "category": "Lead",
+   "spread": 0.1407,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t08",
+   "name": "E-Piano 2",
+   "category": "Keys",
+   "spread": 0.2099,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t09",
+   "name": "Rain FX G4",
+   "category": "FX",
+   "spread": 0.2865,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t07",
+   "name": "Bass Lead G3",
+   "category": "Bass",
+   "spread": 0.1062,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t15",
+   "name": "Glockenspiel G4",
+   "category": "Pluck",
+   "spread": 0.2598,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t17",
+   "name": "Brass Section",
+   "category": "Brass",
+   "spread": 0.2158,
+   "rev": true,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t05",
+   "name": "E-Piano 2 G4",
+   "category": "Keys",
+   "spread": 0.2935,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t11",
+   "name": "Synth Bass 2 G2",
+   "category": "Bass",
+   "spread": 0.1993,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t06",
+   "name": "Calliope",
+   "category": "Lead",
+   "spread": 0.1253,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t17",
+   "name": "Brass Section",
+   "category": "Brass",
+   "spread": 0.2158,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t05",
+   "name": "E-Piano 2 G4",
+   "category": "Keys",
+   "spread": 0.2935,
+   "rev": false,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t07",
+   "name": "Bass Lead G3",
+   "category": "Bass",
+   "spread": 0.1062,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t15",
+   "name": "Glockenspiel G4",
+   "category": "Pluck",
+   "spread": 0.2598,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t06",
+   "name": "Calliope",
+   "category": "Lead",
+   "spread": 0.1253,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t11",
+   "name": "Synth Bass 2 G2",
+   "category": "Bass",
+   "spread": 0.1993,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t18",
+   "name": "E-Piano 2 G3",
+   "category": "Keys",
+   "spread": 0.1633,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t13",
+   "name": "Synth Bass 2 G3",
+   "category": "Bass",
+   "spread": 0.104,
+   "rev": false,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t12",
+   "name": "Synth Brass 2 G4",
+   "category": "Brass",
+   "spread": 0.1054,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t23",
+   "name": "Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.197,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t10",
+   "name": "New Age Pad G4",
+   "category": "Pad",
+   "spread": 0.1637,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t03",
+   "name": "Synth Brass 1",
+   "category": "Brass",
+   "spread": 0.0693,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t13",
+   "name": "Synth Bass 2 G3",
+   "category": "Bass",
+   "spread": 0.104,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t23",
+   "name": "Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.197,
+   "rev": false,
+   "first": "soundfont",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t12",
+   "name": "Synth Brass 2 G4",
+   "category": "Brass",
+   "spread": 0.1054,
+   "rev": false,
+   "first": "prev128",
+   "closer": "prev128",
+   "better": "prev128"
+  },
+  {
+   "id": "t18",
+   "name": "E-Piano 2 G3",
+   "category": "Keys",
+   "spread": 0.1633,
+   "rev": true,
+   "first": "prev128",
+   "closer": "soundfont",
+   "better": "soundfont"
+  },
+  {
+   "id": "t03",
+   "name": "Synth Brass 1",
+   "category": "Brass",
+   "spread": 0.0693,
+   "rev": false,
+   "first": "prev128",
+   "closer": "tie",
+   "better": "tie"
+  },
+  {
+   "id": "t10",
+   "name": "New Age Pad G4",
+   "category": "Pad",
+   "spread": 0.1637,
+   "rev": true,
+   "first": "soundfont",
+   "closer": "tie",
+   "better": "tie"
+  }
+ ],
+ "_note": "The counterbalanced run of the refit A/B (#22 Q1). Order effect gone: the first-played clip won 19 of 37 decided hearings, p=1.000, against 19 of 22, p=0.001, in ab_votes_r1_void.json -- the target-adjacency fix removed it outright. Result is a genuine null: 9-7 to the OLD bank over the 16 pairs that survived counterbalancing, p=0.80, with 4 both-ways ties and 4 order-dependent. The CLAP spread does not predict the ear among the decided pairs (rho +0.07). CAVEAT: closer and better are identical on all 48 hearings, so better is a copy and not a second result. Read with ab_tally.py."
+}
