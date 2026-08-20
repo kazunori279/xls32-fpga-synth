@@ -74,7 +74,9 @@ BOOT_MIDI = [b for ch in range(4) for cc, v in BOOT_CC for b in (0xB0 | ch, cc, 
 class XlsSynth(wiring.Component):
 
     """
-    XLS32: a 32-voice subtractive synthesizer compiled from DSLX by Google XLS.
+    XLS32: a subtractive synthesizer compiled from DSLX by Google XLS. 24 voices as shipped,
+    or 32 in the experimental build; `$VOICES` picks, and the engine's sample rate does not
+    change with it because the codec's backpressure sets the pace, not the ring's length.
 
     Multitimbral over MIDI channels 1-4, played through `i_midi_bytes` -- a raw byte stream,
     not decoded messages. The engine is mono, so out0 and out1 carry the same signal; the

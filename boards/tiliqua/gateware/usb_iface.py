@@ -167,6 +167,13 @@ class XlsUsbInterface(USB2AudioInterface):
             # NOT the stamp. iProduct is what the audio device list shows, in the macOS sound
             # picker and in the panel's own OUT picker, and iSerialNumber is half of the UID
             # CoreAudio remembers a device by.
+            #
+            # "XLS32" here is the *project* name, not the voice count -- the shipped build has run
+            # 24 voices since M36 and this string deliberately did not follow it (#43). Renaming it
+            # changes the CoreAudio UID, so every machine that has ever seen the board forgets its
+            # volume, sample rate, and the panel's saved OUT selection. Not worth it to correct a
+            # number that `pdm run flash status` already reports as XLS24. check_descriptors.py
+            # pins this string; change both or neither.
             d.iProduct = "Tiliqua XLS32"
             d.iSerialNumber = "beta-0000"
             d.bcdDevice = 0.01

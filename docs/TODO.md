@@ -100,8 +100,21 @@ those three; git history keeps the original.)*
   puts the tank out of the path entirely: something *else* is holding a constant. Nor is it the
   pulse-duty offset below — that one is signal-dependent and this window has no signal in it. Basys 3 returns
   tail RMS 0 for the same case, so it is Tiliqua-side. Candidates not eliminated: the `>> 1` floors
-  in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path. At ~−49 dBFS it fails
-  no checker, which is exactly why it is written down here rather than fixed in passing.
+  in the echo and chorus mixers, and the engine → AK4619 / UAC2 output path.
+
+  **Paid off**, and by neither candidate: it was the latched SVF residue two entries down. This
+  entry and that one were the same bug seen from two ends — this one measured at the mix what that
+  one described per voice, which is why "something *else* is holding a constant" was right about
+  the tank and wrong about it being a separate fault. Re-measured on the shipped 24-voice bitstream
+  (`46ae31b`) with the exact stimuli from `test/cases_stress.py`: the `stress_silence_recovery` tail
+  is `n=14400 mean=-0.006 min=-1 max=1`, two distinct values, where it was one value at +115; and
+  `stress_fx_tail`'s late window is `mean=+0.30` (range −1..3) against +82.3. Cutting 32 voices to
+  24 does not explain that — 24 latched constants where there were 32 predicts 115 × ¾ ≈ +86, not
+  +0.3 — so `290d00b` removed the mechanism rather than diluting it. Still unexplained, and left on
+  the issue rather than guessed at: why Basys 3 read tail RMS 0 *before* the fix, when `290d00b` is
+  a `core/synth.x` change both boards share. Its blob is still pre-fix
+  ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)), so that cannot be settled
+  today.
 - **The pulse wave's DC is still inside the engine; it is only the USB tee that is clean now**
   ([#2](https://github.com/kazunori279/xls32-fpga-synth/issues/2)).
   A pulse at anything but 50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 —
@@ -159,6 +172,27 @@ those three; git history keeps the original.)*
   checked for a mix of *exactly* zero, all four passing. On the module, `check_panic_hw.py` reports
   `ptp 0.000` on all six of its silence cases; that is the weaker "stops moving" claim, since a
   latched constant also has zero peak-to-peak, so the exact-zero half of it rests on `tb_dc.v`.
+- **`check_headroom_hw.py` flakes on its quietest row: 1 FAIL in 4 runs of the same bitstream**
+  ([#42](https://github.com/kazunori279/xls32-fpga-synth/issues/42)). Found verifying the 24-voice
+  build. The failing row is always CC75 = 100 at **2 voices**, shift −0.0808 against the threshold —
+  the least-driven row in the sweep, so the smallest shift in the table and the one nearest the
+  line. Every loud, high-polyphony row passes on all four runs, which is the wrong way round for a
+  returning offset and the right way round for capture noise. The threshold is one constant across
+  a sweep whose signal varies by polyphony; it should scale with the row. Worth fixing because this
+  is the check that certifies the pulse DC (#2) stays fixed, so a false FAIL reads as a regression —
+  and teaches whoever hits it to re-run until green, which would hide a real one.
+- **The 24-voice build calls itself XLS32 to the host, and the two builds are indistinguishable
+  from a connected machine** ([#43](https://github.com/kazunori279/xls32-fpga-synth/issues/43)).
+  `build.sh` gets the slot name right (`NAME="${NAME:-XLS$VOICES}"` → `XLS24`), but `iProduct`,
+  `build_id.TAG` and `xls_core`'s manifest `brief` all hardcode 32, so with 24 on slot 7 and 32 on
+  slot 6 the only thing telling them apart over USB is the commit hash. Mostly *won't fix* by
+  design: `XLS32` is the project name, and `iProduct` is half the UID CoreAudio remembers the device
+  by — renaming it makes every machine forget its volume, rate, and the panel's saved OUT pick. That
+  reasoning is now inline at both sites so it does not get rediscovered. What is left is the cheap
+  half — deriving the voice count into `brief` — and it is stuck behind a rebuild twice over: the
+  manifest is baked into the archive, and reading `$VOICES` from Python needs `export VOICES` in
+  `build.sh`, which `check_artefacts.py` hashes **raw**, so the edit alone would mark both shipped
+  archives stale. Rides with the next re-sweep, same queue as #40.
 - **`filter_sweep` WARNs on Tiliqua at 80.7** ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7))
   against 86 on Basys 3 — the same DSLX filter, the same sweep, a consistently worse score.
   Deferred rather than diagnosed; nothing yet rules out the 48 kHz coefficient set as the

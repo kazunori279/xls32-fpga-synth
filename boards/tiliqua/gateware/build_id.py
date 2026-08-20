@@ -70,7 +70,10 @@ import subprocess
 MANUFACTURER = "apf.audio"
 
 # The token that separates the vendor from the stamp. Deliberately not a bare separator: this string
-# is user-visible in Audio MIDI Setup, and "XLS32/" reads as what it is.
+# is user-visible in Audio MIDI Setup, and "XLS32/" reads as what it is. The 32 is the project name,
+# not the voice count -- the shipped build has run 24 voices since M36 and this did not follow it,
+# for the same reason iProduct did not (#43): both live in the descriptor ROM, which is on both of
+# M36's critical paths, so editing either costs a rebuild and a re-roll of the seed lottery.
 TAG = "XLS32/"
 
 
