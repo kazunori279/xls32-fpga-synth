@@ -1,0 +1,493 @@
+{
+ "source": "soundfont",
+ "banks": [
+  "prev128",
+  "soundfont"
+ ],
+ "comparison": "prev128-vs-soundfont",
+ "seed": 20260816,
+ "question": "closer",
+ "listener": "kaz",
+ "votes": [
+  {
+   "id": "t12",
+   "name": "Synth Bass 1 C4",
+   "category": "Bass",
+   "spread": 0.0239,
+   "band": 0,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t23",
+   "name": "Crystal",
+   "category": "FX",
+   "spread": 0.0843,
+   "band": 0,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t04",
+   "name": "E-Piano 2 G3",
+   "category": "Keys",
+   "spread": 0.1633,
+   "band": 2,
+   "rev": true,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t22",
+   "name": "Synth Bass 2 G3",
+   "category": "Bass",
+   "spread": 0.104,
+   "band": 2,
+   "rev": false,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t15",
+   "name": "Synth Brass 2 C5",
+   "category": "Brass",
+   "spread": 0.0441,
+   "band": 1,
+   "rev": false,
+   "first": "prev128",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t09",
+   "name": "Square Lead G4",
+   "category": "Lead",
+   "spread": 0.0839,
+   "band": 1,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t23",
+   "name": "Crystal",
+   "category": "FX",
+   "spread": 0.0843,
+   "band": 0,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t04",
+   "name": "E-Piano 2 G3",
+   "category": "Keys",
+   "spread": 0.1633,
+   "band": 2,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t22",
+   "name": "Synth Bass 2 G3",
+   "category": "Bass",
+   "spread": 0.104,
+   "band": 2,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t15",
+   "name": "Synth Brass 2 C5",
+   "category": "Brass",
+   "spread": 0.0441,
+   "band": 1,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t09",
+   "name": "Square Lead G4",
+   "category": "Lead",
+   "spread": 0.0839,
+   "band": 1,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t12",
+   "name": "Synth Bass 1 C4",
+   "category": "Bass",
+   "spread": 0.0239,
+   "band": 0,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t10",
+   "name": "Kalimba G4",
+   "category": "Pluck",
+   "spread": 0.0938,
+   "band": 1,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t00",
+   "name": "Clavinet G4",
+   "category": "Keys",
+   "spread": 0.0574,
+   "band": 0,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t03",
+   "name": "Synth Brass 2 G3",
+   "category": "Brass",
+   "spread": 0.0283,
+   "band": 0,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "prev128"
+  },
+  {
+   "id": "t08",
+   "name": "Synth Strings 2 G3",
+   "category": "Strings",
+   "spread": 0.0172,
+   "band": 0,
+   "rev": false,
+   "first": "prev128",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t17",
+   "name": "Pizzicato",
+   "category": "Pluck",
+   "spread": 0.0543,
+   "band": 0,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t18",
+   "name": "Sweep Pad G4",
+   "category": "Pad",
+   "spread": 0.0828,
+   "band": 1,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "prev128"
+  },
+  {
+   "id": "t00",
+   "name": "Clavinet G4",
+   "category": "Keys",
+   "spread": 0.0574,
+   "band": 0,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t08",
+   "name": "Synth Strings 2 G3",
+   "category": "Strings",
+   "spread": 0.0172,
+   "band": 0,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t03",
+   "name": "Synth Brass 2 G3",
+   "category": "Brass",
+   "spread": 0.0283,
+   "band": 0,
+   "rev": true,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t10",
+   "name": "Kalimba G4",
+   "category": "Pluck",
+   "spread": 0.0938,
+   "band": 1,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t18",
+   "name": "Sweep Pad G4",
+   "category": "Pad",
+   "spread": 0.0828,
+   "band": 1,
+   "rev": false,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t17",
+   "name": "Pizzicato",
+   "category": "Pluck",
+   "spread": 0.0543,
+   "band": 0,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t07",
+   "name": "Brightness G4",
+   "category": "FX",
+   "spread": 0.1127,
+   "band": 1,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t06",
+   "name": "Glockenspiel G4",
+   "category": "Pluck",
+   "spread": 0.2598,
+   "band": 2,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t11",
+   "name": "New Age Pad G4",
+   "category": "Pad",
+   "spread": 0.1637,
+   "band": 2,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t14",
+   "name": "Strings 1 C5",
+   "category": "Strings",
+   "spread": 0.0586,
+   "band": 1,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t20",
+   "name": "Harpsichord C5",
+   "category": "Keys",
+   "spread": 0.1395,
+   "band": 1,
+   "rev": true,
+   "first": "prev128",
+   "vote": "soundfont"
+  },
+  {
+   "id": "t21",
+   "name": "Voice Lead G4",
+   "category": "Lead",
+   "spread": 0.1407,
+   "band": 2,
+   "rev": false,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t11",
+   "name": "New Age Pad G4",
+   "category": "Pad",
+   "spread": 0.1637,
+   "band": 2,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t14",
+   "name": "Strings 1 C5",
+   "category": "Strings",
+   "spread": 0.0586,
+   "band": 1,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t07",
+   "name": "Brightness G4",
+   "category": "FX",
+   "spread": 0.1127,
+   "band": 1,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t21",
+   "name": "Voice Lead G4",
+   "category": "Lead",
+   "spread": 0.1407,
+   "band": 2,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t20",
+   "name": "Harpsichord C5",
+   "category": "Keys",
+   "spread": 0.1395,
+   "band": 1,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t06",
+   "name": "Glockenspiel G4",
+   "category": "Pluck",
+   "spread": 0.2598,
+   "band": 2,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t13",
+   "name": "Halo Pad",
+   "category": "Pad",
+   "spread": 0.0545,
+   "band": 0,
+   "rev": true,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t01",
+   "name": "Synth Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.1919,
+   "band": 2,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t02",
+   "name": "Echoes",
+   "category": "FX",
+   "spread": 0.1399,
+   "band": 2,
+   "rev": false,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t16",
+   "name": "Synth Bass 1 E3",
+   "category": "Bass",
+   "spread": 0.075,
+   "band": 1,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  },
+  {
+   "id": "t19",
+   "name": "Saw Lead G3",
+   "category": "Lead",
+   "spread": 0.03,
+   "band": 0,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t05",
+   "name": "Synth Brass 2 G4",
+   "category": "Brass",
+   "spread": 0.1054,
+   "band": 2,
+   "rev": true,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t02",
+   "name": "Echoes",
+   "category": "FX",
+   "spread": 0.1399,
+   "band": 2,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "prev128"
+  },
+  {
+   "id": "t16",
+   "name": "Synth Bass 1 E3",
+   "category": "Bass",
+   "spread": 0.075,
+   "band": 1,
+   "rev": true,
+   "first": "prev128",
+   "vote": "prev128"
+  },
+  {
+   "id": "t13",
+   "name": "Halo Pad",
+   "category": "Pad",
+   "spread": 0.0545,
+   "band": 0,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "prev128"
+  },
+  {
+   "id": "t01",
+   "name": "Synth Strings 2 C5",
+   "category": "Strings",
+   "spread": 0.1919,
+   "band": 2,
+   "rev": false,
+   "first": "prev128",
+   "vote": "tie"
+  },
+  {
+   "id": "t19",
+   "name": "Saw Lead G3",
+   "category": "Lead",
+   "spread": 0.03,
+   "band": 0,
+   "rev": true,
+   "first": "soundfont",
+   "vote": "prev128"
+  },
+  {
+   "id": "t05",
+   "name": "Synth Brass 2 G4",
+   "category": "Brass",
+   "spread": 0.1054,
+   "band": 2,
+   "rev": false,
+   "first": "soundfont",
+   "vote": "tie"
+  }
+ ]
+}
