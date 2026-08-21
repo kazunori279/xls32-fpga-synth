@@ -117,18 +117,23 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
 
 ## Known debt — recorded, not scheduled
 
-- **The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
-  bit-exact** ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)).
-  `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both boards, but only
-  the Tiliqua archives have been rebuilt: both carry the fixes and pass `check_artefacts.py`,
-  while `boards/basys3/firmware/top.bit` is still
-  the 2026-08-11 M34 build and reports stale. Refreshing it needs Vivado on an x86 machine — the
-  GCE build VM in `remote_build.sh`, which is not something CI can provide — and then a Basys 3 on
-  the desk for `verify.sh`, since timing closure has come apart from what the synth sounds like on
-  this project before. Until both happen, anyone flashing the Basys 3 blob gets a synth with the
-  latched SVF residue and the pulse's duty offset still in it. Neither stops it playing; the note
-  is in [`top.bit.md`](../boards/basys3/firmware/top.bit.md) for people who flash without running
-  the check.
+- ~~**The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
+  bit-exact**~~ ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)). **Paid off
+  2026-08-22.** `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both
+  boards, but for two weeks only the Tiliqua archives carried them; refreshing this one needed
+  Vivado on an x86 machine — the GCE build VM in `remote_build.sh`, which is not something CI can
+  provide — and then a Basys 3 on the desk for `verify.sh`. Both happened: the build reports `ok`
+  against `2fcb2b9`, and `verify.sh` returned 4 of 4 notes on hardware. The `known_stale` waiver
+  is gone from the record.
+
+  What the entry did not predict is that the rebuild would **not close timing**. The M35 DC fixes
+  lengthened the engine's combinational backpressure chain, and that turned `ardy` — the audio-ready
+  handshake, which reaches the clock-enable pin of nearly every register in the engine — into a
+  genuine 10 ns path: 861 of 879 failing endpoints, worst −0.565 ns. The remaining 18 were an
+  exception Vivado had quietly dissolved by absorbing `revwetL_reg` into a DSP48 as its B input
+  register, taking the name-matched `/6` constraint with it. So the entry's real cost was not the
+  x86 machine and the desk; it was that two weeks of engine changes had gone unbuilt on this board,
+  and a rebuild is the only thing that reads that back. Fixed in `2fcb2b9`, closed at +1.322 ns.
 - **A residual DC offset on Tiliqua that is not the reverb tank's**
   ([#4](https://github.com/kazunori279/xls32-fpga-synth/issues/4)). Fixing the comb dead band
   (see [ARCHITECTURE_tiliqua.md → C3](../ARCHITECTURE_tiliqua.md#c3-the-freeverb-tank-at-half-length))
@@ -150,9 +155,10 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   24 does not explain that — 24 latched constants where there were 32 predicts 115 × ¾ ≈ +86, not
   +0.3 — so `290d00b` removed the mechanism rather than diluting it. Still unexplained, and left on
   the issue rather than guessed at: why Basys 3 read tail RMS 0 *before* the fix, when `290d00b` is
-  a `core/synth.x` change both boards share. Its blob is still pre-fix
-  ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)), so that cannot be settled
-  today.
+  a `core/synth.x` change both boards share. Its blob was pre-fix when that was written; it is not
+  any more ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)), so the measurement
+  is now available to whoever wants it — re-run `stress_silence_recovery` against the 2026-08-22
+  Basys 3 build and the before/after pair on that board is finally comparable.
 - **The pulse wave's DC is still inside the engine; it is only the USB tee that is clean now**
   ([#2](https://github.com/kazunori279/xls32-fpga-synth/issues/2)).
   A pulse at anything but 50 % duty has a DC term; the Bach demo patch runs `PULSE W` 100 of 128 —
@@ -577,8 +583,9 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   in seconds; it runs `--self-test` first, because a false green here is worse than no job.
 
   What made this possible was not the workflow — that part is six lines — but working out how a
-  permanently-red check could be made to mean something. The Basys 3 blob **is** stale, for a
-  reason that is written down and cannot currently be fixed (#41), so an unconditional check would
+  permanently-red check could be made to mean something. The Basys 3 blob **was** stale, for a
+  reason that was written down and could not be fixed that week (#41 — since paid off, and the
+  waiver with it), so an unconditional check would
   have failed on its first run and been ignored by its second. A blanket "skip basys3" flag would
   have been worse than no automation at all: it would hide the drift nobody has seen yet along with
   the drift everybody knows about. So the waiver is **scoped** — `known_stale` in the record names

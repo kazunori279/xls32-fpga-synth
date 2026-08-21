@@ -304,11 +304,13 @@ Notes:
 The committed bitstream is the Vivado/DSP48 build: 32 kHz, `STAGES=48`. To regenerate it see
 [§3 · Basys 3](#a--basys-3--build-flash-verify), then `cp build/top.bit boards/basys3/firmware/top.bit`.
 
-> **Rebuilt and verified 2026-08-11** for M34, the channel mode messages. It closed timing with
-> **zero failing endpoints** (100 MHz, worst slack +0.276 ns) and then played: A major 7 came back
-> at 438 / 554 / 658 / 830 Hz, all four inside the bin the check can resolve. `uv run --no-project
-> python scripts/check_artefacts.py` holds its provenance and will say so when it drifts again;
-> the full record is [`top.bit.md`](boards/basys3/firmware/top.bit.md).
+> **Rebuilt and verified 2026-08-22** for M37, which put this board back in step with the two DC
+> fixes the Tiliqua had been carrying alone. It closed timing with **zero failing endpoints**
+> (100 MHz, worst slack +1.322 ns) and then played: A major 7 came back at 438 / 554 / 658 / 830 Hz,
+> all four inside the bin the check can resolve. It took an RTL fix to get there — the engine's
+> audio-ready handshake had become a genuine 10 ns path. `uv run --no-project python
+> scripts/check_artefacts.py` holds its provenance and will say so when it drifts again; the full
+> record is [`top.bit.md`](boards/basys3/firmware/top.bit.md).
 
 Then jump to [Run the web UI](#run-the-web-ui) to play it.
 
