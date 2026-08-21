@@ -259,9 +259,7 @@ class VoiceTiles(wiring.Component):
                 m.d.sync += px.eq(px + 1)
 
         # Vertical: reload at the last pixel of the last blanking line, advance at the end of each
-        # active line. The tile index used to be `Cat(col, row)`, free because COLS was 8; since
-        # #40 it is a multiply by a constant that is 4, 6 or 8, which yosys turns into at most two
-        # adds on a two-bit operand. Still nothing, and it no longer depends on the grid.
+        # active line.
         with m.If((self.i_y == -1) & (self.i_x == -1)):
             m.d.sync += [py.eq(0), row.eq(0)]
         with m.Elif((self.i_x == self.h_active - 1) & (self.i_y >= 0)):
@@ -270,7 +268,15 @@ class VoiceTiles(wiring.Component):
             with m.Else():
                 m.d.sync += py.eq(py + 1)
 
-        m.d.comb += self.o_addr.eq(row * COLS + col)
+        # The tile index. This was `Cat(col, row)` while COLS was 8 -- free, because a shift by a
+        # power of two is a renaming of wires. At 24 voices COLS is 6, and writing the obvious
+        # `row * COLS + col` costs a **MULT18X18D**: yosys emits `$mul` even against a constant,
+        # and this die has all 28 of its multipliers spoken for by the engine (E3), so the build
+        # dies in the placer with "no BELs remaining". Sum the set bits of COLS instead -- for 6
+        # that is `(row << 1) + (row << 2)`, two adds on a two-bit operand, which is what the
+        # multiply would have decomposed into anyway had there been a multiplier to lose.
+        row_cols = sum(row << i for i in range(COLS.bit_length()) if (COLS >> i) & 1)
+        m.d.comb += self.o_addr.eq(row_cols + col)
 
         px_d1, py_d1 = Signal.like(px), Signal.like(py)
         de_d1, hs_d1, vs_d1 = Signal(), Signal(), Signal()
