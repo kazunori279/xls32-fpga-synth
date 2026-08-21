@@ -10,6 +10,7 @@ presets that shipped. This asks it with the bank.
     uv run python presetgen/bank_hw.py                       # soundfont, best of 3
     uv run python presetgen/bank_hw.py --bank armxmod -n 5
     uv run python presetgen/bank_hw.py --limit 8 --no-align  # quick, and the unaligned number
+    uv run python presetgen/bank_hw.py --replay caps_soundfont.npz   # re-score, no board
 
 What comes out is a per-preset sim<->board distance, sorted worst first. `calibrate.py` puts
 matched patches at ~9-22 and noise-against-a-tone at ~137, so a preset well above the bank's own
@@ -35,21 +36,36 @@ question than an 8-probe check:
   capture by cross-correlating the two envelopes and reported, because if it is constant it is the
   transport's latency and worth knowing on its own.
 
-  A floor measured from the board, not assumed.  The board's LFO free-runs and `engine.py`'s does
-  not (`core/synth.x:460` advances `lfo_ph` every sample and nothing resets it; `engine.py:153`
-  starts it at 0 for every render), so a note lands at whatever LFO phase it finds and the same
-  preset captured twice is two different sounds. Measured here: `Bass Lead G2` (lfodep 78) returned
-  19.2, 50.1, 26.2, 31.3, 43.9 over five identical captures, while `Glockenspiel G4` (lfodep 0)
-  returned 4.92-5.15. 62 of the 64 soundfont presets have lfodep > 0, so on this bank that noise is
-  the rule and a bare sim<->board number is close to meaningless.
+  The note-on state the board landed in, modelled instead of subtracted.  Two accumulators in
+  `core/synth.x` free-run and `engine.py` used to start both from a constant, so a note lands at
+  whatever state it finds and the same preset captured twice is two different sounds:
+  `synth.x:460` advances `lfo_ph` every sample and note-on never touches it, and `synth.x:176`
+  seeds every voice's start phase out of the shared noise LFSR that `synth.x:416` advances every
+  sample. #44 measured both; the seed is the larger one, median 15.61 against the LFO's 5.50 over
+  the soundfont bank, because it sets stacked voices' phases relative to each other.
 
-  So each preset is captured N times and compared two ways: sim against the best capture, and the
-  captures against *each other*. The second is the floor -- the part of the distance the LFO phase
-  alone accounts for, which no model change could remove -- and the finding is the excess over it.
-  A preset whose excess is near zero is not modelled badly; it is modelled unobservably. (The floor
-  is a min over C(N,2) pairs against N sim comparisons, so it is biased slightly low, which makes
-  the excess conservative.) Thresholds from the run rather than from a constant, for the reason
-  #42 landed on: the scatter belongs to the take, not to the row.
+  The first version of this file measured that as a board<->board floor -- capture each preset N
+  times, take the closest pair, subtract -- and ranked on the excess. That does not work. The floor
+  is a min over C(N,2) pairs against N sim comparisons, so the two sides are not sampled alike, and
+  on `Bass Lead G2` it came out at 30.86 against a distance of 19.13: an excess of -11.73, which is
+  not a small finding but no finding at all. Nine presets in the first run went negative.
+
+  So the state is modelled now, not estimated from the spread. `engine.render()` takes `lfo_phase`
+  and `osc_seed`, and each capture is scored against the NEAREST of the states in
+  `phase_audit.states()` rather than against the one arbitrary state the preset was fitted at
+  (`marginal`). A residual after that is a sim<->board difference the note-on state does not
+  explain, which is the number #24 asked for. The fitted-state distance is still reported as
+  `loss`, because it is what the shipped bank was actually chosen by.
+
+  Two honesty items on that. The state set is a sample -- N LFO phases and N LFSR values out of a
+  continuum and a 65535-long cycle -- so `resolution` renders one state deliberately BETWEEN the
+  samples and scores it against them, giving the floor the sampling grid imposes on `marginal`.
+  And the board<->board floor is still measured and printed, now as a diagnostic rather than a
+  subtrahend: if it is large while `marginal` is small, the model reaches every state the board
+  visits, which is the outcome this is hoping for.
+
+Captures are written to `caps_<bank>.npz` and `--replay` re-scores them with no board attached, so
+a change to the loss or to the state set does not cost another hour of hardware time.
 
 Needs the board connected and its link free (close the web UI tab first).
 """
@@ -72,10 +88,19 @@ import synth as u                                                          # noq
 import synthspec                                                           # noqa: E402
 import engine                                                              # noqa: E402
 import loss                                                                # noqa: E402
+import phase_audit                                                         # noqa: E402
 import protocol                                                            # noqa: E402
 from name_audit import note_of                                             # noqa: E402
 
 WEBUI = os.path.join(REPO, "webui")
+
+
+def rel(p):
+    """Repo-relative if it is in the repo, absolute otherwise -- a replay set is often in /tmp,
+    and `../../../../../tmp/x.npz` is not a path anyone can read."""
+    r = os.path.relpath(p, REPO)
+    return p if r.startswith("..") else r
+
 
 # id -> CC, from the one source of truth. `volume` is excluded: it is a master gain the model does
 # not have, and sending it would scale the board's side of a comparison the sim cannot follow.
@@ -147,65 +172,86 @@ def find_lag(sim, brd, sr, max_s=LAG_MAX_S):
     return list(lags)[int(np.argmax(score))]
 
 
-def measure(tp, p, gate_s, tail_s, n, align=True):
-    """One preset: the sim<->board distance, and the board<->board floor it has to beat."""
-    note = note_of(p["name"], p["category"])
-    sim = engine.render(p["values"], note=note, gate_s=gate_s, tail_s=tail_s)
-    sim_p = loss.prep(sim, engine.SR)
-    caps, runs, lags = [], [], []
+def take(tp, p, note, gate_s, tail_s, n, sim, sr, align=True):
+    """N board captures of one preset, onset-aligned, as raw float arrays plus their lags.
+
+    Aligned against the fitted-state render rather than against each other, so every capture and
+    every model state below sits in the same window and the distances are comparable. The onset is
+    where the envelope rises, which barely moves with LFO phase or start seed -- the alignment does
+    not need the state to be right, only the note.
+    """
+    caps, lags = [], []
     for _ in range(n):
         brd = capture(tp, p["values"], note, gate_s, tail_s)
-        if len(brd) < int(0.5 * gate_s * tp.sr):
+        if len(brd) < int(0.5 * gate_s * sr):
             continue                                     # the capture failed, not the preset
-        # Aligned against the sim, so the captures end up aligned with each other too -- the floor
-        # and the distance are then measured through the same window and are comparable.
-        lag = find_lag(sim, brd, tp.sr) if align else 0
-        caps.append(loss.prep(brd[lag:], tp.sr))
-        runs.append(float(loss.loss(sim_p, caps[-1], a_prepped=True, b_prepped=True)))
-        lags.append(lag / tp.sr)
-    if not runs:
+        lag = find_lag(sim, brd, sr) if align else 0
+        caps.append(brd[lag:])
+        lags.append(lag / sr)
+    return caps, lags
+
+
+def score(p, note, caps, lags, win, sr, n_states):
+    """One preset's row: distance from the board to the model, at the fitted state and marginally.
+
+    `loss` is the old number -- board against the single state the preset was fitted at -- kept
+    because that state is what the shipped bank was chosen by. `marginal` is the new one: the
+    board against the CLOSEST state `engine.py` can now reach, which charges the model for being
+    wrong and not for the note having started somewhere the model was never asked about.
+    """
+    if not caps:
         return None
-    pairs = [float(loss.loss(caps[i], caps[j], a_prepped=True, b_prepped=True))
-             for i in range(len(caps)) for j in range(i + 1, len(caps))]
-    floor = min(pairs) if pairs else 0.0
-    return {"name": p["name"], "category": p["category"], "note": note,
-            "loss": min(runs), "spread": max(runs) - min(runs), "n": len(runs),
-            "floor": floor, "excess": min(runs) - floor,
+    sts = phase_audit.states(n_states)
+    sims = phase_audit.renders(p["values"], note, win, sts)
+    cp = [loss.prep(c, sr) for c in caps]
+    L = np.array([[float(loss.loss(c, s, a_prepped=True, b_prepped=True, window=win))
+                   for s in sims] for c in cp])          # captures x states
+    best = int(np.argmin(L.min(axis=0)))                 # the state the board looks most like
+
+    # What the state grid costs on its own. A render at an LFO phase and an LFSR value that are
+    # both BETWEEN the sampled ones, scored against the sample set: the board can land there too,
+    # so `marginal` cannot be expected below this.
+    off = phase_audit.seeds(2 * n_states)[1]
+    probe = phase_audit.renders(p["values"], note, win, [(0.5 / n_states, off)])[0]
+    res = min(float(loss.loss(probe, s, a_prepped=True, b_prepped=True, window=win)) for s in sims)
+
+    pairs = [float(loss.loss(cp[i], cp[j], a_prepped=True, b_prepped=True, window=win))
+             for i in range(len(cp)) for j in range(i + 1, len(cp))]
+    fitted = L[:, 0]
+    return {"name": p["name"], "category": p["category"], "note": note, "n": len(cp),
+            "loss": float(fitted.min()), "spread": float(fitted.max() - fitted.min()),
+            "marginal": float(L.min()), "resolution": res,
+            "state": [round(sts[best][0], 4), sts[best][1]],
+            # Kept as a diagnostic, not subtracted from anything: a large floor beside a small
+            # marginal is the model reaching every state the board visits, which is the good case.
+            "floor": min(pairs) if pairs else 0.0,
             "lfodep": int(p["values"].get("lfodep", 0)), "trem": int(p["values"].get("trem", 0)),
-            "lag_s": float(np.median(lags)),
-            "sim_rms": float(np.sqrt(np.mean(np.asarray(sim) ** 2)))}
+            "unison": int(p["values"].get("unison", 0)),
+            "lag_s": float(np.median(lags)) if lags else 0.0}
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--bank", default="soundfont", help="bank stem, e.g. soundfont / armxmod")
-    ap.add_argument("-n", "--best-of", type=int, default=3)
-    ap.add_argument("--limit", type=int, default=0, help="first N presets only (a dry run)")
-    ap.add_argument("--no-align", action="store_true", help="skip onset alignment (see the docstring)")
-    ap.add_argument("--out", default=None)
-    args = ap.parse_args()
-
-    path = os.path.join(WEBUI, f"presets_{args.bank}.json")
-    d = json.load(open(path))
-    presets = d["presets"][:args.limit or None]
-    gate_s, tail_s = protocol.window((d.get("meta") or {}).get("targets", args.bank))
-
+def collect(bank, best_of, limit, align, npz):
+    """Capture the bank off the board and write the raw audio to `npz`. Needs the hardware."""
+    d, presets, gate_s, tail_s = load_bank(bank, limit)
     tp = open_transport().open()
     print(f"board: {BOARD.name} over {BOARD.transport} at {tp.sr} Hz")
-    print(f"bank: {args.bank}, {len(presets)} presets, window {gate_s}s + {tail_s}s, "
-          f"best of {args.best_of}{'' if not args.no_align else ', UNALIGNED'}")
+    print(f"bank: {bank}, {len(presets)} presets, window {gate_s}s + {tail_s}s, "
+          f"best of {best_of}{'' if align else ', UNALIGNED'}")
     engine.render(engine._DEFAULTS, gate_s=gate_s, tail_s=tail_s)          # warm the JIT
-    rows = []
+    store = {}
     try:
         for i, p in enumerate(presets, 1):
-            r = measure(tp, p, gate_s, tail_s, args.best_of, align=not args.no_align)
-            if r is None:
+            note = note_of(p["name"], p["category"])
+            sim = engine.render(p["values"], note=note, gate_s=gate_s, tail_s=tail_s)
+            caps, lags = take(tp, p, note, gate_s, tail_s, best_of, sim, tp.sr, align)
+            if not caps:
                 print(f"  [{i:2}/{len(presets)}] {p['name']:24} no usable capture", flush=True)
                 continue
-            rows.append(r)
-            print(f"  [{i:2}/{len(presets)}] {r['name']:24} {r['category']:8} "
-                  f"loss {r['loss']:6.2f}  floor {r['floor']:6.2f}  excess {r['excess']:6.2f}"
-                  f"  lag {r['lag_s']*1e3:4.0f}ms", flush=True)
+            for k, c in enumerate(caps):
+                store[f"{i - 1}|{k}"] = c
+            store[f"{i - 1}|lags"] = np.array(lags)
+            print(f"  [{i:2}/{len(presets)}] {p['name']:24} {p['category']:8} "
+                  f"{len(caps)} captures, lag {np.median(lags)*1e3:4.0f}ms", flush=True)
     finally:
         for ch in range(4):
             for n in range(128):
@@ -217,54 +263,115 @@ def main():
             tp.send_midi(u.cc(cc, int(synthspec.DEFAULTS[cid]) & 0x7F))
             time.sleep(CC_GAP)
         tp.close()
+    np.savez_compressed(npz, sr=tp.sr, bank=bank, board=BOARD.name, aligned=align,
+                        names=np.array([p["name"] for p in presets]), **store)
+    print(f"\nwrote {rel(npz)}")
+    return npz
 
-    if not rows:
-        sys.exit("no presets measured")
-    vals = np.array([r["loss"] for r in rows])
+
+def load_bank(bank, limit=0):
+    path = os.path.join(WEBUI, f"presets_{bank}.json")
+    d = json.load(open(path))
+    gate_s, tail_s = protocol.window((d.get("meta") or {}).get("targets", bank))
+    return d, d["presets"][:limit or None], gate_s, tail_s
+
+
+def report(rows, n_states):
+    marg = np.array([r["marginal"] for r in rows])
+    fitted = np.array([r["loss"] for r in rows])
+    res = np.array([r["resolution"] for r in rows])
     floors = np.array([r["floor"] for r in rows])
-    excess = np.array([r["excess"] for r in rows])
     lags = np.array([r["lag_s"] for r in rows])
-    med = float(np.median(vals))
-    print(f"\n{len(rows)} presets: sim<->board median {med:.2f}, worst {vals.max():.2f}, "
-          f"best {vals.min():.2f}")
+    print(f"\n{len(rows)} presets, model marginalised over {n_states} LFO phases "
+          f"+ {n_states} seeds")
+    print(f"  marginal (board vs the nearest state the model can reach): "
+          f"median {np.median(marg):.2f}, worst {marg.max():.2f}, best {marg.min():.2f}")
+    print(f"  at the fitted state alone: median {np.median(fitted):.2f}, worst {fitted.max():.2f} "
+          f"-- the state the shipped bank was chosen by, and the one the board rarely lands in")
+    print(f"  state-grid resolution: median {np.median(res):.2f} -- a render BETWEEN the sampled "
+          f"states, so nothing below this is measurable")
     print(f"  board<->board floor: median {np.median(floors):.2f}, worst {floors.max():.2f} "
-          f"-- the same preset played twice, so nothing below this is a model finding")
-    print(f"  excess over the floor: median {np.median(excess):.2f}, worst {excess.max():.2f}")
+          f"(diagnostic: large here beside a small marginal is the model doing its job)")
     print(f"  onset lag: median {np.median(lags)*1e3:.0f} ms, "
           f"spread {(lags.max()-lags.min())*1e3:.0f} ms"
           + ("  (a tight spread means this is the transport, not the patches)"
              if lags.max() - lags.min() < 0.02 else ""))
 
-    # How much of the bank can be read at all. A preset whose floor is as large as its distance was
-    # not measured -- the LFO phase used up the whole budget -- and it belongs in neither list.
-    mute = [r for r in rows if r["excess"] <= 0.25 * r["loss"]]
+    # How much of the bank can be read at all. A preset whose marginal sits at the grid resolution
+    # was not measured -- the state sampling used up the whole budget -- and it is neither a
+    # finding nor a clean bill of health.
+    mute = [r for r in rows if r["marginal"] <= 1.5 * r["resolution"]]
     if mute:
-        lf = sum(1 for r in mute if r["lfodep"])
-        print(f"  {len(mute)} of {len(rows)} presets are floor-limited (excess under a quarter of "
-              f"the distance); {lf} of those have lfodep > 0")
+        print(f"  {len(mute)} of {len(rows)} presets are grid-limited (marginal within 1.5x the "
+              f"resolution); raise --states to read them")
 
-    # Ranked on the excess, not the raw distance: the raw number rewards presets whose LFO happens
-    # to be slow or shallow. Read against the bank's own median rather than calibrate.py's 9-22 --
-    # that range came from probe patches with no effects and a held sustain, which a bank preset
-    # is not. The absolute number is the scale; the excess is the claim.
-    print("\nfurthest from the model, floor removed (worst 12):")
-    for r in sorted(rows, key=lambda r: -r["excess"])[:12]:
-        print(f"  excess {r['excess']:6.2f}  = loss {r['loss']:6.2f} - floor {r['floor']:5.2f}"
-              f"   {r['category']:8} {r['name']:24}  lfodep {r['lfodep']:3}")
+    # Ranked on the marginal. The fitted-state number rewards presets whose LFO happens to be slow
+    # or shallow and punishes ones the board simply caught mid-cycle; this one does neither. Read
+    # against the bank's own median rather than calibrate.py's 9-22 -- that range came from probe
+    # patches with no effects and a held sustain, which a bank preset is not.
+    print("\nfurthest from the model once the note-on state is accounted for (worst 12):")
+    for r in sorted(rows, key=lambda r: -r["marginal"])[:12]:
+        print(f"  marginal {r['marginal']:6.2f}  (fitted {r['loss']:6.2f}, "
+              f"res {r['resolution']:5.2f})   {r['category']:8} {r['name']:24}  "
+              f"lfodep {r['lfodep']:3} uni {r['unison']:3}")
 
     by = {}
     for r in rows:
-        by.setdefault(r["category"], []).append(r["excess"])
-    print("\nby category (excess):")
+        by.setdefault(r["category"], []).append(r["marginal"])
+    print("\nby category (marginal):")
     for c in sorted(by, key=lambda c: -np.median(by[c])):
         print(f"  {c:9} median {np.median(by[c]):6.2f}  n {len(by[c]):3}")
 
-    out = args.out or os.path.join(HERE, f"bank_hw_{args.bank}.json")
-    json.dump({"board": BOARD.name, "bank": args.bank, "sr": tp.sr, "best_of": args.best_of,
-               "aligned": not args.no_align, "window": [gate_s, tail_s],
-               "median": med, "median_floor": float(np.median(floors)),
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bank", default="soundfont", help="bank stem, e.g. soundfont / armxmod")
+    ap.add_argument("-n", "--best-of", type=int, default=3)
+    ap.add_argument("--limit", type=int, default=0, help="first N presets only (a dry run)")
+    ap.add_argument("--no-align", action="store_true", help="skip onset alignment (see the docstring)")
+    ap.add_argument("--states", type=int, default=phase_audit.N,
+                    help="LFO phases and LFSR values to marginalise the model over, each")
+    ap.add_argument("--replay", default=None, help="re-score a saved capture set, no board needed")
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+
+    npz = args.replay or collect(args.bank, args.best_of, args.limit, not args.no_align,
+                                 os.path.join(HERE, f"caps_{args.bank}.npz"))
+    z = np.load(npz, allow_pickle=True)
+    bank, sr, aligned = str(z["bank"]), int(z["sr"]), bool(z["aligned"])
+    d, presets, gate_s, tail_s = load_bank(bank)
+    win = (gate_s, tail_s)
+    if args.replay:
+        print(f"replaying {rel(npz)}: {bank} off {z['board']} at {sr} Hz"
+              f"{'' if aligned else ', UNALIGNED'}")
+    engine.render(engine._DEFAULTS, gate_s=gate_s, tail_s=tail_s)          # warm the JIT
+
+    rows = []
+    for i, p in enumerate(presets):
+        # Scanned rather than counted up to --best-of: a replay may be re-scoring a set captured
+        # with a different N, and silently dropping captures would make the two runs incomparable.
+        caps = [z[f"{i}|{j}"] for j in range(64) if f"{i}|{j}" in z]
+        if not caps:
+            continue
+        r = score(p, note_of(p["name"], p["category"]), caps,
+                  list(z.get(f"{i}|lags", [])), win, sr, args.states)
+        rows.append(r)
+        print(f"  [{i+1:2}/{len(presets)}] {r['name']:24} {r['category']:8} "
+              f"marginal {r['marginal']:6.2f}  fitted {r['loss']:6.2f}  "
+              f"res {r['resolution']:5.2f}", flush=True)
+
+    if not rows:
+        sys.exit("no presets measured")
+    report(rows, args.states)
+
+    out = args.out or os.path.join(HERE, f"bank_hw_{bank}.json")
+    json.dump({"board": str(z["board"]), "bank": bank, "sr": sr, "best_of": args.best_of,
+               "aligned": aligned, "window": [gate_s, tail_s], "states": args.states,
+               "captures": rel(npz),
+               "median": float(np.median([r["marginal"] for r in rows])),
+               "median_fitted": float(np.median([r["loss"] for r in rows])),
                "presets": rows}, open(out, "w"), indent=1)
-    print(f"\nwrote {os.path.relpath(out, REPO)}")
+    print(f"\nwrote {rel(out)}")
 
 
 if __name__ == "__main__":
