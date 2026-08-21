@@ -364,6 +364,30 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   separate item and is still untested (next).
 - **Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8)** ([#8](https://github.com/kazunori279/xls32-fpga-synth/issues/8))
   are built and timing-closed but not hardware-tested — parts on order.
+- **The preset workstream is closed, and the shipped bank is board-measured but not
+  board-validated.** Eight presetgen issues were closed 2026-08-21 without further fitting
+  ([#45](https://github.com/kazunori279/xls32-fpga-synth/issues/45),
+  [#44](https://github.com/kazunori279/xls32-fpga-synth/issues/44),
+  [#24](https://github.com/kazunori279/xls32-fpga-synth/issues/24),
+  [#23](https://github.com/kazunori279/xls32-fpga-synth/issues/23),
+  [#28](https://github.com/kazunori279/xls32-fpga-synth/issues/28),
+  [#26](https://github.com/kazunori279/xls32-fpga-synth/issues/26),
+  [#18](https://github.com/kazunori279/xls32-fpga-synth/issues/18),
+  [#19](https://github.com/kazunori279/xls32-fpga-synth/issues/19)); the tools each of them asked
+  for were written and the findings recorded, and none of it changed `presets_soundfont.json`. The
+  reason is #22: the loss orders *quality* (19 of 24 blind pairs decided) and does not order
+  *closeness to the target* (5 of 24, rho = +0.07), and closeness is the axis CMA-ES descends. More
+  budget against that objective buys loss and not sound, which is the same verdict the two search
+  widenings already returned. Three consequences stay open and unscheduled: attacks run **0.3–0.6**
+  of the target's spectral centroid across the bank; **16 of 64** consolidated-away presets sit
+  above #22's 0.09 audibility crossing from their nearest survivor, with a better cut available
+  (#45, 12 of 64) that cannot be taken without a refit; and the shipped bank's board grade in
+  `presetgen/bank_hw_soundfont.json` came from `excess = distance − floor`, which is unsound —
+  25 of its 64 rows are negative. #24's replacement (`marginal`, against the nearest note-on state)
+  is verified only on synthetic captures and has never been run against a board, so
+  DEVELOPMENT.md's "sim-optimal until board-validated" rule has a standing exception here. Full
+  evaluation in
+  [DEVELOPMENT.md → Closing the preset workstream](../DEVELOPMENT.md#closing-the-preset-workstream-the-objective-is-the-limit).
 - ~~**The committed Basys 3 bitstream is stale, and known to be.**~~ **Done — rebuilt and verified
   2026-08-10.** `boards/basys3/firmware/top.bit` had been byte-for-byte the 2026-07-13
   initial-release blob for four months, an engine from before M22's 18×18 narrowing and M29,

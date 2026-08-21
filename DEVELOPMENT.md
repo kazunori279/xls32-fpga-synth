@@ -774,6 +774,10 @@ sound, search the engine's parameter space to minimize a spectrogram distance to
 > NSynth and FM banks are removed from `webui/` (regenerate: `build_presets.py … nsynth`,
 > `make_fm_bank.py`), and the SoundFont bank is **halved to 64 by `consolidate.py`** — see
 > [Half a bank is a better bank](#half-a-bank-is-a-better-bank).
+>
+> **This workstream is closed as of 2026-08-21**, and the last subsection is the verdict on it:
+> [Closing the preset workstream](#closing-the-preset-workstream-the-objective-is-the-limit). Read
+> it before spending budget on any of what follows.
 
 The pipeline (`presetgen/`):
 1. **Software model of the engine** (`engine.py`) — a sample-accurate NumPy/[numba](https://numba.pydata.org/)
@@ -928,7 +932,9 @@ constraints, not the search itself.
   exposed a real sim↔board gap (resonance/effects level and character), so treat matched
   patches as sim-optimal until board-validated. Board captures are also **nondeterministic**
   (engine state persists across UART sessions + occasional MIDI-CC drops), so use best-of-N and
-  reflash for a clean baseline before trusting a calibration number.
+  reflash for a clean baseline before trusting a calibration number. **The shipped soundfont bank
+  is a standing exception to that rule** — see
+  [Closing the preset workstream](#closing-the-preset-workstream-the-objective-is-the-limit).
 - **Ground truth is the hard part, not the search.** Driving Surge XT headlessly is a dead end
   with pip tooling: pedalboard and DawDreamer both silently ignore its `.fxp` (VST3 `raw_state`
   round-trips unchanged; `load_preset`/`preset_data` reject it; the AU won't scan), `surgepy`
@@ -1158,6 +1164,69 @@ losses did. `presets_soundfont.json` stays as fitted at `SPACE=base`.
 > against any future change to the loss or the budget. What it is not is a reason to ship a
 > different bank. The three results together — a decisive objective win, a duller attack, and a
 > null ear — say the search found something the metrics reward and the listener does not.
+
+### Closing the preset workstream: the objective is the limit
+
+Eight presetgen issues were closed on 2026-08-21 without further fitting — [#45](https://github.com/kazunori279/xls32-fpga-synth/issues/45),
+[#44](https://github.com/kazunori279/xls32-fpga-synth/issues/44),
+[#24](https://github.com/kazunori279/xls32-fpga-synth/issues/24),
+[#23](https://github.com/kazunori279/xls32-fpga-synth/issues/23),
+[#28](https://github.com/kazunori279/xls32-fpga-synth/issues/28),
+[#26](https://github.com/kazunori279/xls32-fpga-synth/issues/26),
+[#18](https://github.com/kazunori279/xls32-fpga-synth/issues/18),
+[#19](https://github.com/kazunori279/xls32-fpga-synth/issues/19) — and no more search budget is
+going into the bank. This is the standing evaluation, written here so the reasoning does not have
+to be reassembled out of closed issues.
+
+**What holds up.** The software model is a good proxy for the board: `bank_hw.py` played all 64
+shipped presets on the Tiliqua (best-of-3, onset-aligned) for a median sim↔board distance of
+**7.80**, where `calibrate.py` puts a matched probe pair at 9–22. Whatever is wrong with the bank,
+the sim↔board gap is not the dominant term. The consolidation threshold is calibrated rather than
+asserted — #22's listening test located the "these two are the same patch" crossing at CLAP
+distance **0.09** (AUC 0.975, permutation *p* = 0.0001). And the coverage the cut was built for
+survived: 64 slots, 8 categories, all **46 instruments**.
+
+**What stops it.** Three numbers, each measured outside the loss, because a loss cannot grade
+itself:
+
+1. **The loss does not order the thing it is minimising.** #22 asked 24 blind pairs two questions.
+   *Which is better* decided 19 of 24. *Which is closer to the target* — the axis CMA-ES descends —
+   decided **5 of 24**, at **rho = +0.07** against CLAP distance. Listeners hear a difference and
+   cannot rank it by closeness. Two widenings that won the objective and came back null at the ear
+   ([#16](#widening-the-search-space-what-30-ccs-bought-and-what-it-cost) and the `$SPACE` arms) are
+   the same finding seen earlier and read as something else.
+2. **The attacks are dull across the bank, and stayed dull.** `attack_audit.py` measures the attack
+   spectral centroid as a ratio ours/target: **0.3–0.6** on the struck patches, one to two octaves
+   too dark, after the three fixes in the section above.
+3. **The last refit is inside the note-on noise.** The aligned-window refit was adopted for a mean
+   gain of **0.53** loss units. `phase_audit.py` shows the spread from note-on state alone — two
+   free-running accumulators the board does not reset (#44) — exceeds that on **64 of 64** presets.
+   The search was resolving a difference smaller than the one the hardware introduces for free.
+
+Two more belong on the record rather than in the verdict. Median fit residual is **22.45**, the top
+of `calibrate.py`'s matched band. And **16 of 64** presets dropped by the consolidation sit above
+the 0.09 crossing from their nearest survivor — sounds that are audibly gone from the bank rather
+than merely duplicated out of it. #45 rebuilt `consolidate.py` to select against exactly that count
+(`--rule coverage`, a farthest-point seed plus steepest-descent swaps) and it does better on the
+128-slot bank: **12 of 64** with the instrument constraint kept, 9 without. It was not adopted,
+because `ccd17d7` did the refit and the consolidation in one commit — 0 of 64 shipped presets match
+their 128-slot entry, so a re-cut costs a refit, and the refit is what item 3 says is unreadable.
+
+> **The "sim-optimal until board-validated" rule now carries a standing exception.** The bank *was*
+> played on the board, but the number it was graded by does not survive inspection: the first
+> `bank_hw.py` estimated the board's own repeat floor and ranked on `excess = distance − floor`,
+> and the two sides are not sampled alike — the floor is a min over C(N,2) capture pairs against a
+> min over N sim comparisons. **25 of the 64 rows** in `presetgen/bank_hw_soundfont.json` carry a
+> negative excess, `Bass Lead G2` by −11.73. #24 replaced it with `marginal`, which scores each
+> capture against the nearest state in `phase_audit.states()` and reports the grid resolution as
+> the measurement floor — verified end to end on synthetic captures and **never run against a
+> board**. So the shipped bank is board-measured and not board-validated, and with the workstream
+> closed it stays that way.
+
+**What the bank is, then:** a browsing bank that demonstrates inverse synthesis end to end, not a
+faithful GM emulation, and not something more of the same search improves. The limiting factor is
+the objective — not the engine, the budget, or the hardware. Reopening it means a metric that
+correlates with perceived closeness, and #22 is the test that would have to pass first.
 
 ## Milestone 7 + 8 — hardware I/O: DIN MIDI in + I2S DAC out (built; hardware pending)
 
