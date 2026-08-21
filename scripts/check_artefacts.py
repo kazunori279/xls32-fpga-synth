@@ -127,7 +127,7 @@ ARTEFACTS = {
                 "boards/tiliqua/gateware/viz.py",
             ],
         }
-        for voices, seed in ((24, "4"), (32, "5"))
+        for voices, seed in ((24, "3"), (32, "5"))
     },
 }
 
