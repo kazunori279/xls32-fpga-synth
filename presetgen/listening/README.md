@@ -1,15 +1,17 @@
 # Listening sessions
 
-Votes from `webui/ab_check.html`, one file per session, grouped by what was compared:
+Votes from the blind listening pages, one file per session, grouped by what was compared:
 
 ```
-listening/<incumbent>-vs-<challenger>/ab_<comparison>_<question>_<listener>.json
+listening/<incumbent>-vs-<challenger>/ab_<comparison>_<question>_<listener>.json   ab_check.html
+listening/consolidate-128-to-64/sub_<listener>.json                               sub_check.html
 ```
 
 Read a directory, never a single file:
 
 ```
-uv run python ab_tally.py listening/prev128-vs-soundfont
+uv run python ab_tally.py  listening/prev128-vs-soundfont
+uv run python sub_tally.py listening/consolidate-128-to-64
 ```
 
 A **session** is one question, one listener, one pass over the counterbalanced sequence. Adding a
@@ -39,6 +41,13 @@ Some rules the files encode, and why:
   from them. `stft-vs-clapstft` (the `$LOSS` choice, 18–1) and `armbase-vs-armfx` (#16, the
   search-space widening, 9–7 null) are both of that vintage: neither controls for playback order.
 
-The WAV the votes refer to is not here. `ab_render.py` regenerates `webui/ab/` from the banks in
-about a minute, and its manifest is the answer key, which is why that directory is gitignored and
-this one is not.
+- **`consolidate-128-to-64`** is not an A/B: each trial is one dropped preset against the surviving
+  slot that shares its name, asking whether the survivor covers it (#22). Same two rules — two
+  hearings a pair, one question a session — and `consolidate_check.py` additionally draws from the
+  presets no stored session has asked about, so a second sitting extends the coverage instead of
+  re-testing memory. Pool on the preset name, not the trial id: stems are per-render, so `s00` is a
+  different pair in every set. `sub_votes_r1.json` predates all of that and asked once.
+
+The WAV the votes refer to is not here. `ab_render.py` and `consolidate_check.py` regenerate
+`webui/ab/` and `webui/sub/` from the banks in about a minute each, and their manifests are the
+answer key, which is why those directories are gitignored and this one is not.

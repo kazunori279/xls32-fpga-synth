@@ -25,13 +25,26 @@ all. If they do, `consolidate.py`'s metric is doing its job and the top of the l
 list. If a listener misses sounds at 0.05 as often as at 0.30, the metric is not measuring
 substitutability and the halving was defended with the wrong number.
 
+Every pair is asked twice, once in each playback order, and only a pair answered the same way both
+times counts (#20). "Are these two interchangeable" is a property of the pair, so the order should
+not enter into it -- which is exactly why a verdict that flips with the order is worth counting
+rather than averaging away. The first run of this page asked once, and the only structure in its 24
+answers pointed that way: `different` in 8 of 12 trials where the dropped preset played second
+against 4 of 12 where it played first (Fisher p = 0.22 -- not a finding, and not something a single
+hearing per pair can rule out).
+
     uv sync --extra deepfit
-    uv run python presetgen/consolidate_check.py [trials] [old-bank.json]
+    uv run python presetgen/consolidate_check.py [trials] [old-bank.json] [--again]
     python3 -m http.server 8765 -d webui   # then http://127.0.0.1:8765/sub_check.html
 
 The old 128-slot bank is `git show b9f77b7:webui/presets_soundfont.json`; pass it as a file.
 Output lands in webui/sub/, which is gitignored alongside webui/ab/.
+
+Re-running draws from the dropped presets no stored session has asked about yet, so a second
+sitting extends the coverage instead of re-testing the listener's memory -- 64 dropped presets at
+24 a sitting is between two and three sessions to see all of them. `--again` reuses them anyway.
 """
+import glob
 import json
 import os
 import subprocess
@@ -46,14 +59,33 @@ sys.path.insert(0, HERE)
 import engine                                                              # noqa: E402
 import loss_deep                                                           # noqa: E402
 import protocol                                                            # noqa: E402
-from ab_render import write_wav                                            # noqa: E402
+from ab_render import build_sequence, write_wav                            # noqa: E402
 from consolidate import instrument                                         # noqa: E402
 from name_audit import note_of                                             # noqa: E402
 
 OUT = os.path.join(REPO, "webui", "sub")
 NEW = os.path.join(REPO, "webui", "presets_soundfont.json")
+STORE = os.path.join(HERE, "listening", "consolidate-128-to-64")
 PREV_REV = "b9f77b7"                     # the 128-slot bank, before ccd17d7 refit + consolidated
 SEED = int(os.environ.get("SEED", 20260821))
+
+
+def already_heard():
+    """Dropped presets some stored session already asked about.
+
+    64 dropped presets and 24 trials a sitting means a second session should ask about the ones
+    nobody has heard yet, not the same 24 again. Re-asking the same pairs would measure whether the
+    listener repeats themselves -- and they have already been told the answers, since the page
+    reveals the names and gaps at the end. Excluding them makes consecutive sessions independent
+    samples that pool by band, which is what the band question needs.
+    """
+    seen = set()
+    for p in sorted(glob.glob(os.path.join(STORE, "*.json"))):
+        try:
+            seen |= {r["dropped"] for r in json.load(open(p)).get("votes", []) if "dropped" in r}
+        except (OSError, ValueError):
+            continue
+    return seen
 
 
 def load_prev(path=None):
@@ -97,6 +129,8 @@ def survey(old, new_names, win):
 
 def main():
     argv = sys.argv[1:]
+    again = "--again" in argv                 # ask about the stored pairs again anyway
+    argv = [a for a in argv if a != "--again"]
     paths = [a for a in argv if a.endswith(".json")]
     rest = [a for a in argv if not a.endswith(".json")]
     n_trials = int(rest[0]) if rest else 24
@@ -111,10 +145,22 @@ def main():
     print(f"  gap to that slot: median {np.median(d):.3f}, worst {d.max():.3f}, best {d.min():.3f}")
     print(f"  for {diff} of {len(rows)}, some OTHER instrument's slot sounds nearer")
 
+    pool_rows = rows
+    heard = set() if again else already_heard()
+    if heard:
+        fresh = [r for r in rows if r["dropped"] not in heard]
+        print(f"  {len(heard)} already asked about in {os.path.relpath(STORE, REPO)}; "
+              f"drawing from the remaining {len(fresh)}   (--again to reuse them)")
+        if len(fresh) >= n_trials:
+            pool_rows = fresh
+        else:
+            print(f"  !! only {len(fresh)} unheard left, fewer than {n_trials} -- using all "
+                  f"{len(rows)}, so this set repeats pairs")
+
     # Stratified across the gap, in thirds, so the answers can be read against the distance. Taking
     # the top n would only ask whether the worst cases are bad, which is not in doubt and is not
     # what validates the metric.
-    order = sorted(rows, key=lambda r: -r["dist"])
+    order = sorted(pool_rows, key=lambda r: -r["dist"])
     band = max(1, len(order) // 3)
     per = [n_trials // 3 + (1 if k < n_trials % 3 else 0) for k in range(3)]
     rng = np.random.default_rng(SEED)
@@ -152,11 +198,24 @@ def main():
         print(f"  {stem}  {t['category']:8} {t['dropped']:20} -> {t['survivor']:20} "
               f"gap {t['dist']:.3f}")
 
-    json.dump({"banks": ["prev128", "soundfont"], "seed": SEED, "window": list(win),
+    # Each pair asked TWICE, once in each playback order, using ab_render's block builder. The
+    # verdict here is a property of the pair -- "are these two interchangeable" is the same question
+    # whichever plays first -- so a verdict that changes with the order is not a tie, it is the
+    # protocol failing to ask, exactly as in the A/B rig. The first run of this page asked once and
+    # the only structure in it was in that direction: the dropped preset was called `different` in
+    # 8 of 12 trials when it played second and 4 of 12 when it played first. Fisher p = 0.22, so not
+    # a finding -- but not something 24 single hearings can rule out either.
+    sequence = build_sequence([t["id"] for t in manifest], rng)
+
+    json.dump({"banks": ["prev128", "soundfont"], "comparison": "consolidate-128-to-64",
+               "seed": SEED, "window": list(win),
                "survey": [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows],
-               "trials": manifest}, open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
-    print(f"\nwrote {len(manifest)} trials -> {OUT}")
+               "trials": manifest, "sequence": sequence},
+              open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
+    print(f"\nwrote {len(manifest)} pairs -> {OUT}")
+    print(f"  {len(sequence)} trials: each pair heard twice, once in each playback order")
     print("  python3 -m http.server 8765 -d webui   # then http://127.0.0.1:8765/sub_check.html")
+    print("  uv run python presetgen/sub_tally.py presetgen/listening/consolidate-128-to-64")
 
 
 if __name__ == "__main__":

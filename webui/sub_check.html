@@ -26,14 +26,28 @@
   used for and the halving was defended with the wrong number. So the trials are drawn evenly from
   the top, middle and bottom third of the gap range, and the tally reports the answer per band.
 
-  WHAT IS NOT CONTROLLED: 24 trials over 3 bands is 8 per band, which is enough to see a strong
-  trend and not enough to size one. Levels are peak-normalised at render, so loudness cannot
-  decide it. Every clip is one held note of 1.6 s at the pitch the preset was fitted at -- two
-  slots of the same instrument at DIFFERENT pitches are a fair part of what consolidation dropped,
-  and a single note is the only way this bank has ever been judged.
+  EVERY PAIR IS ASKED TWICE, once in each playback order, and only a pair answered the same way
+  both times counts. "Are these two interchangeable" is a property of the pair, so the order should
+  not enter into it at all -- which is why a verdict that flips with the order is worth counting
+  rather than averaging away. It is not a tie: a tie is the listener saying the two are alike, and a
+  flip is this page failing to ask. The first run asked once and the only structure in its answers
+  was in that direction: `different` in 8 of 12 trials where the dropped preset played second,
+  4 of 12 where it played first (Fisher p = 0.22, so noise as far as 24 trials can say).
+
+  WHO IS LISTENING is recorded. Sessions accumulate as separate files under
+  presetgen/listening/consolidate-128-to-64/ and sub_tally.py pools them, so a second ear is a
+  second file rather than a re-run of this one.
+
+  WHAT IS NOT CONTROLLED: 24 pairs over 3 bands is 8 per band, which is enough to see a strong
+  trend and not enough to size one, and requiring both hearings to agree makes it smaller still.
+  Levels are peak-normalised at render, so loudness cannot decide it. Every clip is one held note
+  of 1.6 s at the pitch the preset was fitted at -- two slots of the same instrument at DIFFERENT
+  pitches are a fair part of what consolidation dropped, and a single note is the only way this
+  bank has ever been judged.
 
     uv run python presetgen/consolidate_check.py
     python3 -m http.server 8765 -d webui        # http://127.0.0.1:8765/sub_check.html
+    uv run python presetgen/sub_tally.py presetgen/listening/consolidate-128-to-64
 -->
 <style>
   :root { color-scheme: dark; }
@@ -61,6 +75,8 @@
   pre { background:#1b1d22; border:1px solid #2a2d34; border-radius:8px; padding:16px;
         overflow:auto; font:13px/1.55 ui-monospace,monospace; color:#dfe1e6; }
   .hint { color:#6d727d; font-size:12px; margin-left:4px; }
+  input { background:#1b1d22; color:#dfe1e6; border:1px solid #33363e; border-radius:7px;
+          padding:9px 12px; font:inherit; width:180px; }
 </style>
 
 <h1>Blind substitution — <span id="head">loading…</span></h1>
@@ -75,15 +91,51 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let M = null, i = 0, votes = [], ctx = null, src = null, buf = {};
+let M = null, LISTENER = '', SEQ = [], i = 0, votes = [], ctx = null, src = null, buf = {};
 
 async function boot() {
   M = await (await fetch('sub/manifest.json')).json();
-  votes = M.trials.map(() => null);
-  $('#head').textContent = `${M.trials.length} trials, ${M.banks.join(' vs ')}`;
+  if (!M.sequence) {
+    $('#head').textContent = 'stale render';
+    $('#body').innerHTML = '<pre>webui/sub/ predates the two-hearings-per-pair split.\n\n'
+      + 'uv run python presetgen/consolidate_check.py</pre>';
+    return;
+  }
+  LISTENER = new URLSearchParams(location.search).get('listener')
+          || localStorage.getItem('ab_listener') || '';
+  $('#head').textContent = `${M.trials.length} pairs, ${M.banks.join(' vs ')}`;
+  $('#sub').textContent = 'each pair is heard twice, both ways round — say who is listening';
+  $('#body').innerHTML = `
+    <div class="row">
+      <span class="q">listener</span>
+      <input id="who" placeholder="a name or initials" value="${LISTENER}">
+      <button id="go">start ${M.sequence.length} trials</button>
+      <span class="hint">stored with the votes, so a second ear is a second file</span>
+    </div>`;
+  $('#go').onclick = () => {
+    const who = $('#who').value.trim();
+    if (!who) return $('#who').focus();
+    LISTENER = who;
+    localStorage.setItem('ab_listener', who);
+    start();
+  };
+}
+
+function start() {
+  const byId = Object.fromEntries(M.trials.map(t => [t.id, t]));
+  SEQ = M.sequence.map(s => ({...byId[s.id], rev: s.rev}));
+  votes = SEQ.map(() => null);
+  $('#head').textContent = `${SEQ.length} trials over ${M.trials.length} pairs, `
+                         + `${M.banks.join(' vs ')} · ${LISTENER}`;
+  $('#sub').textContent = 'two slots of one instrument; one of them is no longer in the bank';
   render();
   addEventListener('keydown', key);
 }
+
+// Which rendered clip a button plays. The pair's two wavs are fixed at render time and `rev` is
+// what makes the second hearing the other way round -- so button 1 is not always file 1, and the
+// listener has no way to tell the two hearings of a pair apart by which button they reached for.
+const slotOf = (t, n) => t.rev ? String(3 - n) : String(n);
 
 // One AudioContext, one voice. Starting a clip stops whatever is playing: this is a comparison of
 // two sounds heard one after the other, and overlapping them just makes a chord.
@@ -102,14 +154,14 @@ async function play(id, slot, btn) {
 }
 
 function render() {
-  if (i >= M.trials.length) return results();
-  const t = M.trials[i], v = votes[i];
-  $('#prog').style.width = `${i / M.trials.length * 100}%`;
+  if (i >= SEQ.length) return results();
+  const t = SEQ[i], v = votes[i];
+  $('#prog').style.width = `${i / SEQ.length * 100}%`;
   // Nothing about the trial is shown. Not the names -- the survivor is the one still in the
   // browser, so a name is the answer -- and not the category, which narrows it for the same
   // reason on a bank this small.
   $('#body').innerHTML = `
-    <div class="trial">trial <b>${i + 1}</b> of ${M.trials.length}</div>
+    <div class="trial">trial <b>${i + 1}</b> of ${SEQ.length}</div>
     <div class="row">
       <span class="q">listen</span>
       <button class="play" data-slot="1">▶ sound 1</button>
@@ -127,7 +179,7 @@ function render() {
       <button id="back" ${i ? '' : 'disabled'}>← back</button>
     </div>`;
   document.querySelectorAll('.play').forEach(b =>
-    b.onclick = () => play(t.id, b.dataset.slot, b));
+    b.onclick = () => play(t.id, slotOf(t, +b.dataset.slot), b));
   document.querySelectorAll('.pick').forEach(b => {
     if (v === b.dataset.v) b.classList.add('sel');
     b.onclick = () => pick(b.dataset.v);
@@ -139,10 +191,10 @@ function render() {
 function pick(v) { votes[i] = v; render(); }
 
 function key(e) {
-  if (i >= M.trials.length) return;
-  const t = M.trials[i];
+  if (i >= SEQ.length) return;
+  const t = SEQ[i];
   if (e.key === '1' || e.key === '2')
-    return play(t.id, e.key, document.querySelector(`.play[data-slot="${e.key}"]`));
+    return play(t.id, slotOf(t, +e.key), document.querySelector(`.play[data-slot="${e.key}"]`));
   const map = {q: 'different', w: 'same', x: 'tie'};
   if (map[e.key]) return pick(map[e.key]);
   if (e.key === 'Enter' && votes[i]) { i++; render(); }
@@ -151,32 +203,56 @@ function key(e) {
 // ---- tally. Only here does the page read the gaps and the names.
 function results() {
   $('#prog').style.width = '100%';
-  const out = M.trials.map((t, n) => ({
+  // One record per HEARING, carrying `gone` as the button that held the dropped preset on that
+  // hearing rather than the render-time slot -- the same pair reaches the listener both ways, and
+  // which way is the thing being checked.
+  const out = SEQ.map((t, n) => ({
     id: t.id, category: t.category, dropped: t.dropped, survivor: t.survivor,
     dist: t.dist, nearest: t.nearest, dist_nearest: t.dist_nearest,
-    nearest_same_instrument: t.nearest_same_instrument, gone: t.gone, verdict: votes[n],
+    nearest_same_instrument: t.nearest_same_instrument, rev: !!t.rev,
+    gone: t.rev ? String(3 - +t.gone) : t.gone, verdict: votes[n],
   }));
-  const kept = out.filter(r => r.verdict === 'different').length;
-  const same = out.filter(r => r.verdict === 'same').length;
-  const tie = out.filter(r => r.verdict === 'tie').length;
+
+  // A pair counts only if both hearings say the same thing. "Interchangeable" is a property of the
+  // pair, so a verdict that flips with the playback order is not a tie -- it is a question this
+  // page put badly.
+  const ids = [...new Set(out.map(r => r.id))];
+  const verdict = {};
+  for (const id of ids) {
+    const h = out.filter(r => r.id === id).map(r => r.verdict);
+    verdict[id] = h.length < 2 ? '?' : h[0] === h[1] ? h[0] : 'flip';
+  }
+  const n = k => ids.filter(id => verdict[id] === k).length;
   const lines = [
-    `${kept} of ${out.length} dropped sounds would be missed; ${same} interchangeable; ${tie} can't tell`,
+    `${n('different')} of ${ids.length} dropped sounds would be missed both times heard;`,
+    `${n('same')} interchangeable both times; ${n('tie')} can't tell; ${n('flip')} order-dependent`,
     '',
   ];
 
-  // The result that matters: does the verdict track the gap? Bands over the trials actually run,
-  // by tertile of their own gaps rather than by the render-time band, so a partial set still reads.
-  const sorted = [...out].sort((a, b) => b.dist - a.dist);
+  // Did the order decide the verdict? It should not: the pair is the same pair either way.
+  const dec = out.filter(r => r.verdict === 'different' || r.verdict === 'same');
+  const d2 = dec.filter(r => r.gone === '2');
+  const d1 = dec.filter(r => r.gone === '1');
+  const pc = rs => rs.length ? `${rs.filter(r => r.verdict === 'different').length}/${rs.length}`
+                             : '—';
+  lines.push('called `different` by which button held the dropped preset (should not matter):',
+    `  played first  ${pc(d1)}      played second  ${pc(d2)}`, '');
+
+  // The result that matters: does the verdict track the gap? Bands over the pairs actually run, by
+  // tertile of their own gaps rather than the render-time band, so a partial set still reads.
+  const byId = Object.fromEntries(out.map(r => [r.id, r]));
+  const sorted = ids.map(id => byId[id]).sort((a, b) => b.dist - a.dist);
   const b = Math.ceil(sorted.length / 3);
   const bands = [['widest gap', sorted.slice(0, b)],
                  ['middle', sorted.slice(b, 2 * b)],
                  ['narrowest gap', sorted.slice(2 * b)]];
-  lines.push('would be missed, by CLAP gap:');
+  lines.push('would be missed, by CLAP gap (concordant pairs only):');
   for (const [label, rs] of bands) {
     if (!rs.length) continue;
-    const k = rs.filter(r => r.verdict === 'different').length;
+    const k = rs.filter(r => verdict[r.id] === 'different').length;
+    const dd = rs.filter(r => verdict[r.id] === 'different' || verdict[r.id] === 'same').length;
     const lo = Math.min(...rs.map(r => r.dist)), hi = Math.max(...rs.map(r => r.dist));
-    lines.push(`  ${label.padEnd(14)} ${String(k).padStart(2)}/${rs.length}   `
+    lines.push(`  ${label.padEnd(14)} ${String(k).padStart(2)}/${dd} of ${rs.length}   `
              + `gap ${lo.toFixed(3)}-${hi.toFixed(3)}`);
   }
   lines.push('',
@@ -184,28 +260,34 @@ function results() {
     'wide-gap slots are a re-voicing list. A flat result means it does not, and the 128->64',
     'cut was defended with a number that does not answer the question it was used for.', '');
 
-  lines.push('per trial (verdict / gap / dropped -> survivor):');
+  lines.push('per pair (verdict / gap / dropped -> survivor):');
   for (const r of sorted) {
-    const mark = {different: 'MISSED', same: '  ok  ', tie: '  ??  '}[r.verdict] || '  --  ';
+    const mark = {different: 'MISSED', same: '  ok  ', tie: '  ??  ',
+                  flip: ' ~~~~ '}[verdict[r.id]] || '  --  ';
     const other = r.nearest_same_instrument ? ''
                 : `   [${r.nearest} sounds nearer @ ${r.dist_nearest.toFixed(3)}]`;
     lines.push(`  ${mark}  ${r.dist.toFixed(3)}  ${r.category.padEnd(8)} `
              + `${r.dropped.padEnd(20)} -> ${r.survivor.padEnd(20)}${other}`);
   }
+  lines.push('', 'One listener, one session. Pool it with sub_tally.py rather than reading it',
+    'alone, and hand the page to another ear before quoting the number anywhere.');
 
-  $('#sub').textContent = 'the reveal, and the vote file to keep';
+  const fn = `sub_${LISTENER.replace(/[^A-Za-z0-9_-]/g, '_')}.json`;
+  $('#head').textContent = `done — ${LISTENER}`;
+  $('#sub').textContent = 'save the file into presetgen/listening/consolidate-128-to-64/';
   $('#body').innerHTML = `<pre>${lines.join('\n').replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre>
-    <div class="row"><button id="save">save sub_votes.json</button>
+    <div class="row"><button id="save">save ${fn}</button>
       <button id="again">start over</button></div>`;
   $('#save').onclick = () => {
-    const blob = new Blob([JSON.stringify({banks: M.banks, seed: M.seed, votes: out}, null, 1)],
-                          {type: 'application/json'});
+    const blob = new Blob([JSON.stringify(
+      {banks: M.banks, comparison: M.comparison, seed: M.seed, listener: LISTENER, votes: out},
+      null, 1)], {type: 'application/json'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'sub_votes.json';
+    a.download = fn;
     a.click();
   };
-  $('#again').onclick = () => { i = 0; votes = M.trials.map(() => null); render(); };
+  $('#again').onclick = () => { i = 0; votes = SEQ.map(() => null); render(); };
 }
 
 boot();
