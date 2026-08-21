@@ -272,8 +272,8 @@ def main():
     print(f"  better  a {len(PHRASE)}-note phrase, no target")
     print("\n  python3 -m http.server 8765 -d webui")
     print("  http://127.0.0.1:8765/ab_check.html      # pick the question and enter a listener id")
-    print("  !! hard-reload (cmd-shift-R). A re-render reuses the filenames, and a cached page will")
-    print("  !! re-ask the pairs the last session already answered -- #22 lost a sitting to that.")
+    print("  !! hard-reload (cmd-shift-R). A re-render reuses the filenames, and a cached")
+    print("  !! page re-asks the pairs the last session answered -- #22 lost a sitting to that.")
     print(f"  uv run python presetgen/ab_tally.py presetgen/listening/{comparison}")
 
 
