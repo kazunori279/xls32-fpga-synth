@@ -178,17 +178,25 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # as headroom. Do not confuse it with `--tmg-ripup`, which is router1's and therefore inert here.
 #
 # M37's own 24-voice draw, all six seeds, on this netlist with the router option on:
-# 52.50 (1), 54.06 (2), 54.30 (3), **56.33 (4)**, 51.40 (5), 53.07 (6). Every one converged, where
+# 52.50 (1), 54.06 (2), **54.30 (3)**, 49.12 (4), 51.40 (5), 53.07 (6). Every one converged, where
 # M36 had four of five -- which is the insurance above showing up as routability rather than as
-# megahertz. Seed 4 wins by 2.03 MHz over the next best, and it was also M36's winner, so on this
-# design the draw is less arbitrary than "lottery" suggests; do not read that as a rule, since seed
-# 5 is the best of the 32-voice draw and the worst of both 24-voice ones.
+# megahertz. Seed 3 wins, and only by 0.24 MHz: the spread across the six is 5.2 MHz with no gap
+# worth calling a winner's margin, so treat the pin as "the best measured" and not as a property
+# of the design.
+#
+# Seed 4 is worth a warning, because measuring it is how this sweep first got the wrong answer.
+# It read 56.33 MHz -- best of the draw by 2 MHz -- on a build whose tree was dirty, and
+# `9fca1a0-dirty` is six characters longer than a clean seven-digit sha. The stamp is a ROM, so
+# that was a different netlist: 22,745 cells against 22,985 for the clean one. Re-measured properly
+# it is 49.12, the *worst* of the six. Two lessons. The whole sweep has to run on the netlist that
+# will ship, dirty trees included in "different netlist"; and seed rankings really do not transfer,
+# not even from the same seed on a netlist 240 cells away.
 #
 # The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
 # before trusting it.
 case "$VOICES" in
   32) SEED="${SEED:-5}" ;;
-  *)  SEED="${SEED:-4}" ;;
+  *)  SEED="${SEED:-3}" ;;
 esac
 PNR_OPTS="--timing-allow-fail --router router2 --router2-tmg-ripup --seed $SEED"
 export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:-$PNR_OPTS}"
