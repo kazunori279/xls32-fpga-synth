@@ -473,7 +473,7 @@ Both are production quality; record from whichever suits the rest of your signal
 #### The screen is optional
 
 The picture is feedback, not control: everything plays, and every parameter responds, with the DVI
-output unplugged. What you give up is the 32 tiles, one per voice — brightness is the envelope, hue
+output unplugged. What you give up is the grid of tiles, one per voice — brightness is the envelope, hue
 is the pitch. Any digital display takes the 720×720p60 signal; apf.audio's own
 **[Tiliqua Screen](https://apf.audio/modules/current/tiliquascreen/)** is the 4-inch round one made
 for it, and locks onto the signal at once rather than spending seconds re-locking each time you

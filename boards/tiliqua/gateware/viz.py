@@ -1,8 +1,8 @@
-# M29 — the 32 voices as 32 tiles, drawn by racing the beam.
+# M29 — one tile per voice, drawn by racing the beam.
 #
 # The engine already tells us what to draw. `viz_out` (synth.x:403) is a 32-bit tuple emitted once
 # per voice per scan -- {env[15:0], is_new@16, last@17} -- and M28's LED comet is already reading
-# it (led.py). This draws the same envelopes at 32x the resolution the pmod's eight LEDs allow.
+# it (led.py). This draws the same envelopes at 3-4x the resolution the pmod's eight LEDs allow.
 #
 # **There is no framebuffer.** The colour of each pixel is computed in the cycle before it is sent,
 # from the beam position and a 32-byte store. That is not a shortcut, it is the design:
@@ -11,8 +11,8 @@
 #     PSRAM is where M26's echo delay line lives, and the two would then be sharing one controller
 #     for the whole of every frame. "The audio must not glitch" would become a bandwidth argument
 #     to be won. With no framebuffer there is no second PSRAM client and nothing to argue about.
-#   * 32 tiles x 8 bits of brightness is 32 bytes. A framebuffer for the same information is
-#     1.5 MB, and every one of those bytes would be a copy of one of these 32.
+#   * One tile x 8 bits of brightness is one byte, so the whole picture is 24 or 32 of them. A
+#     framebuffer for the same information is 1.5 MB, and every byte of it a copy of one of those.
 #
 # So the whole store is one BRAM, written from the engine's domain and read from the pixel clock,
 # and the renderer is a pair of counters. See `ARCHITECTURE_tiliqua.md` A1 for how it is clocked: the
@@ -26,8 +26,8 @@ from amaranth.lib import wiring
 from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out
 
-N_VOICE = 32
-COLS, ROWS = 8, 4               # 8 across, 4 down -- 32 tiles, and both divide 720 exactly
+from voices import COLS, N_VOICE, ROWS   # `$VOICES` tiles in a grid that divides 720 exactly
+
 H_ACTIVE = V_ACTIVE = 720       # 720x720p60r2; the panel's own EDID confirms it (see below)
 
 # synth.x:403 packs {env[15:0], is_new@16, last@17, note@18..24, part@25..26}
@@ -49,8 +49,8 @@ IDLE_V = 0x14
 #
 # The first version of this collapsed octaves (`note % 12`, twelve fixed hues), which made a
 # chord read as one stable chord of colours -- but it also made the bottom and top of the
-# instrument identical, and on 32 tiles the thing worth seeing is *register*: which voices are
-# holding the bass and which are up in the melody. So the ramp is stretched over the keyboard
+# instrument identical, and on a wall of tiles the thing worth seeing is *register*: which
+# voices hold the bass and which are up in the melody. So the ramp is stretched over the keyboard
 # instead, and an octave visibly moves.
 #
 # The window is 44 keys, not the piano's 88. Spreading the ramp over the full A0..C8 was
@@ -114,7 +114,7 @@ def corner_insets(r):
 class VizStore(wiring.Component):
 
     """
-    The engine's `viz_out` tap -> 32 bytes of brightness, readable from the pixel clock.
+    The engine's `viz_out` tap -> one byte of brightness per voice, readable from the pixel clock.
 
     This is the whole clock crossing. `audio` (12.288 MHz) writes one byte per voice per scan;
     `dvi` (39.07 MHz) reads one byte per pixel. A true dual-port BRAM does both without a FIFO,
@@ -251,22 +251,26 @@ class VoiceTiles(wiring.Component):
             m.d.sync += [px.eq(0), col.eq(0)]
         with m.Elif(self.i_x >= 0):
             with m.If(px == h_tile - 1):
-                m.d.sync += [px.eq(0), col.eq(col + 1)]
+                # The wrap is explicit because COLS is not necessarily a power of two -- at 24
+                # voices it is 6, and a bare `col + 1` would leave 6 in a 3-bit signal for the
+                # rest of the line and push `o_addr` a whole row along.
+                m.d.sync += [px.eq(0), col.eq(Mux(col == COLS - 1, 0, col + 1))]
             with m.Else():
                 m.d.sync += px.eq(px + 1)
 
         # Vertical: reload at the last pixel of the last blanking line, advance at the end of each
-        # active line. `col`/`row` are 3 and 2 bits, so the tile index is a concatenation and the
-        # multiply by 8 costs nothing.
+        # active line. The tile index used to be `Cat(col, row)`, free because COLS was 8; since
+        # #40 it is a multiply by a constant that is 4, 6 or 8, which yosys turns into at most two
+        # adds on a two-bit operand. Still nothing, and it no longer depends on the grid.
         with m.If((self.i_y == -1) & (self.i_x == -1)):
             m.d.sync += [py.eq(0), row.eq(0)]
         with m.Elif((self.i_x == self.h_active - 1) & (self.i_y >= 0)):
             with m.If(py == v_tile - 1):
-                m.d.sync += [py.eq(0), row.eq(row + 1)]
+                m.d.sync += [py.eq(0), row.eq(Mux(row == ROWS - 1, 0, row + 1))]
             with m.Else():
                 m.d.sync += py.eq(py + 1)
 
-        m.d.comb += self.o_addr.eq(Cat(col, row))
+        m.d.comb += self.o_addr.eq(row * COLS + col)
 
         px_d1, py_d1 = Signal.like(px), Signal.like(py)
         de_d1, hs_d1, vs_d1 = Signal(), Signal(), Signal()

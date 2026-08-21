@@ -7,9 +7,11 @@
 # unaccounted for every tile is shifted a pixel into its neighbour. Both are invisible on a photo
 # of a lit panel and obvious here.
 #
-# The geometry test runs against an 80x40 frame rather than 720x720. The counters do not know the
-# difference -- they are compared against `h_tile`/`v_tile` either way -- and it is the difference
-# between 4,000 cycles and 651,224.
+# The geometry test runs against a ten-pixel-per-tile frame rather than 720x720. The counters do
+# not know the difference -- they are compared against `h_tile`/`v_tile` either way -- and it is
+# the difference between a few thousand cycles and 651,224. It is sized from the grid rather than
+# written down as 80x40 because the grid follows `$VOICES` since #40, and VoiceTiles asserts that
+# the actives divide by it.
 
 import sys
 from pathlib import Path
@@ -18,8 +20,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from amaranth.sim import Simulator
 
-from viz import (COLS, HUE_MAX, IDLE_V, NOTE_HI, NOTE_LO, N_VOICE, RADIUS,
+from viz import (COLS, HUE_MAX, IDLE_V, NOTE_HI, NOTE_LO, N_VOICE, RADIUS, ROWS,
                  VizStore, VoiceTiles, corner_insets, hue_rgb, tile_rgb)
+
+# The miniature frame the geometry tests walk, and the totals that give it a blanking interval.
+MINI_H, MINI_V = COLS * 10, ROWS * 10
+MINI_H_TOTAL, MINI_V_TOTAL = MINI_H + 12, MINI_V + 12
 
 
 def viz(env, is_new=0, last=0, note=0, part=0):
@@ -182,7 +188,7 @@ def sweep(dut, watch, *, h_total, v_total, frames=1, lines=None, level=0, note=0
 
 def test_every_pixel_indexes_its_own_tile():
     """`o_addr` is combinational from the counters, so at pixel (x, y) it must already be right."""
-    dut = VoiceTiles(h_active=80, v_active=40)
+    dut = VoiceTiles(h_active=MINI_H, v_active=MINI_V)
     seen = set()
 
     async def watch(ctx, x, y):
@@ -191,7 +197,7 @@ def test_every_pixel_indexes_its_own_tile():
         assert got == want, f"pixel ({x},{y}) indexed tile {got}, wanted {want}"
         seen.add(got)
 
-    sweep(dut, watch, h_total=92, v_total=52)
+    sweep(dut, watch, h_total=MINI_H_TOTAL, v_total=MINI_V_TOTAL)
     assert seen == set(range(N_VOICE)), f"only {len(seen)} of {N_VOICE} tiles were ever addressed"
 
 
@@ -201,14 +207,14 @@ def test_geometry_survives_a_second_frame():
     A frame boundary is the one place the row counter can be left holding 3 -- which would put the
     bottom row of tiles across the top of every frame after the first, and only after the first.
     """
-    dut = VoiceTiles(h_active=80, v_active=40)
+    dut = VoiceTiles(h_active=MINI_H, v_active=MINI_V)
     rows = []
 
     async def watch(ctx, x, y):
         if x == 0:
             rows.append(ctx.get(dut.o_addr))
 
-    sweep(dut, watch, h_total=92, v_total=52, frames=2)
+    sweep(dut, watch, h_total=MINI_H_TOTAL, v_total=MINI_V_TOTAL, frames=2)
     half = len(rows) // 2
     assert rows[:half] == rows[half:], "the second frame does not match the first"
 

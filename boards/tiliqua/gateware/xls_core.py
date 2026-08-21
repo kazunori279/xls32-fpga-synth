@@ -52,6 +52,8 @@ from tiliqua import dsp
 from tiliqua.build.types import BitstreamHelp
 from tiliqua.dsp import ASQ
 
+from voices import N_VOICE
+
 # Engine sample rate. Set by the DSLX pitch tables, not by anything on this side: the phase
 # increments in synth.x are computed for 32 kHz (Basys 3 divides 100 MHz by 3125 to match).
 ENGINE_FS = 32000
@@ -78,6 +80,10 @@ class XlsSynth(wiring.Component):
     or 32 in the experimental build; `$VOICES` picks, and the engine's sample rate does not
     change with it because the codec's backpressure sets the pace, not the ring's length.
 
+    The name is the project's, not the voice count -- it has meant "32-bit synthesizer in XLS"
+    since M1, and the count has been 8, 16, 24 and 32 under it. `voices.N_VOICE` is the count,
+    and the `brief` below prints it so the bootloader's slot list says which build this is.
+
     Multitimbral over MIDI channels 1-4, played through `i_midi_bytes` -- a raw byte stream,
     not decoded messages. The engine is mono, so out0 and out1 carry the same signal; the
     chorus, echo and reverb that make them a stereo pair live downstream in `fx.StereoFx`,
@@ -103,7 +109,10 @@ class XlsSynth(wiring.Component):
     # is unused, which is why in0..in3 and out2/out3 are blank: nothing reads the ADC (M28's CV
     # variant that did was deleted in M31) and out2/out3 have carried silence since M26.
     bitstream_help = BitstreamHelp(
-        brief="XLS32 synth: MIDI in (ch 1-4) over TRS or USB, audio out",
+        # 64 bytes is a hard cap -- BitstreamHelp raises above it, which is why the channel list
+        # lost its parentheses to make room for the voice count. 62 here, 63 if a future ladder
+        # rung is three digits.
+        brief=f"XLS32 synth, {N_VOICE} voices: MIDI ch 1-4 over TRS or USB, audio out",
         io_left=['', '', '', '', 'out L', 'out R', '', ''],
         io_right=['', 'USB MIDI + audio', 'video out', '', '', 'TRS MIDI in'],
     )

@@ -105,6 +105,11 @@ export YOSYS=yowasp-yosys
 export NEXTPNR_ECP5=yowasp-nextpnr-ecp5
 export ECPPACK=yowasp-ecppack
 export XLS_ENGINE_V="$WORK/engine.v"
+# The gateware side needs the voice count too, and until #43 it did not get it: viz.py drew a
+# fixed 32 tiles and the `brief` the bootloader prints said "XLS32 synth" on a 24-voice build.
+# `gateware/voices.py` reads this one variable; nothing else sets it, and its default is the
+# same 24 as line 51, so an SDK-side `python top.py build` cannot disagree with this script.
+export VOICES
 
 # --- the stamp the board reports over USB (issue #27) ---
 # Two variables, both consumed by gateware/build_id.py, which turns them into iManufacturer. The
@@ -165,17 +170,22 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # below for 24 voices and seed 5 stays pinned for 32. Note the winners do not transfer: seed 5 is
 # the best of the 32-voice draw and among the worst of the 24-voice one.
 #
-# `--router2-tmg-ripup` is measured and deliberately not enabled here (#39). It is worth +1.04 MHz
-# at 32 voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
-# raising the ceiling (4: 55.48 -> 55.40). Turning it on means a new bitstream, and the one this
-# repo ships is the one that was graded on the module. Adopt it at the next netlist change, when a
-# re-sweep and a re-verify are being paid for anyway. Do not confuse it with `--tmg-ripup`, which
-# is router1's and therefore inert here.
+# M37 (#39): `--router2-tmg-ripup` is now on. It was measured at M36 and held back because
+# turning it on means a new bitstream, and the one shipping then was the one graded on the module
+# -- that reason expired the moment #43's `brief` changed the netlist. It is worth +1.04 MHz at 32
+# voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
+# raising the ceiling (4: 55.48 -> 55.40), so read it as insurance against a bad draw rather than
+# as headroom. Do not confuse it with `--tmg-ripup`, which is router1's and therefore inert here.
+#
+# The seeds below are the M36 draw and are *not* valid for this netlist -- #43's string and #40's
+# tile grid are both netlist changes, and with the router option on top of them the lottery has
+# been re-drawn twice over. Sweep before trusting either number.
 case "$VOICES" in
   32) SEED="${SEED:-5}" ;;
   *)  SEED="${SEED:-4}" ;;
 esac
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed $SEED}"
+PNR_OPTS="--timing-allow-fail --router router2 --router2-tmg-ripup --seed $SEED"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:-$PNR_OPTS}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then
