@@ -108,13 +108,17 @@ class XlsSynth(wiring.Component):
     # src/top/usb_audio/top.py is the reference for both orderings. An empty string means the jack
     # is unused, which is why in0..in3 and out2/out3 are blank: nothing reads the ADC (M28's CV
     # variant that did was deleted in M31) and out2/out3 have carried silence since M26.
+    #
+    # These four strings are also what the webflasher draws in its preview panel
+    # (`src/pixeldocs.js` in apfaudio/tiliqua-webflash), so two more limits apply on top of the
+    # bootloader's: labels are truncated at 18 characters, and `brief` is word-wrapped to 45
+    # columns over 2 lines. Both are satisfied below; check them again if the wording changes.
     bitstream_help = BitstreamHelp(
-        # 64 bytes is a hard cap -- BitstreamHelp raises above it, which is why the channel list
-        # lost its parentheses to make room for the voice count. 62 here, 63 if a future ladder
-        # rung is three digits.
-        brief=f"XLS32 synth, {N_VOICE} voices: MIDI ch 1-4 over TRS or USB, audio out",
-        io_left=['', '', '', '', 'out L', 'out R', '', ''],
-        io_right=['', 'USB MIDI + audio', 'video out', '', '', 'TRS MIDI in'],
+        # 64 bytes is a hard cap -- BitstreamHelp raises above it. 63 here, and it stays 63 across
+        # the whole ladder because 16, 24 and 32 are all two digits.
+        brief=f"{N_VOICE}-voice polysynth, 4 MIDI parts. TRS or USB MIDI in, audio out",
+        io_left=['', '', '', '', 'audio L', 'audio R', '', ''],
+        io_right=['', 'usb2: MIDI + UAC2', 'DVI 720x720p60', '', '', 'TRS MIDI in ch 1-4'],
     )
 
     def __init__(self, engine_path=None, viz=False):
