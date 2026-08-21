@@ -139,7 +139,7 @@ def _voice_wave(wave, t, noise, pwthr, sine, pwdc):
 def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
           wave, pwbase, subsel, detsel, cutoff_base, reso, fdepth, fmode,
           lfo_rate, lfo_depth, trdep, xmode, xdepth, xratio,
-          a_att, a_dec, a_sus, a_rel, f_att, f_dec, f_sus, f_rel, comp, sine, pwdc):
+          a_att, a_dec, a_sus, a_rel, f_att, f_dec, f_sus, f_rel, comp, sine, pwdc, lfo_ph0):
     nv = ph.shape[0]
     out = np.zeros(n, dtype=np.float64)
     env = np.zeros(nv, dtype=np.int64); env_st = np.ones(nv, dtype=np.int64)
@@ -150,7 +150,7 @@ def _core(n, gate, note, vel, ph, ph2, uni, tgt, portsel,
     for v in range(nv):
         cinc[v] = tgt[v] if portsel == 0 else 0
     lfsr = 0xACE1
-    lfo_ph = 0
+    lfo_ph = lfo_ph0
     ktrack = note * 16
     for t in range(n):
         lfo_raw = sine[(lfo_ph >> 24) & 255]
@@ -461,7 +461,8 @@ def _fx(dry, revwet, chdep, echodep, edly, rvg, delays, region, tank_words):
     return out
 
 
-def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None, pwdc=False):
+def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None, pwdc=False,
+           lfo_phase=0.0, osc_seed=0xACE1):
     """Render a preset (raw-CC dict) to mono float audio at SR. Returns np.float32 in [-1,1].
 
     `board` defaults to $XLS32_BOARD and only reaches echo_delay() -- the one constant the two
@@ -469,6 +470,20 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None
 
     `pwdc=True` subtracts the pulse wave's closed-form DC in the oscillator; see _voice_wave and
     issue #2. It models a board that does not exist yet, so it defaults off.
+
+    `lfo_phase` is where in the LFO cycle the note starts, in turns (0.0-1.0). The default of 0 is
+    what this file has always done and what every preset was fitted against; the RTL does NOT do it.
+    `core/synth.x:460` advances `lfo_ph` every sample from reset and note-on never touches it, so
+    the board starts each note wherever the LFO happens to be (#44).
+
+    `osc_seed` is the noise LFSR value the voices' start phases are derived from. `synth.x:176` does
+    `seed = (lfsr << 16) ^ (cnt << 29)` at note-on out of the SHARED LFSR, which advances every
+    sample (`synth.x:416`) -- so this is uncontrolled on the board in exactly the way `lfo_phase`
+    is. The default 0xACE1 is the value at reset, which this file has always assumed and the board
+    only holds for one sample.
+
+    Both exist to render the start states the board might land on -- see phase_audit.py -- rather
+    than to fit at a new one.
     """
     d = decode(preset)
     n = int((gate_s + tail_s) * SR)
@@ -478,7 +493,7 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None
     tgt0 = note_inc(note) >> 6
     ph = np.empty(nvoices, dtype=np.int64); ph2 = np.empty(nvoices, dtype=np.int64)
     uni = np.empty(nvoices, dtype=np.int64); tgt = np.empty(nvoices, dtype=np.int64)
-    lfsr = 0xACE1
+    lfsr = int(osc_seed) & 0xFFFF
     for cnt in range(nvoices):
         seed = ((lfsr << 16) ^ (cnt << 29)) & MASK
         ph[cnt] = seed
@@ -490,7 +505,8 @@ def render(preset, note=60, gate_s=1.2, tail_s=1.0, vel=100, fx=True, board=None
                 d['fdepth'], d['fmode'], d['lfo_rate'], d['lfo_depth'], d['trdep'],
                 d['xmode'], d['xdepth'], d['xratio'],
                 d['a_att'], d['a_dec'], d['a_sus'], d['a_rel'],
-                d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE, 1 if pwdc else 0)
+                d['f_att'], d['f_dec'], d['f_sus'], d['f_rel'], comp, SINE, 1 if pwdc else 0,
+                int(lfo_phase % 1.0 * 4294967296) & MASK)
     # Skipping a fully-dry chain is not just an optimisation: the tank is 12 regions x 2 channels
     # per sample, and every bank preset is dry, so this is the common path.
     if fx and (d['revwet'] or d['chdep'] or d['echodep']):
