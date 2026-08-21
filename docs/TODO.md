@@ -252,15 +252,49 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   manifest is baked into the archive, and reading `$VOICES` from Python needs `export VOICES` in
   `build.sh`, which `check_artefacts.py` hashes **raw**, so the edit alone would mark both shipped
   archives stale. Rides with the next re-sweep, same queue as #40.
-- **`filter_sweep` WARNs on Tiliqua at 80.7** ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7))
-  against 86 on Basys 3 — the same DSLX filter, the same sweep, a consistently worse score.
-  Deferred rather than diagnosed; nothing yet rules out the 48 kHz coefficient set as the
-  difference.
-- **+369 TRELLIS_COMB from the part-select remap, still unexplained**
-  ([#5](https://github.com/kazunori279/xls32-fpga-synth/issues/5)).
-  The estimate was ~50. The cells were paid and the design fits, so nothing forced the question,
-  but a sevenfold miss on a design with ~515 cells free is a hole in the area model, not a
-  rounding error.
+- ~~**`filter_sweep` WARNs on Tiliqua at 80.7 against 86 on Basys 3**~~
+  ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7)). **Diagnosed 2026-08-22, on the
+  desk, and it was two bugs rather than a filter.** The 86 was a pre-#28a capture: on Basys 3 the
+  case's centroid reads 486→948 Hz interleaved and **962→1765 Hz** de-interleaved, and post-fix
+  Basys 3 grades `basic` 99.8 with `filter_sweep` not warning at all. What is left is a threshold
+  with no margin. `_chk_sweep` is `score_scale(rise, good=800, bad=100)`, so Basys 3's **803 Hz**
+  rise clears `good` by **0.4%** while Tiliqua's 665–690 Hz warns — 17% apart on centroid rise,
+  straddling a bar calibrated on one board. The 48 kHz hypothesis is ruled out by construction:
+  `boards/tiliqua/gateware/xls_core.py:57` is `ENGINE_FS = 32000` — the codec runs at 48 kHz and
+  `dsp.Resample` pulls the engine at exactly 2/3 of it — and `core/synth.x:353` feeds the SVF a raw
+  integer coefficient with no sample rate anywhere in the expression. Same CC74, same corner, both
+  boards. The remaining suspect is named rather than guessed: `dsp.Resample`'s anti-imaging FIR is
+  in the Tiliqua path and nowhere in the Basys 3 path, and `centroid_over_time` measures to
+  `fmax = 8000`, so a rolloff inside that band shaves the bright end and leaves the dark end alone —
+  which is the shape of the data (starts agree within 6%, ends diverge the other way). Re-deriving
+  `good` from both boards rides with [#11](https://github.com/kazunori279/xls32-fpga-synth/issues/11):
+  same file, same board day.
+- ~~**+369 TRELLIS_COMB from the part-select remap, still unexplained**~~
+  ([#5](https://github.com/kazunori279/xls32-fpga-synth/issues/5)). **Closed 2026-08-22 as a class,
+  not a case.** The reason it was urgent has expired — the ~1,200-cell budget it was measured
+  against was for clearing `flo`/`fbnd` in `apply_off`, and that fix was never built: `290d00b`
+  closed the SVF dead zone a different way for **598 cells**. And the miss is no longer a single
+  data point. [ARCHITECTURE_tiliqua.md → E1](../ARCHITECTURE_tiliqua.md#e1-the-six-hard-constraints)
+  now carries three: +369 against an estimate of 50, **+4 against an estimate of −150** when
+  `TrsPanicInject` and the arbiter's third source were deleted, and −136 on a `core` whose RTL did
+  not change. The second one is what settles it — removing real logic moved the total the wrong
+  way — so this is post-pack re-synthesis swing, and E1's standing conclusion covers it: nothing
+  under ~100 cells can be costed on this design without building it both ways.
+- **Basys 3 cannot report which bitstream is flashed on it, and structurally cannot**
+  ([#29](https://github.com/kazunori279/xls32-fpga-synth/issues/29), closed 2026-08-22 as designed
+  out). #27 gave Tiliqua a stamp the board itself reports, in its USB `iManufacturer` string. Basys 3
+  has no equivalent for two reasons that no amount of gateware fixes: every USB string belongs to
+  the FT2232H bridge and is identical on every Basys 3 ever made, with the FPGA downstream of it;
+  and the return path is a continuous 4-byte PCM frame that `Aligner` locks onto by the LSB channel
+  markers and never stops, so there is no idle gap and no framing escape to put a reply in. SETTINGS
+  ▸ Firmware therefore shows Basys 3 as "no stamp" and falls back to `firmware.json` — the Vivado
+  header date out of the committed `top.bit`, which answers *what this repo ships* and does not
+  pretend to answer *what is on your board*. One mechanism was costed and rejected: steal bit 1 of
+  each sample while a reply is in flight (sync word, payload, CRC, release), inaudible at −90 dBFS
+  and frame-shape-preserving, but a protocol change on both ends — `top.v`,
+  `host/transport/uart.py`, `webui/static/transport.js` — plus teaching the aligner check that a
+  stamped frame in `webui/testdata/` is still a valid frame. Worth revisiting only if a *second*
+  thing ever needs to come back out-of-band, at which point the timestamp rides along for free.
 - **28/28 MULT18X18D, no margin at all** ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)).
   One route out is known and unused: a 44-entry ROM for
   `nrel * HUE_K` frees two multipliers, at the cost of the resource that is *actually* scarce.
