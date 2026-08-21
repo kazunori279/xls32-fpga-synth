@@ -172,14 +172,20 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 #
 # M37 (#39): `--router2-tmg-ripup` is now on. It was measured at M36 and held back because
 # turning it on means a new bitstream, and the one shipping then was the one graded on the module
-# -- that reason expired the moment #43's `brief` changed the netlist. It is worth +1.04 MHz at 32
+# -- that reason expired the moment #40's tile grid changed the netlist. It is worth +1.04 MHz at 32
 # voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
 # raising the ceiling (4: 55.48 -> 55.40), so read it as insurance against a bad draw rather than
 # as headroom. Do not confuse it with `--tmg-ripup`, which is router1's and therefore inert here.
 #
-# The seeds below are the M36 draw and are *not* valid for this netlist -- #43's string and #40's
-# tile grid are both netlist changes, and with the router option on top of them the lottery has
-# been re-drawn twice over. Sweep before trusting either number.
+# M37's own 24-voice draw, all six seeds, on this netlist with the router option on:
+# 52.50 (1), 54.06 (2), 54.30 (3), **56.33 (4)**, 51.40 (5), 53.07 (6). Every one converged, where
+# M36 had four of five -- which is the insurance above showing up as routability rather than as
+# megahertz. Seed 4 wins by 2.03 MHz over the next best, and it was also M36's winner, so on this
+# design the draw is less arbitrary than "lottery" suggests; do not read that as a rule, since seed
+# 5 is the best of the 32-voice draw and the worst of both 24-voice ones.
+#
+# The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
+# before trusting it.
 case "$VOICES" in
   32) SEED="${SEED:-5}" ;;
   *)  SEED="${SEED:-4}" ;;
