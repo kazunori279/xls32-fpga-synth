@@ -215,6 +215,8 @@ def main():
     print(f"\nwrote {len(manifest)} pairs -> {OUT}")
     print(f"  {len(sequence)} trials: each pair heard twice, once in each playback order")
     print("  python3 -m http.server 8765 -d webui   # then http://127.0.0.1:8765/sub_check.html")
+    print("  !! hard-reload the page (cmd-shift-R). A re-render reuses the filenames, and a cached")
+    print("  !! sub_check.html will happily re-ask the pairs the last session already answered.")
     print("  uv run python presetgen/sub_tally.py presetgen/listening/consolidate-128-to-64")
 
 

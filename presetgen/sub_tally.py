@@ -62,6 +62,11 @@ def load(args):
                 continue
             if "votes" not in d:
                 continue
+            if d.get("void"):
+                # Kept as evidence about the rig rather than about the bank; `_note` says why.
+                print(f"skipped {os.path.basename(p)}: void — "
+                      f"{d.get('_note', 'no reason recorded').split('.')[0]}.")
+                continue
             d["_path"] = os.path.basename(p)
             d.setdefault("listener", "author")
             out.append(d)

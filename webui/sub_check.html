@@ -93,8 +93,15 @@
 const $ = s => document.querySelector(s);
 let M = null, LISTENER = '', SEQ = [], i = 0, votes = [], ctx = null, src = null, buf = {};
 
+// `no-store` on every asset, because a re-render reuses the filenames. The second sitting of #22
+// was lost to exactly that: the browser had sub/manifest.json and the wavs from the previous
+// render, so the page re-asked the 24 pairs the listener had already judged -- and had already been
+// shown the answers to, since the last screen names them. A stale render is caught below; stale
+// audio behind a fresh manifest would not be caught at all.
+const fresh = url => fetch(url, {cache: 'no-store'});
+
 async function boot() {
-  M = await (await fetch('sub/manifest.json')).json();
+  M = await (await fresh('sub/manifest.json')).json();
   if (!M.sequence) {
     $('#head').textContent = 'stale render';
     $('#body').innerHTML = '<pre>webui/sub/ predates the two-hearings-per-pair split.\n\n'
@@ -142,7 +149,7 @@ const slotOf = (t, n) => t.rev ? String(3 - n) : String(n);
 async function play(id, slot, btn) {
   ctx = ctx || new AudioContext();
   const url = `sub/${id}_${slot}.wav`;
-  if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fresh(url)).arrayBuffer());
   if (src) { try { src.stop(); } catch (e) {} }
   document.querySelectorAll('.play.on').forEach(b => b.classList.remove('on'));
   src = ctx.createBufferSource();
