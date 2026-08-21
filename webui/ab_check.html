@@ -129,8 +129,13 @@ const QUESTIONS = {
   },
 };
 
+// `no-store` on every asset: a re-render reuses the filenames, so a cached manifest or a cached wav
+// silently re-asks the pairs the last session answered. That cost #22 a sitting. The stale-render
+// guard below only catches an old manifest, and only if the page itself came down fresh.
+const fresh = url => fetch(url, {cache: 'no-store'});
+
 async function boot() {
-  M = await (await fetch('ab/manifest.json')).json();
+  M = await (await fresh('ab/manifest.json')).json();
   if (!M.sequences) {
     $('#head').textContent = 'stale render';
     $('#body').innerHTML = '<pre>webui/ab/ predates the two-session split.\n\n'
@@ -196,7 +201,7 @@ async function play(id, slots, btn) {
   ctx = ctx || new AudioContext();
   const urls = slots.map(s => `ab/${id}_${s}.wav`);
   for (const url of urls)
-    if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+    if (!buf[url]) buf[url] = await ctx.decodeAudioData(await (await fresh(url)).arrayBuffer());
   srcs.forEach(s => { try { s.stop(); } catch (e) {} });
   srcs = [];
   document.querySelectorAll('.play.on').forEach(b => b.classList.remove('on'));
