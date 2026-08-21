@@ -48,6 +48,35 @@ if {[llength $eng_ffs] > 0} {
     set_multicycle_path 3 -setup -from $eng_ffs -to $mvld_ff
     set_multicycle_path 2 -hold  -from $eng_ffs -to $mvld_ff
   }
+  # The mirror image of the mvld crossing, and the one the M35 rebuild fell over on (#41):
+  # `ardy` is the shell's `_audio_out_rdy`, and it drives the same 48-stage combinational
+  # backpressure chain forwards, so it reaches the CE (and R) pin of essentially every register
+  # in the engine -- 861 of the 879 failing endpoints of that build. `-from eng_ffs` does not
+  # cover it because ardy is a shell register. top.v now sets *and* clears ardy under `ce`, so
+  # the enable it produces is only ever sampled on a /3 edge and physically has 30 ns.
+  # The RTL change is load-bearing: without it ardy could rise on any clock and this exception
+  # would be a lie that hides a genuine 10 ns path.
+  set ardy_ff [get_cells -hier -filter {IS_SEQUENTIAL && NAME =~ *ardy_reg*}]
+  if {[llength $ardy_ff] > 0} {
+    set_multicycle_path 3 -setup -from $ardy_ff -to $eng_ffs
+    set_multicycle_path 2 -hold  -from $ardy_ff -to $eng_ffs
+  }
+}
+# Effect registers Vivado absorbed into a DSP48E1 (#41). `rwetL_p`/`rwetR_p` are the reverb wet
+# multiplies; the tool pulled `revwetL_reg`/`revwetR_reg` in as the DSP's B input register, so the
+# cells vanish from the name-matched `fx_ffs` above and their /6 exception silently goes with them.
+# The M35 rebuild's worst path in the whole design was one of them -- the reverb tank BRAM output
+# to `rwetL_p/B[*]` at -0.565 ns, on a datapath that has 60 ns. Match the DSPs by name instead.
+#
+# Only these two, deliberately. `revwetL_reg`/`revwetR_reg` are already in the `fx_ffs` list above,
+# so this restores an exception the tool dissolved rather than making a new claim -- and the other
+# four multiplies (echoW*_p, chW*_p) are left alone because their operands were not audited for
+# the same property and none of them has ever appeared in the census.
+set fx_dsp [get_cells -hier -filter {REF_NAME =~ DSP48* && (NAME =~ *rwetL_p* || NAME =~ *rwetR_p*)}]
+puts "MCP: fx_dsp=[llength $fx_dsp]"
+if {[llength $fx_dsp] > 0} {
+  set_multicycle_path 3 -setup -to $fx_dsp
+  set_multicycle_path 2 -hold  -to $fx_dsp
 }
 # Power-on reset only: `rc` is a 5-bit counter that saturates at 5'h1f and never moves again
 # (top.v), so `rst` is static within 310 ns of power-up and its deassertion timing is irrelevant.

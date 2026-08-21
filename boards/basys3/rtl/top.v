@@ -310,7 +310,17 @@ module top (
         else begin
             dweL<=1'b0; dweR<=1'b0; dwe2L<=1'b0; dwe2R<=1'b0;
             if (stick && pend == 0 && dst == 0) want <= 1;
-            if (want && avld && !ardy) ardy <= 1;
+            // `ce` here is a timing fix, not a functional one (#41). `ardy` is `_audio_out_rdy`,
+            // and inside the engine that feeds the combinational backpressure chain running
+            // backwards through all 48 stages -- so it reaches the clock-enable pin of nearly
+            // every register in `eng`. Those registers only move when `ce` is high, but `ardy`
+            // rising on any clock meant the enable had as little as one 10 ns period to settle
+            // before the next `ce` edge, and after the M35 DC fixes lengthened the chain 861 of
+            // those endpoints missed setup by up to 0.493 ns. Set on a `ce` edge (the clear
+            // already is) and the path genuinely has 30 ns, which the .tcl then declares.
+            // The cost is at most one extra `ce` period before a sample is taken, out of the
+            // 3125 clocks between them.
+            if (want && avld && !ardy && ce) ardy <= 1;
             if (ardy && avld && ce) begin
                 raws  <= $signed(audio) - 16'sd32768;                  // mono dry (signed)
                 clfo  <= clfo + 15'd1; chan <= 1'b0;
