@@ -186,7 +186,10 @@ it beside `top.bit` from three sources — the `MODELINE`, the clock settings, a
 `BitstreamHelp` literal in `xls_core.py` — and tars the pair into a *bitstream archive*, the format
 both `pdm flash archive` and `tiliqua-webflash` take. M32 committed one as
 `boards/tiliqua/firmware/xls32-r5.tar.gz` and M36 added `xls24-r5.tar.gz` beside it, so the correct
-`clk0` now travels with the design instead of being a thing the reader has to know. `BitstreamHelp` is a class attribute the manifest
+`clk0` now travels with the design instead of being a thing the reader has to know. The 24-voice
+archive was merged upstream into `apfaudio/tiliqua-webflash` on 2026-08-22 and is now selectable
+as **XLS24** in that page's Community list, which is the format paying off: the thing the vendor
+merged is the same file this repo commits, unpacked by nobody in between. `BitstreamHelp` is a class attribute the manifest
 generator reads and the elaborator never sees, so correcting the help text is provably free:
 the rebuild that fixed it produced a byte-identical `top.bit`.
 

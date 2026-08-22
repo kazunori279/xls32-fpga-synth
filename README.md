@@ -79,15 +79,21 @@ want the panel.
 
 ### 1 · Flash it — once, from Chrome
 
-1. **Download one file** —
-   **[`xls24-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz)**
-   (410 KB). That *is* the synth: the FPGA bitstream, plus the clock settings the module has to be
-   given at boot.
-2. **Write it to the module** — connect USB-C to the module's **`dbg`** port, open
-   **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome, pick the module,
-   upload the file, and write it to **slot 7**. Power-cycle the case; the bootloader counts down
-   for five seconds — pick slot 7 from the menu once, and every cold boot after that goes straight
-   there.
+1. **Connect and open the flasher** — USB-C into the module's **`dbg`** port, then
+   **[tiliqua-webflash](https://apfaudio.github.io/tiliqua-webflash/)** in Chrome. Pick the module
+   over WebUSB.
+2. **Choose `XLS24` from the Community list and write it to slot 7.** There is nothing to
+   download: the module's maker merged XLS32 into the flasher on 2026-08-22, so it sits in the
+   same list as the factory bitstreams. Power-cycle the case; the bootloader counts down for five
+   seconds — pick slot 7 from the menu once, and every cold boot after that goes straight there.
+
+The list entry is deliberately one build behind this repo. `XLS24` in the flasher is the archive
+that closes at **54.30 MHz**, and it is the copy the maker tested across several of his own
+Tiliquas before merging — the only build with evidence from more than one die.
+[`xls24-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz)
+here (408 KB) is newer, closes at **56.63 MHz**, and has been graded on exactly one module. They
+grade identically and sound identical, so take the list unless you specifically want the newer
+routing — in which case download that file and use the flasher's upload button instead.
 
 This is the **only** step that needs a computer at all, so borrow one if you have to. Once slot 7
 is written the module never asks again.
@@ -341,7 +347,10 @@ Then write it to a slot.
 
 **A · The web flasher — the default, and nothing to install.** Open
 [**tiliqua-webflash**](https://apfaudio.github.io/tiliqua-webflash/) in Chrome, pick the module over
-WebUSB, upload `xls24-r5.tar.gz`, and choose **slot 7**.
+WebUSB, and choose **slot 7**. `XLS24` is in the **Community** list, so for the 24-voice build
+there is nothing to download — but that entry is the 54.30 MHz archive, one build behind this repo
+(see [§1 above](#1--flash-it--once-from-chrome)). To flash what is committed here, or to flash the
+32-voice build at all, upload the `.tar.gz` instead.
 
 **B · `pdm flash`, if you already have the vendor SDK checked out** (see
 [§3 · Tiliqua](#b--tiliqua--build-flash-verify) for what `pdm` needs). `openFPGALoader --scan-usb`
@@ -1223,7 +1232,7 @@ this table is [§1](#two-boards-one-synth).)
 | **Polyphony** | 32 voices | **24** (formal) or 32 (experimental) — `VOICES=` on `build.sh` |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — one tile per voice, no framebuffer; 8 level LEDs; encoder |
 | **Area** | ~51% LUTs · 26 DSP48E1 · 33 RAMB36 | 22,722 / 24,288 TRELLIS_COMB (93.5%) at 24 voices, 24,023 (98.9%) at 32 · 27/28 MULT18X18D · 53/56 DP16KD |
-| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 7 (or 6 for the 32-voice one), over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
+| **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | `XLS24` straight from the web flasher's Community list, or a bitstream archive to slot 7 (or 6 for the 32-voice one) over the same flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
 | **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls24-r5.tar.gz` and `xls32-r5.tar.gz` |
 
 Both boards are driven by the same web UI, the same `host/` tools and the same 175-case suite; the

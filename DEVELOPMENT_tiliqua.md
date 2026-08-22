@@ -1444,6 +1444,15 @@ M32 is what produced the file you are reading.
 `tiliqua-webflash` accepts as an upload. Shipping one is a `cp`. What needed thought was two things
 either side of it.
 
+That format paid off again on 2026-08-22, when the 24-voice archive was merged into
+`apfaudio/tiliqua-webflash` ([PR #5](https://github.com/apfaudio/tiliqua-webflash/pull/5),
+[#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)) and became selectable as
+**XLS24** in that page's Community list. The file the vendor merged is the file this repo commits,
+byte for byte — nothing was repacked in between. What was merged is M37's archive at 54.30 MHz,
+and it stays that way on purpose: it is the copy Seb tested across several of his own modules
+before merging, which makes it the only build with evidence from more than one die, and M38's
+56.63 MHz swap buys margin rather than anything audible. See `docs/TODO.md`.
+
 *The manifest was describing a different module.* `BitstreamHelp` is what the bootloader prints
 beside a highlighted slot, and ours read `io_left[4..5] = 'synth out', 'synth out'` with everything
 else blank — including `io_right[5]`, the TRS MIDI jack this design has taken note-ons from since

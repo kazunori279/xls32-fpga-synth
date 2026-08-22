@@ -48,9 +48,16 @@ Either way round writes an archive to a slot; the archive does not care which. *
 24 voices and slot 6 for 32** is what this repo's docs and tooling assume, and keeping them apart
 means you can A/B the two without reflashing.
 
+The 24-voice build is also **in the flasher's own Community list as `XLS24`**, merged upstream on
+2026-08-22, so flashing it needs no file at all. That entry is `xls24-9976c4e-r5.tar.gz` — M37's
+archive at 54.30 MHz — and it is deliberately one build behind the `.tar.gz` here: it is the copy
+the module's maker tested across several of his own Tiliquas before merging, and it is the only
+build with evidence from more than one die. Upload the file below to flash what is committed here.
+
 ```bash
 # A) No toolchain — open https://apfaudio.github.io/tiliqua-webflash/ in Chrome, pick the module
-#    over WebUSB, upload the file, choose the slot.
+#    over WebUSB, then either choose XLS24 from the Community list (24 voices only, 54.30 MHz) or
+#    upload one of these archives. Choose the slot.
 
 # B) With the vendor SDK checked out:
 cd ~/Documents/GitHub/tiliqua/gateware
