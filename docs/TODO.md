@@ -304,9 +304,18 @@ wrong, only old in its wording and its routing. It is waived by name in
   `host/transport/uart.py`, `webui/static/transport.js` — plus teaching the aligner check that a
   stamped frame in `webui/testdata/` is still a valid frame. Worth revisiting only if a *second*
   thing ever needs to come back out-of-band, at which point the timestamp rides along for free.
-- **28/28 MULT18X18D, no margin at all** ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)).
-  One route out is known and unused: a 44-entry ROM for
-  `nrel * HUE_K` frees two multipliers, at the cost of the resource that is *actually* scarce.
+- **27/28 MULT18X18D — one spare since M38, and it came from a mistake**
+  ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)). This read 28/28 from M24 to
+  M37. The one that freed up was never wanted: `edly = dtime_c * ECHO_STEP` is a 7-bit value times
+  the constant 192, and yosys spent a DSP on it. **The remaining 27, audited from `top.json` on
+  2026-08-22:** 19 in `core.engine` (XLS output, both operands live), 3 in `fx` (`mul_a/b/g`, the
+  Q15 tank multiplies, both operands live), 2 vendor (`core.resample.filt`, `pmod0.calibrator` —
+  read-only), and **3 in `tiles`, of which two are constant multiplies like the one just removed**:
+  `hue = (nrel * HUE_K) >> 8` and `v = IDLE_V + ((i_level * (255 - IDLE_V)) >> 8)`. Neither
+  decomposes as cheaply as 192 did — `HUE_K` is 6091 (9 set bits) and `255 - IDLE_V` is 235 (6) —
+  so these are the case the route below was written for: a 44-entry ROM for `nrel * HUE_K` frees
+  two multipliers, at the cost of the resource that is *actually* scarce. Neither is on the
+  critical path today.
   Worth doing only when a feature needs a multiplier and cannot have one. See
   [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
 - **Risk 3b — `sync`/`usb` fails static timing at 60 MHz, and it has now bitten.** Open since M25;
@@ -358,6 +367,31 @@ wrong, only old in its wording and its routing. It is waived by name in
   formal bitstream now; the 32-voice build stays available and stays a risk. The gap itself is
   unchanged and still needs a register in luna's cone
   ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
+
+  **M38, 2026-08-22: the sweep found a bug in our own code, and #34 is now the only lever by
+  measurement rather than by assumption.** Sweeping 18 more seeds on the shipped netlist (24 in
+  total: mean 53.15, 49.12–56.30, 2 at or above the vendor's 55) turned up seed 20 at 56.30 — and on
+  seed 20 the critical path was not luna's. It ran from the CC82 clamp in `fx.py` through
+  `dtime_c * ECHO_STEP` into the echo line's write pointer, 17.76 ns, **3.93 of it inside a
+  MULT18X18D that should never have existed**: a constant multiply of a 7-bit value by 192, which
+  yosys handed a DSP on a die where all 28 were already spoken for
+  ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)). 192 = 128 + 64, so it is two
+  shifts and an add — same value, no DSP, no extra cycle, `test_fx.py` bit-exact against `FxModel`
+  on all five scenarios including the CC82=127 clamp. 22,985 cells → 22,722, 28/28 multipliers →
+  27. **What the fix bought is the floor, not the ceiling.** Re-sweeping all 24 seeds on the new
+  netlist: mean 53.15 → **53.99**, sd 1.71 → 1.39, worst draw 49.12 → **51.60**, seeds at or above
+  55 MHz **2 of 24 → 6 of 24**, best 56.30 → **56.63** (seed 7). Removing a 3.93 ns cell from the
+  middle of the design barely moved the top because the top was never that cell. On seed 7 the
+  worst path is luna again — `usb.timer.counter[7]` → `usb.data_crc.crc[1]`, 17.66 ns, 13.04 of it
+  routing — with no fx cell and no multiplier anywhere in it. Rankings still do not transfer: seed
+  7 read 50.90 on the old netlist and old-winner seed 20 reads 54.54 on this one.
+  **None of this is on hardware.** The 99.8/100 grade belongs to seed 3's placement on the old
+  netlist; the entry below still describes what ships. Taking 56.63 means a board day and a re-run
+  of the 175-case suite, not a repack. Until that day `check_artefacts.py` reports **tiliqua-24 as
+  stale, and it is right to** — the tree genuinely no longer builds the flashed archive. That is
+  deliberately *not* waived: a waiver on the artefact this repo asks people to flash would hide the
+  next fx.py change as well as this one. #46's waiver did take `fx.py` on, since the 32-voice build
+  is already deferred wholesale.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 94.6 % of the die, `clk` at 54.30 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept

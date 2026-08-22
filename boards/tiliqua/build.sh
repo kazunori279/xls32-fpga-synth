@@ -13,9 +13,10 @@
 #
 # The 32-voice build fills 98.9% of the die and closes `clk` at 46.35 MHz against a 60 MHz
 # constraint -- a bet that the silicon is 29% faster than nextpnr models it. It runs here. It did
-# not run on one of the vendor's two modules (issue #3). 24 voices is 93.9% and 55.48 MHz: the same
-# bet at +8%, and graded 99.8/100 on the module. So 24 is what this repo stands behind and 32 is
-# kept as the experimental one (issue #37).
+# not run on one of the vendor's two modules (issue #3). 24 voices is 93.5% and 56.63 MHz: the same
+# bet at +6%, and graded 99.8/100 on the module. So 24 is what this repo stands behind and 32 is
+# kept as the experimental one (issue #37). (The 55.48 that number used to read was M36's; M38's
+# shift-add and its sweep are below.)
 #
 # The knee is at 24, not 28 -- 28 voices buys only +2.4 MHz -- because the critical path changes
 # character across it: 4.49 ns logic / 15.30 ns routing at 98.9%, against 7.73 / 10.29 at 93.9%.
@@ -192,11 +193,38 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # will ship, dirty trees included in "different netlist"; and seed rankings really do not transfer,
 # not even from the same seed on a netlist 240 cells away.
 #
+# M38: the echo tap stopped spending a MULT18X18D on a constant (fx.py, `edly`), and that is the
+# first netlist change here made *because* of a sweep rather than measured after one. M37's draw
+# put seed 20 on top at 56.30, and on seed 20 the critical path had left luna: it ran from the CC82
+# clamp through an unregistered MULT18X18D -- 3.93 ns of a 17.76 ns path -- into the echo line's
+# write pointer. ECHO_STEP is 192 = 128 + 64, so two shifts and an add compute the same number with
+# no DSP and no extra cycle. 22,985 cells -> 22,722 (94.6% -> 93.5%), and 28/28 multipliers -> 27,
+# which is the first one this die has had free since #6.
+#
+# The full 24-seed draw on the new netlist, same router options:
+# 54.50 (1), 54.36 (2), 51.61 (3), 52.37 (4), 52.69 (5), 53.90 (6), **56.63 (7)**, 54.53 (8),
+# 55.21 (9), 54.49 (10), 52.60 (11), 54.95 (12), 55.60 (13), 53.12 (14), 51.60 (15), 55.94 (16),
+# 55.11 (17), 52.51 (18), 55.42 (19), 54.54 (20), 53.99 (21), 53.71 (22), 54.56 (23), 51.79 (24).
+#
+# Read the distribution, not the winner. Against M37's 24 seeds on the old netlist the mean moves
+# 53.15 -> 53.99 and the spread tightens 1.71 -> 1.39 sd, but what actually changed is the floor:
+# the worst draw goes 49.12 -> 51.60, and seeds at or above 55 go from 2 of 24 to 6 of 24. Removing
+# a 3.93 ns cell from the middle of the design did not raise the ceiling much (56.30 -> 56.63)
+# because the ceiling was never that cell -- it bought back the bad draws. On seed 7 the critical
+# path is luna again, 17.66 ns of which 13.04 is routing, `usb.timer.counter[7]` to
+# `usb.data_crc.crc[1]`, with no fx cell and no multiplier anywhere in it. #34 is the only lever
+# left, and now that is measured rather than assumed.
+#
+# Seed 7 is pinned below as the best measured. It has not been on hardware: the 99.8/100 grade is
+# still seed 3's placement on the *old* netlist, so shipping this means a board day and a re-run of
+# the 175-case suite, not a repack. Note again that rankings do not transfer -- seed 7 was 50.90 on
+# the old netlist, near the bottom of that draw, and old-winner seed 20 reads 54.54 here.
+#
 # The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
 # before trusting it.
 case "$VOICES" in
   32) SEED="${SEED:-5}" ;;
-  *)  SEED="${SEED:-3}" ;;
+  *)  SEED="${SEED:-7}" ;;
 esac
 PNR_OPTS="--timing-allow-fail --router router2 --router2-tmg-ripup --seed $SEED"
 export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:-$PNR_OPTS}"

@@ -62,9 +62,10 @@
     "built_on": "2026-08-20",
     "hash_scheme": "normalized-v1",
     "known_stale": {
-      "reason": "#46 -- M37 rewrote the voice count as a parameter (voices.py, #40/#43) and changed the router options (#39), and the experimental build has not been re-run against any of it. At 32 voices the design fills 98.9 % of the die, so a rebuild is a fresh six-seed sweep of which historically about half converge, and the 24-voice build is the one this repo asks you to flash. What the flashed archive is missing is the wording of the bootloader strings and a differently-routed placement -- not the picture, which is 8x4 at 32 voices before and after. Waives exactly the four sources M37 moved: anything else changing here is new and should fail.",
+      "reason": "#46 -- M37 rewrote the voice count as a parameter (voices.py, #40/#43) and changed the router options (#39), M38 removed the echo tap's constant multiply (fx.py), and the experimental build has not been re-run against any of it. At 32 voices the design fills 98.9 % of the die, so a rebuild is a fresh six-seed sweep of which historically about half converge, and the 24-voice build is the one this repo asks you to flash. What the flashed archive is missing is the wording of the bootloader strings, a differently-routed placement, and one MULT18X18D spent on two adds -- not the picture, which is 8x4 at 32 voices before and after, and not the audio, which test_fx.py holds bit-exact across the M38 change. Waives exactly the five sources M37 and M38 moved: anything else changing here is new and should fail.",
       "sources": [
         "boards/tiliqua/build.sh",
+        "boards/tiliqua/gateware/fx.py",
         "boards/tiliqua/gateware/viz.py",
         "boards/tiliqua/gateware/voices.py",
         "boards/tiliqua/gateware/xls_core.py"

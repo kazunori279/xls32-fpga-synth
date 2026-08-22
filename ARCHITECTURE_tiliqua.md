@@ -144,6 +144,12 @@ design on this module starts from:
 | EHXPLLL | **2 of 2 (100%)** | 2 (100%) | 1 (50%) |
 | TRELLIS_IO | **86 of 197 (43%)** | 86 (43%) | — |
 
+**Since M38 the tree no longer builds the shipped column.** Removing the echo tap's constant
+multiply ([E3](#e3-multipliers-28-of-28)) takes the 24-voice netlist to **22,722 TRELLIS_COMB
+(93.5%)** and **27 of 28 MULT18X18D**, and its best measured seed to 56.63 MHz. That build has not
+been on hardware, so the archive — and this table — still describe 9976c4e. The two reconverge on
+the next board day; until then, read "shipped" literally.
+
 Only the two fabric rows move with voice count, and that is the point: voices are time-multiplexed
 through one datapath ([A2](#a2-the-engine-as-an-amaranth-submodule)), so the multipliers and the BRAM are
 already saturated at any ring length, and what a voice costs is register file and scan logic —
@@ -1210,8 +1216,10 @@ the bottom row sat at `IDLE_V` forever, looking like eight permanently silent vo
 The tile index is the part worth knowing about. It was `Cat(col, row)`, free while COLS was 8
 because a shift by a power of two is a renaming of wires. At COLS = 6 the obvious `row * COLS + col`
 makes yosys emit a `$mul` — against a *constant* — which becomes a **MULT18X18D**, and all 28 of
-this die's multipliers are already spoken for by the engine (E3). The build then dies in the placer
-with "no BELs remaining", which does not point anywhere near `viz.py`. Summing the set bits of COLS
+this die's multipliers were already spoken for (E3). The build then dies in the placer
+with "no BELs remaining", which does not point anywhere near `viz.py`. There is one spare since
+M38, so this exact build would now survive — but it would survive by spending 3.93 ns and a DSP on
+two adds, which is the same mistake M38 undid in `fx.py`. Summing the set bits of COLS
 gives what the multiply would have decomposed into anyway: `(row << 1) + (row << 2)`, two adds on a
 two-bit operand. The column and row counters also need explicit wraps now, because at COLS = 6 a
 bare `col + 1` leaves 6 sitting in a three-bit signal for the rest of the line and pushes `o_addr` a
@@ -1442,15 +1450,27 @@ census tells you where the area is, not what an edit will cost.** Estimate from 
 
 ## E3 Multipliers: 28 of 28
 
-**Where they went.** The engine's, after the M22 narrowing, plus the effects' three shared
-multipliers ([C1](#c1-the-ported-fsm)), plus three in `viz.py`. Of those three only one is a real
-multiply — `f * v`, the brightness fold at `viz.py:325`. The other two are constant scalings yosys
-inferred: `nrel * HUE_K` (`HUE_K = 6091`, `nrel` 0..43) and `i_level * (255 - IDLE_V)`.
+**Where they went**, counted out of `top.json` rather than from memory: **19** in `core.engine`
+(the XLS output, after the M22 narrowing), **3** in `fx` — `mul_a`, `mul_b`, `mul_g`, the shared
+Q15 tank multiplies ([C1](#c1-the-ported-fsm)) — **3** in `viz.py`, and **2** in vendor code we do
+not touch (`core.resample.filt`, `pmod0.calibrator`). Of the three in `viz.py` only one is a real
+multiply: `f * v`, the brightness fold at `viz.py:325`. The other two are constant scalings yosys
+inferred, `nrel * HUE_K` (`HUE_K = 6091`, `nrel` 0..43) and `i_level * (255 - IDLE_V)`.
+
+That is 27, and until M38 there was a 28th this list did not name, which is the whole lesson.
+`edly = dtime_c * ECHO_STEP + ECHO_MIN` in `fx.py` is a 7-bit value times the constant **192** —
+128 + 64, two shifts and an add — and yosys gave it a DSP. Nobody noticed for fourteen milestones
+because a full census reads the same whether it is full of work or full of waste. What surfaced it
+was a seed sweep: on the best placement of the M37 netlist the design's critical path ran *through
+that multiplier*, 3.93 ns of 17.76 ns, because an unregistered `MULT18X18D` costs 3.93 ns no matter
+how little it is doing. Rewriting it as shifts left 22,722 TRELLIS_COMB and **27 of 28**
+multipliers, the first spare this design has ever had, and moved the critical path back into luna.
 
 **The escape hatch, measured and deliberately not taken.** A 44-entry ROM would free the two
 constant scalings for 60–80 TRELLIS_COMB, or one of the 3 spare DP16KD. It spends the resource that
 is at 97% to relieve one that nothing is waiting on. Revisit when something actually needs a
-multiplier.
+multiplier. Note these two are *not* the M38 case: `6091` has nine set bits and `235` has six, so
+neither decomposes into anything as cheap as 192 did.
 
 **Gotcha.** `MULT18X18D` at 28/28 means **any new inferred multiply pushes the design into soft
 multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with 731 TRELLIS_COMB free — and that
@@ -1508,8 +1528,10 @@ logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a di
 | M36, **32 voices** (experimental), `--seed 5` | **98.9%** | **luna**, congestion-limited | **46.35 MHz** |
 | M36, 24 voices, `--seed 4` | 93.9% | **luna**, depth-limited | 55.48 MHz |
 | M37, **24 voices** (shipped), `--seed 3` | **94.6%** | **luna**, depth-limited | **54.30 MHz** |
+| M38, 24 voices (built, not shipped), `--seed 7` | 93.5% | **luna**, routing-limited | 56.63 MHz |
 
-The last four rows are read from the `top.tim` of an archive that is committed in this repo. The
+The last four rows are read from the `top.tim` of an archive that is committed in this repo; the
+M38 row is read from a local build and has not been on hardware. The
 M35 row superseded an entry that read `M33 | 96% | 39.42 MHz` and was two netlists out of date; the
 M36 rows supersede a 24-voice row that read `80% | 46.79 MHz` and had been measured on a netlist
 yosys had pruned ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)).
@@ -1661,6 +1683,33 @@ The shipped 24-voice netlist is no longer that one. M37 parameterised the tile g
 strings, which put 189 cells back — **22,985 (94.6%)** — and cost a fresh seed draw: 52.50 / 54.06 /
 **54.30** / 49.12 / 51.40 / 53.07 MHz, all six converged, seed 3 pinned. Read the 1.18 MHz against
 M36 as the seed lottery and not as a cost of the change: the spread across the six is 5.2 MHz.
+
+**M38 widened that draw to 24 seeds and the extra sample paid for itself twice over.** On the M37
+netlist the full set runs 49.12 to 56.30, mean 53.15, with **2 of 24** at or above the vendor's
+55 MHz. The winner was seed 20 — and reading its critical path is what found the stray
+`MULT18X18D` in the echo tap ([E3](#e3-multipliers-28-of-28)). Nothing about a single pinned seed
+would have shown that: on seed 3's placement the luna cone is longer, so `fx` never appears in the
+report at all. A sweep is a sampler of *which* path is worst, not only of how fast the worst one is.
+
+Re-swept on the netlist without the multiply, all 24 again, the distribution moves like this:
+
+| | M37 netlist (22,985) | M38 netlist (22,722) |
+|---|---|---|
+| mean | 53.15 MHz | **53.99 MHz** |
+| sd | 1.71 | **1.39** |
+| worst draw | 49.12 | **51.60** |
+| best draw | 56.30 (seed 20) | **56.63 (seed 7)** |
+| ≥ 55 MHz | 2 of 24 | **6 of 24** |
+
+**The fix bought the floor, not the ceiling**, and that is the honest reading: +0.33 MHz at the top
+against +2.48 at the bottom and three times as many usable draws. The ceiling was never that cell.
+Seed rankings still do not transfer — seed 7 read 50.90 on the M37 netlist, near the bottom of that
+draw, and seed 20 reads 54.54 on this one — so the pin is "best measured", as always. On seed 7 the
+worst path is luna again, `usb.timer.counter[7]` → `usb.data_crc.crc[1]`, **4.62 ns logic / 13.04 ns
+routing**. Note that is 74% routing where M36's 24-voice row was 40%, at slightly *lower* occupancy
+— so the depth-limited cone this section has tracked since M25 is no longer the worst path even
+within luna, and #34's skid buffer is aimed at a cone that has stopped binding. Whatever the next
+cut is, it should be chosen off a fresh report and not off that one.
 
 The path composition is what makes the knee sharp, and it inverts across it. Both builds report a
 path that lives entirely inside luna, but they are limited by opposite things. At 98.9% it is
