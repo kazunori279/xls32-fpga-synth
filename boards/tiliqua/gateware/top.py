@@ -156,7 +156,7 @@ class CoreTop(Elaboratable):
 
         # The eight LEDs are left in the pmod's automatic mode, which shows the four input levels
         # on 0-3 and the four output levels on 4-7. M28's alternative was a comet driven off
-        # `viz_out`; M29's screen shows the same tap thirty-two voices at a time, so the LEDs are
+        # `viz_out`; M29's screen shows the same tap for every voice at once, so the LEDs are
         # better spent saying something the screen does not.
 
         # --- TRS MIDI in ------------------------------------------------------------------
@@ -211,7 +211,7 @@ class CoreTop(Elaboratable):
             return m
         usb_src = arb.i[n_src - 1]
 
-        # --- M29: the 32 voices as 32 tiles ------------------------------------------------
+        # --- M29: one tile per voice ---------------------------------------------------------
         # Hardware only, and deliberately: the Verilator harness has no display and no `dvi5x`,
         # and sim_xls_core.cpp is still the M23/M24 regression guard. Keeping video out of it
         # leaves check_pitch.py and check_midi.py measuring exactly what they measured before.

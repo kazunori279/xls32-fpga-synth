@@ -1130,10 +1130,11 @@ is computed in the cycle before it is sent, from the beam position and a 32-byte
   every frame — "the audio must not glitch" would become a bandwidth argument to be won. With no
   framebuffer there is no second PSRAM client and nothing to argue about. (M29 then went further and
   deleted PSRAM entirely; see [D3](#d3-what-deleting-psram-bought).)
-- 32 tiles × 15 bits of brightness and note is **60 bytes**. A framebuffer for the same information
-  is 1.5 MB, and every one of those bytes would be a copy of one of these 60.
+- One tile × 15 bits of brightness and note is under two bytes, so the whole picture is 45 of them
+  at 24 voices and 60 at 32. A framebuffer for the same information is 1.5 MB, and every one of
+  those bytes would be a copy of one of these.
 
-**The crossing is one dual-port BRAM.** `VizStore` is `Memory(shape=unsigned(15), depth=32)` —
+**The crossing is one dual-port BRAM.** `VizStore` is `Memory(shape=unsigned(15), depth=N_VOICE)` —
 brightness and note packed into one word per voice — written from `audio` (12.288 MHz, one word per
 voice per scan) and read from `dvi` (39.07 MHz, one word per pixel). No FIFO, no handshake, no
 synchroniser, because neither side needs to know what the other is doing: the reader wants the most
@@ -1166,7 +1167,7 @@ give the frame rate away.
 
 **Hue is stretched over 44 keys, not 88.** The first version collapsed octaves (`note % 12`, twelve
 fixed hues), which made a chord read as one stable chord of colours but also made the bottom and top
-of the instrument identical. On 32 tiles the thing worth seeing is *register*. Spreading the ramp
+of the instrument identical. On a wall of tiles the thing worth seeing is *register*. Spreading the ramp
 over the full A0–C8 was technically correct and visually useless: real music lives in the middle two
 octaves, so a whole song came out one shade of green. `NOTE_LO, NOTE_HI = 36, 79` (C2–G5) doubles
 the colour separation where the notes actually are, and out-of-range notes **clamp rather than
@@ -1670,7 +1671,9 @@ as marginal — but that flag belongs to router1, and `build.sh` pins `--router 
 measured was largely inert. **`--router2-tmg-ripup` is a different flag** and it helps: +1.04 MHz at
 32 voices (46.35 → 47.39), and at 24 voices it lifts the weak seeds without moving the ceiling —
 seed 1 51.17 → 53.19, seed 6 54.03 → 55.33, seed 4 55.48 → 55.40. That is worth more than the
-megahertz, given how much of this section is about the seed lottery.
+megahertz, given how much of this section is about the seed lottery. **It is on in `build.sh` as of
+M37**, held back until then only because turning it on means a new bitstream and the one shipping
+was the one graded on the module.
 
 And `-abc9` was never switched on by the experiment that ruled it out: `synth_ecp5` enables abc9 by
 **default**, and the flag that exists is `-noabc9`. Far from marginal, it is load-bearing for fit —

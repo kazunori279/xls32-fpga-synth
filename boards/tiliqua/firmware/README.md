@@ -5,7 +5,7 @@ run the synth **without building** — no Amaranth, no yosys, no Docker.
 
 | | voices | die | `clk` post-route | slot | |
 |---|---|---|---|---|---|
-| **`xls24-r5.tar.gz`** | 24 | 93.9 % | 55.48 MHz | **7** | **formal** — what this repo stands behind |
+| **`xls24-r5.tar.gz`** | 24 | 94.6 % | 54.30 MHz | **7** | **formal** — what this repo stands behind |
 | `xls32-r5.tar.gz` | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** — see the warning below |
 
 Both are the same engine at 48 kHz: 4 multitimbral parts, resonant multimode filter, LFO, unison,
@@ -28,24 +28,19 @@ this design. At 32 voices the design fills 98.9 % of the die and closes at **46.
 bet that the silicon is **29 % faster than nextpnr models it**. That bet pays on this desk. It did
 not pay on one of the vendor's two modules, which is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and the reason any of this
-exists. At 24 voices the same design is 93.9 % and closes at **55.48 MHz** — the same bet at **8 %**.
+exists. At 24 voices the same design is 94.6 % and closes at **54.30 MHz** — the same bet at **11 %**.
 
-Eight fewer notes of polyphony for roughly a quarter of the risk. If a module refuses to enumerate,
+Eight fewer notes of polyphony for well under half the risk. If a module refuses to enumerate,
 drops audio intermittently, or gets worse as it warms up, try slot 7 before you try anything else.
 
 The 24-voice build is graded **99.8/100 (A+)** on the module — 174 pass / 1 warn / 0 fail over the
-175-case suite, frame gaps 0.00 % across 175 captures, pitch 440.01 Hz (+0.1 cents). The one warn is
+175-case suite, frame gaps 0.00 % across 175 captures, audio clock 12.288 MHz. The one warn is
 `filter_sweep`, [issue #7](https://github.com/kazunori279/xls32-fpga-synth/issues/7), which both
 builds share.
 
-> **One cosmetic difference on the screen.** The visualiser's grid is 8 × 4 and its voice count is
-> fixed in gateware (`gateware/viz.py`, `N_VOICE = 32`), which the build's `VOICES` does not reach.
-> On the 24-voice build the **bottom row therefore never lights**: those eight tiles hold their
-> reset value and render as permanently idle voices. Audio, timing and every check are unaffected —
-> it is eight dim tiles that should not be drawn at all. Left alone deliberately, because the fix
-> changes the netlist and would cost this archive its measured Fmax, its pinned seed and its
-> hardware grade; [issue #40](https://github.com/kazunori279/xls32-fpga-synth/issues/40) carries it
-> to the next netlist change.
+The visualiser draws **6 × 4** here and 8 × 4 on the 32-voice build: one tile per voice either way,
+with the grid derived from the voice count rather than fixed at 32. Until M37 it was fixed, and the
+bottom row of this build never lit ([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)).
 
 ## Flash it
 
@@ -85,8 +80,16 @@ The other half of the bitstream is the vendor's — luna, luna-soc and the `tili
 in from `$TILIQUA_SDK`. That lives outside this repo, so it is recorded by **commit** rather than by
 hash, and the check reports it changing since the build as staleness like any other source. Two
 caveats, both of which the output states rather than papers over: with no checkout on the machine
-(CI, or a fresh clone) it can only say it could not verify, and the two archives above were built
-before this was recorded at all, so they will say so until their next rebuild.
+(CI, or a fresh clone) it can only say it could not verify, and the 32-voice archive was built
+before this was recorded at all, so it will say so until its next rebuild.
+
+That archive reports **known-stale** for a second reason. M37's four changes — `voices.py`, the tile
+index, the panel strings and the router options — were only rebuilt against at 24 voices, and at
+98.9 % occupancy re-running the 32-voice one means a fresh seed sweep. Nothing about the flashed
+bitstream is wrong; it draws the same 8 × 4 and plays the same engine. It announces itself with the
+old wording, and it was routed with the old options. The waiver in `scripts/artefact_hashes.json`
+names those four sources and lapses if anything else moves
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
 
 One thing the record has to work harder at since there are two archives. They are built from *the
 same committed sources*: the voice count is not in the tree, it is rewritten into a throwaway copy
@@ -112,10 +115,12 @@ uv run --no-project python scripts/build_firmware_json.py
 
 Run `--update` only when the archive you just copied in was built from the tree as it stands — the
 record is a provenance claim, and a false one is worse than none. Build on a **clean tree**: a dirty
-one puts a `+` on the stamp, and because the stamp is a string descriptor baked into a ROM, that one
-character changes the netlist's width and re-draws the seed lottery `build.sh` pins a seed against.
+one appends `-dirty` to the stamp, and because the stamp is a string descriptor baked into a ROM,
+those six characters change the netlist's width and re-draw the seed lottery `build.sh` pins a seed
+against. That is not theoretical — M37 measured a dirty build at 22,745 cells and the clean one at
+22,985, and the seed that won the first was the *worst* of the second.
 
-`build.sh` pins **seed 4** for 24 voices and **seed 5** for 32. Those are not preferences. At this
+`build.sh` pins **seed 3** for 24 voices and **seed 5** for 32. Those are not preferences. At this
 occupancy the router either converges or runs away depending on the seed, the winners do not
 transfer between netlists — seed 5 is the best of the 32-voice draw and among the worst of the
 24-voice one — and any netlist change costs a fresh sweep. The long version is in `build.sh`.
@@ -136,5 +141,5 @@ few hundred counts per part that has ever played; and the pulse wave subtracts i
 DC, which stops a loud pulse passage clipping on one rail only. That second fix is why a 78 %-duty
 stack of 16 voices peaks at +1.04 / −1.10 where the pre-`3aa0227` archive peaked at +0.07 / −1.88
 with its positive half eaten by the clamp. Both fixes are `core/synth.x` changes and so belong to
-the Basys 3 too, but the Basys 3 blob in `boards/basys3/firmware/` predates them and has not been
-rebuilt — see `docs/TODO.md`.
+the Basys 3 too. That board carried a blob predating them for two weeks; it was rebuilt in M37 and
+is back in step ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)).

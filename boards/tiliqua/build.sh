@@ -105,6 +105,11 @@ export YOSYS=yowasp-yosys
 export NEXTPNR_ECP5=yowasp-nextpnr-ecp5
 export ECPPACK=yowasp-ecppack
 export XLS_ENGINE_V="$WORK/engine.v"
+# The gateware side needs the voice count too, and until #43 it did not get it: viz.py drew a
+# fixed 32 tiles and the `brief` the bootloader prints said "XLS32 synth" on a 24-voice build.
+# `gateware/voices.py` reads this one variable; nothing else sets it, and its default is the
+# same 24 as line 51, so an SDK-side `python top.py build` cannot disagree with this script.
+export VOICES
 
 # --- the stamp the board reports over USB (issue #27) ---
 # Two variables, both consumed by gateware/build_id.py, which turns them into iManufacturer. The
@@ -165,17 +170,36 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # below for 24 voices and seed 5 stays pinned for 32. Note the winners do not transfer: seed 5 is
 # the best of the 32-voice draw and among the worst of the 24-voice one.
 #
-# `--router2-tmg-ripup` is measured and deliberately not enabled here (#39). It is worth +1.04 MHz
-# at 32 voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
-# raising the ceiling (4: 55.48 -> 55.40). Turning it on means a new bitstream, and the one this
-# repo ships is the one that was graded on the module. Adopt it at the next netlist change, when a
-# re-sweep and a re-verify are being paid for anyway. Do not confuse it with `--tmg-ripup`, which
-# is router1's and therefore inert here.
+# M37 (#39): `--router2-tmg-ripup` is now on. It was measured at M36 and held back because
+# turning it on means a new bitstream, and the one shipping then was the one graded on the module
+# -- that reason expired the moment #40's tile grid changed the netlist. It is worth +1.04 MHz at 32
+# voices and it lifts the weak 24-voice seeds (1: 51.17 -> 53.19, 6: 54.03 -> 55.33) without
+# raising the ceiling (4: 55.48 -> 55.40), so read it as insurance against a bad draw rather than
+# as headroom. Do not confuse it with `--tmg-ripup`, which is router1's and therefore inert here.
+#
+# M37's own 24-voice draw, all six seeds, on this netlist with the router option on:
+# 52.50 (1), 54.06 (2), **54.30 (3)**, 49.12 (4), 51.40 (5), 53.07 (6). Every one converged, where
+# M36 had four of five -- which is the insurance above showing up as routability rather than as
+# megahertz. Seed 3 wins, and only by 0.24 MHz: the spread across the six is 5.2 MHz with no gap
+# worth calling a winner's margin, so treat the pin as "the best measured" and not as a property
+# of the design.
+#
+# Seed 4 is worth a warning, because measuring it is how this sweep first got the wrong answer.
+# It read 56.33 MHz -- best of the draw by 2 MHz -- on a build whose tree was dirty, and
+# `9fca1a0-dirty` is six characters longer than a clean seven-digit sha. The stamp is a ROM, so
+# that was a different netlist: 22,745 cells against 22,985 for the clean one. Re-measured properly
+# it is 49.12, the *worst* of the six. Two lessons. The whole sweep has to run on the netlist that
+# will ship, dirty trees included in "different netlist"; and seed rankings really do not transfer,
+# not even from the same seed on a netlist 240 cells away.
+#
+# The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
+# before trusting it.
 case "$VOICES" in
   32) SEED="${SEED:-5}" ;;
-  *)  SEED="${SEED:-4}" ;;
+  *)  SEED="${SEED:-3}" ;;
 esac
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed $SEED}"
+PNR_OPTS="--timing-allow-fail --router router2 --router2-tmg-ripup --seed $SEED"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:-$PNR_OPTS}"
 
 cd "$WORK"
 if [ -n "${SIM:-}" ]; then

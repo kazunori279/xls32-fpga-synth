@@ -125,9 +125,14 @@ ARTEFACTS = {
                 "boards/tiliqua/gateware/fx.py",
                 "boards/tiliqua/gateware/dc_block.py",
                 "boards/tiliqua/gateware/viz.py",
+                # One line of arithmetic and three constants, but they are the constants that
+                # decide how many tiles get drawn and what the bootloader's slot list says. Both
+                # of the files above import it (M37, #40/#43), so an edit here reaches the
+                # bitstream without touching either of them.
+                "boards/tiliqua/gateware/voices.py",
             ],
         }
-        for voices, seed in ((24, "4"), (32, "5"))
+        for voices, seed in ((24, "3"), (32, "5"))
     },
 }
 
