@@ -339,7 +339,7 @@ building. They are the same engine and differ in polyphony:
 **Take the 24-voice one.** Neither closes the 60 MHz `clk` constraint — that is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3), and it is why this repo exists
 — so both are a bet that the silicon beats nextpnr's model. At 32 voices the bet is **29 %** and it
-has already failed on one of the two modules the module's maker tried. At 24 it is **8 %**, for four
+has already failed on one of the two modules the module's maker tried. At 24 it is **6 %**, for eight
 fewer simultaneous notes. Both archives are graded on hardware here;
 [`boards/tiliqua/firmware/README.md`](boards/tiliqua/firmware/) has the numbers and the history.
 
@@ -385,10 +385,10 @@ countdown, pick the slot from the menu once, and every cold boot from then on lo
 
 What you should see and hear when it comes up:
 
-- **The screen** — 720×720p60 on the DVI output: an 8×4 grid of tiles, one per voice, brightness the
-  envelope and hue the pitch. Beam-raced, with no framebuffer. On the 24-voice build the bottom row
-  never lights — the grid's size is fixed in gateware, which is
-  [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40) and is cosmetic only.
+- **The screen** — 720×720p60 on the DVI output: a grid of tiles, one per voice, brightness the
+  envelope and hue the pitch. Beam-raced, with no framebuffer. **6×4** on the 24-voice build and
+  8×4 on the 32-voice one — the grid is derived from the voice count since M37, which closed
+  [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40).
 - **The jacks** — `out0`/`out1` are the stereo effects pair, and the only two that make sound;
   `out2`/`out3` have carried silence since M26 and nothing reads the four inputs. The eight LEDs
   show the four input and four output levels (the pmod's automatic mode), so the bottom four stay
@@ -1252,7 +1252,7 @@ almost none of the answers match:
 | **Clocking** | one 100 MHz clock; engine on a ÷3 clock-enable, effects FSM on ÷6 | five domains — `sync`/`usb` 60 MHz, `fast` 120, `audio` **12.288**, `dvi` 39.07 + `dvi5x`; the engine lives in `audio` |
 | **What sets the rate** | the ÷3 enable — the shell *pushes* samples | the codec *pulls*: 48 kHz demand back through a 3/2 resampler lands on the engine as exactly 32 kHz. There is no 32 kHz divider anywhere |
 | **Engine occupancy** | 768 of ~3,125 cycles per sample | ~168 of 384 `audio` cycles per sample at 24 voices (43.8%); 224 at 32 |
-| **Multipliers** | 26 × DSP48E1 (of 90) | 28 × MULT18X18D (of 28 — every one on the die) |
+| **Multipliers** | 26 × DSP48E1 (of 90) | 27 × MULT18X18D (of 28 — all but one on the die; it was every one until M38 stopped the echo tap spending one on a constant) |
 | **Echo line** | 16K×16 BRAM → ≤508 ms | 16,384 words of BRAM → ≤340 ms (it was PSRAM until M29 gave the space to the screen) |
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
