@@ -305,7 +305,7 @@
   </div>
   <div class="footerbar">
     <span class="pill">XLS32 · HLS / FPGAシンセ</span>
-    <span>2026年7月 · 50分</span>
+    <span>2026年7月 · 55分</span>
   </div>
 </section>
 
@@ -315,10 +315,10 @@
     <div class="h-big">アジェンダ</div>
     <ol>
       <li><span class="num">00</span><span class="txt">自己紹介</span><span class="min">2分</span></li>
-      <li><span class="num">01</span><span class="txt">XLS32とは</span><span class="min">6分</span></li>
+      <li><span class="num">01</span><span class="txt">XLS32とは</span><span class="min">7分</span></li>
       <li><span class="num">02</span><span class="txt">技術スタック</span><span class="min">16分</span></li>
       <li><span class="num">03</span><span class="txt">AIエージェントとループエンジニアリング</span><span class="min">9分</span></li>
-      <li><span class="num">04</span><span class="txt">アーキテクチャ詳解</span><span class="min">8分</span></li>
+      <li><span class="num">04</span><span class="txt">アーキテクチャ詳解</span><span class="min">12分</span></li>
       <li><span class="num">05</span><span class="txt">つまずきと学び</span><span class="min">5分</span></li>
       <li><span class="num">06</span><span class="txt">まとめ + Q&amp;A</span><span class="min">4分</span></li>
     </ol>
@@ -409,6 +409,37 @@
       <div class="imgcard" style="height:430px;"><img src="assets/webui.png" alt="XLS32のブラウザUI"></div>
       <div class="imgcap">USB越しにFPGAシンセをライブで鳴らすWeb UI</div>
     </div>
+  </div></section>
+
+<!-- ============ TWO BOARDS ============ -->
+<section class="slide">
+  <div class="h">…そして同じエンジンは、Eurorackモジュールでもあります</div>
+  <div class="hsub">ここから先は「1つの設計・2枚のボード」の話です。数字が違うところは両方載せます。</div>
+  <div class="cols" style="grid-template-columns: repeat(2, 1fr); margin-top: 46px; gap: 64px;">
+    <div>
+      <div class="lbl">Basys 3 — 開発用ボード</div>
+      <p>Digilent Basys 3、Xilinx Artix-7 <code>xc7a35t</code>。<b>32音</b>。音声もMIDIも1本のUSB UARTを
+      通り、ホスト側のFFTで採点します。プロジェクトの出発点であり、エンジンに手を入れたときに
+      最初に測るのは今もこちら。</p>
+      <p class="small">Verilogのシェル · 出荷ビットストリームはVivadoでビルド。</p>
+    </div>
+    <div>
+      <div class="lbl">Tiliqua R5 — 楽器</div>
+      <p>apf.audioのTiliqua、Lattice ECP5 <code>LFE5U-25F</code>。小さいダイで<b>24音</b>。音はEurorackの
+      ジャックから本物のコーデック経由で出て、TRS MIDI入力と720×720p60のDVIビジュアライザ付き。
+      USB Audio Class 2準拠なので、どのDAWからもドライバなしで見えます。</p>
+      <p class="small">Amaranthのシェル · yosys + nextpnr-ecp5で完全オープン。</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:40px; max-width:1150px; font-size:19px;">
+    <p><code>synth.x</code> の中身は、自分がどちらのボードにいるかを知りません。ECP5への移植は
+    <b>同じソースを違う <code>--pipeline_stages</code> で再コンパイルしただけ</b> — 48から12へ —
+    書き直しではありません。パイプラインを手で配置せず、コンパイラにスケジュールさせたことの配当です。</p>
+  </div>
+  <div class="dgbox" style="margin-top:32px; padding:16px 26px;">
+    <div class="dgd" style="font-size:16.5px; margin-top:0;"><b style="color:#3c4043;">共通、無改造:</b>
+    生成された <code>engine.v</code> 1つ · ブラウザパネル1つ · <code>host/</code> のツールチェーン1つ ·
+    175ケースの採点スイート1つ。どちらのボードを相手にするかはフラグ1つです。</div>
   </div></section>
 
 <!-- ============ DEMO ============ -->
@@ -1326,7 +1357,8 @@
   <div class="num">04</div>
   <div class="name">アーキテクチャ詳解</div>
   <div class="kick">クロックは1本、サンプルレートも1つ。すべては純粋関数か小さなprocのどちらかで、
-  シンセはティックごとにオーディオサンプルを1つ吐き出します。</div>
+  シンセはティックごとにオーディオサンプルを1つ吐き出します。そのあと、同じエンジンを2枚目の
+  小さいチップに載せるとき何が変わるのかを見ます。</div>
 </section>
 
 <!-- ============ 20 · TIMING ============ -->
@@ -2469,6 +2501,134 @@
     本来の32 kHzが戻ります。</p>
   </div></section>
 
+<!-- ============ 23c · TILIQUA · TWO SHELLS ============ -->
+<section class="slide">
+  <div class="h">2つのシェル、1つのエンジン</div>
+  <div class="hsub">生成された <code>engine.v</code> は両ボードでまったく同じ論理です。違う数字はすべて、
+  その周りのシェル側にあります。</div>
+  <table class="gt compact">
+    <thead><tr><th style="width:200px;"></th><th style="width:390px;">Basys 3 · Artix-7</th><th>Tiliqua · ECP5</th></tr></thead>
+    <tbody>
+      <tr><td>シェルと配置配線</td><td>Verilogの <code>rtl/top.v</code> — Vivado / F4PGA / openXC7</td>
+        <td>Amaranthの <code>gateware/</code> — yosys + nextpnr-ecp5、完全オープン</td></tr>
+      <tr><td>エンジンのクロック</td><td>100 MHz、エンジンは÷3のclock enableで駆動</td>
+        <td>12.288 MHz — SI5351がファブリックへ直結、FPGA内PLLなし</td></tr>
+      <tr><td>パイプライン段数</td><td><code>STAGES=48</code> → 1サンプル768サイクル</td>
+        <td><code>STAGES=12</code> → 224。このクロックでは384サイクルしか使えないため</td></tr>
+      <tr><td>サンプルレート</td><td>32 kHz — シェルがサンプルを<i>押し込む</i></td>
+        <td>コーデックが<i>引く</i>: 48 kHzの要求が3/2リサンプラを通り、エンジンにはちょうど32 kHzで届く</td></tr>
+      <tr><td>音声とMIDI</td><td>16bit PCMとMIDIが1本の2 MbaudのUARTを共有</td>
+        <td>AK4619経由でEurorackジャックへ · USB-C 1本でUAC2音声とUSB-MIDI · TRS MIDI入力</td></tr>
+      <tr><td>乗算器</td><td>DSP48E1を26個（90個中）</td>
+        <td>MULT18X18Dを27個（28個中） — ダイ上の1個を残して全部</td></tr>
+      <tr><td>見えるもの</td><td>16個のLEDがボイス動作の彗星、7セグ表示</td>
+        <td>720×720p60のDVI — 1ボイス1タイル、フレームバッファなし</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="margin-top:28px; max-width:1150px; font-size:18px;">
+    <p class="mut">ECP5の狭い18×18タイルに合わせて乗算を組み直したら、<i>Basys 3</i>のビルドまで安くなりました。
+    LUTが78個減り、パスが0.32 ns短くなり、DSP48は26個のまま — 音声3,000サンプルはビット単位で一致。
+    移植の配当が、元のボードへ逆流した形です。</p>
+  </div></section>
+
+<!-- ============ 23d · TILIQUA · THE SQUEEZE ============ -->
+<section class="slide">
+  <div class="h">ダイの93.5%と、6%の賭け</div>
+  <div class="hsub">Artix-7側はチップの半分ほどで収まります。ECP5側にその余裕はなく、このスライドの内容は
+  すべてそこから来ています。</div>
+  <div class="rows" style="grid-template-columns: 320px 1fr; row-gap: 34px; margin-top: 46px;">
+    <div class="lbl">どの指標で見ても満杯</div>
+    <ul class="dots">
+      <li>24音で論理セル<b>22,722 / 24,288</b> — <b>93.5%</b>、32音なら<b>98.9%</b> ·
+      乗算器28個中27個 · ブロックRAM 56個中53個</li>
+    </ul>
+    <div class="lbl">クロックが閉じない</div>
+    <ul class="dots">
+      <li>USB PHYがそのドメインを<b>60 MHz</b>に固定する一方、nextpnrの24音ビルドは<b>56.63</b>止まり。
+      出荷するということは<b>シリコンがモデルより6%速い</b>方に賭けること — 32音では同じ賭けが
+      <b>29%</b>になり、実際に1台のモジュールで外れています</li>
+    </ul>
+    <div class="lbl">効くのは配置</div>
+    <ul class="dots">
+      <li>この占有率ではルータのシードが結果を決めます。同じネットリストで<b>24シードのスイープが
+      51.60 → 56.63 MHzに散らばり</b>、しかも勝者は移りません: 56.63を取るシードは、1コミット前の
+      ネットリストでは下位の50.90でした</li>
+    </ul>
+    <div class="lbl">gitハッシュすら効く</div>
+    <ul class="dots">
+      <li>ビルドスタンプはROMなので、ツリーが汚れて付く6文字がROM幅を変え、ネットリストを変え、
+      くじを引き直させます。リリースビルドは<b>クリーンツリー</b>のビルドであり、ネットリストが
+      動けばスイープはやり直しです</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 23e · TILIQUA · THE SCREEN ============ -->
+<section class="slide">
+  <div class="h">フレームバッファのない720×720p60</div>
+  <div class="hsub">置き場所がなかったから — そして、持たなかったおかげで設計は<i>小さく</i>なりました。</div>
+  <div class="cols c3" style="margin-top:50px;">
+    <div>
+      <div class="lbl">ビームを追いかける</div>
+      <p>各ピクセルの色は、送出の1サイクル前に、ビーム位置と<b>32バイトのストア</b>から計算します。
+      1ボイスあたり15bitが1ワード、明るさはエンベロープ、色相はピッチから。</p>
+      <p class="small">同じ情報をフレームバッファで持つと<b>1.5 MB</b>。ダイ全体でブロックRAMは56個です。</p>
+    </div>
+    <div>
+      <div class="lbl">クロック載せ替えはBRAM 1個</div>
+      <p>そのストアはデュアルポートです。<code>audio</code>ドメイン（12.288 MHz）から書き、
+      <code>dvi</code>（39.07 MHz）から読む。FIFOもハンドシェイクも同期化回路もありません。</p>
+      <p class="small">互いの都合を知る必要がないのは、読む側が常に最新値だけを欲しがるから。
+      ポートが渡すのはまさにそれです。</p>
+    </div>
+    <div>
+      <div class="lbl">元が取れた</div>
+      <p>SDKの映像パスはPSRAMから流します。そこはエコーのディレイラインが住んでいた場所でした。
+      フレームバッファをやめた結果、2つ目の利用者が消え、続いてPSRAM自体が消えました。</p>
+      <p class="small"><b>24,107セル（99%）→ 23,404（96%）</b>、当該ドメインのFmaxは
+      40.17 → 44.71 MHz。画面が増えたのに、設計は縮みました。</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:38px; max-width:1150px; font-size:18px;">
+    <p class="mut">タイル自体は235セル — <b>デバイスの1.0%</b>です。ホスト側で描いてピクセルを流し込む案は、
+    測って却下しました。必要な帯域が93 MB/s、相手はバルクエンドポイントを持たず上限およそ40 MB/sの
+    USBデバイスです。</p>
+  </div></section>
+
+<!-- ============ 23f · TILIQUA · ONE LOOP, TWO BOARDS ============ -->
+<section class="slide">
+  <div class="h">オブジェクト1つで、ループが2枚目のボードに届いた</div>
+  <div class="hsub">同じ175ケース、同じ採点、同じしきい値 — UARTのバイトを読んでいた <code>Transport</code> が、
+  UAC2のキャプチャを開く実装に変わっただけです。</div>
+  <div class="split" style="grid-template-columns: 640px 1fr; margin-top: 36px;">
+    <div class="body">
+      <ul class="dots">
+        <li>出荷している24音ビルドは実機で<b>99.8 / 100（A+）</b> — 174 pass、1 warn、0 fail、
+        175回のキャプチャでUSBフレーム欠落<b>0.00%</b></li>
+        <li>唯一のwarnはフィルタスイープの明るさ測定で、<b>両ボード共通</b>。移植より前からあります</li>
+        <li>2枚はサンプルレートが食い違うので、スイートには相手がどちらかを教え、そのうえで
+        実際に得られたレートをアサートさせています</li>
+      </ul>
+      <p style="margin-top:22px;"><b>そして、話の筋に合わない部分:</b> より古くて<i>遅い</i>32音の
+      ビットストリームが、ここでは完璧に動き、<b>製作者の2台のうち1台では動きませんでした</b>。
+      スタティックタイミング的にはどちらも動かないはずです。このダイでは動いています。</p>
+      <p class="small mut" style="margin-top:14px;">未解決・原因未特定のまま。32音ではなく24音を
+      このリポジトリの正式ビルドにしている理由でもあります。</p>
+    </div>
+    <div>
+      <div class="imgcap" style="text-align:left; margin-top:2px;">USB経由で実機から録音 —
+      4パート、部屋マイクなし、ソフト音源なし:</div>
+      <a class="ytrow" href="https://youtu.be/sWc6g7cgsd4" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/sWc6g7cgsd4/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">パネルでモジュールを鳴らす</span><span class="ytm">ライブデモ</span></a>
+      <a class="ytrow" href="https://youtu.be/UPpt41BPEH8" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/UPpt41BPEH8/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">Bach · ゴルトベルク アリア</span><span class="ytm">4パート · 1:45</span></a>
+      <a class="ytrow" href="https://youtu.be/Qv_raL9kz5I" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/Qv_raL9kz5I/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">Vivaldi · 冬 第2楽章</span><span class="ytm">4パート · 1:45</span></a>
+    </div>
+  </div></section>
+
 <!-- ============ 23b · PRESET SEARCH ============ -->
 <section class="slide">
   <div class="h">プリセットは回して作らず、探索した</div>
@@ -2722,8 +2882,10 @@
       <line x1="9" y1="18" x2="17" y2="18" stroke="#188038" stroke-width="2" stroke-linecap="round"/>
     </svg>リポジトリ内のドキュメント</div>
     <ul class="dots">
-      <li><code>ARCHITECTURE.md</code> — ブロック毎の詳解: コード、データフロー、タイミングチャート</li>
-      <li><code>DEVELOPMENT.md</code> — マイルストーンの履歴とツールチェーンの苦戦ログ</li>
+      <li><code>ARCHITECTURE.md</code> — ブロック毎の詳解: コード、データフロー、タイミングチャート。
+      ECP5シェルは <code>ARCHITECTURE_tiliqua.md</code></li>
+      <li><code>DEVELOPMENT.md</code> — マイルストーンの履歴とツールチェーンの苦戦ログ。
+      移植の分は <code>DEVELOPMENT_tiliqua.md</code></li>
     </ul>
     <div class="lbl"><svg class="lico" width="26" height="26" viewBox="0 0 26 26" fill="none">
       <path d="M 13 2 L 24 8 L 13 14 L 2 8 Z" stroke="#f9ab00" stroke-width="2" stroke-linejoin="round"/>
@@ -2732,8 +2894,8 @@
     </svg>使用したスタック</div>
     <ul class="dots">
       <li>Google XLS — google.github.io/xls</li>
-      <li>F4PGA — f4pga.org · openXC7 · openFPGALoader</li>
-      <li>Basys 3 — digilent.com</li>
+      <li>F4PGA — f4pga.org · openXC7 · yosys + nextpnr · openFPGALoader</li>
+      <li>Basys 3 — digilent.com · Tiliqua — apf.audio</li>
     </ul>
   </div></section>
 
