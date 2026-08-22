@@ -401,6 +401,18 @@ wrong, only old in its wording and its routing. It is waived by name in
   rather than absent. [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48), filed
   separately from [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9): that one is the
   dropouts, this one is the instrument built to measure them.
+
+  **The vendor has now run the 24-voice build on more than one die, and it held.** Sebastian
+  Holzapfel, 2026-08-22, on merging the webflasher PR: *"I have tested it on a couple of Tiliquas
+  and with the timing fixes now it seems to be robust, and I think it should work everywhere."*
+  That is the measurement this project could not make — every other result on this risk comes from
+  the one module on this desk, which has always worked. It is evidence about **M37's 54.30 MHz
+  24-voice build specifically**: the 32-voice archive is unchanged and untested by him since the
+  failure, and he did not say which of his modules were in the "couple", so the die that failed is
+  not named as having passed. He also did not answer the question about what "didn't work" looked
+  like on it — no enumeration, glitching audio, or no video — so
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) still has no diagnosis, only a
+  build that stopped reproducing it.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
@@ -419,6 +431,18 @@ wrong, only old in its wording and its routing. It is waived by name in
   marginal path some silicon wins and some loses
   ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3),
   [#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
+
+  **There is now a third copy, and it is deliberately one build behind.** The webflasher carries
+  `xls24-9976c4e-r5.tar.gz` — M37's archive at 54.30 MHz — merged into `apfaudio/tiliqua-webflash`
+  on 2026-08-22 ([PR #5](https://github.com/apfaudio/tiliqua-webflash/pull/5),
+  [#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). M38's 56.63 MHz archive has
+  *not* been sent after it, on purpose. That copy is the one the vendor tested on several of his
+  own modules before merging, and it is the only build with evidence from more than one die; M38's
+  has been graded on exactly the die that has always worked. Against that, the swap buys a 6 %
+  bet instead of an 11 % one and nothing audible — the two grade identically, down to the same
+  lone WARN. So it waits and goes up with the next change that is worth a stranger reflashing for.
+  The corollary is that the number a webflasher user sees is 54.30 until then, and the repo should
+  not quietly start claiming otherwise.
 
   The two differ only in the voice count, which
   is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so
