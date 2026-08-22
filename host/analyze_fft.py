@@ -25,8 +25,15 @@ def pick_window(s, W=2048, clean=False):
     loudest and then takes the one with the fewest sample-to-sample jumps over `synth.glitches`'
     threshold -- a tone of any pitch in range has none, misdecoded bytes have thousands.
 
-    The default stays `False` because `test/analysis.py` grades through here and its published
-    0-100 scores would move; `host/play.py` passes `clean=True`. See docs/TODO.md."""
+    `host/play.py` passes `clean=True`. The default stays `False` for `test/analysis.py`, and
+    since M37 that is a measured decision rather than a cautious one: `test/regrade.py` re-graded
+    all 175 stored Tiliqua captures both ways. `clean=True` picks a different window on 68 of 350
+    picks and moves exactly one score -- `filter_sweep`, 81.7 to 80.4, because `centroid_over_time`
+    re-picks inside each of its eight slices and a quieter window flattens the rise it is looking
+    for. Nothing improves. Only two of the 68 had the default landing on the glitchier window
+    (`filter_notch`), and the take-level pathologies `clean=True` exists for are already rejected
+    upstream by `harness._bad_take`. Unmeasured: the Basys 3 UART set, where those pathologies are
+    the ones that actually occur -- no capture set for it is on disk. See #11, docs/TODO.md."""
     step = max(1, W // 8) if clean else 256
     offs = list(range(0, max(1, len(s)-W), step))
     pps = [max(s[i:i+W]) - min(s[i:i+W]) for i in offs]

@@ -103,8 +103,10 @@ def run(args):
         # And the other failure, which `gap_rate` is blind to by construction: frames that never
         # arrived leave no zeros behind, so the capture is simply short and every rate computed
         # from it still reads clean. #9 measured this reaching 89% of a capture with no flag from
-        # PortAudio at all, so nothing but this number would say it had happened.
-        if getattr(t, "missing_frames", None):
+        # PortAudio at all, so nothing but this number would say it had happened. Every capture
+        # that can measure it is recorded, zeros included, for the same reason the gap rate is:
+        # a number that only appears when it is bad cannot be watched.
+        if getattr(t, "missing_frames", None) is not None:
             missing.append((tc.id, t.missing_frames))
         if getattr(t, "audio_clock_hz", None) is not None:
             clocks.append(t.audio_clock_hz)
@@ -118,16 +120,18 @@ def run(args):
     if gaps:
         print(f"USB frame gaps: mean {100*sum(gaps)/len(gaps):.2f}%, worst {100*max(gaps):.2f}%")
     if missing:
+        hit = [m for m in missing if m[1]]
         worst_id, worst_n = max(missing, key=lambda m: m[1])
         print(f"frames that never arrived: {sum(n for _, n in missing)} over "
-              f"{len(missing)} of {len(cases)} captures (worst {worst_n} in {worst_id}) -- "
-              "the host stalled; these are not in the gap rate")
+              f"{len(hit)} of {len(missing)} captures"
+              + (f" (worst {worst_n} in {worst_id}) -- the host stalled; "
+                 "these are not in the gap rate" if hit else ""))
     if clocks:
         print(f"audio clock: mean {sum(clocks)/len(clocks)/1e6:.3f} MHz over {len(clocks)} captures "
               f"(spread {(max(clocks)-min(clocks))/1e3:.1f} kHz)")
 
     overall, grade, counts = score_overall(results)
-    write_reports(results, overall, grade, counts, args, board, gaps, clocks)
+    write_reports(results, overall, grade, counts, args, board, gaps, clocks, missing)
 
     if not args.skip_video:
         build_video(results, overall, grade, counts)
@@ -156,7 +160,7 @@ def _table(results, category):
     return head + "\n".join(rows) + "\n"
 
 
-def write_reports(results, overall, grade, counts, args, board, gaps=(), clocks=()):
+def write_reports(results, overall, grade, counts, args, board, gaps=(), clocks=(), missing=()):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     caveat = ""
     if gaps:
@@ -169,6 +173,17 @@ def write_reports(results, overall, grade, counts, args, board, gaps=(), clocks=
                   else "nothing material to repair")
         caveat = (f"\n_USB frame gaps: mean {100*sum(gaps)/len(gaps):.3f}%, "
                   f"worst {100*worst:.3f}% — {detail}; see ARCHITECTURE_tiliqua.md._\n")
+    if missing:
+        # The other loss, and the one no rate can see: a frame that never arrived leaves no
+        # zeros behind, so the capture is simply short and reads clean. Only the board's own
+        # frame counter witnesses it (host/transport/usbaudio.py, `_measure_clock`), and
+        # boards/tiliqua/probe/probe_discard.py measured PortAudio raising no flag at all
+        # while 89% of a capture went missing. So it is stated on every report, at zero too.
+        lost = sum(n for _, n in missing)
+        hit = [m for m in missing if m[1]]
+        detail = (f"over {len(hit)} of {len(missing)} captures — the host stalled; not in the "
+                  "gap rate above" if hit else f"across {len(missing)} captures")
+        caveat += f"\n_Frames that never arrived: {lost} {detail}._\n"
     if clocks:
         # The clock the run was graded at, not just the clock it was supposed to be graded
         # at. Pitch is measured in cents against a fixed reference, so a report that does not
@@ -200,6 +215,9 @@ def write_reports(results, overall, grade, counts, args, board, gaps=(), clocks=
           "transport": board.transport,
           "gap_rate_mean": round(sum(gaps) / len(gaps), 5) if gaps else None,
           "gap_rate_worst": round(max(gaps), 5) if gaps else None,
+          # None means the transport cannot measure it; 0 means it measured none.
+          "missing_frames_total": sum(n for _, n in missing) if missing else None,
+          "missing_frames_captures": sum(1 for _, n in missing if n) if missing else None,
           "audio_clock_hz": round(sum(clocks) / len(clocks)) if clocks else None,
           "overall": round(overall, 1), "grade": grade, "counts": counts,
           "results": [{"id": tc.id, "category": tc.category, "title": tc.title,

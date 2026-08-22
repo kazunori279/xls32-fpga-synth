@@ -11,13 +11,24 @@ uv run python test/run_tests.py            # full suite: reflash + all tests + v
 uv run python test/run_tests.py --smoke    # fast subset (pipeline check)
 uv run python test/run_tests.py --only basic|integration|stress
 uv run python test/run_tests.py --no-reflash --skip-video   # fastest iteration
+uv run python test/regrade.py --clean       # no board: re-grade the stored wavs
 ```
+
+`regrade.py` is the one that needs no hardware. Every graded take is on disk in `out/wav/` and
+`check(samples)` is pure, so "what would this analysis change do to the scores?" is answerable
+without a board — read its docstring for the two ways the offline numbers differ from the
+published ones. It is what settled
+[#11](https://github.com/kazunori279/xls32-fpga-synth/issues/11).
 
 The board must be connected and its link free — **close the web UI's browser tab**, which holds
 the port through Web Serial. A full run takes several minutes (all captures with best-of-N retry,
 plus ffmpeg). Outputs land in `test/out/` (gitignored):
 
-- `report.md` / `report.json` — per-test scores (0–100), verdicts, metrics, overall grade.
+- `report.md` / `report.json` — per-test scores (0–100), verdicts, metrics, overall grade, plus
+  what the transport measured about itself: `gap_rate_*`, `audio_clock_hz`, and
+  `missing_frames_*` (frames the board produced that never arrived — the only loss no rate can
+  see, see [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9)). All are written on
+  every run, zeros included; `null` means the transport cannot measure that one.
 - `report.mp4` — one video: before each test a caption card (title, description, expected,
   verdict + score) then that test's scrolling spectrogram.
 - `wav/<id>.wav` — each test's captured audio; `cards/` — the caption PNGs.
@@ -36,6 +47,9 @@ plus ffmpeg). Outputs land in `test/out/` (gitignored):
 - **`cases_basic.py` / `cases_integration.py` / `cases_stress.py`** — the test cases; each has
   a `setup` (CCs), a `perform` (notes/CCs played while recording), and a `check` returning a
   scored `Result` against an expected-outcome rubric.
+- **`regrade.py`** — re-grades the stored `out/wav/` captures with the analysis code as it stands
+  and diffs against the published `report.json`; `--clean` also grades with
+  `pick_window(clean=True)` and shows what moves. No board, no reflash.
 - **`captions.py` / `video.py`** — Pillow caption cards + ffmpeg spectrogram clips, concatenated
   into `report.mp4` (this ffmpeg build has no `drawtext`, hence Pillow).
 

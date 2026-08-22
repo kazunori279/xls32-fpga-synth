@@ -527,9 +527,24 @@ wrong, only old in its wording and its routing. It is waived by name in
   slice on its own with `frame_align`, measured 0–12 against whole-buffer `frame_align`'s 19–53.
   It also runs in 2.9 s instead of 6.2, since the 50 ms pause was longer than the 45 ms read.
 
-  What is left. `test/analysis.py` still picks the loudest window, deliberately: the graded suite's
-  published 0–100 scores would move and re-running it is a board-day. And *which layer* discards on
-  the UART side is still unidentified — only the condition that provokes it.
+  What is left: *which layer* discards on the UART side, still unidentified — only the condition
+  that provokes it. ~~And `test/analysis.py` still picks the loudest window, deliberately: the
+  graded suite's published 0–100 scores would move and re-running it is a board-day.~~
+  **Settled 2026-08-22, and the board-day was never needed** ([#11](https://github.com/kazunori279/xls32-fpga-synth/issues/11)).
+  `run_tests.py` saves every graded take to `test/out/wav/`, and `check(samples)` is a pure
+  function of those samples, so the question could always have been answered off the disk.
+  `test/regrade.py` does that now. Re-graded both ways, `clean=True` picks a different window on
+  68 of 350 picks and moves **exactly one score, downward**: `filter_sweep`, 81.7 → 80.4, because
+  `centroid_over_time` re-picks inside each of its eight slices and a quieter window flattens the
+  rise the check measures. Nothing improves, and that one case is the suite's only WARN. Only two
+  of the 68 differing picks had the default landing on the glitchier window (`filter_notch`), and
+  the take-level pathologies `clean=True` was written for are rejected upstream by
+  `harness._bad_take` before grading. So the default stays `False` on evidence. The honest limit:
+  this is the Tiliqua USB set, and the pathologies in question are the UART's — no Basys 3 capture
+  set is on disk to check. Two caveats on reading the tool's absolute numbers, both in its
+  docstring: the wav is `normalize`d, which shifts the five factory presets by ≤1.4 points because
+  `_chk_preset` thresholds glitches and clipping in absolute counts; and it is the best take of up
+  to five retries, not the session.
 
   **The Tiliqua half, looked at 2026-08-21** (`boards/tiliqua/probe/probe_discard.py`, 24-voice
   build from flash slot 7). The instrument is the frame counter the gateware already tees onto
@@ -561,9 +576,17 @@ wrong, only old in its wording and its routing. It is waived by name in
      That would have watched a flag that never sets. Worth writing down, because it is the second
      time on this issue that the plausible explanation was the wrong one.
   4. So the counter arithmetic is the only thing that can see it, and it is cheap. `record_stop`
-     now reports `missing_frames` alongside `gap_rate`, and `run_tests.py` prints it when non-zero.
-     The suite has therefore never been able to distinguish "no dropouts" from "a capture that was
-     silently short"; it can now.
+     now reports `missing_frames` alongside `gap_rate`. The suite has therefore never been able to
+     distinguish "no dropouts" from "a capture that was silently short"; it can now.
+
+  **2026-08-22: the number is now published, not just printed.** It was collected only when
+  non-zero and never written to `report.json` or `report.md` — which is the failure the entry two
+  paragraphs above names about the gap rate, repeated on the number that replaced it: a figure that
+  appears only when it is bad cannot be watched, because a clean report and a report from a build
+  where the measurement silently stopped working read identically. Every capture that can measure
+  it is now recorded, zeros included, as `missing_frames_total` / `missing_frames_captures` in
+  `report.json` and one line in `report.md`. `null` means the transport cannot measure it (the
+  Basys 3 UART); `0` means it measured none.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted

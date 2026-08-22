@@ -127,8 +127,9 @@ addition rather than a rewrite.
   that levels them — the mix the board does is one hard-clipped accumulator, so this is the
   difference between four parts and one.
 - **`test/`** — the end-to-end hardware test suite: drives **either** board over USB, scores the
-  captured audio (0–100), and builds a captioned report video. See
-  [§3](../README.md#3-builders-guide) and `test/README.md`.
+  captured audio (0–100), and builds a captioned report video. `regrade.py` re-scores the stored
+  captures with no board attached, which is how an analysis change is costed before it is made.
+  See [§3](../README.md#3-builders-guide) and `test/README.md`.
 - **`docs/`** — diagrams & spectrogram PNGs (in `docs/assets/`), the open-TODO list
   ([`docs/TODO.md`](TODO.md)), the USB dropout report, and the session slides
   (`docs/slides/`, self-contained HTML, no build step). **`media/`** (captured
