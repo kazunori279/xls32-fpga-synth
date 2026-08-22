@@ -38,7 +38,7 @@
       "path": "/Users/kaz/Documents/GitHub/tiliqua"
     },
     "sources": {
-      "boards/tiliqua/build.sh": "874a3535710102e71a14cd7bcd3a4d721a1b4b1323a4ed0a24decff4c790e5f5",
+      "boards/tiliqua/build.sh": "a582b3f58e61d49051f92717ec478019be5867a70810b7a2baf16a55113b6bd8",
       "boards/tiliqua/gateware/build_id.py": "c39bc105a6c853606a3b85a48b519ccf5fc1efa69ad4fa31b403ee754e8d7958",
       "boards/tiliqua/gateware/dc_block.py": "b9720b2b0e8d4cb349b5babb08da71efd523865dac2ed2fd2d26b17b6eea157d",
       "boards/tiliqua/gateware/fx.py": "794fd1e49ebec566757d3898d044d9d5af234b6facf3dddeb7bf36f482caba93",
