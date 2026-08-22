@@ -299,7 +299,7 @@
   </div>
   <div class="footerbar">
     <span class="pill">XLS32 · HLS / FPGA synth</span>
-    <span>Jul 2026 · 55 min</span>
+    <span>Jul 2026 · 50 min</span>
   </div>
 </section>
 
@@ -309,12 +309,13 @@
     <div class="h-big">Agenda</div>
     <ol>
       <li><span class="num">00</span><span class="txt">Who's talking</span><span class="min">2 min</span></li>
-      <li><span class="num">01</span><span class="txt">What is XLS32</span><span class="min">7 min</span></li>
+      <li><span class="num">01</span><span class="txt">What is XLS32</span><span class="min">6 min</span></li>
       <li><span class="num">02</span><span class="txt">The technology stack</span><span class="min">16 min</span></li>
       <li><span class="num">03</span><span class="txt">Loop engineering with AI agents</span><span class="min">9 min</span></li>
-      <li><span class="num">04</span><span class="txt">Architecture deep-dive</span><span class="min">12 min</span></li>
+      <li><span class="num">04</span><span class="txt">Architecture deep-dive</span><span class="min">8 min</span></li>
       <li><span class="num">05</span><span class="txt">Frictions &amp; learnings</span><span class="min">5 min</span></li>
       <li><span class="num">06</span><span class="txt">Wrap-up + Q&amp;A</span><span class="min">4 min</span></li>
+      <li><span class="num">A</span><span class="txt">Appendix — the ECP5 port</span><span class="min">if asked</span></li>
     </ol>
   </div></section>
 
@@ -404,38 +405,6 @@
       <div class="imgcard" style="height:430px;"><img src="assets/webui.png" alt="XLS32 browser front-end"></div>
       <div class="imgcap">The web UI driving the FPGA synth live over USB</div>
     </div>
-  </div></section>
-
-<!-- ============ TWO BOARDS ============ -->
-<section class="slide">
-  <div class="h">…and the same engine is also a Eurorack module</div>
-  <div class="hsub">From here on this is one design on two boards. Where the numbers differ, both are given.</div>
-  <div class="cols" style="grid-template-columns: repeat(2, 1fr); margin-top: 46px; gap: 64px;">
-    <div>
-      <div class="lbl">Basys 3 — the development board</div>
-      <p>Digilent Basys 3, Xilinx Artix-7 <code>xc7a35t</code>. <b>32 voices</b>; audio and MIDI both
-      travel down one USB UART and are graded on the host by FFT. Where the project started, and
-      where an engine change is still measured first.</p>
-      <p class="small">Verilog shell · Vivado builds the shipped bitstream.</p>
-    </div>
-    <div>
-      <div class="lbl">Tiliqua R5 — the instrument</div>
-      <p>apf.audio Tiliqua, Lattice ECP5 <code>LFE5U-25F</code>. <b>24 voices</b> on a smaller die,
-      out of Eurorack jacks through a real codec, TRS MIDI in, and a 720×720p60 DVI visualiser.
-      Class-compliant USB audio, so any DAW sees it without a driver.</p>
-      <p class="small">Amaranth shell · fully open yosys + nextpnr-ecp5.</p>
-    </div>
-  </div>
-  <div class="body" style="margin-top:40px; max-width:1150px; font-size:19px;">
-    <p>Nothing in <code>synth.x</code> knows which board it is on. Retargeting to the ECP5 was
-    <b>recompiling the same source at a different <code>--pipeline_stages</code></b> — 48 down to 12 —
-    not a rewrite. That is the dividend of letting a compiler schedule the pipeline instead of
-    placing it by hand.</p>
-  </div>
-  <div class="dgbox" style="margin-top:32px; padding:16px 26px;">
-    <div class="dgd" style="font-size:16.5px; margin-top:0;"><b style="color:#3c4043;">Shared,
-    unchanged:</b> one generated <code>engine.v</code> · one browser panel · one <code>host/</code>
-    toolchain · one 175-case scored suite. Which board it is pointed at is a flag.</div>
   </div></section>
 
 <!-- ============ DEMO ============ -->
@@ -1356,8 +1325,7 @@
   <div class="num">04</div>
   <div class="name">Architecture deep-dive</div>
   <div class="kick">One clock, one sample rate. Everything is either a pure function or a small proc —
-  and the synth emits one audio sample per tick. Then: what has to change when the same engine is
-  asked to fit a second, smaller chip.</div>
+  and the synth emits one audio sample per tick.</div>
 </section>
 
 <!-- ============ 20 · TIMING ============ -->
@@ -2499,137 +2467,6 @@
     26 DSP48 + 32 BRAM on Vivado, halving the critical path (~40 → ~18.5 ns) and restoring true 32 kHz.</p>
   </div></section>
 
-<!-- ============ 23c · TILIQUA · TWO SHELLS ============ -->
-<section class="slide">
-  <div class="h">Two shells, one engine</div>
-  <div class="hsub">The generated <code>engine.v</code> is the same logic on both boards. Every number
-  that differs lives in the shell around it.</div>
-  <table class="gt compact">
-    <thead><tr><th style="width:200px;"></th><th style="width:390px;">Basys 3 · Artix-7</th><th>Tiliqua · ECP5</th></tr></thead>
-    <tbody>
-      <tr><td>Shell &amp; P&amp;R</td><td>Verilog <code>rtl/top.v</code> — Vivado, F4PGA or openXC7</td>
-        <td>Amaranth <code>gateware/</code> — yosys + nextpnr-ecp5, fully open</td></tr>
-      <tr><td>Engine clock</td><td>100 MHz, engine on a ÷3 clock-enable</td>
-        <td>12.288 MHz — an SI5351 wired straight into the fabric, no FPGA PLL</td></tr>
-      <tr><td>Pipeline depth</td><td><code>STAGES=48</code> → 768 cycles per sample</td>
-        <td><code>STAGES=12</code> → 224, because that clock only allows 384</td></tr>
-      <tr><td>Sample rate</td><td>32 kHz — the shell <i>pushes</i> samples</td>
-        <td>the codec <i>pulls</i>: 48 kHz of demand through a 3/2 resampler lands on the engine as exactly 32 kHz</td></tr>
-      <tr><td>Audio &amp; MIDI</td><td>16-bit PCM and MIDI over one 2 Mbaud UART</td>
-        <td>Eurorack jacks via an AK4619 · UAC2 audio + USB-MIDI on one USB-C · TRS MIDI in</td></tr>
-      <tr><td>Multiplies</td><td>26 × DSP48E1, of 90</td>
-        <td>27 × MULT18X18D, of 28 — all but one on the die</td></tr>
-      <tr><td>You can watch</td><td>16 LEDs as a voice-activity comet, 7-segment</td>
-        <td>720×720p60 DVI — one tile per voice, no framebuffer</td></tr>
-    </tbody>
-  </table>
-  <div class="body" style="margin-top:28px; max-width:1150px; font-size:18px;">
-    <p class="mut">Reshaping the multiplies for the ECP5's narrower 18×18 tiles made the <i>Basys 3</i>
-    build cheaper too: 78 fewer LUTs, a 0.32 ns shorter path, the same 26 DSP48 — and 3,000 audio
-    samples bit-identical. Porting paid a dividend backwards.</p>
-  </div></section>
-
-<!-- ============ 23d · TILIQUA · THE SQUEEZE ============ -->
-<section class="slide">
-  <div class="h">93.5% of the die, and a 6% bet</div>
-  <div class="hsub">The Artix-7 build sits at about half the chip. The ECP5 one has no such room, and
-  everything on this slide follows from that.</div>
-  <div class="rows" style="grid-template-columns: 320px 1fr; row-gap: 42px; margin-top: 52px;">
-    <div class="lbl">Full, by every measure</div>
-    <ul class="dots">
-      <li><b>22,722 of 24,288</b> logic cells at 24 voices — <b>93.5%</b>, and <b>98.9%</b> at 32 ·
-      27 of 28 multipliers · 53 of 56 block RAMs</li>
-    </ul>
-    <div class="lbl">The clock does not close</div>
-    <ul class="dots">
-      <li>The USB PHY fixes that domain at <b>60 MHz</b>; nextpnr closes the 24-voice build at
-      <b>56.63</b>. Shipping it is a bet that the silicon is <b>6% faster than the model</b> — at
-      32 voices the same bet is <b>29%</b>, and it has already failed on one module</li>
-    </ul>
-    <div class="lbl">Placement is the variable</div>
-    <ul class="dots">
-      <li>At this occupancy the router seed decides. A <b>24-seed sweep spanned 51.60 → 56.63 MHz</b>
-      on one netlist — and winners do not transfer: the seed that takes the 56.63 read 50.90, near
-      the bottom of the draw, one commit earlier</li>
-    </ul>
-    <div class="lbl">Even the git hash moves it</div>
-    <ul class="dots">
-      <li>The build stamp is a ROM, so a dirty tree's six extra characters change its width, change
-      the netlist, and re-draw the whole lottery. A release build is a <b>clean-tree</b> build, and
-      every netlist change costs a fresh sweep</li>
-    </ul>
-  </div></section>
-
-<!-- ============ 23e · TILIQUA · THE SCREEN ============ -->
-<section class="slide">
-  <div class="h">A 720×720p60 display with no framebuffer</div>
-  <div class="hsub">Because there was nowhere to put one — and the design got <i>smaller</i> for going without.</div>
-  <div class="cols c3" style="margin-top:50px;">
-    <div>
-      <div class="lbl">Race the beam</div>
-      <p>Each pixel's colour is computed in the cycle before it is sent, from the beam position and a
-      <b>32-byte store</b>: one 15-bit word per voice, brightness from its envelope and hue from its
-      pitch.</p>
-      <p class="small">A framebuffer holding the same information is <b>1.5 MB</b>. The whole die has
-      56 block RAMs.</p>
-    </div>
-    <div>
-      <div class="lbl">One BRAM is the whole crossing</div>
-      <p>That store is dual-port: written from the <code>audio</code> domain at 12.288 MHz, read from
-      <code>dvi</code> at 39.07. No FIFO, no handshake, no synchroniser.</p>
-      <p class="small">Neither side needs to know what the other is doing — the reader only ever
-      wants the newest value, which is what the port hands it.</p>
-    </div>
-    <div>
-      <div class="lbl">It paid for itself</div>
-      <p>The SDK's video path streams out of PSRAM, which is where the echo delay line lived. Going
-      framebuffer-free removed the second client — and then removed PSRAM.</p>
-      <p class="small"><b>24,107 cells (99%) → 23,404 (96%)</b>, and that domain's Fmax went
-      40.17 → 44.71 MHz. The design gained a screen and shrank.</p>
-    </div>
-  </div>
-  <div class="body" style="margin-top:38px; max-width:1150px; font-size:18px;">
-    <p class="mut">The tiles themselves are 235 cells — <b>1.0% of the device</b>. Rendering them on
-    the host and streaming pixels in was killed by measuring it: 93 MB/s wanted, against a USB device
-    with no bulk endpoint and a ~40 MB/s ceiling.</p>
-  </div></section>
-
-<!-- ============ 23f · TILIQUA · ONE LOOP, TWO BOARDS ============ -->
-<section class="slide">
-  <div class="h">The loop reached the second board by swapping one object</div>
-  <div class="hsub">Same 175 cases, same grader, same thresholds — a <code>Transport</code> that read
-  UART bytes became one that opens a UAC2 capture.</div>
-  <div class="split" style="grid-template-columns: 640px 1fr; margin-top: 36px;">
-    <div class="body">
-      <ul class="dots">
-        <li>The shipped 24-voice build grades <b>99.8 / 100 (A+)</b> on the module — 174 pass,
-        1 warn, 0 fail, USB frame gaps <b>0.00%</b> across 175 captures</li>
-        <li>That one warn is a filter-sweep brightness measurement <b>both boards share</b>, and it
-        predates the port</li>
-        <li>The boards disagree about sample rate, so the suite is told which one it is talking to
-        and then asserts the rate it actually got</li>
-      </ul>
-      <p style="margin-top:22px;"><b>And the part that does not fit the story:</b> an earlier and
-      <i>slower</i> 32-voice bitstream ran perfectly here, and <b>did not run on one of the maker's
-      two modules</b>. Static timing says neither should work. On this die it does.</p>
-      <p class="small mut" style="margin-top:14px;">Still open, still undiagnosed — and the reason
-      24 voices, not 32, is the build this repo stands behind.</p>
-    </div>
-    <div>
-      <div class="imgcap" style="text-align:left; margin-top:2px;">Recorded off the module over USB —
-      four parts, no room mic, no software instruments:</div>
-      <a class="ytrow" href="https://youtu.be/sWc6g7cgsd4" target="_blank" rel="noopener">
-        <span class="ythumb"><img src="https://img.youtube.com/vi/sWc6g7cgsd4/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
-        <span class="ytt">The panel playing the module</span><span class="ytm">live demo</span></a>
-      <a class="ytrow" href="https://youtu.be/UPpt41BPEH8" target="_blank" rel="noopener">
-        <span class="ythumb"><img src="https://img.youtube.com/vi/UPpt41BPEH8/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
-        <span class="ytt">Bach · Goldberg Aria</span><span class="ytm">4 parts · 1:45</span></a>
-      <a class="ytrow" href="https://youtu.be/Qv_raL9kz5I" target="_blank" rel="noopener">
-        <span class="ythumb"><img src="https://img.youtube.com/vi/Qv_raL9kz5I/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
-        <span class="ytt">Vivaldi · Winter, Largo</span><span class="ytm">4 parts · 1:45</span></a>
-    </div>
-  </div></section>
-
 <!-- ============ 23b · PRESET SEARCH ============ -->
 <section class="slide">
   <div class="h">The factory presets were searched, not dialled in</div>
@@ -2910,6 +2747,306 @@
     </div>
   </div>
 </section>
+
+<!-- ============ SECTION A · APPENDIX ============ -->
+<section class="slide divider">
+  <div class="num">A</div>
+  <div class="name">Appendix<br>The ECP5 port</div>
+  <div class="kick">The same engine is also a Eurorack module. Everything from here is the second
+  board — what the shell had to become, and which numbers moved when the same source was asked to
+  fit a smaller die.</div>
+</section>
+
+<!-- ============ TWO BOARDS ============ -->
+<section class="slide">
+  <div class="h">…and the same engine is also a Eurorack module</div>
+  <div class="hsub">From here on this is one design on two boards. Where the numbers differ, both are given.</div>
+  <div class="cols" style="grid-template-columns: repeat(2, 1fr); margin-top: 46px; gap: 64px;">
+    <div>
+      <div class="lbl">Basys 3 — the development board</div>
+      <p>Digilent Basys 3, Xilinx Artix-7 <code>xc7a35t</code>. <b>32 voices</b>; audio and MIDI both
+      travel down one USB UART and are graded on the host by FFT. Where the project started, and
+      where an engine change is still measured first.</p>
+      <p class="small">Verilog shell · Vivado builds the shipped bitstream.</p>
+    </div>
+    <div>
+      <div class="lbl">Tiliqua R5 — the instrument</div>
+      <p>apf.audio Tiliqua, Lattice ECP5 <code>LFE5U-25F</code>. <b>24 voices</b> on a smaller die,
+      out of Eurorack jacks through a real codec, TRS MIDI in, and a 720×720p60 DVI visualiser.
+      Class-compliant USB audio, so any DAW sees it without a driver.</p>
+      <p class="small">Amaranth shell · fully open yosys + nextpnr-ecp5.</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:40px; max-width:1150px; font-size:19px;">
+    <p>Nothing in <code>synth.x</code> knows which board it is on. Retargeting to the ECP5 was
+    <b>recompiling the same source at a different <code>--pipeline_stages</code></b> — 48 down to 12 —
+    not a rewrite. That is the dividend of letting a compiler schedule the pipeline instead of
+    placing it by hand.</p>
+  </div>
+  <div class="dgbox" style="margin-top:32px; padding:16px 26px;">
+    <div class="dgd" style="font-size:16.5px; margin-top:0;"><b style="color:#3c4043;">Shared,
+    unchanged:</b> one generated <code>engine.v</code> · one browser panel · one <code>host/</code>
+    toolchain · one 175-case scored suite. Which board it is pointed at is a flag.</div>
+  </div></section>
+
+<!-- ============ 23c · TILIQUA · TWO SHELLS ============ -->
+<section class="slide">
+  <div class="h">Two shells, one engine</div>
+  <div class="hsub">The generated <code>engine.v</code> is the same logic on both boards. Every number
+  that differs lives in the shell around it.</div>
+  <table class="gt compact">
+    <thead><tr><th style="width:200px;"></th><th style="width:390px;">Basys 3 · Artix-7</th><th>Tiliqua · ECP5</th></tr></thead>
+    <tbody>
+      <tr><td>Shell &amp; P&amp;R</td><td>Verilog <code>rtl/top.v</code> — Vivado, F4PGA or openXC7</td>
+        <td>Amaranth <code>gateware/</code> — yosys + nextpnr-ecp5, fully open</td></tr>
+      <tr><td>Engine clock</td><td>100 MHz, engine on a ÷3 clock-enable</td>
+        <td>12.288 MHz — an SI5351 wired straight into the fabric, no FPGA PLL</td></tr>
+      <tr><td>Pipeline depth</td><td><code>STAGES=48</code> → 768 cycles per sample</td>
+        <td><code>STAGES=12</code> → 224, because that clock only allows 384</td></tr>
+      <tr><td>Sample rate</td><td>32 kHz — the shell <i>pushes</i> samples</td>
+        <td>the codec <i>pulls</i>: 48 kHz of demand through a 3/2 resampler lands on the engine as exactly 32 kHz</td></tr>
+      <tr><td>Audio &amp; MIDI</td><td>16-bit PCM and MIDI over one 2 Mbaud UART</td>
+        <td>Eurorack jacks via an AK4619 · UAC2 audio + USB-MIDI on one USB-C · TRS MIDI in</td></tr>
+      <tr><td>Multiplies</td><td>26 × DSP48E1, of 90</td>
+        <td>27 × MULT18X18D, of 28 — all but one on the die</td></tr>
+      <tr><td>You can watch</td><td>16 LEDs as a voice-activity comet, 7-segment</td>
+        <td>720×720p60 DVI — one tile per voice, no framebuffer</td></tr>
+    </tbody>
+  </table>
+  <div class="body" style="margin-top:28px; max-width:1150px; font-size:18px;">
+    <p class="mut">Reshaping the multiplies for the ECP5's narrower 18×18 tiles made the <i>Basys 3</i>
+    build cheaper too: 78 fewer LUTs, a 0.32 ns shorter path, the same 26 DSP48 — and 3,000 audio
+    samples bit-identical. Porting paid a dividend backwards.</p>
+  </div></section>
+
+<!-- ============ A3 · TILIQUA · CLOCKS ============ -->
+<section class="slide">
+  <div class="h">Four clock domains, and the engine's is not the FPGA's</div>
+  <div class="hsub">Basys 3 has one oscillator, no PLL, and a ÷3 enable. Here the engine's clock
+  arrives from an SI5351 on the other side of the board, and the FPGA never divides it.</div>
+  <table class="gt compact" style="margin-top:26px;">
+    <thead><tr><th style="width:150px;">Domain</th><th style="width:142px;">Rate</th><th style="width:306px;">Source</th><th>What runs in it</th></tr></thead>
+    <tbody>
+      <tr><td style="background:#e6f4ea; border-left:4px solid #188038; color:#0d652d;"><b>audio</b></td>
+        <td style="background:#e6f4ea;"><b style="color:#0d652d;">12.288 MHz</b></td>
+        <td style="background:#e6f4ea;"><b style="color:#0d652d;">SI5351 <code>clk0</code>, straight into the fabric</b></td>
+        <td style="background:#e6f4ea; color:#0d652d;"><b style="font-weight:600;">The XLS engine, its boot ROM and the visualiser tap</b></td></tr>
+      <tr><td><code>sync</code> + <code>usb</code></td><td>60 MHz</td>
+        <td>ECP5 PLL off the 48 MHz oscillator — and the ULPI PHY fixes it there</td>
+        <td>Everything else: MIDI, the effects, the codec, the USB tee, luna's whole stack</td></tr>
+      <tr><td><code>dvi</code> (+<code>dvi5x</code>)</td><td>39.07 MHz</td>
+        <td>SI5351 <code>clk1</code> → the <i>second</i> ECP5 PLL</td>
+        <td>The voice tiles and the TMDS PHY</td></tr>
+      <tr><td><code>fast</code></td><td>120 MHz</td><td>ECP5 PLL</td>
+        <td>SDK infrastructure — unused by this design</td></tr>
+    </tbody>
+  </table>
+  <div class="ladder" style="grid-template-columns: repeat(3, 1fr); margin-top:30px;">
+    <div class="opt">
+      <div class="ot">Run it in <code>sync</code> at ÷1</div>
+      <div class="ou">60 MHz, one domain, nothing to cross.</div>
+      <div class="om">Not available. No <code>STAGES</code> reaches 60 MHz — the best measured is
+      59.2 at 48, and that costs 70% of the device's flip-flops.</div>
+    </div>
+    <div class="opt">
+      <div class="ot">…with a clock enable</div>
+      <div class="ou">What Basys 3 does: gate every register ÷3.</div>
+      <div class="om">Not available either. An enable does not relax a register-to-register path.
+      Vivado is <i>told</i> the path is multicycle; nextpnr-ecp5 has no equivalent.</div>
+    </div>
+    <div class="opt hl">
+      <div class="badge">built</div>
+      <div class="ot">Give it a clock of its own</div>
+      <div class="ou">12.288 MHz, from a part already on the board.</div>
+      <div class="op"><code>STAGES=12</code> closes at 27.5 MHz and needs 7.2 — <b>1.7× margin</b>,
+      and the engine runs on every edge.</div>
+    </div>
+  </div>
+  <div class="body" style="margin-top:24px; max-width:1150px;">
+    <p class="mut" style="font-size:17px;">Two <code>AsyncFIFO</code>s are the whole crossing — 4 deep
+    for MIDI in, 8 deep for audio out. The clock-enable port <code>fix_verilog.py</code> injects for
+    the Basys 3 is still in this Verilog, because it is the <i>same</i> Verilog; here it is tied high
+    and dead.</p>
+  </div></section>
+
+<!-- ============ A4 · TILIQUA · PIPELINE ============ -->
+<section class="slide">
+  <div class="h">The same source, scheduled into 12 stages instead of 48</div>
+  <div class="hsub"><code>--pipeline_stages</code> is a codegen flag, not a source change — and it is
+  the only knob that had to move for the engine to fit a 12.288 MHz clock.</div>
+  <div style="margin-top:34px;">
+<svg viewBox="0 0 1152 200" width="100%" style="display:block;">
+  <rect x="160" y="30" width="476" height="152" rx="4" fill="#e6f4ea"/>
+  <line x1="636" y1="30" x2="636" y2="182" stroke="#188038" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="0" y="16" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#5f6368">Engine cycles to compute one 32 kHz sample</text>
+  <text x="644" y="16" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#0d652d" font-weight="700">384 — every cycle a 12.288 MHz clock has to give</text>
+
+  <text x="0" y="66" font-family="Roboto Mono, monospace" font-size="13.5" fill="#5f6368">STAGES=48</text>
+  <rect x="160" y="50" width="952" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+  <text x="1100" y="67" text-anchor="end" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#c5221f" font-weight="700">768 — fine on Basys 3, where 3,125 clocks are on offer</text>
+
+  <text x="0" y="122" font-family="Roboto Mono, monospace" font-size="13.5" fill="#5f6368">STAGES=12</text>
+  <rect x="160" y="106" width="278" height="24" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+  <text x="450" y="123" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#1a73e8">224 at 32 voices</text>
+
+  <text x="0" y="174" font-family="Roboto Mono, monospace" font-size="13.5" fill="#0d652d" font-weight="700">shipped</text>
+  <rect x="160" y="158" width="208" height="24" rx="4" fill="#ffffff" stroke="#188038" stroke-width="2"/>
+  <text x="380" y="175" font-family="Roboto, Arial, sans-serif" font-size="13.5" fill="#0d652d" font-weight="700">~168 at 24 voices — 43.8% of the period</text>
+</svg>
+  </div>
+  <div class="rows" style="grid-template-columns: 300px 1fr; row-gap: 18px; margin-top: 24px;">
+    <div class="lbl" style="font-size:21px;">Why not one cycle a voice</div>
+    <ul class="dots"><li style="font-size:17.5px;">A sample costs <code>voices</code> × roughly
+    <code>STAGES</code>/2 engine cycles. The ring keeps a voice in the pipeline for half its depth, so
+    the depth the compiler chose is also the width of the bar above.</li></ul>
+    <div class="lbl" style="font-size:21px;">Depth is not throughput</div>
+    <ul class="dots"><li style="font-size:17.5px;">Both the clock the engine <i>needs</i> and the Fmax it
+    <i>reaches</i> rise with <code>STAGES</code>, so raising it buys timing slack and spends flip-flops.
+    The sustainable rate stays above 57 kHz at every value that fits. <b>Sample rate was never the
+    constraint on this port. Area was.</b></li></ul>
+    <div class="lbl" style="font-size:21px;">48 fits, and costs too much</div>
+    <ul class="dots"><li style="font-size:17.5px;">On the ECP5 <code>STAGES=48</code> closes at 59.2 MHz —
+    still short of the 60 the USB PHY demands — and takes <b>70% of the device's flip-flops</b> on a
+    die that is already 93.5% full.</li></ul>
+  </div></section>
+
+<!-- ============ A5 · TILIQUA · BUILD & P&R ============ -->
+<section class="slide">
+  <div class="h">One backend, one pinned seed, an archive not a bitstream</div>
+  <div class="hsub">The first half of the build is shared to the character. The second half has no
+  Vivado in it, and does not end at <code>top.bit</code>.</div>
+  <div class="rows" style="grid-template-columns: 300px 1fr; row-gap: 26px; margin-top: 40px;">
+    <div class="lbl">Shared, to the flag</div>
+    <ul class="dots">
+      <li><code>core/synth.x</code> → <code>ir_converter</code> → <code>opt</code> →
+      <code>codegen</code> → <code>fix_verilog.py</code>: the same script and the same pinned XLS
+      build, with one number different. It still runs in Docker on <code>linux/amd64</code>, because
+      XLS ships no arm64 binary</li>
+    </ul>
+    <div class="lbl">Then Amaranth, not Verilog</div>
+    <ul class="dots">
+      <li><code>top.py</code> elaborates the shell around the engine, which is handed to the build
+      <b>by contents rather than by path</b> — yowasp's yosys runs under WASI and cannot see a file
+      outside its own working directory</li>
+    </ul>
+    <div class="lbl">One backend, fully open</div>
+    <ul class="dots">
+      <li>yosys → nextpnr-ecp5 → ecppack, all through <code>yowasp</code> and all native on Apple
+      Silicon — the reference core end to end in <b>35.8 s</b>, where the Basys 3's Vivado path
+      needed a remote VM. P&amp;R is pinned:
+      <code>--router router2 --router2-tmg-ripup --seed 7 --timing-allow-fail</code>, the last flag
+      because this design has never closed 60 MHz</li>
+    </ul>
+    <div class="lbl">The output is not a bitstream</div>
+    <ul class="dots">
+      <li>A <code>.tar.gz</code> whose <code>manifest.json</code> carries
+      <code>clk0_hz: 12288000</code>, written to bootloader <b>slot 7</b>. The bootloader programs
+      the SI5351 from that manifest on every cold boot — so the engine's clock lives in the flash
+      image, not in the gateware</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 23d · TILIQUA · THE SQUEEZE ============ -->
+<section class="slide">
+  <div class="h">93.5% of the die, and a 6% bet</div>
+  <div class="hsub">The Artix-7 build sits at about half the chip. The ECP5 one has no such room, and
+  everything on this slide follows from that.</div>
+  <div class="rows" style="grid-template-columns: 320px 1fr; row-gap: 42px; margin-top: 52px;">
+    <div class="lbl">Full, by every measure</div>
+    <ul class="dots">
+      <li><b>22,722 of 24,288</b> logic cells at 24 voices — <b>93.5%</b>, and <b>98.9%</b> at 32 ·
+      27 of 28 multipliers · 53 of 56 block RAMs</li>
+    </ul>
+    <div class="lbl">The clock does not close</div>
+    <ul class="dots">
+      <li>The USB PHY fixes that domain at <b>60 MHz</b>; nextpnr closes the 24-voice build at
+      <b>56.63</b>. Shipping it is a bet that the silicon is <b>6% faster than the model</b> — at
+      32 voices the same bet is <b>29%</b>, and it has already failed on one module</li>
+    </ul>
+    <div class="lbl">Placement is the variable</div>
+    <ul class="dots">
+      <li>At this occupancy the router seed decides. A <b>24-seed sweep spanned 51.60 → 56.63 MHz</b>
+      on one netlist — and winners do not transfer: the seed that takes the 56.63 read 50.90, near
+      the bottom of the draw, one commit earlier</li>
+    </ul>
+    <div class="lbl">Even the git hash moves it</div>
+    <ul class="dots">
+      <li>The build stamp is a ROM, so a dirty tree's six extra characters change its width, change
+      the netlist, and re-draw the whole lottery. A release build is a <b>clean-tree</b> build, and
+      every netlist change costs a fresh sweep</li>
+    </ul>
+  </div></section>
+
+<!-- ============ 23e · TILIQUA · THE SCREEN ============ -->
+<section class="slide">
+  <div class="h">A 720×720p60 display with no framebuffer</div>
+  <div class="hsub">Because there was nowhere to put one — and the design got <i>smaller</i> for going without.</div>
+  <div class="cols c3" style="margin-top:50px;">
+    <div>
+      <div class="lbl">Race the beam</div>
+      <p>Each pixel's colour is computed in the cycle before it is sent, from the beam position and a
+      <b>32-byte store</b>: one 15-bit word per voice, brightness from its envelope and hue from its
+      pitch.</p>
+      <p class="small">A framebuffer holding the same information is <b>1.5 MB</b>. The whole die has
+      56 block RAMs.</p>
+    </div>
+    <div>
+      <div class="lbl">One BRAM is the whole crossing</div>
+      <p>That store is dual-port: written from the <code>audio</code> domain at 12.288 MHz, read from
+      <code>dvi</code> at 39.07. No FIFO, no handshake, no synchroniser.</p>
+      <p class="small">Neither side needs to know what the other is doing — the reader only ever
+      wants the newest value, which is what the port hands it.</p>
+    </div>
+    <div>
+      <div class="lbl">It paid for itself</div>
+      <p>The SDK's video path streams out of PSRAM, which is where the echo delay line lived. Going
+      framebuffer-free removed the second client — and then removed PSRAM.</p>
+      <p class="small"><b>24,107 cells (99%) → 23,404 (96%)</b>, and that domain's Fmax went
+      40.17 → 44.71 MHz. The design gained a screen and shrank.</p>
+    </div>
+  </div>
+  <div class="body" style="margin-top:38px; max-width:1150px; font-size:18px;">
+    <p class="mut">The tiles themselves are 235 cells — <b>1.0% of the device</b>. Rendering them on
+    the host and streaming pixels in was killed by measuring it: 93 MB/s wanted, against a USB device
+    with no bulk endpoint and a ~40 MB/s ceiling.</p>
+  </div></section>
+
+<!-- ============ 23f · TILIQUA · ONE LOOP, TWO BOARDS ============ -->
+<section class="slide">
+  <div class="h">The loop reached the second board by swapping one object</div>
+  <div class="hsub">Same 175 cases, same grader, same thresholds — a <code>Transport</code> that read
+  UART bytes became one that opens a UAC2 capture.</div>
+  <div class="split" style="grid-template-columns: 640px 1fr; margin-top: 36px;">
+    <div class="body">
+      <ul class="dots">
+        <li>The shipped 24-voice build grades <b>99.8 / 100 (A+)</b> on the module — 174 pass,
+        1 warn, 0 fail, USB frame gaps <b>0.00%</b> across 175 captures</li>
+        <li>That one warn is a filter-sweep brightness measurement <b>both boards share</b>, and it
+        predates the port</li>
+        <li>The boards disagree about sample rate, so the suite is told which one it is talking to
+        and then asserts the rate it actually got</li>
+      </ul>
+      <p style="margin-top:22px;"><b>And the part that does not fit the story:</b> an earlier and
+      <i>slower</i> 32-voice bitstream ran perfectly here, and <b>did not run on one of the maker's
+      two modules</b>. Static timing says neither should work. On this die it does.</p>
+      <p class="small mut" style="margin-top:14px;">Still open, still undiagnosed — and the reason
+      24 voices, not 32, is the build this repo stands behind.</p>
+    </div>
+    <div>
+      <div class="imgcap" style="text-align:left; margin-top:2px;">Recorded off the module over USB —
+      four parts, no room mic, no software instruments:</div>
+      <a class="ytrow" href="https://youtu.be/sWc6g7cgsd4" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/sWc6g7cgsd4/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">The panel playing the module</span><span class="ytm">live demo</span></a>
+      <a class="ytrow" href="https://youtu.be/UPpt41BPEH8" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/UPpt41BPEH8/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">Bach · Goldberg Aria</span><span class="ytm">4 parts · 1:45</span></a>
+      <a class="ytrow" href="https://youtu.be/Qv_raL9kz5I" target="_blank" rel="noopener">
+        <span class="ythumb"><img src="https://img.youtube.com/vi/Qv_raL9kz5I/mqdefault.jpg" alt=""><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.5.3 34 .3 34 .3S12.5.3 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C.1 12.8.1 24 .1 24s0 11.2 1.4 16.3c.8 2.9 3 5.2 5.9 6 5.1 1.4 26.6 1.4 26.6 1.4s21.5 0 26.6-1.4c2.9-.8 5.1-3.1 5.9-6C67.9 35.2 67.9 24 67.9 24s0-11.2-1.4-16.3z" fill="#f00"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span>
+        <span class="ytt">Vivaldi · Winter, Largo</span><span class="ytm">4 parts · 1:45</span></a>
+    </div>
+  </div></section>
+
 
 </div></div>
 
