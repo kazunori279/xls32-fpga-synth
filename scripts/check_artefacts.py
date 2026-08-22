@@ -28,7 +28,10 @@ learn to skip.
 
 Run `--update` only when the artefact sitting in the tree was *just built from the tree as it
 stands*. The record is a claim about provenance; updating it on a dirty or unrelated tree turns
-that claim into a false one, which is worse than having no check at all.
+that claim into a false one, which is worse than having no check at all. It takes an artefact
+name for that reason, and skips any whose bytes have not changed since they were recorded --
+a bare `--update` after rebuilding one board would otherwise stamp today's commit onto every
+other one and drop their waivers.
 """
 
 import argparse
@@ -519,6 +522,8 @@ def check(name, spec, record):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--update", action="store_true", help="re-record, after a rebuild")
+    ap.add_argument("--force", action="store_true",
+                    help="with --update, record even artefacts whose bytes have not changed")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the comment-stripping is not blind to real edits")
     ap.add_argument("--strict", action="store_true",
@@ -543,9 +548,22 @@ def main():
     if args.update:
         for name in names:
             spec = ARTEFACTS[name]
+            digest = sha256(ROOT / spec["artefact"])
+            # An artefact whose bytes have not moved was not rebuilt, whatever the sources did.
+            # Recording it anyway is the exact failure the docstring above warns about, and a bare
+            # `--update` after rebuilding one board hits every other one: it stamps today's commit
+            # onto a bitstream built weeks ago and drops any `known_stale` waiver explaining why it
+            # is behind. Skipping is the safe default because a real rebuild always changes the
+            # bytes -- the build stamp alone guarantees it. --force is for re-recording sources
+            # against an artefact you know is current.
+            if not args.force and state.get(name, {}).get("artefact_sha256") == digest:
+                print(f"skipped {name}: unchanged since it was recorded at "
+                      f"{state[name].get('built_from_commit', '?')}, so it was not rebuilt "
+                      "(--force to record anyway)")
+                continue
             state[name] = {
                 "artefact": spec["artefact"],
-                "artefact_sha256": sha256(ROOT / spec["artefact"]),
+                "artefact_sha256": digest,
                 "built_from_commit": head_commit(),
                 "built_on": datetime.date.today().isoformat(),
                 "hash_scheme": SCHEME,

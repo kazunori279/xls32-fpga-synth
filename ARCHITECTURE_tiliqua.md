@@ -42,7 +42,7 @@ are gone, so the question is never whether the idea works but what it displaces.
 - [Part D — The beam-raced visualiser](#part-d--the-beam-raced-visualiser)
   - [D1 No framebuffer](#d1-no-framebuffer) · [D2 The voice grid](#d2-the-voice-grid) · [D3 What deleting PSRAM bought](#d3-what-deleting-psram-bought)
 - [Part E — Constraints, area and timing](#part-e--constraints-area-and-timing)
-  - [E1 The six hard constraints](#e1-the-six-hard-constraints) · [E2 The area census](#e2-the-area-census) · [E3 Multipliers: 28 of 28](#e3-multipliers-28-of-28) · [E4 The timing shortfall, and the die it does not run on](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)
+  - [E1 The six hard constraints](#e1-the-six-hard-constraints) · [E2 The area census](#e2-the-area-census) · [E3 Multipliers: 27 of 28](#e3-multipliers-27-of-28) · [E4 The timing shortfall, and the die it does not run on](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)
 
 ---
 
@@ -137,18 +137,18 @@ design on this module starts from:
 
 | resource | **24 voices (shipped)** | 32 voices (experimental) | vendor reference shell |
 |---|---|---|---|
-| TRELLIS_COMB | **22,985 of 24,288 (94.6%)** | 24,023 (98.9%) | 1,768 (7%) |
+| TRELLIS_COMB | **22,722 of 24,288 (93.5%)** | 24,023 (98.9%) | 1,768 (7%) |
 | TRELLIS_FF | **11,931 of 24,288 (49%)** | 13,223 (54%) | 731 (3%) |
 | DP16KD | **53 of 56 (94%)** | 53 (94%) | 0 (0%) |
-| MULT18X18D | **28 of 28 (100%)** | 28 (100%) | 1 (4%) |
+| MULT18X18D | **27 of 28 (96%)** | 28 (100%) | 1 (4%) |
 | EHXPLLL | **2 of 2 (100%)** | 2 (100%) | 1 (50%) |
 | TRELLIS_IO | **86 of 197 (43%)** | 86 (43%) | — |
 
-**Since M38 the tree no longer builds the shipped column.** Removing the echo tap's constant
-multiply ([E3](#e3-multipliers-28-of-28)) takes the 24-voice netlist to **22,722 TRELLIS_COMB
-(93.5%)** and **27 of 28 MULT18X18D**, and its best measured seed to 56.63 MHz. That build has not
-been on hardware, so the archive — and this table — still describe 9976c4e. The two reconverge on
-the next board day; until then, read "shipped" literally.
+The 24-voice column is M38 (`76401a5`, `--seed 7`), graded on hardware at 99.8/100 on 2026-08-22.
+It is 263 cells and one multiplier below M37's because the echo tap stopped spending a DSP on a
+constant ([E3](#e3-multipliers-27-of-28)) — the only time this design has ever had a spare
+multiplier. The 32-voice column is still cd2e2c2 and has not been rebuilt against any of it
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
 
 Only the two fabric rows move with voice count, and that is the point: voices are time-multiplexed
 through one datapath ([A2](#a2-the-engine-as-an-amaranth-submodule)), so the multipliers and the BRAM are
@@ -814,7 +814,7 @@ bitstreams loaded back to back it separates them 10-of-11 to 0-of-9; see
 
 **The filter is `x − lowpass(x)`, and the lowpass has no multiplier.** `dsp.OnePole` is
 `state += (input − state) >> shift`, which is a shift and two adders. That is not a stylistic
-preference: `MULT18X18D` is **28 of 28** on this bitstream ([E3](#e3-multipliers-28-of-28)), which
+preference: `MULT18X18D` is **27 of 28** on this bitstream ([E3](#e3-multipliers-27-of-28)), which
 also rules out the SDK's `dsp.filters.DCBlock` — the obvious choice — because it wants a MAC.
 `DEFAULT_SHIFT = 10` puts the corner near 7.5 Hz, below the lowest note the engine can play and well
 above the drift it has to remove.
@@ -1202,7 +1202,7 @@ visible when nothing is playing: a black screen is indistinguishable from a vide
 working, and that ambiguity has cost a debugging session before.
 
 **Gotcha — the corner ROM.** `dx*dx + dy*dy <= r*r` is two multiplies in the pixel path, on a design
-with zero spare multipliers ([E3](#e3-multipliers-28-of-28)). The quarter circle is baked into
+with zero spare multipliers ([E3](#e3-multipliers-27-of-28)). The quarter circle is baked into
 eighteen 5-bit words instead. The radius is also clamped to half the shape, or the two corners on
 one edge meet and the rectangle develops a waist — only the test geometry's miniature tiles come
 near it, but clamping is one line and a waist is a confusing bug.
@@ -1274,7 +1274,7 @@ resolved facts about the shipped design — the narrative of how each was hit is
 18×18, so yosys splits any operand wider than 18 bits into 2–4 tiles — and `synth.x` deliberately
 widened some operands to fit *one* DSP48. The naive expectation was **40–60 tiles against a budget
 of 28**. Fixed in the DSLX by narrowing operands to ≤18×18, not worked around downstream, and the
-narrowing made the Basys 3 build cheaper too. See [E3](#e3-multipliers-28-of-28).
+narrowing made the Basys 3 build cheaper too. See [E3](#e3-multipliers-27-of-28).
 
 **2 · Block RAM.** `rtl/top.v` declares four 16384×16 buffers = 1,048,576 bits, which is 64 DP16KD
 against 56 available — before the engine's own inferred ROMs. Resolved by region-sizing the tank and
@@ -1423,8 +1423,8 @@ What is still true is the mechanism: the engine time-shares one datapath — one
 filter, the VCA and the envelopes are *the same size at any voice count*, and only the voice
 register file and the unrolled `apply_on`/`apply_off` scans scale. The corrected points put that at
 roughly 150 cells per voice, which predicts ~21,600 at 16 voices rather than a floor. Nobody has
-built it. Neither `MULT18X18D` (28/28) nor `DP16KD` (53/56) moves across the three measured, so
-cutting voices does not relieve [E3](#e3-multipliers-28-of-28) either.
+built it. Neither `MULT18X18D` (28/28 on the three measured, 27 since M38) nor `DP16KD` (53/56)
+moves with voice count, so cutting voices does not relieve [E3](#e3-multipliers-27-of-28) either.
 
 **Gotcha — the model misses in both directions, and neither miss is understood.**
 
@@ -1448,7 +1448,7 @@ Both are left alone deliberately — the design places and it runs. But a sevenf
 few hundred cells drifting downward on unchanged RTL are the same hole seen from two sides: **this
 census tells you where the area is, not what an edit will cost.** Estimate from it, then measure.
 
-## E3 Multipliers: 28 of 28
+## E3 Multipliers: 27 of 28
 
 **Where they went**, counted out of `top.json` rather than from memory: **19** in `core.engine`
 (the XLS output, after the M22 narrowing), **3** in `fx` — `mul_a`, `mul_b`, `mul_g`, the shared
@@ -1472,9 +1472,9 @@ is at 97% to relieve one that nothing is waiting on. Revisit when something actu
 multiplier. Note these two are *not* the M38 case: `6091` has nine set bits and `235` has six, so
 neither decomposes into anything as cheap as 192 did.
 
-**Gotcha.** `MULT18X18D` at 28/28 means **any new inferred multiply pushes the design into soft
-multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with 731 TRELLIS_COMB free — and that
-figure has been as low as ~515, at the 98% of [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)'s
+**Gotcha.** One spare is not room. `MULT18X18D` at 27/28 means the *second* new inferred multiply
+**pushes the design into soft multipliers**, and a soft 16×16 is hundreds of LUT4 on a die with
+1,566 TRELLIS_COMB free — and that figure has been as low as ~515, at the 98% of [E4](#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)'s
 second-to-last row. The brightness fold in
 `tile_rgb` is written the way it is — reusing `v` and `v - fv` for the `255` and `255-f` cases
 instead of scaling them properly — to save two multipliers for a difference no panel can show. That
@@ -1527,11 +1527,10 @@ logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a di
 | M35, 32 voices, `--seed 4` | 97% | `fx.rsize[0]` → `fx.mul_g[22]` | 40.95 MHz |
 | M36, **32 voices** (experimental), `--seed 5` | **98.9%** | **luna**, congestion-limited | **46.35 MHz** |
 | M36, 24 voices, `--seed 4` | 93.9% | **luna**, depth-limited | 55.48 MHz |
-| M37, **24 voices** (shipped), `--seed 3` | **94.6%** | **luna**, depth-limited | **54.30 MHz** |
-| M38, 24 voices (built, not shipped), `--seed 7` | 93.5% | **luna**, routing-limited | 56.63 MHz |
+| M37, 24 voices, `--seed 3` | 94.6% | **luna**, depth-limited | 54.30 MHz |
+| M38, **24 voices** (shipped), `--seed 7` | **93.5%** | **luna**, routing-limited | **56.63 MHz** |
 
-The last four rows are read from the `top.tim` of an archive that is committed in this repo; the
-M38 row is read from a local build and has not been on hardware. The
+The last five rows are read from the `top.tim` of an archive that is committed in this repo. The
 M35 row superseded an entry that read `M33 | 96% | 39.42 MHz` and was two netlists out of date; the
 M36 rows supersede a 24-voice row that read `80% | 46.79 MHz` and had been measured on a netlist
 yosys had pruned ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)).
@@ -1687,7 +1686,7 @@ M36 as the seed lottery and not as a cost of the change: the spread across the s
 **M38 widened that draw to 24 seeds and the extra sample paid for itself twice over.** On the M37
 netlist the full set runs 49.12 to 56.30, mean 53.15, with **2 of 24** at or above the vendor's
 55 MHz. The winner was seed 20 — and reading its critical path is what found the stray
-`MULT18X18D` in the echo tap ([E3](#e3-multipliers-28-of-28)). Nothing about a single pinned seed
+`MULT18X18D` in the echo tap ([E3](#e3-multipliers-27-of-28)). Nothing about a single pinned seed
 would have shown that: on seed 3's placement the luna cone is longer, so `fx` never appears in the
 report at all. A sweep is a sampler of *which* path is worst, not only of how fast the worst one is.
 

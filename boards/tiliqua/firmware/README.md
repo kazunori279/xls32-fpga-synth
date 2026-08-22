@@ -5,7 +5,7 @@ run the synth **without building** — no Amaranth, no yosys, no Docker.
 
 | | voices | die | `clk` post-route | slot | |
 |---|---|---|---|---|---|
-| **`xls24-r5.tar.gz`** | 24 | 94.6 % | 54.30 MHz | **7** | **formal** — what this repo stands behind |
+| **`xls24-r5.tar.gz`** | 24 | 93.5 % | 56.63 MHz | **7** | **formal** — what this repo stands behind |
 | `xls32-r5.tar.gz` | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** — see the warning below |
 
 Both are the same engine at 48 kHz: 4 multitimbral parts, resonant multimode filter, LFO, unison,
@@ -28,7 +28,7 @@ this design. At 32 voices the design fills 98.9 % of the die and closes at **46.
 bet that the silicon is **29 % faster than nextpnr models it**. That bet pays on this desk. It did
 not pay on one of the vendor's two modules, which is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and the reason any of this
-exists. At 24 voices the same design is 94.6 % and closes at **54.30 MHz** — the same bet at **11 %**.
+exists. At 24 voices the same design is 93.5 % and closes at **56.63 MHz** — the same bet at **6 %**.
 
 Eight fewer notes of polyphony for well under half the risk. If a module refuses to enumerate,
 drops audio intermittently, or gets worse as it warms up, try slot 7 before you try anything else.
@@ -120,10 +120,10 @@ those six characters change the netlist's width and re-draw the seed lottery `bu
 against. That is not theoretical — M37 measured a dirty build at 22,745 cells and the clean one at
 22,985, and the seed that won the first was the *worst* of the second.
 
-`build.sh` pins **seed 3** for 24 voices and **seed 5** for 32. Those are not preferences. At this
+`build.sh` pins **seed 7** for 24 voices and **seed 5** for 32. Those are not preferences. At this
 occupancy the router either converges or runs away depending on the seed, the winners do not
-transfer between netlists — seed 5 is the best of the 32-voice draw and among the worst of the
-24-voice one — and any netlist change costs a fresh sweep. The long version is in `build.sh`.
+transfer between netlists — seed 7 wins the 24-voice draw at 56.63 MHz and read 50.90, near the
+bottom, on the netlist one commit earlier — and any netlist change costs a fresh sweep. The long version is in `build.sh`.
 
 ## History
 

@@ -66,6 +66,7 @@ graded automatically, everything before it by hand or by simulation.
 | **34 🚧** | **The channel mode messages, and the TRS jack cleaning up after itself**: CC120/121/123 in the engine, `MidiChanWatch` + `TrsPanicInject` in the arbiter so a target change silences the part it leaves without the host's help | **on hardware, both boards**: `check_panic_hw.py` 14/14 on the module (including the injector reaping the part a target change leaves), Basys 3 `verify.sh` 4/4. Below that, `tb_panic` 10/10, `test_midi_arb.py` 9/9, `check_panic.py` PASS, Vivado **0 failing endpoints at +0.276 ns** (better than M33's +0.012), ECP5 **routed at 23,729 (97.7%), overused 0** — but only on `--seed 3`, now pinned in `build.sh`. Still unverified on hardware: `MidiChanWatch`, which needs a keyboard on the TRS jack changing its own transmit channel. CC64 was in scope and was cut for area; see [the area squeeze](#the-area-squeeze) |
 | **36 ✅** | **24 voices becomes the formal build** — and the reduced-voice ladder that ruled this out for four milestones turns out to have been measuring a netlist yosys had pruned to nothing | **the generator bug is fixed and the curve is a slope, not two rungs**: 32 → 24,023 (98.9%) / 46.35 MHz, 28 → 23,358 (96.2%) / 48.85, **24 → 22,796 (93.9%) / 55.48**, converged runs only. That takes [risk 3](#what-is-left--m32-and-the-risk-register) from a 29% bet against the silicon to 8%. On hardware: **99.8/100 (A+), 174 pass / 1 warn / 0 fail**, frame gaps 0.00%, 440.01 Hz. `xls24-r5.tar.gz` → slot 7 (formal), `xls32-r5.tar.gz` → slot 6 (experimental). Known cosmetic fallout: the visualiser's bottom row (#40) |
 | **37 ✅** | **The reduction finishes, and both boards get rebuilt**: `gateware/voices.py` becomes the one place the voice count is written (#40, #43), `--router2-tmg-ripup` goes on (#39), and the Basys 3 blob that had been two weeks behind the engine is rebuilt (#41) | **Tiliqua**: `xls24-9976c4e-r5.tar.gz` at **54.30 MHz**, 22,985 (94.6%), all six seeds converged; **99.8/100 (A+)** on the module, 174/1/0, frame gaps 0.00%, grid drawing 6×4 and the slot list naming the voice count, both confirmed on hardware. **Basys 3**: `ardy` stops being a single-cycle path, and Vivado closes at **+1.322 ns with 0 failing endpoints** (was +0.276); `verify.sh` **PASS 4/4** at 438/554/658/830 Hz. The 32-voice archive is deliberately not rebuilt and is waived by name ([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) |
+| **38 ✅** | **The echo tap stops spending a multiplier on a constant**, found by sweeping seeds rather than by reading the code: on the seed that won the sweep the critical path had left luna and landed in `fx.py` | **22,985 → 22,722 cells and 28/28 → 27/28 MULT18X18D** — the first spare multiplier this design has had. Re-sweeping 24 seeds on the new netlist: mean 53.15 → **53.99**, worst 49.12 → **51.60**, best **56.63** (seed 7), 6 of 24 at or above 55 where M37 had 2. On the module `xls24-76401a5-r5.tar.gz` grades **99.8/100 (A+)**, 174/1/0 — the same grade and the same lone WARN as M37, so the 2.33 MHz is margin and nothing else. `test_fx.py` is bit-exact across the change |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1399,7 +1400,7 @@ measured 440.02 Hz (+0.1 cents), PASS.** Video costs the audio path nothing meas
 confirmed on the panel, and the halved tank accepted by ear on Bach's Prelude and Le Cygne — the two
 demos most exposed to it, both at reverb 127 / room 96.
 
-**MULT18X18D is at 28 of 28 and that is the thing to know before adding anything.** Three are
+**MULT18X18D is at 27 of 28 and that is the thing to know before adding anything.** Three are
 `viz.py`'s, and only one is a real multiply: `f * v` at line 325. The other two are constant
 scalings yosys inferred — `nrel * HUE_K` (HUE_K = 6091, nrel 0..43) and `i_level * (255 - IDLE_V)`.
 A 44-entry ROM would free them for 60–80 TRELLIS_COMB, or one of the 3 spare DP16KD. Measured and
@@ -1565,7 +1566,7 @@ struck through were retired, the rows in bold were hit. Two are still open.
 | 1 | ~~26 DSP48 explode past 28 `MULT18X18D`~~ | **Retired by M22**: 24 → 19 tiles (20 with the shell), eight spare. `TRELLIS_COMB` became the binding resource instead |
 | 2 | LUT4 / FF exhaustion with 32 voices × 4 parts | **Hit in M28.** M26's effects build left 488 spare cells and the CV jacks wanted 639, so nextpnr refused to place at 24,848 / 24,288 (102%). A per-block census (`core` 70.5% on its own) ruled out shrinking, so the design split along `fx` into an `fx` slot (97%) and a `cv` slot (90%). **Undone by M29** and the `cv` variant deleted in M31 |
 | 3 | Timing: ECP5 can't hold ~30 ns on the SVF path | Did not bite. The engine closes at 27.5 MHz at `STAGES=12` and needs 7.2 MHz; it runs at 12.288 MHz with 1.7× margin |
-| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired — but the fallback was finally taken in M36.** Not the engine's own path and not fixable in the tool flow: occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. Cutting voices was written down as the fallback in M25 and then wrongly ruled out for four milestones by a [broken variant generator](#milestone-36--24-voices-and-the-measurement-that-had-been-wrong-for-four-milestones); once fixed, 24 voices measured **55.48 MHz at 93.9%** against 32 voices' 46.35 at 98.9%, and became the formal build. The shipped M37 netlist re-draws that to **54.30 MHz at 94.6%** — a seed draw on a slightly larger netlist, not a regression. Still open — 54.30 is not 60 — but the gap is 11% rather than 29%. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
+| 3b | `sync`/`usb` misses 60 MHz once USB is added | **Confirmed in M25; carried, not retired — but the fallback was finally taken in M36.** Not the engine's own path and not fixable in the tool flow: occupancy scatters luna, and `pll.py` drives `sync` and `usb` from one signal so a dedicated engine PLL output does not help. Cutting voices was written down as the fallback in M25 and then wrongly ruled out for four milestones by a [broken variant generator](#milestone-36--24-voices-and-the-measurement-that-had-been-wrong-for-four-milestones); once fixed, 24 voices measured **55.48 MHz at 93.9%** against 32 voices' 46.35 at 98.9%, and became the formal build. M37 re-drew that to 54.30 MHz at 94.6% on a slightly larger netlist, and M38 took a stray MULT18X18D out of the echo tap and re-swept 24 seeds to reach **56.63 MHz at 93.5%**, which is what ships. Still open — 56.63 is not 60 — but the gap is 6% rather than 29%. See [ARCHITECTURE_tiliqua.md E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on) |
 | 3c | Stale SI5351 `clk0` silently detunes everything | **Hit in M25.** Only the bootloader programs `clk0`; an SRAM load inherits the last-booted slot's rate, and neither a JTAG refresh nor a power cycle clears it. The ratio-only sim checks cannot see it. *Mitigated in M25*: the USB tee carries a 31-bit `audio`-cycle counter, and both `check_loop.py` and `run_tests.py` measure the clock and refuse to grade before reporting anything else. *Closed in M29* by giving XLS32 a flash slot whose manifest sets `clk0_hz` |
 | 4 | 115200 CDC can't carry audio | **Certain, and retired as a design risk.** UAC2 over `usb2` records 4×24-bit on real hardware; M25 was integration work, not research |
 | 4b | USB audio delivers 2.5–5% of frames as zeros | ⛔ **Withdrawn — does not reproduce.** See [below](#the-usb-dropout-report-that-was-withdrawn) |
@@ -1607,7 +1608,7 @@ frame as a dropout, so underrunning would trade a real artefact for a measured o
 about 24 frames buffered, half a millisecond of added USB latency.
 
 **The DC was arithmetic.** `dc_block.py` is `x - OnePole(x)` per channel, multiplier-free because
-`MULT18X18D` is 28 of 28 with nothing spare — which also rules out the SDK's `dsp.filters.DCBlock`,
+`MULT18X18D` was 28 of 28 with nothing spare at the time — which also ruled out the SDK's `dsp.filters.DCBlock`,
 the obvious choice, since it wants a MAC.
 
 **Two things measurement contradicted.** The first: `extra_bits` does *not* create a dead band. At
@@ -2175,7 +2176,77 @@ scoped `known_stale` waiver that had been sitting on the Basys 3 record since M3
 a fresh six-seed sweep of which historically about half converge, and the flashed bitstream is not
 wrong — `GRIDS[32]` is `(8, 4)`, so the picture is identical before and after. What it is missing is
 the string wording and a newer routing. `check_artefacts.py` reports it `known-stale` against
-exactly the four sources M37 moved, and the waiver lapses if anything else does.
+exactly the five sources M37 and M38 moved, and the waiver lapses if anything else does.
+
+---
+
+## Milestone 38 — the seed sweep finds a bug in our own code
+
+M37 pinned `--seed 3` off a six-seed draw. This milestone asked whether six was enough, swept
+eighteen more on the same netlist, and the answer turned out not to be about seeds at all.
+
+**The draw.** 24 seeds on the shipped M37 netlist: mean 53.15 MHz, 49.12–56.30, only 2 at or above
+the vendor's 60 MHz target's practical stand-in of 55. Seed 20 took it at 56.30 — and on seed 20 the
+worst path was not luna's. It ran from the CC82 clamp in `fx.py` through `dtime_c * ECHO_STEP` into
+the echo line's write pointer, 17.76 ns, **3.93 of it inside a single MULT18X18D**. That is the
+whole point of sweeping: a pinned seed tells you how fast the worst path is, never which path it is,
+and this one had been hiding behind luna for fourteen milestones.
+
+**The bug.** `ECHO_STEP` is 192 and `dtime_c` is 7 bits, so this is a constant multiply that ought
+to be a couple of LUTs. yosys hands it a DSP anyway, on a die where all 28 were already spoken for
+([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)). 192 = 128 + 64, so
+`(dtime_c << 7) + (dtime_c << 6)` is the identical value with no DSP and no extra cycle; an assert
+next to it fails the build if `ECHO_STEP` ever moves off that decomposition. `test_fx.py` is
+0 mismatches against `FxModel` on all five scenarios, including the CC82 = 127 clamp.
+
+**22,985 → 22,722 TRELLIS_COMB and 28/28 → 27/28 MULT18X18D**, the first spare multiplier this
+design has ever had — and it came from a mistake, not from headroom.
+
+**What the fix bought is the floor, not the ceiling.** Re-sweeping all 24 seeds on the new netlist:
+
+| | M37 netlist (22,985) | M38 netlist (22,722) |
+|---|---|---|
+| mean | 53.15 MHz | **53.99 MHz** |
+| sd | 1.71 | **1.39** |
+| worst draw | 49.12 | **51.60** |
+| best draw | 56.30 (seed 20) | **56.63 (seed 7)** |
+| at or above 55 MHz | 2 of 24 | **6 of 24** |
+
++0.33 MHz at the top against +2.48 at the bottom. Removing a 3.93 ns cell from the middle of a
+design barely moves the best placement, because the best placement was never limited by that cell —
+what it removes is the chance of a draw that puts it somewhere awkward. Rankings still do not
+transfer: seed 7 read 50.90 on the old netlist and old-winner seed 20 reads 54.54 on this one.
+
+On seed 7 the worst path is luna again — `usbif.usb.timer.counter[7]` → `usbif.usb.data_crc.crc[1]`,
+17.66 ns of which **13.04 is routing**. M36's 24-voice row was 40 % routing at slightly *higher*
+occupancy, so the depth-limited cone this project has tracked since M25 is no longer the worst path
+even inside luna, and [#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)'s skid buffer
+is aimed at a cone that has stopped binding. Its third item — upstream a register into luna — is
+what is left of it.
+
+**On hardware.** `xls24-76401a5-r5.tar.gz`, SRAM-loaded over dirtyJtag and confirmed by the build
+stamp `2026-08-22T06:27Z-76401a5` in `iManufacturer` before anything ran: **99.8/100 (A+), 174 pass
+/ 1 warn / 0 fail** over the full 175 cases in 618 s, USB frame gaps 0.00 %, audio clock
+12.288 MHz. Identical to seed 3's grade, down to the same lone `filter_sweep` WARN. Worth saying
+plainly: 2.33 MHz of extra static-timing margin bought no audible change, which is exactly what it
+should buy on a design that already met every rate it needs.
+
+**Two things went wrong on the bench and neither was the bitstream.** The suite was first run
+without `--board tiliqua` and graded the Basys 3 over UART instead: 16.1/100, `peak 0` on 147 cases,
+every transport metric `null`, 3289 s. It is a sharp reminder that the runner defaults to the other
+board and says so only in one line of its own output. Then `check_artefacts.py --update` with no
+artefact name re-recorded *all three* artefacts at today's commit, silently turning the 32-voice
+entry's honest "built at cd2e2c2, known-stale" into a false "built at 76401a5, clean" and dropping
+its waiver. `--update` now skips any artefact whose bytes have not changed since it was recorded,
+because a real rebuild always changes them — the build stamp alone guarantees it.
+
+**One number in the report is wrong and should not become a baseline.** This was the first full
+suite to publish `missing_frames`, and it read 73,646,868 frames missing over 49 of 175 captures —
+against a 618 s run in which the device can only have produced about 29.7 M frames. Every case
+graded, peaks are normal and `gap_rate` reads 0.00 %, so the fault is in the counter reconstruction
+in `usbaudio.py`, not the audio. The order of magnitude matches the 75 M the first probe misreported
+by reading the counter's wrap unsigned, which suggests the signed fix is incomplete rather than
+missing.
 
 ---
 

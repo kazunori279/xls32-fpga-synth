@@ -215,10 +215,12 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # `usb.data_crc.crc[1]`, with no fx cell and no multiplier anywhere in it. #34 is the only lever
 # left, and now that is measured rather than assumed.
 #
-# Seed 7 is pinned below as the best measured. It has not been on hardware: the 99.8/100 grade is
-# still seed 3's placement on the *old* netlist, so shipping this means a board day and a re-run of
-# the 175-case suite, not a repack. Note again that rankings do not transfer -- seed 7 was 50.90 on
-# the old netlist, near the bottom of that draw, and old-winner seed 20 reads 54.54 here.
+# Seed 7 is pinned below as the best measured, and it is what ships: built at 76401a5, loaded on
+# the module and graded 99.8/100 (A+) over the full 175 cases on 2026-08-22 -- the same grade and
+# the same lone WARN as seed 3's placement scored on the old netlist, so the extra 2.33 MHz bought
+# margin and nothing audible, which is what it should buy. Note again that rankings do not transfer
+# -- seed 7 was 50.90 on the old netlist, near the bottom of that draw, and old-winner seed 20
+# reads 54.54 here.
 #
 # The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
 # before trusting it.

@@ -35,7 +35,7 @@ the netlist you are going to ship, and count a dirty tree as a different netlist
 ([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) — at 98.9 % occupancy that is a
 fresh six-seed sweep of which historically about half converge, and the flashed bitstream is not
 wrong, only old in its wording and its routing. It is waived by name in
-`scripts/artefact_hashes.json`, and the waiver lapses if anything beyond those four sources moves.
+`scripts/artefact_hashes.json`, and the waiver lapses if anything beyond those five sources moves.
 
 ## Unverified — things believed to work that have not been watched working
 
@@ -317,12 +317,12 @@ wrong, only old in its wording and its routing. It is waived by name in
   two multipliers, at the cost of the resource that is *actually* scarce. Neither is on the
   critical path today.
   Worth doing only when a feature needs a multiplier and cannot have one. See
-  [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-28-of-28).
+  [ARCHITECTURE_tiliqua.md → E3](../ARCHITECTURE_tiliqua.md#e3-multipliers-27-of-28).
 - **Risk 3b — `sync`/`usb` fails static timing at 60 MHz, and it has now bitten.** Open since M25;
   promoted from a carried risk to an observed failure in August 2026, when the vendor ran the
   shipped bitstream on their own two Tiliquas and it worked on one and not the other. The build they
   tested measured 40.95 MHz against 60; what the repo ships now is the 24-voice build at
-  **54.30 MHz**, which is a much smaller bet but still short. Two things this item used to say are
+  **56.63 MHz**, which is a much smaller bet but still short. Two things this item used to say are
   wrong: the failing
   path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
   clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
@@ -332,8 +332,8 @@ wrong, only old in its wording and its routing. It is waived by name in
   voice ring had been pruned away by a broken variant generator
   ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)). Built correctly, 24 voices is
   93.9 % occupancy and **55.48 MHz**, +9.1 over the 32-voice build, and it is what the repo now
-  ships — at 94.6 % and 54.30 MHz since M37 re-drew the seed on a slightly larger netlist (see the
-  next item). Still measured and dead:
+  ships — at 93.5 % and 56.63 MHz since M38 took a DSP out of the echo tap and re-swept 24 seeds
+  on the netlist that left (see the next item). Still measured and dead:
   nextpnr 0.11.1 (bit-identical), `--placer static` (never legalises), `REGION`/`UGROUP` (absent
   from the wasm), and **SDC timing exceptions** — `nextpnr-ecp5` parses only `create_clock`,
   `get_ports`, `get_cells` and `set_false_path`, has no `set_multicycle_path` at all, and prints
@@ -362,8 +362,8 @@ wrong, only old in its wording and its routing. It is waived by name in
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
-  **M36 routes around it rather than closing it.** At 24 voices the shortfall is 54.30 against 60 —
-  a bet that the silicon is 11 % faster than modelled, where 32 voices bets on 29 %. That is the
+  **M36 routes around it rather than closing it.** At 24 voices the shortfall is 56.63 against 60 —
+  a bet that the silicon is 6 % faster than modelled, where 32 voices bets on 29 %. That is the
   formal bitstream now; the 32-voice build stays available and stays a risk. The gap itself is
   unchanged and still needs a register in luna's cone
   ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
@@ -385,22 +385,31 @@ wrong, only old in its wording and its routing. It is waived by name in
   worst path is luna again — `usb.timer.counter[7]` → `usb.data_crc.crc[1]`, 17.66 ns, 13.04 of it
   routing — with no fx cell and no multiplier anywhere in it. Rankings still do not transfer: seed
   7 read 50.90 on the old netlist and old-winner seed 20 reads 54.54 on this one.
-  **None of this is on hardware.** The 99.8/100 grade belongs to seed 3's placement on the old
-  netlist; the entry below still describes what ships. Taking 56.63 means a board day and a re-run
-  of the 175-case suite, not a repack. Until that day `check_artefacts.py` reports **tiliqua-24 as
-  stale, and it is right to** — the tree genuinely no longer builds the flashed archive. That is
-  deliberately *not* waived: a waiver on the artefact this repo asks people to flash would hide the
-  next fx.py change as well as this one. #46's waiver did take `fx.py` on, since the 32-voice build
-  is already deferred wholesale.
+  **Then it went on hardware the same day, and held.** Seed 7's build, SRAM-loaded over dirtyJtag
+  and stamped `2026-08-22T06:27Z-76401a5` on the board: **99.8/100 (A+), 174 pass / 1 warn / 0
+  fail** over the full 175 cases in 618 s, USB frame gaps 0.00 %, audio clock 12.288 MHz. The same
+  grade as seed 3's, with the same single WARN (`filter_sweep`, 80.9) — 2.33 MHz of timing margin
+  bought no audible change, which is what a design that already met its own rates should show.
+  `xls24-r5.tar.gz` is now that build and `check_artefacts.py` reports tiliqua-24 clean again;
+  #46's waiver on the 32-voice archive stands, since that one still has not been rebuilt.
+  **The suite's first published `missing_frames` total is wrong**, and it is worth writing down
+  before it becomes a baseline: 73,646,868 frames reported missing over 49 of 175 captures, when
+  the whole run lasted 618 s and the device can only have produced ~29.7 M frames in it. Every
+  case still graded, peaks are normal and `gap_rate` reads 0.00 %, so this is the counter
+  reconstruction in `usbaudio.py:401` and not the audio — the same order as the 75 M the first
+  probe misreported by reading the wrap unsigned, which suggests the signed fix is incomplete
+  rather than absent. Filed separately from
+  [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9).
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
-  the formal build — 24 voices, 94.6 % of the die, `clk` at 54.30 MHz, graded 99.8/100 (A+) on the
+  the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
   in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
   two modules. Anyone flashing slot 6 is carrying that.
 
-  Both were verified on 2026-08-20 — flashed, then SRAM-loaded from the same archive and confirmed
-  by the build stamp in `iManufacturer` before any test ran, so neither number is off a stale
-  image. They grade **identically**: 99.8/100 (A+), 174 pass / 1 warn / 0 fail, 175 cases in ~616 s,
+  Both were verified this way — flashed or SRAM-loaded from the same archive and confirmed by the
+  build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; the
+  32-voice run was 2026-08-20 and the 24-voice one 2026-08-22, after M38 replaced the archive.
+  They grade **identically**: 99.8/100 (A+), 174 pass / 1 warn / 0 fail, 175 cases in ~616 s,
   0.00 % USB frame gaps, and the same lone WARN — `filter_sweep` at 81 and 82, which is
   [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) and not a timing symptom. Worth
   stating plainly what that is and is not evidence of: the 32-voice build misses 60 MHz by 22.8 %
