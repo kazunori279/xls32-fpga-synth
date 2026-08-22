@@ -11,28 +11,31 @@ refurbishment, not a list of patches" — was itself carried out by the rewrite 
 [DEVELOPMENT_tiliqua.md](../DEVELOPMENT_tiliqua.md). The port document's remaining content lives in
 those three; git history keeps the original.)*
 
-## Queued behind the next rebuild
+## ~~Queued behind the next rebuild~~ — paid off 2026-08-22
 
-Three open items are each individually cheap and each blocked by the same thing, so they are
-collected here rather than left to be rediscovered separately. **Whichever of them finally forces a
-re-sweep should carry the other two.**
+**Landed together in M37**, which is what this section was arguing for. #39 (`--router2-tmg-ripup`),
+#40 (the visualiser grid) and #43 (the manifest `brief`) were each individually cheap and each
+blocked by the same rebuild, so they were batched: one netlist change, one seed sweep, one board
+day. The 24-voice archive came out at **54.30 MHz on seed 3** and re-graded **99.8/100 (A+)**.
 
-| item | change | why it cannot land alone |
-|---|---|---|
-| [#39](https://github.com/kazunori279/xls32-fpga-synth/issues/39) | adopt `--router2-tmg-ripup` | new P&R options, so a new netlist and a new seed lottery |
-| [#43](https://github.com/kazunori279/xls32-fpga-synth/issues/43) | put the real voice count in the manifest `brief` | needs `export VOICES` in `build.sh`; the manifest is baked into the archive |
-| [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40) | make the visualiser grid follow the voice count | `N_VOICE`/`COLS`/`ROWS` are literals in the gateware |
+Two of the three costs this section predicted were real. The seed lottery did have to be won again —
+seed 4's 55.48 MHz did not survive, and the new draw put seed 3 on top at 54.30 with a 5.2 MHz
+spread across the six. The board verification did have to be re-earned, 625 s of suite plus the
+setup around it.
 
-Two costs are shared, and they are what make the batching worth it rather than merely tidy. A
-rebuild **re-rolls the seed lottery** — seed rankings do not transfer between netlists, so the
-24-voice build's 55.48 MHz on seed 4 is not a number that survives a re-sweep, it is a number that
-has to be won again. And it **invalidates the board verification**: the shipped 24-voice bitstream
-scored 99.8/100 over 175 cases, which is most of a board-day to re-earn, per bitstream.
+The third prediction was the interesting one, and it was understated. It said only #39 and #43 touch
+`build.sh` and that `check_artefacts.py` hashes `.sh` raw, so either edit marks both archives stale
+before anything is rebuilt. True, and still true. What it missed is that the **build stamp** does
+the same thing to the *bitstream*: `build_id.py` bakes `<utc>-<commit>` into a ROM, a dirty tree
+appends `-dirty`, and those six characters are worth 240 cells. A seed measured on a dirty tree was
+2 MHz ahead of the field and turned out to be the worst of six on the netlist that shipped. Sweep on
+the netlist you are going to ship, and count a dirty tree as a different netlist.
 
-There is a third, quieter cost that only #39 and #43 pay: both edit `boards/tiliqua/build.sh`, and
-`scripts/check_artefacts.py` hashes `.sh` **raw** — its comment-stripping normaliser covers Python
-but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both shipped archives
-`stale` the instant it lands, before anything has actually been rebuilt.
+**What is still queued.** The 32-voice archive was not rebuilt against any of this
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) — at 98.9 % occupancy that is a
+fresh six-seed sweep of which historically about half converge, and the flashed bitstream is not
+wrong, only old in its wording and its routing. It is waived by name in
+`scripts/artefact_hashes.json`, and the waiver lapses if anything beyond those four sources moves.
 
 ## Unverified — things believed to work that have not been watched working
 
@@ -310,7 +313,7 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   promoted from a carried risk to an observed failure in August 2026, when the vendor ran the
   shipped bitstream on their own two Tiliquas and it worked on one and not the other. The build they
   tested measured 40.95 MHz against 60; what the repo ships now is the 24-voice build at
-  **55.48 MHz**, which is a much smaller bet but still short. Two things this item used to say are
+  **54.30 MHz**, which is a much smaller bet but still short. Two things this item used to say are
   wrong: the failing
   path is *not* only in `fx` — that is true at 97% occupancy and nowhere else — and "both run
   clean" was one die's evidence. Underneath `fx` is a **~20-LUT-level luna cone** that has sat at
@@ -320,7 +323,8 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   voice ring had been pruned away by a broken variant generator
   ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)). Built correctly, 24 voices is
   93.9 % occupancy and **55.48 MHz**, +9.1 over the 32-voice build, and it is what the repo now
-  ships (see the next item). Still measured and dead:
+  ships — at 94.6 % and 54.30 MHz since M37 re-drew the seed on a slightly larger netlist (see the
+  next item). Still measured and dead:
   nextpnr 0.11.1 (bit-identical), `--placer static` (never legalises), `REGION`/`UGROUP` (absent
   from the wasm), and **SDC timing exceptions** — `nextpnr-ecp5` parses only `create_clock`,
   `get_ports`, `get_cells` and `set_false_path`, has no `set_multicycle_path` at all, and prints
@@ -349,13 +353,13 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   ([#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). See
   [ARCHITECTURE_tiliqua.md → E4](../ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on).
 
-  **M36 routes around it rather than closing it.** At 24 voices the shortfall is 55.48 against 60 —
-  a bet that the silicon is 8 % faster than modelled, where 32 voices bets on 29 %. That is the
+  **M36 routes around it rather than closing it.** At 24 voices the shortfall is 54.30 against 60 —
+  a bet that the silicon is 11 % faster than modelled, where 32 voices bets on 29 %. That is the
   formal bitstream now; the 32-voice build stays available and stays a risk. The gap itself is
   unchanged and still needs a register in luna's cone
   ([#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
-  the formal build — 24 voices, 93.9 % of the die, `clk` at 55.48 MHz, graded 99.8/100 (A+) on the
+  the formal build — 24 voices, 94.6 % of the die, `clk` at 54.30 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
   in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
   two modules. Anyone flashing slot 6 is carrying that.
@@ -376,15 +380,21 @@ but deliberately excludes `.sh`, `.tcl` and `.xdc`. So either edit marks both sh
   is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so
   `check_artefacts.py` has to hash the generator and the count or it cannot tell them apart
   ([#10](https://github.com/kazunori279/xls32-fpga-synth/issues/10)).
-- **The visualiser's bottom row is dead on the formal bitstream.** `gateware/viz.py` fixes the grid
-  at `N_VOICE = 32`, `COLS, ROWS = 8, 4`, and `build.sh`'s `VOICES` never reaches the gateware — it
-  only selects which `synth*.x` the engine comes from. So the 24-voice build writes tiles 0–23 and
-  leaves 24–31 at their reset value, which `VoiceTiles` renders at `IDLE_V` in the lowest hue:
+- ~~**The visualiser's bottom row is dead on the formal bitstream.**~~ **Paid off 2026-08-22**
+  ([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)). `gateware/viz.py` fixed the
+  grid at `N_VOICE = 32`, `COLS, ROWS = 8, 4`, and `build.sh`'s `VOICES` never reached the gateware
+  — it only selected which `synth*.x` the engine came from. So the 24-voice build wrote tiles 0–23
+  and left 24–31 at their reset value, which `VoiceTiles` renders at `IDLE_V` in the lowest hue:
   eight dim tiles that never change. No audio or timing consequence, and invisible to the suite,
-  which grades frame *timing* and never tile content. Not fixed with the rest of M36 because it is a
-  netlist change, and at 93.9 % occupancy that costs a fresh seed sweep (seeds 1/4/5/6 span 7 MHz on
-  this netlist) plus another hardware run — so it is queued against the next netlist change, with
-  #39, as [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40).
+  which grades frame *timing* and never tile content — which is why it survived M36 and needed a
+  human to look at the panel.
+
+  The count now comes from `gateware/voices.py`, which reads `$VOICES` and picks the grid from it.
+  The cost estimate here was right about the seed sweep and wrong about what else was lurking: at
+  COLS = 6 the tile index stops being a free `Cat(col, row)` and `row * COLS + col` costs a
+  MULT18X18D, of which this die has none to spare
+  ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)). The build fails in the placer
+  with "no BELs remaining", which points nowhere near `viz.py`.
 - **Reduced-voice variants were unmeasurable for four milestones and nobody noticed.**
   `voices_variant.py` asserted a match count for every substitution it knew about and had no rule
   for one site — `rotate_in`'s tail writeback — so a 24-voice copy wrote the new voice to index 31

@@ -31,7 +31,8 @@ addition rather than a rewrite.
   - **`boards/tiliqua/`** — `board.py` (descriptor: 48 kHz, UAC2 + USB-MIDI transport),
     `gateware/` (`top.py` + `xls_core.py`, an [Amaranth](https://amaranth-lang.org/) shell that
     `Instance()`s the same generated `engine.v`, plus `usb_iface.py`, `midi_filter.py`,
-    `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py`, `build_id.py` (the build stamp the module
+    `midi_arb.py`, `fx.py`, `fx_model.py`, `viz.py`, `voices.py` (`$VOICES` → the voice count and
+    the tile grid, in one place), `build_id.py` (the build stamp the module
     reports over USB, in its `iManufacturer` string) and their Verilator/Amaranth harnesses),
     `sim/` (iverilog reference for the pitch check), `build.sh`, `area.py` (per-block cell
     census), `check_pitch.py` / `check_midi.py` / `check_loop.py` / `check_panic.py` (the per-milestone

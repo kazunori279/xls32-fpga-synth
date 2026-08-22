@@ -93,7 +93,7 @@ This is the **only** step that needs a computer at all, so borrow one if you hav
 is written the module never asks again.
 
 > There is a second archive beside it, `xls32-r5.tar.gz`, which is the same synth with **32** voices
-> instead of 24 and belongs in **slot 6**. It fills 98.9 % of the FPGA where 24 voices fill 93.9 %,
+> instead of 24 and belongs in **slot 6**. It fills 98.9 % of the FPGA where 24 voices fill 94.6 %,
 > and this repo labels it *experimental* for exactly that reason: it runs here, and it did not run
 > on one of the two modules the module's maker tried it on. Start with slot 7.
 > [`boards/tiliqua/firmware/README.md`](boards/tiliqua/firmware/) is the long answer.
@@ -327,7 +327,7 @@ building. They are the same engine and differ in polyphony:
 
 | | voices | die | `clk` post-route | slot | |
 |---|---|---|---|---|---|
-| **`xls24-r5.tar.gz`** ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz), 410 KB) | 24 | 93.9 % | 55.48 MHz | **7** | **formal** — what this repo stands behind |
+| **`xls24-r5.tar.gz`** ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz), 411 KB) | 24 | 94.6 % | 54.30 MHz | **7** | **formal** — what this repo stands behind |
 | `xls32-r5.tar.gz` ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz), 430 KB) | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** |
 
 **Take the 24-voice one.** Neither closes the 60 MHz `clk` constraint — that is
@@ -963,11 +963,13 @@ time (`--voices 32` must reproduce the original byte for byte, which is asserted
 > default router does not converge — it ripped up more arcs than it laid for two hours and never
 > finished; router2 routes the same netlist in ~80 s with `overused=0`. `build.sh` sets it, together
 > with `--timing-allow-fail` for the known `clk`-domain shortfall and a **pinned `--seed`**, which
-> is load-bearing at this occupancy: seeds 1/4/5/6 gave 51.17 / 55.48 / 48.45 / 54.03 MHz on the
-> same 24-voice netlist, and the winners do not transfer between netlists
+> is load-bearing at this occupancy: the six seeds gave 52.50 / 54.06 / **54.30** / 49.12 / 51.40 /
+> 53.07 MHz on the shipped 24-voice netlist, and the winners do not transfer between netlists
 > ([ARCHITECTURE_tiliqua.md → E4](ARCHITECTURE_tiliqua.md#e4-the-timing-shortfall-and-the-die-it-does-not-run-on)).
-> Build from a **clean tree**: the build stamp gains a `+` on a dirty one, and because it is a
-> string baked into a ROM, that one character changes the netlist and re-draws the lottery.
+> Build from a **clean tree**: the build stamp gains `-dirty` on a dirty one, and because it is a
+> string baked into a ROM, those six characters change the netlist and re-draw the lottery. That is
+> measured, not feared — the dirty netlist is 240 cells away, and seed 4 reads 56.33 MHz on it
+> against 49.12 on the one that ships.
 
 The build leaves two things worth having in `build/tiliqua/build/xls24-r5/`: `top.bit`, and a
 `xls24-<tag>-r5.tar.gz` **bitstream archive** pairing it with a generated `manifest.json`. Load
@@ -1219,7 +1221,7 @@ this table is [§1](#two-boards-one-synth).)
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Polyphony** | 32 voices | **24** (formal) or 32 (experimental) — `VOICES=` on `build.sh` |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — one tile per voice, no framebuffer; 8 level LEDs; encoder |
-| **Area** | ~50% LUTs · 26 DSP48E1 · 32 RAMB36 | 22,796 / 24,288 TRELLIS_COMB (93.9%) at 24 voices, 24,023 (98.9%) at 32 · 28/28 MULT18X18D · 53/56 DP16KD |
+| **Area** | ~51% LUTs · 26 DSP48E1 · 33 RAMB36 | 22,985 / 24,288 TRELLIS_COMB (94.6%) at 24 voices, 24,023 (98.9%) at 32 · 28/28 MULT18X18D · 53/56 DP16KD |
 | **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | bitstream archive to slot 7 (or 6 for the 32-voice one), over the web flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
 | **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls24-r5.tar.gz` and `xls32-r5.tar.gz` |
 
@@ -1244,8 +1246,8 @@ almost none of the answers match:
 | **Echo line** | 16K×16 BRAM → ≤508 ms | 16,384 words of BRAM → ≤340 ms (it was PSRAM until M29 gave the space to the screen) |
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
-| **Visual feedback** | 16 LEDs, a voice-activity comet | a 32-tile grid on a 720×720p60 DVI beam-raced display, 32 bytes of state and no framebuffer (the bottom row is dead at 24 voices — [#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)) |
-| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — **55.48 MHz** Fmax at 24 voices (46.35 at 32), and **on one Tiliqua out of two an earlier, slower bitstream did not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
+| **Visual feedback** | 16 LEDs, a voice-activity comet | one tile per voice on a 720×720p60 DVI beam-raced display — 6×4 or 8×4, one byte of state each and no framebuffer |
+| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — **54.30 MHz** Fmax at 24 voices (46.35 at 32), and **on one Tiliqua out of two an earlier, slower bitstream did not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
 
 Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8) are **built and timing-closed but not yet
 hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART. On Tiliqua both

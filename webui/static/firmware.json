@@ -40,16 +40,16 @@
     {
       "board": "Basys 3",
       "artefact": "boards/basys3/firmware/top.bit",
-      "built": "2026-08-10 23:10",
+      "built": "2026-08-21 22:22",
       "tz": null,
       "source": "Vivado bitstream header",
       "part": "7a35tcpg236",
       "toolchain": "Vivado 2024.2",
       "bytes": 2192111,
-      "sha256": "4cf4af55ac66",
-      "commit": "56eb5ef",
+      "sha256": "19ed922a756b",
+      "commit": "2fcb2b9",
       "reports_over_usb": false
     }
   ],
-  "generated_at_commit": "6cc4752"
+  "generated_at_commit": "63e3450"
 }

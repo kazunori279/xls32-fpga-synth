@@ -63,7 +63,8 @@ forced by something in it.
 | [`gateware/midi_arb.py`](boards/tiliqua/gateware/midi_arb.py) | 343 | `MidiArbiter` (round-robin, message-atomic), `MidiPartSelect` (the CC103 sniffer), `MidiChanWatch` and `TrsPanicInject` |
 | [`gateware/fx.py`](boards/tiliqua/gateware/fx.py) | 683 | Chorus, ping-pong echo and 8-comb Freeverb — a structural port of `top.v:159-400` |
 | [`gateware/fx_model.py`](boards/tiliqua/gateware/fx_model.py) | 127 | A bit-exact pure-Python transcription of the same arithmetic, for the unit tests |
-| [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 361 | `VizStore` + `VoiceTiles`: a 32-tile voice grid with no framebuffer. `N_VOICE` is a literal, so 24-voice builds leave the bottom row dark ([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)) |
+| [`gateware/viz.py`](boards/tiliqua/gateware/viz.py) | 371 | `VizStore` + `VoiceTiles`: one tile per voice, no framebuffer. The grid comes from `voices.py`, so it is 6×4 or 8×4 with nothing dark |
+| [`gateware/voices.py`](boards/tiliqua/gateware/voices.py) | 27 | `$VOICES` → `N_VOICE`, `COLS`, `ROWS`. The one place the Python side learns the voice count |
 | [`gateware/sim_xls_core.cpp`](boards/tiliqua/gateware/sim_xls_core.cpp) | 272 | The Verilator harness — bit-bangs the TRS jack and dumps samples |
 | [`build.sh`](boards/tiliqua/build.sh) | — | codegen (in Docker) → Amaranth → yosys/nextpnr (yowasp) → `top.bit` |
 | [`area.py`](boards/tiliqua/area.py) | 121 | Per-block area census, read out of yosys' `top.json` |
@@ -136,7 +137,7 @@ design on this module starts from:
 
 | resource | **24 voices (shipped)** | 32 voices (experimental) | vendor reference shell |
 |---|---|---|---|
-| TRELLIS_COMB | **22,796 of 24,288 (93.9%)** | 24,023 (98.9%) | 1,768 (7%) |
+| TRELLIS_COMB | **22,985 of 24,288 (94.6%)** | 24,023 (98.9%) | 1,768 (7%) |
 | TRELLIS_FF | **11,931 of 24,288 (49%)** | 13,223 (54%) | 731 (3%) |
 | DP16KD | **53 of 56 (94%)** | 53 (94%) | 0 (0%) |
 | MULT18X18D | **28 of 28 (100%)** | 28 (100%) | 1 (4%) |
@@ -1200,14 +1201,21 @@ eighteen 5-bit words instead. The radius is also clamped to half the shape, or t
 one edge meet and the rectangle develops a waist — only the test geometry's miniature tiles come
 near it, but clamping is one line and a waist is a confusing bug.
 
-**Gotcha — the grid does not know the voice count.** `N_VOICE = 32` and `COLS, ROWS = 8, 4` are
-literals in `viz.py`, independent of the ring length the engine was built with. On the shipped
-24-voice build slots 24–31 are therefore never written, and the bottom row sits at `IDLE_V`
-forever: eight dim red tiles that look like eight permanently silent voices. It is cosmetic — the
-top three rows are correct — and it is deliberately still there, because the fix is a netlist change
-and the netlist that shipped is the one that was measured at 55.48 MHz and graded on hardware.
-Queued behind the next build that has to be re-swept anyway
+**The grid comes from the voice count, and getting it there cost a multiplier.** `N_VOICE`, `COLS`
+and `ROWS` live in `gateware/voices.py`, which reads `$VOICES` and picks 4×4, 6×4 or 8×4 — all of
+which divide 720 exactly. Until M37 they were literals here, so the 24-voice build drew 32 tiles and
+the bottom row sat at `IDLE_V` forever, looking like eight permanently silent voices
 ([#40](https://github.com/kazunori279/xls32-fpga-synth/issues/40)).
+
+The tile index is the part worth knowing about. It was `Cat(col, row)`, free while COLS was 8
+because a shift by a power of two is a renaming of wires. At COLS = 6 the obvious `row * COLS + col`
+makes yosys emit a `$mul` — against a *constant* — which becomes a **MULT18X18D**, and all 28 of
+this die's multipliers are already spoken for by the engine (E3). The build then dies in the placer
+with "no BELs remaining", which does not point anywhere near `viz.py`. Summing the set bits of COLS
+gives what the multiply would have decomposed into anyway: `(row << 1) + (row << 2)`, two adds on a
+two-bit operand. The column and row counters also need explicit wraps now, because at COLS = 6 a
+bare `col + 1` leaves 6 sitting in a three-bit signal for the rest of the line and pushes `o_addr` a
+whole row along.
 
 ## D3 What deleting PSRAM bought
 
@@ -1377,7 +1385,7 @@ Rebuilt with the generator fixed, M36:
 |---|---:|---:|---:|---|
 | 32 (32-voice build) | 24,023 | 98.9% | 13,223 | — |
 | 28 | 23,358 | 96.2% | 12,660 | **−665** cells, −2.7 points |
-| 24 (shipped) | 22,796 | 93.9% | 11,931 | **−562** cells, −2.3 points |
+| 24 | 22,796 | 93.9% | 11,931 | **−562** cells, −2.3 points |
 | 16 | not measured on a correct netlist — [#38](https://github.com/kazunori279/xls32-fpga-synth/issues/38) | | | |
 
 The old table read 19,631 cells / 9,456 FF at 24 voices. Its 32-voice row is within 231 cells of
@@ -1498,12 +1506,21 @@ logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a di
 | + comb magnitude truncation | 98% | `fx.rsize[0]` → `fx.mul_g[22]` | 39.92 MHz |
 | M35, 32 voices, `--seed 4` | 97% | `fx.rsize[0]` → `fx.mul_g[22]` | 40.95 MHz |
 | M36, **32 voices** (experimental), `--seed 5` | **98.9%** | **luna**, congestion-limited | **46.35 MHz** |
-| M36, **24 voices** (shipped), `--seed 4` | **93.9%** | **luna**, depth-limited | **55.48 MHz** |
+| M36, 24 voices, `--seed 4` | 93.9% | **luna**, depth-limited | 55.48 MHz |
+| M37, **24 voices** (shipped), `--seed 3` | **94.6%** | **luna**, depth-limited | **54.30 MHz** |
 
-The last three rows are read from the `top.tim` of an archive that is committed in this repo. The
+The last four rows are read from the `top.tim` of an archive that is committed in this repo. The
 M35 row superseded an entry that read `M33 | 96% | 39.42 MHz` and was two netlists out of date; the
-two M36 rows supersede a 24-voice row that read `80% | 46.79 MHz` and had been measured on a netlist
+M36 rows supersede a 24-voice row that read `80% | 46.79 MHz` and had been measured on a netlist
 yosys had pruned ([#35](https://github.com/kazunori279/xls32-fpga-synth/issues/35)).
+
+The M37 row is the same design at the same voice count as M36's, 189 cells larger for the tile-grid
+parameterisation and the reworded panel strings, and 1.18 MHz slower. Do not read that as a cost of
+the change: the seed had to be re-drawn on the new netlist and the six-seed spread is 5.2 MHz, which
+is four times the difference between the two rows. See
+[M37](DEVELOPMENT_tiliqua.md#milestone-37--the-reduction-finishes-and-both-boards-get-rebuilt) for
+the draw, including the dirty-tree build that read 56.33 MHz off a netlist that was never going to
+ship.
 
 **The luna cone, measured on the 24-voice netlist** where nothing of ours is in front of it:
 
@@ -1640,13 +1657,18 @@ it. Rebuilt correctly, converged runs only:
 So the cut is *smaller* than the old table claimed and worth **+9.1 MHz**, clearing the vendor's
 55 MHz bar. 28 voices buys only +2.4 and is not the knee.
 
+The shipped 24-voice netlist is no longer that one. M37 parameterised the tile grid and the panel
+strings, which put 189 cells back — **22,985 (94.6%)** — and cost a fresh seed draw: 52.50 / 54.06 /
+**54.30** / 49.12 / 51.40 / 53.07 MHz, all six converged, seed 3 pinned. Read the 1.18 MHz against
+M36 as the seed lottery and not as a cost of the change: the spread across the six is 5.2 MHz.
+
 The path composition is what makes the knee sharp, and it inverts across it. Both builds report a
 path that lives entirely inside luna, but they are limited by opposite things. At 98.9% it is
 **4.80 ns logic / 16.77 ns routing** — 78% routing, i.e. congestion, as this section has always
 said — running from `USBControlEndpoint.request` to the descriptor ROM's *address* pins. At 93.9% it
 is **7.73 ns logic / 10.29 ns routing**, running the other way, out of the same ROM's *data* pins
 into `usb.data_crc`, and 5.61 ns of that logic is the DP16KD's own clk-to-q. The routing pressure comes off and the depth-limited cone above is what is left
-standing. Occupancy was worth 9.1 MHz and is now spent; the remaining 4.5 to 60 MHz is the cone, and
+standing. Occupancy was worth 9.1 MHz and is now spent; the remaining 5.7 to 60 MHz is the cone, and
 nothing but a register in it will move it.
 
 Voice count costs no gateware change — the engine's sample rate is set by the codec's backpressure
@@ -1745,10 +1767,10 @@ finishes the same netlist in **81 seconds, overused = 0**.
 `get_override("nextpnr_opts")` *replaces* what the caller passed, and the Tiliqua SDK passes
 `--timing-allow-fail` at `build/cli.py:303`. Setting only `--router router2` silently drops it and
 turns the known shortfall from a warning into an error that fails the build *after* it has routed
-successfully. All three flags go in `build.sh` together:
+successfully. All four flags go in `build.sh` together:
 
 ```bash
-export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --seed 4}"
+export AMARANTH_nextpnr_opts="${AMARANTH_nextpnr_opts:---timing-allow-fail --router router2 --router2-tmg-ripup --seed 3}"
 ```
 
 **Gotcha — the seed is load-bearing at 97%, and only at 97%.** At M34's 23,729 cells even router2
