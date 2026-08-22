@@ -53,6 +53,7 @@
       "boards/tiliqua/gateware/top.py": "f9755b7f8057b8a6cecdb0c00da76bed143b599f98da3d77d7ffdef4353d0579",
       "boards/tiliqua/gateware/usb_iface.py": "2811265d2f3995f9e56c244508fbc2cdcee612575ccbcc6276a73fbd825f9091",
       "boards/tiliqua/gateware/viz.py": "dff8d4ad2d9478e4f33617b1940e699f4e6d401b61bbf49601f795d1acb77dce",
+      "boards/tiliqua/gateware/voices.py": "1e697c7d77b2b0d94c9d044d17554e65f5f86da1cfe8b99e805fdb26722760d3",
       "boards/tiliqua/gateware/xls_core.py": "5e753346a4a4658e62280d2c3a89988bfe246ae0dd9f0c0616b6e99f181f4029",
       "boards/tiliqua/spike/voices_variant.py": "35a5349920c9c1ab83f53b19ad636a81760f4aa54afa7fac8e660a91561659fe",
       "core/codegen.sh": "1b225060370115699164c0bca82c7a694fb99a8e8edf0054059ffd0a02d217a0",
@@ -66,6 +67,15 @@
     "built_from_commit": "cd2e2c2",
     "built_on": "2026-08-20",
     "hash_scheme": "normalized-v1",
+    "known_stale": {
+      "reason": "#46 -- M37 rewrote the voice count as a parameter (voices.py, #40/#43) and changed the router options (#39), and the experimental build has not been re-run against any of it. At 32 voices the design fills 98.9 % of the die, so a rebuild is a fresh six-seed sweep of which historically about half converge, and the 24-voice build is the one this repo asks you to flash. What the flashed archive is missing is the wording of the bootloader strings and a differently-routed placement -- not the picture, which is 8x4 at 32 voices before and after. Waives exactly the four sources M37 moved: anything else changing here is new and should fail.",
+      "sources": [
+        "boards/tiliqua/build.sh",
+        "boards/tiliqua/gateware/viz.py",
+        "boards/tiliqua/gateware/voices.py",
+        "boards/tiliqua/gateware/xls_core.py"
+      ]
+    },
     "params": {
       "SEED": "5",
       "STAGES": "12",

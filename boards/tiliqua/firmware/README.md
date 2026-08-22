@@ -80,8 +80,16 @@ The other half of the bitstream is the vendor's — luna, luna-soc and the `tili
 in from `$TILIQUA_SDK`. That lives outside this repo, so it is recorded by **commit** rather than by
 hash, and the check reports it changing since the build as staleness like any other source. Two
 caveats, both of which the output states rather than papers over: with no checkout on the machine
-(CI, or a fresh clone) it can only say it could not verify, and the two archives above were built
-before this was recorded at all, so they will say so until their next rebuild.
+(CI, or a fresh clone) it can only say it could not verify, and the 32-voice archive was built
+before this was recorded at all, so it will say so until its next rebuild.
+
+That archive reports **known-stale** for a second reason. M37's four changes — `voices.py`, the tile
+index, the panel strings and the router options — were only rebuilt against at 24 voices, and at
+98.9 % occupancy re-running the 32-voice one means a fresh seed sweep. Nothing about the flashed
+bitstream is wrong; it draws the same 8 × 4 and plays the same engine. It announces itself with the
+old wording, and it was routed with the old options. The waiver in `scripts/artefact_hashes.json`
+names those four sources and lapses if anything else moves
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
 
 One thing the record has to work harder at since there are two archives. They are built from *the
 same committed sources*: the voice count is not in the tree, it is rewritten into a throwaway copy
