@@ -398,8 +398,9 @@ wrong, only old in its wording and its routing. It is waived by name in
   case still graded, peaks are normal and `gap_rate` reads 0.00 %, so this is the counter
   reconstruction in `usbaudio.py:401` and not the audio — the same order as the 75 M the first
   probe misreported by reading the wrap unsigned, which suggests the signed fix is incomplete
-  rather than absent. Filed separately from
-  [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9).
+  rather than absent. [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48), filed
+  separately from [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9): that one is the
+  dropouts, this one is the instrument built to measure them.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept

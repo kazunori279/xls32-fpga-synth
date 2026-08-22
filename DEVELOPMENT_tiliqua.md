@@ -2246,7 +2246,7 @@ against a 618 s run in which the device can only have produced about 29.7 M fram
 graded, peaks are normal and `gap_rate` reads 0.00 %, so the fault is in the counter reconstruction
 in `usbaudio.py`, not the audio. The order of magnitude matches the 75 M the first probe misreported
 by reading the counter's wrap unsigned, which suggests the signed fix is incomplete rather than
-missing.
+missing. [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48).
 
 ---
 
