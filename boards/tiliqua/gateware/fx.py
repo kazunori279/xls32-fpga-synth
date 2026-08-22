@@ -315,11 +315,23 @@ class StereoFx(wiring.Component):
         m.d.comb += [
             echo_on.eq(ctrl.echodep != 0),         # top.v:210 -- depth-gated, no mode selector
             chorus_on.eq(ctrl.chdep != 0),
-            edly.eq(dtime_c * ECHO_STEP + ECHO_MIN),
+            edly.eq((dtime_c << 7) + (dtime_c << 6) + ECHO_MIN),   # * ECHO_STEP, see below
             wetgn.eq(ctrl.revwet << 8),            # CC 0..127 -> Q15 0..~0.99
             chdep_q15.eq(ctrl.chdep << 8),
             echdep_q15.eq(ctrl.echodep << 8),
         ]
+        # `edly` is a shift-add rather than `dtime_c * ECHO_STEP` for the same reason, one step
+        # further along. A constant multiply of a 7-bit value ought to be a couple of LUTs, but
+        # yosys hands it to a MULT18X18D, and this die has none to give: all 28 are in use (#6).
+        # It also costs what every unregistered MULT18X18D here costs, 3.93 ns in a single cell,
+        # and it sits mid-path between the CC82 clamp below and the echo line's write pointer.
+        # On the seed sweep's best placement that whole path measured 17.76 ns and was the
+        # longest in the design -- the critical path had left luna and landed here. ECHO_STEP is
+        # 192 = 128 + 64, so two shifts and an add give the identical value with no DSP and no
+        # extra cycle. The assert is the maintenance cost: change ECHO_STEP and the decomposition
+        # above stops being that constant.
+        assert ECHO_STEP == 128 + 64, "edly decomposes ECHO_STEP as (x<<7)+(x<<6); re-derive it"
+
         # `rvg` is registered, not wired, and that is a timing fix rather than a style choice.
         # `Array(RVG)[ctrl.rsize]` is a 4:1 mux over 15 bits sitting directly on the A input of
         # the comb-feedback MULT18X18D, so it lands at the *front* of the longest path in this
