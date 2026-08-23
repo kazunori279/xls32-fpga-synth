@@ -409,10 +409,26 @@ wrong, only old in its wording and its routing. It is waived by name in
   the one module on this desk, which has always worked. It is evidence about **M37's 54.30 MHz
   24-voice build specifically**: the 32-voice archive is unchanged and untested by him since the
   failure, and he did not say which of his modules were in the "couple", so the die that failed is
-  not named as having passed. He also did not answer the question about what "didn't work" looked
-  like on it — no enumeration, glitching audio, or no video — so
-  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) still has no diagnosis, only a
-  build that stopped reproducing it.
+  not named as having passed.
+
+  **2026-08-23 he answered the question, and it is the first of the three: no enumeration.**
+  *"The symptom was no USB enumeration/communication at all. As I mentioned, the previous bitstream
+  I tested was failing timing at 45MHz, which could cause all kinds of problems, including the
+  above."* That rules out the other two readings —
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) was never audio that came up and
+  glitched, and never a missing video output — and it points at the USB cone, which is exactly
+  where the failing paths on that build were (`usb.timer.counter[7]` → `usb.data_crc.crc[1]`, and
+  luna's `transmitter.fsm_state` and `IsoStreamInEndpoint.bytes_left_in_frame` before it). A device
+  that never enumerates is one whose USB logic is not meeting its own timing, not one whose engine
+  is wrong.
+
+  What is still not measured is the causal link. He attributes it to that build missing timing at
+  45 MHz, which is an inference from the report and not a capture off the failing die, and nobody
+  has re-run the old bitstream on it to confirm. So #3 has a symptom and a named suspect rather
+  than a proof, and it stays open on that basis. The consequence for what ships: `xls32-r5.tar.gz`
+  sits at 46.35 MHz, within a megahertz of the build that failed to enumerate, and is still the
+  slot-6 experimental archive for that reason. The 24-voice build at 56.63 is the one that has run
+  on more than one die.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
