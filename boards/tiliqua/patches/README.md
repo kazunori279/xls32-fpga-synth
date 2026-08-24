@@ -126,6 +126,18 @@ baseline (6 at 53.90, 16 at 55.94) now diverge instead: `overused` climbs across
 and never comes back down. So the patch also buys a wider sweep, because two draws in 24 stop
 producing a bitstream at all.
 
+### It does not combine with `XLS32_SPLIT_CLOCKS=1`
+
+Worth knowing before anyone tries it, because the two look like they should add: M39's split build
+fell 0.6 MHz short of 60 MHz and its best-seed path started at `usb.token_detector.timer.counter`,
+another `USBInterpacketTimer` and so exactly what this patch registers. Over the same 24 seeds,
+23 routed and the result is worse than either lever on its own — mean 52.87, best **55.59**, and
+zero draws at or above 56 against the patch's five. The patch still works: on the best draw the
+timer cone is gone and the worst path is the same `out_fifo.r_port__addr[3]` → `data_crc.crc[0]`
+pair the unsplit patched build ends on, at 17.99 ns against 16.97, all of the difference in routing
+(13.61 vs 12.37 ns). The extra domain buys the `usb` cells freedom and takes it back in placement
+dispersion. Measure this patch unsplit.
+
 **Not applied.** The vendor asked that his distributed libraries not be modified, and luna is one of
 them. The place this belongs is upstream in `greatscottgadgets/luna`, which is issue #34's third
 item — if luna takes it, Tiliqua gets it through a version bump and nothing here is patched.

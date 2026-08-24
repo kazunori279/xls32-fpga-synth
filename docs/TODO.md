@@ -449,6 +449,34 @@ what happens.
   whole issue rather than the third part of it. 58.93 is still a FAIL at 60, so
   [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) does not close either way.
 
+  **And the two levers do not stack — combining them is worse than either alone.** The obvious next
+  experiment was `XLS32_SPLIT_CLOCKS=1` plus patch 0002, because M39's split fell 0.6 MHz short of
+  60 and its best-seed path started at `usb.token_detector.timer.counter`, another `InterpacketTimer`
+  instance and so exactly what 0002 registers. Built and swept over the same 24 seeds, 23 of which
+  routed:
+
+  | 24 voices, post-route | routed | mean | best | draws ≥ 56 |
+  |---|---|---|---|---|
+  | unsplit, no patch (M38) | 24/24 | 53.99 | 56.63 | 1 |
+  | unsplit, patch 0002 (M41) | 22/24 | 54.76 | **58.93** | 5 |
+  | split only, `usb` (M39) | 10/12 | 55.26 | **59.40** | — |
+  | **split + patch 0002**, `usb` | 23/24 | **52.87** | **55.59** | **0** |
+
+  Worse on every column that matters: the mean drops below even the unpatched baseline, the best
+  draw loses 3.3 MHz against the split alone and 3.8 against the patch alone, and not one seed in 24
+  clears 56 where the patch alone cleared it five times. The patch still did its job — on the best
+  draw the timer cone is gone and the worst path is
+  `channels_to_usb_stream.out_fifo.r_port__addr[3]` → `usb.data_crc.crc[0]`, the same endpoint pair
+  the unsplit patched build lands on. It is 17.99 ns against that build's 16.97, and the whole
+  difference is routing (13.61 vs 12.37 ns) on 135 more cells. So the split is not paying for its
+  extra domain here: nextpnr stops optimising `sync` the moment it meets 50, and what that buys the
+  `usb` cells in freedom it takes back in placement dispersion. `sync` itself is never the problem —
+  23 of 23 pass, mean 56.45, worst 51.57, and those are floors rather than ceilings for the same
+  reason.
+
+  **60 MHz is not reachable by stacking what exists.** #3 stays open on that, and #34's case for
+  upstreaming rests on the unsplit measurement, which is the one that ships.
+
   **The suite's first published `missing_frames` total is wrong**, and it is worth writing down
   before it becomes a baseline: 73,646,868 frames reported missing over 49 of 175 captures, when
   the whole run lasted 618 s and the device can only have produced ~29.7 M frames in it. Every
