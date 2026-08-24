@@ -2288,6 +2288,22 @@ Sanity-check that the module is talking before writing any gateware:
 openFPGALoader --scan-usb        # expect: 0x1209:0xc0ca dirtyJtag  apf.audio  Tiliqua R5
 ```
 
+**With more than one module attached, `--busdev-num` will not pick between them.** openFPGALoader
+accepts the flag for `-c dirtyJtag` and then ignores it: on the Homebrew 0.12.1 build,
+`--busdev-num 000:999` and `--busdev-num 099:003` both still report `idcode 0x41111043 … LFE5U-25`,
+because the dirtyJtag backend opens the first probe it enumerates whatever you asked for. Loads that
+look like they went to two different boards went to the same one twice. There is no flag that fixes
+this — **unplug the other `dbg` cables** and leave exactly one, then confirm with the build stamp in
+`iManufacturer` before trusting a measurement. `usb2` cables can all stay connected; only `dbg`
+carries JTAG.
+
+**A module held at the bootloader menu does not enumerate on `usb2`.** Cancelling the five-second
+autoboot with the encoder is the [required posture for an SRAM load](README.md#b--tiliqua--flash-and-go)
+— it is the only way the SI5351 ends up at 12.288 MHz — but while it sits there the FPGA is running
+the bootloader's gateware, which is not a UAC2 device. An empty `system_profiler SPUSBDataType` at
+that moment means the board is waiting, not broken. The audio device appears after the SRAM load
+lands.
+
 **Three toolchains, three ideas about the filesystem.** This is the friction that costs the most
 time on this board, and `boards/tiliqua/build.sh` exists mostly to absorb it. XLS runs as a
 linux-x64 binary inside Docker; `yowasp`'s yosys and nextpnr run under WASI and **can only see files

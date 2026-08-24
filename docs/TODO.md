@@ -429,6 +429,25 @@ wrong, only old in its wording and its routing. It is waived by name in
   sits at 46.35 MHz, within a megahertz of the build that failed to enumerate, and is still the
   slot-6 experimental archive for that reason. The 24-voice build at 56.63 is the one that has run
   on more than one die.
+
+  **2026-08-24: the 32-voice build has now run on a second die too, and it graded the same.** Two
+  more R5 modules arrived unflashed; one of them (call it die #2) took `xls32-r5.tar.gz`'s `top.bit`
+  — stamp `2026-08-20T05:45Z-f7b52c4`, 46.35 MHz — as an SRAM load and enumerated on `usb2` first
+  try. `check_loop.py` read 440.01 Hz (+0.1 cents) and 0.000 % frame gaps, and the full suite
+  returned **99.7/100 (A+), 174 pass / 1 warn / 0 fail**, 175 cases in 616 s, frame gaps mean and
+  worst both 0.00 %, audio clock mean 12.288 MHz over 175 captures (spread 29.3 kHz).
+  `stress_32voice` scored 100.0 with zero glitches. The lone WARN is `filter_sweep` at 82 — the same
+  [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) that die #1 shows, on both
+  bitstreams, so it travels with the design and not with the silicon. The 83,844,053 `missing_frames`
+  over 55 of 175 captures is [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48)
+  re-confirmed, not audio.
+
+  What that is worth, stated narrowly: two dies out of two on this desk run the 46.35 MHz build
+  clean, where before there was one. It is still an SRAM load rather than a slot boot, so the
+  bootloader's slot-6 path is unexercised; the module that actually failed is Sebastian's and is not
+  here; and two winners do not refute a marginal path — a path some silicon loses is not required to
+  lose often. What it does remove is the reading that die #1 is unusually good. Die #2 came out of
+  the box, was never flashed, and grades within 0.1 of it.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
