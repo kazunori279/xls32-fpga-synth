@@ -442,12 +442,20 @@ wrong, only old in its wording and its routing. It is waived by name in
   over 55 of 175 captures is [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48)
   re-confirmed, not audio.
 
+  **Then the same die was flashed to slot 6 and booted from it, which is the path a user takes.**
+  `pdm flash archive` wrote the bitstream to `0x700000` and the manifest to `0x7f0000`, and the cold
+  boot brought up `Tiliqua XLS32` on `usb2` with `iManufacturer` reading
+  `apf.audio XLS32/2026-08-20T05:45Z-f7b52c4`. The manifest's `clk0_hz: 12288000` loaded on its own —
+  `check_loop.py` read 12.288 MHz and 440.01 Hz with no bootloader dance, which is the part an SRAM
+  load cannot demonstrate. The suite returned **99.8/100 (A+), 174 pass / 1 warn / 0 fail**, 175
+  cases in 621 s, gaps 0.00 %, clock mean 12.288 MHz (spread 23.6 kHz), WARN `filter_sweep` at 80.
+
   What that is worth, stated narrowly: two dies out of two on this desk run the 46.35 MHz build
-  clean, where before there was one. It is still an SRAM load rather than a slot boot, so the
-  bootloader's slot-6 path is unexercised; the module that actually failed is Sebastian's and is not
-  here; and two winners do not refute a marginal path — a path some silicon loses is not required to
-  lose often. What it does remove is the reading that die #1 is unusually good. Die #2 came out of
-  the box, was never flashed, and grades within 0.1 of it.
+  clean, one of them from flash by the documented procedure, where before there was one. The module
+  that actually failed is Sebastian's and is not here, and two winners do not refute a marginal path
+  — a path some silicon loses is not required to lose often. What it does remove is the reading that
+  die #1 is unusually good. Die #2 came out of the box, was never flashed, and grades within 0.1 of
+  it across four runs.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
