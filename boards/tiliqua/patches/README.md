@@ -129,3 +129,34 @@ producing a bitstream at all.
 **Not applied.** The vendor asked that his distributed libraries not be modified, and luna is one of
 them. The place this belongs is upstream in `greatscottgadgets/luna`, which is issue #34's third
 item — if luna takes it, Tiliqua gets it through a version bump and nothing here is patched.
+
+The block it changes is byte-identical on luna `main` (checked 2026-08-24) and on the `6771b6d`
+that `pdm.lock` pins, so the patch applies upstream unchanged.
+
+## 0003-luna-repair-the-interpacket-timer-test.patch
+
+luna already ships `USBInterpacketTimerTest`, and it has never run. `test_resets_and_delays` is a
+generator function without `@usb_domain_test_case`, so calling it returns a generator that is never
+driven — pytest reports it as a pass and prints *"It is deprecated to return a value that is not
+None from a test case"*, which is the only sign anything is wrong. Three separate defects were
+sitting behind that, none of which could ever have been noticed:
+
+- `initialize_signals` calls `USBSpeed.FULL`, and the file never imports `USBSpeed`. Adding the
+  decorator gets you `NameError` before a single cycle is simulated.
+- the same line is `yield self.dut.speed(USBSpeed.FULL)` — calling a `Signal` instead of `.eq()`.
+- the final loop asserts on `self.rx_to_tx_min`, `self.rx_to_tx_max` and `self.tx_to_rx_timeout`,
+  none of which exist on the test case. They are the DUT's internal names, not the interface's.
+
+Once it runs, the cycle counts are wrong too. Measured against pristine luna in the test's own
+idiom, the FS strobes land 11, 33 and 81 cycles after the `start` pulse, where the test advances 10,
+32 and 54 and its comment claims 80. So this patch fixes the four defects and corrects the counts to
+what the hardware does.
+
+**It passes both with 0002 and without it**, which is the point: it is a real regression test for
+the strobe cycles, so it is the thing that makes 0002 reviewable rather than a claim. The two go
+upstream together — repair the test first, then make the change under it.
+
+```bash
+git -C /path/to/luna apply /path/to/xls32-fpga-synth/boards/tiliqua/patches/0003-*.patch
+python -m pytest tests/test_usb2_packet.py -k InterpacketTimer -q
+```

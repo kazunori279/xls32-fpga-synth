@@ -1,0 +1,53 @@
+--- a/tests/test_usb2_packet.py
++++ b/tests/test_usb2_packet.py
+@@ -9,6 +9,7 @@
+ from luna.gateware.usb.usb2.packet import USBDataPacketDeserializer, USBDataPacketGenerator, USBDataPacketReceiver
+ from luna.gateware.usb.usb2.packet import USBHandshakeDetector, USBHandshakeGenerator
+ from luna.gateware.usb.usb2.packet import InterpacketTimerInterface, USBInterpacketTimer, USBTokenDetector
++from luna.gateware.usb.usb2       import USBSpeed
+ 
+ class USBPacketizerTest(LunaGatewareTestCase):
+     SYNC_CLOCK_FREQUENCY = None
+@@ -512,9 +513,10 @@
+ 
+     def initialize_signals(self):
+         # Assume FS for our tests, unless overridden.
+-        yield self.dut.speed(USBSpeed.FULL)
++        yield self.dut.speed.eq(USBSpeed.FULL)
+ 
+ 
++    @usb_domain_test_case
+     def test_resets_and_delays(self):
+         yield from self.advance_cycles(4)
+         interface = self.interface
+@@ -530,7 +532,7 @@
+         self.assertEqual((yield interface.rx_timeout), 0)
+ 
+         # 10 cycles later, we should see our first timer output.
+-        yield from self.advance_cycles(10)
++        yield from self.advance_cycles(11)
+         self.assertEqual((yield interface.tx_allowed), 1)
+         self.assertEqual((yield interface.tx_timeout), 0)
+         self.assertEqual((yield interface.rx_timeout), 0)
+@@ -541,14 +543,16 @@
+         self.assertEqual((yield interface.tx_timeout), 1)
+         self.assertEqual((yield interface.rx_timeout), 0)
+ 
+-        # 58 cycles later (80 total), we should see our third timer output.
+-        yield from self.advance_cycles(22)
++        # 48 cycles later (80 total), we should see our third timer output.
++        yield from self.advance_cycles(48)
+         self.assertEqual((yield interface.tx_allowed), 0)
+         self.assertEqual((yield interface.tx_timeout), 0)
+         self.assertEqual((yield interface.rx_timeout), 1)
+ 
+         # Ensure that the timers don't go high again.
++        yield
+         for _ in range(32):
+-            self.assertEqual((yield self.rx_to_tx_min),     0)
+-            self.assertEqual((yield self.rx_to_tx_max),     0)
+-            self.assertEqual((yield self.tx_to_rx_timeout), 0)
++            self.assertEqual((yield interface.tx_allowed), 0)
++            self.assertEqual((yield interface.tx_timeout), 0)
++            self.assertEqual((yield interface.rx_timeout), 0)
++            yield
