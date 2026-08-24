@@ -41,6 +41,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import textwrap
@@ -48,6 +49,23 @@ import tokenize
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STATE = ROOT / "scripts" / "artefact_hashes.json"
+
+
+def pinned_seed(voices):
+    """The placer seed `boards/tiliqua/build.sh` pins for this voice count.
+
+    Read out of the script rather than written down again here. It was written down again here
+    until M40, and it drifted: the record said the 24-voice archive was seed 3 for two milestones
+    after the board started running seed 7. Nothing caught it, because both the record and the
+    expectation came from the same stale literal and so agreed with each other.
+    """
+    case = re.search(r"case \"\$VOICES\" in(.*?)esac", (ROOT / "boards/tiliqua/build.sh").read_text(),
+                     re.S)
+    pins = dict(re.findall(r"(\d+|\*)\)\s*SEED=\"\$\{SEED:-(\d+)\}\"", case.group(1) if case else ""))
+    seed = pins.get(str(voices), pins.get("*"))
+    if seed is None:
+        raise SystemExit(f"no seed pin for VOICES={voices} in boards/tiliqua/build.sh")
+    return seed
 
 # Bumped whenever `normalize` changes, so old records are reported as needing a re-record instead
 # of showing up as every source having changed at once.
@@ -91,7 +109,7 @@ ARTEFACTS = {
             "artefact": f"boards/tiliqua/firmware/xls{voices}-r5.tar.gz",
             "doc": "boards/tiliqua/firmware/README.md",
             "params": {"STAGES": "12", "WCT": "12", "hw_rev": "5",
-                       "voices": str(voices), "SEED": seed},
+                       "voices": str(voices), "SEED": pinned_seed(voices)},
             # Half of this bitstream is the vendor's: luna, luna-soc and the tiliqua gateware,
             # linked in from $TILIQUA_SDK. See sdk_state() for why it is a commit and not hashes.
             # The Basys 3 has no equivalent -- Vivado reads only the files listed under it.
@@ -135,7 +153,7 @@ ARTEFACTS = {
                 "boards/tiliqua/gateware/voices.py",
             ],
         }
-        for voices, seed in ((24, "3"), (32, "5"))
+        for voices in (24, 32)
     },
 }
 

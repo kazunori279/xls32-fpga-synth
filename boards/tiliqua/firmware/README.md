@@ -6,7 +6,7 @@ run the synth **without building** — no Amaranth, no yosys, no Docker.
 | | voices | die | `clk` post-route | slot | |
 |---|---|---|---|---|---|
 | **`xls24-r5.tar.gz`** | 24 | 93.5 % | 56.63 MHz | **7** | **formal** — what this repo stands behind |
-| `xls32-r5.tar.gz` | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** — see the warning below |
+| `xls32-r5.tar.gz` | 32 | 98.3 % | 48.37 MHz | 6 | **experimental** — see the warning below |
 
 Both are the same engine at 48 kHz: 4 multitimbral parts, resonant multimode filter, LFO, unison,
 cross-osc FM/ring-mod, the block-RAM effects (chorus / ping-pong echo / 8-comb Freeverb), UAC2 audio
@@ -24,13 +24,13 @@ Not because 32 does not work here — it does, and it has been the shipped build
 of what it is betting on.
 
 The `clk` domain (`sync` and `usb` are one net, fixed at 60 MHz by ULPI) has never closed timing on
-this design. At 32 voices the design fills 98.9 % of the die and closes at **46.35 MHz**, which is a
-bet that the silicon is **29 % faster than nextpnr models it**. That bet pays on this desk. It did
+this design. At 32 voices the design fills 98.3 % of the die and closes at **48.37 MHz**, which is a
+bet that the silicon is **24 % faster than nextpnr models it**. That bet pays on this desk. It did
 not pay on one of the vendor's two modules, which is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) and the reason any of this
 exists. At 24 voices the same design is 93.5 % and closes at **56.63 MHz** — the same bet at **6 %**.
 
-Eight fewer notes of polyphony for well under half the risk. If a module refuses to enumerate,
+Eight fewer notes of polyphony for a quarter of the risk. If a module refuses to enumerate,
 drops audio intermittently, or gets worse as it warms up, try slot 7 before you try anything else.
 
 The 24-voice build is graded **99.8/100 (A+)** on the module — 174 pass / 1 warn / 0 fail over the
@@ -85,17 +85,16 @@ That catches uncommitted edits too, which the `tag` cannot.
 
 The other half of the bitstream is the vendor's — luna, luna-soc and the `tiliqua` gateware, linked
 in from `$TILIQUA_SDK`. That lives outside this repo, so it is recorded by **commit** rather than by
-hash, and the check reports it changing since the build as staleness like any other source. Two
-caveats, both of which the output states rather than papers over: with no checkout on the machine
-(CI, or a fresh clone) it can only say it could not verify, and the 32-voice archive was built
-before this was recorded at all, so it will say so until its next rebuild.
+hash, and the check reports it changing since the build as staleness like any other source. One
+caveat, which the output states rather than papers over: with no checkout on the machine (CI, or a
+fresh clone) it can only say it could not verify. Both archives now carry the SDK commit they were
+built against; the 32-voice one predated that field until M40.
 
-That archive reports **known-stale** for a second reason. M37's four changes — `voices.py`, the tile
-index, the panel strings and the router options — were only rebuilt against at 24 voices, and at
-98.9 % occupancy re-running the 32-voice one means a fresh seed sweep. Nothing about the flashed
-bitstream is wrong; it draws the same 8 × 4 and plays the same engine. It announces itself with the
-old wording, and it was routed with the old options. The waiver in `scripts/artefact_hashes.json`
-names those four sources and lapses if anything else moves
+Neither archive is waived. The 32-voice one was, for three milestones: M37's four changes —
+`voices.py`, the tile index, the panel strings and the router options — were rebuilt against at 24
+voices only, because at this occupancy re-running the 32-voice build means a fresh seed sweep and
+the flashed bitstream was not wrong, only routed with the old options and announcing itself with
+the old wording. M40 ran the sweep and the waiver is gone
 ([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
 
 One thing the record has to work harder at since there are two archives. They are built from *the
@@ -127,10 +126,13 @@ those six characters change the netlist's width and re-draw the seed lottery `bu
 against. That is not theoretical — M37 measured a dirty build at 22,745 cells and the clean one at
 22,985, and the seed that won the first was the *worst* of the second.
 
-`build.sh` pins **seed 7** for 24 voices and **seed 5** for 32. Those are not preferences. At this
+`build.sh` pins **seed 7** for 24 voices and **seed 10** for 32. Those are not preferences. At this
 occupancy the router either converges or runs away depending on the seed, the winners do not
 transfer between netlists — seed 7 wins the 24-voice draw at 56.63 MHz and read 50.90, near the
-bottom, on the netlist one commit earlier — and any netlist change costs a fresh sweep. The long version is in `build.sh`.
+bottom, on the netlist one commit earlier — and any netlist change costs a fresh sweep. Only seven
+of the thirteen seeds tried on the 32-voice netlist converged at all; the other six had to be killed
+by hand. `seed_sweep.sh` re-places an existing `top.json` under several seeds at once, which skips
+the whole front of the build. The long version is in `build.sh`.
 
 ## History
 

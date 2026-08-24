@@ -137,10 +137,10 @@ design on this module starts from:
 
 | resource | **24 voices (shipped)** | 32 voices (experimental) | vendor reference shell |
 |---|---|---|---|
-| TRELLIS_COMB | **22,722 of 24,288 (93.5%)** | 24,023 (98.9%) | 1,768 (7%) |
+| TRELLIS_COMB | **22,722 of 24,288 (93.5%)** | 23,870 (98.3%) | 1,768 (7%) |
 | TRELLIS_FF | **11,931 of 24,288 (49%)** | 13,223 (54%) | 731 (3%) |
 | DP16KD | **53 of 56 (94%)** | 53 (94%) | 0 (0%) |
-| MULT18X18D | **27 of 28 (96%)** | 28 (100%) | 1 (4%) |
+| MULT18X18D | **27 of 28 (96%)** | 27 (96%) | 1 (4%) |
 | EHXPLLL | **2 of 2 (100%)** | 2 (100%) | 1 (50%) |
 | TRELLIS_IO | **86 of 197 (43%)** | 86 (43%) | — |
 
@@ -1517,6 +1517,11 @@ top for the first time since M31. That is the shape above playing out, not a new
 also why the 32-voice build is still slow: at 98.9% the luna path is congestion-limited (4.80 ns
 logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a different name.
 
+The 32-voice rebuild at M41 did not change that shape. At 98.3% the worst path runs
+`usb.timer.counter[4]` → `channels_to_usb_stream.level$44[7]` in 20.67 ns, **5.36 ns logic against
+15.31 ns of routing** — 74% routing, so still congestion and still entirely inside luna, only with
+half a point of occupancy and 2 MHz between it and the M36 measurement.
+
 **The trajectory.**
 
 | build | occupancy | critical path | `sync` Fmax vs 60 MHz required |
@@ -1532,6 +1537,7 @@ logic against **16.77 ns** of routing), which is the `fx` mechanism wearing a di
 | M36, 24 voices, `--seed 4` | 93.9% | **luna**, depth-limited | 55.48 MHz |
 | M37, 24 voices, `--seed 3` | 94.6% | **luna**, depth-limited | 54.30 MHz |
 | M38, **24 voices** (shipped), `--seed 7` | **93.5%** | **luna**, routing-limited | **56.63 MHz** |
+| M41, **32 voices** (experimental), `--seed 10` | **98.3%** | **luna**, congestion-limited | **48.37 MHz** |
 
 The last five rows are read from the `top.tim` of an archive that is committed in this repo. The
 M35 row superseded an entry that read `M33 | 96% | 39.42 MHz` and was two netlists out of date; the

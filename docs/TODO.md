@@ -31,11 +31,13 @@ appends `-dirty`, and those six characters are worth 240 cells. A seed measured 
 2 MHz ahead of the field and turned out to be the worst of six on the netlist that shipped. Sweep on
 the netlist you are going to ship, and count a dirty tree as a different netlist.
 
-**What is still queued.** The 32-voice archive was not rebuilt against any of this
-([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) — at 98.9 % occupancy that is a
-fresh six-seed sweep of which historically about half converge, and the flashed bitstream is not
-wrong, only old in its wording and its routing. It is waived by name in
-`scripts/artefact_hashes.json`, and the waiver lapses if anything beyond those five sources moves.
+**Settled 2026-08-24.** The 32-voice archive was rebuilt against all of it
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) and the waiver is gone. The
+prediction that a rebuild costs a sweep of which about half converge was right to the seed: seven of
+thirteen. Seed 10 ships at 48.37 MHz against 46.35. The prediction it got wrong was pessimism about
+the old pin — seed 5 read 46.34 on the new netlist, so it had not gone bad, it had only been
+overtaken. Sweeping finds better seeds; it does not rescue you from broken ones, because that is not
+what happens.
 
 ## Unverified — things believed to work that have not been watched working
 
@@ -278,6 +280,12 @@ wrong, only old in its wording and its routing. It is waived by name in
   which is the shape of the data (starts agree within 6%, ends diverge the other way). Re-deriving
   `good` from both boards rides with [#11](https://github.com/kazunori279/xls32-fpga-synth/issues/11):
   same file, same board day.
+
+  **The rise is not fixed, which sharpens that.** M41's 32-voice build reads **961→1687 Hz**, a
+  726 Hz rise, and scores **89.4** — the first time this case has not warned on Tiliqua, and the
+  reason the suite printed 175/0/0. Nothing in the filter changed between the builds; the voice
+  count and the routing did. So the 665–690 Hz above is one build's number rather than the board's,
+  and a bar this case clears or misses depending on the rebuild is a bar, not a measurement.
 - ~~**+369 TRELLIS_COMB from the part-select remap, still unexplained**~~
   ([#5](https://github.com/kazunori279/xls32-fpga-synth/issues/5)). **Closed 2026-08-22 as a class,
   not a case.** The reason it was urgent has expired — the ~1,200-cell budget it was measured
@@ -472,9 +480,9 @@ wrong, only old in its wording and its routing. It is waived by name in
   45 MHz, which is an inference from the report and not a capture off the failing die, and nobody
   has re-run the old bitstream on it to confirm. So #3 has a symptom and a named suspect rather
   than a proof, and it stays open on that basis. The consequence for what ships: `xls32-r5.tar.gz`
-  sits at 46.35 MHz, within a megahertz of the build that failed to enumerate, and is still the
-  slot-6 experimental archive for that reason. The 24-voice build at 56.63 is the one that has run
-  on more than one die.
+  sat at 46.35 MHz, within a megahertz of the build that failed to enumerate, and M41's rebuild
+  moves it to 48.37 — three megahertz clear rather than one, which is not enough to change the label
+  on slot 6. The 24-voice build at 56.63 is the one that has run on more than one die.
 
   **2026-08-24: the 32-voice build has now run on a second die too, and it graded the same.** Two
   more R5 modules arrived unflashed; one of them (call it die #2) took `xls32-r5.tar.gz`'s `top.bit`
@@ -505,17 +513,19 @@ wrong, only old in its wording and its routing. It is waived by name in
   it across four runs.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
-  module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.9 % and 46.35 MHz, kept
+  module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz, kept
   in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
   two modules. Anyone flashing slot 6 is carrying that.
 
   Both were verified this way — flashed or SRAM-loaded from the same archive and confirmed by the
   build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; the
-  32-voice run was 2026-08-20 and the 24-voice one 2026-08-22, after M38 replaced the archive.
-  They grade **identically**: 99.8/100 (A+), 174 pass / 1 warn / 0 fail, 175 cases in ~616 s,
-  0.00 % USB frame gaps, and the same lone WARN — `filter_sweep` at 81 and 82, which is
-  [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) and not a timing symptom. Worth
-  stating plainly what that is and is not evidence of: the 32-voice build misses 60 MHz by 22.8 %
+  24-voice run was 2026-08-22, after M38 replaced the archive, and the 32-voice one 2026-08-24,
+  after M41 did. They grade the same to a tenth: **99.8/100 (A+)**, 175 cases in ~615 s, 0.00 % USB
+  frame gaps. The 24-voice run is 174/1/0 with `filter_sweep` at 82; the 32-voice one is **175/0/0**,
+  the suite's first clean sweep, with the same case at 89.4 — which is
+  [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) sitting near its 85 threshold and
+  not a timing symptom either way. Worth stating plainly what that is and is not evidence of: the
+  32-voice build misses 60 MHz by 19.4 %
   and still returns zero glitches across 175 cases *on the die that has always worked*. It says
   nothing about the die that did not, and if anything it sharpens the case that the failure is a
   marginal path some silicon wins and some loses

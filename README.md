@@ -99,7 +99,7 @@ This is the **only** step that needs a computer at all, so borrow one if you hav
 is written the module never asks again.
 
 > There is a second archive beside it, `xls32-r5.tar.gz`, which is the same synth with **32** voices
-> instead of 24 and belongs in **slot 6**. It fills 98.9 % of the FPGA where 24 voices fill 93.5 %,
+> instead of 24 and belongs in **slot 6**. It fills 98.3 % of the FPGA where 24 voices fill 93.5 %,
 > and this repo labels it *experimental* for exactly that reason: it runs here, and it did not run
 > on one of the two modules the module's maker tried it on. Start with slot 7.
 > [`boards/tiliqua/firmware/README.md`](boards/tiliqua/firmware/) is the long answer.
@@ -334,7 +334,7 @@ building. They are the same engine and differ in polyphony:
 | | voices | die | `clk` post-route | slot | |
 |---|---|---|---|---|---|
 | **`xls24-r5.tar.gz`** ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz), 408 KB) | 24 | 93.5 % | 56.63 MHz | **7** | **formal** — what this repo stands behind |
-| `xls32-r5.tar.gz` ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz), 430 KB) | 32 | 98.9 % | 46.35 MHz | 6 | **experimental** |
+| `xls32-r5.tar.gz` ([raw](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls32-r5.tar.gz), 429 KB) | 32 | 98.3 % | 48.37 MHz | 6 | **experimental** |
 
 **Take the 24-voice one.** Neither closes the 60 MHz `clk` constraint — that is
 [issue #3](https://github.com/kazunori279/xls32-fpga-synth/issues/3), and it is why this repo exists
@@ -1231,7 +1231,7 @@ this table is [§1](#two-boards-one-synth).)
 | **Effects** | chorus · ping-pong echo (≤508 ms) · 8-comb Freeverb | the same FSM, ported — echo ≤340 ms, half-length reverb tank |
 | **Polyphony** | 32 voices | **24** (formal) or 32 (experimental) — `VOICES=` on `build.sh` |
 | **Extras** | 16 LEDs (a voice-activity comet), 7-segment | **720×720p60 DVI visualiser** — one tile per voice, no framebuffer; 8 level LEDs; encoder |
-| **Area** | ~51% LUTs · 26 DSP48E1 · 33 RAMB36 | 22,722 / 24,288 TRELLIS_COMB (93.5%) at 24 voices, 24,023 (98.9%) at 32 · 27/28 MULT18X18D · 53/56 DP16KD |
+| **Area** | ~51% LUTs · 26 DSP48E1 · 33 RAMB36 | 22,722 / 24,288 TRELLIS_COMB (93.5%) at 24 voices, 23,870 (98.3%) at 32 · 27/28 MULT18X18D · 53/56 DP16KD |
 | **Flashing** | `openFPGALoader -b basys3` (SPI flash or SRAM) | `XLS24` straight from the web flasher's Community list, or a bitstream archive to slot 7 (or 6 for the 32-voice one) over the same flasher or `pdm flash`; `openFPGALoader -c dirtyJtag` for SRAM |
 | **Prebuilt bitstream in-repo** | ✅ `boards/basys3/firmware/top.bit` | ✅ `boards/tiliqua/firmware/xls24-r5.tar.gz` and `xls32-r5.tar.gz` |
 
@@ -1257,7 +1257,7 @@ almost none of the answers match:
 | **Reverb tank** | full-length 8-comb Freeverb | the same 8 combs at half length, RVG raised to hold RT60 |
 | **Audio format** | 16-bit PCM, offset binary over the UART | `ASQ` = `fixed.SQ(1,15)` — one MSB inversion from the engine's output, then a 6 dB pad |
 | **Visual feedback** | 16 LEDs, a voice-activity comet | one tile per voice on a 720×720p60 DVI beam-raced display — 6×4 or 8×4, one byte of state each and no framebuffer |
-| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — **56.63 MHz** Fmax at 24 voices (46.35 at 32), and **on one Tiliqua out of two an earlier, slower bitstream did not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
+| **Known risk** | soft-multiplier backends sit ~0.2 ns over budget (see below) | `sync` fails static timing at 60 MHz — **56.63 MHz** Fmax at 24 voices (48.37 at 32), and **on one Tiliqua out of two an earlier, slower bitstream did not run** ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)) |
 
 Basys 3's MIDI-DIN input (M7) and I2S DAC output (M8) are **built and timing-closed but not yet
 hardware-tested** (parts on order); audio and MIDI otherwise flow over the USB UART. On Tiliqua both

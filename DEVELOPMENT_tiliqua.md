@@ -67,6 +67,9 @@ graded automatically, everything before it by hand or by simulation.
 | **36 ✅** | **24 voices becomes the formal build** — and the reduced-voice ladder that ruled this out for four milestones turns out to have been measuring a netlist yosys had pruned to nothing | **the generator bug is fixed and the curve is a slope, not two rungs**: 32 → 24,023 (98.9%) / 46.35 MHz, 28 → 23,358 (96.2%) / 48.85, **24 → 22,796 (93.9%) / 55.48**, converged runs only. That takes [risk 3](#what-is-left--m32-and-the-risk-register) from a 29% bet against the silicon to 8%. On hardware: **99.8/100 (A+), 174 pass / 1 warn / 0 fail**, frame gaps 0.00%, 440.01 Hz. `xls24-r5.tar.gz` → slot 7 (formal), `xls32-r5.tar.gz` → slot 6 (experimental). Known cosmetic fallout: the visualiser's bottom row (#40) |
 | **37 ✅** | **The reduction finishes, and both boards get rebuilt**: `gateware/voices.py` becomes the one place the voice count is written (#40, #43), `--router2-tmg-ripup` goes on (#39), and the Basys 3 blob that had been two weeks behind the engine is rebuilt (#41) | **Tiliqua**: `xls24-9976c4e-r5.tar.gz` at **54.30 MHz**, 22,985 (94.6%), all six seeds converged; **99.8/100 (A+)** on the module, 174/1/0, frame gaps 0.00%, grid drawing 6×4 and the slot list naming the voice count, both confirmed on hardware. **Basys 3**: `ardy` stops being a single-cycle path, and Vivado closes at **+1.322 ns with 0 failing endpoints** (was +0.276); `verify.sh` **PASS 4/4** at 438/554/658/830 Hz. The 32-voice archive is deliberately not rebuilt and is waived by name ([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)) |
 | **38 ✅** | **The echo tap stops spending a multiplier on a constant**, found by sweeping seeds rather than by reading the code: on the seed that won the sweep the critical path had left luna and landed in `fx.py` | **22,985 → 22,722 cells and 28/28 → 27/28 MULT18X18D** — the first spare multiplier this design has had. Re-sweeping 24 seeds on the new netlist: mean 53.15 → **53.99**, worst 49.12 → **51.60**, best **56.63** (seed 7), 6 of 24 at or above 55 where M37 had 2. On the module `xls24-76401a5-r5.tar.gz` grades **99.8/100 (A+)**, 174/1/0 — the same grade and the same lone WARN as M37, so the 2.33 MHz is margin and nothing else. `test_fx.py` is bit-exact across the change |
+| **39 ✅** | **Splitting `sync` from `usb`** (#47): the dead 120 MHz `fast` PLL output becomes 50 MHz and carries `sync`, leaving the 60 MHz ULPI constraint on the 2,429 cells that need it | **measured, and the answer is no.** 12 seeds, 10 routed: usb mean 55.26 / best **59.40** against the unsplit 53.99 / 56.63, so +1.27 and +2.77 and still FAIL at 60. The best seed's critical path is 16.84 ns over seventeen LUT levels with none of our cells in it, which makes the shortfall depth and not congestion, and hands [#34 item 3](https://github.com/kazunori279/xls32-fpga-synth/issues/34) a named location. Kept behind `XLS32_SPLIT_CLOCKS=1`, off by default |
+| **40 ✅** | **The frame counter was measuring PortAudio, not the board** (#48): `missing_frames` published 73.6 M and 83.8 M out of runs that can hold 29.7 M | **`>> 16` → `(x + 0x8000) >> 16` in `usbaudio.py`, and 22,641,160 phantom missing frames over 24 captures become 0.** CoreAudio's float32 conversion lands three LSBs either side of the written value, and ch3 carries the counter's high bits, so truncating read it 32768 cycles low — 128 frames per flip in a counter that steps 256 per frame. `rec_audio.py` had rounded all along |
+| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -2387,6 +2390,54 @@ And the reason it was caught at all is the argument from M38 running in reverse.
 just been changed from "printed when non-zero" to "published every run", and a published number
 gets read, and a number that is read gets checked against what it can physically be. It had been
 wrong for as long as it had existed.
+
+## Milestone 41 — the 32-voice archive catches up, four milestones late
+
+`xls32-r5.tar.gz` had been the shipped experimental build since M32 and had not been rebuilt since
+M36. Four milestones of netlist changes went past it: `voices.py`, the tile index and the panel
+strings in M37, `--router2-tmg-ripup` in the same milestone, and M38's echo tap giving back a
+multiplier. Each time it was left alone for the same reason, written down each time — at this
+occupancy a rebuild is a fresh seed lottery, and the flashed bitstream was not wrong, only routed
+with the old options and announcing itself with the old wording
+([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
+
+**Thirteen seeds, seven converged.** The six that did not never terminate on their own; you watch
+`overused=` climb and kill them.
+
+| | MHz |
+|---|---|
+| best | **48.37** (seed 10) |
+| mean of 7 | 46.09 |
+| worst | 43.76 (seed 8) |
+
+Seed 5, pinned since M36, reads **46.34** on the new netlist against the 46.35 it shipped. That is
+the cleanest measurement this design has produced of what does and does not transfer across a
+netlist change: the seed kept its own result almost exactly, and lost its rank to three others.
+A sweep is not insurance against a seed going bad; it is how you find the ones that were always
+better and that you had no way to know about.
+
+What the four milestones bought, all of it from M38's multiplier: 24,023 → **23,870** TRELLIS_COMB
+(98.9 % → 98.3 %), 28/28 → **27/28** MULT18X18D, 53/56 DP16KD unchanged. With seed 10 on top,
+46.35 → **48.37 MHz**, so risk 3's bet against the silicon goes from 29 % to **24 %**. Still a bet,
+and still the reason slot 6 is labelled experimental.
+
+On die #2, flashed to slot 6 and confirmed by the build stamp (`2026-08-24T08:08Z-b9b2345`) before
+anything ran: **99.8/100 (A+), 175 pass / 0 warn / 0 fail** over 612 s, frame gaps 0.00 %, audio
+clock 12.288 MHz mean over 175 captures, and **0 frames missing over 0 of 175 captures** — the first
+full-suite run since the M40 fix, and it reads zero rather than 73 million.
+
+The 175/0/0 is the first clean sweep the suite has ever printed. `filter_sweep`
+([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7)) scored **89.4** against a PASS
+threshold of 85, where it has been warning for a dozen runs. One score above the line is one score
+above the line — the case is marginal by construction and this does not close the issue — but it is
+the first evidence that what it measures moves with the build rather than being a fixed property of
+the engine.
+
+One thing fell out of the provenance record while checking it. `check_artefacts.py` wrote the
+placer seed down a second time, as a literal beside the artefact spec, and it had drifted: the
+record claimed the 24-voice archive was seed 3 for two milestones after the board started running
+seed 7. Nothing caught it, because the recorded value and the expected value came from the same
+stale literal and so agreed with each other perfectly. It now reads the pin out of `build.sh`.
 
 ---
 
