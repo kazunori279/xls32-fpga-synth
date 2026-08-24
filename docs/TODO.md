@@ -425,6 +425,30 @@ what happens.
   ceilings, since nextpnr stops optimising a domain that already meets its constraint.
   [#47](https://github.com/kazunori279/xls32-fpga-synth/issues/47).
 
+  **M41, 2026-08-24: the register #34 has been asking for exists, it was measured properly, and it
+  is worth 2.3 MHz at the ceiling.** Where it goes is now named by two netlists rather than one — the
+  worst `clk` path on the 24-voice build (`usb.timer.counter[7]` → `usb.data_crc.crc[1]`, 17.66 ns)
+  and on the 32-voice build (`usb.timer.counter[4]` → `channels_to_usb_stream.level[7]`, 20.67 ns)
+  both start at luna's `USBInterpacketTimer`, whose three strobes are `counter == N` comparators
+  wired combinationally into every endpoint interface. `tx_allowed` gates the decision to transmit,
+  so the comparator and its fanout are the first two LUT levels of the longest path in the design.
+  [`patches/0002-luna-register-interpacket-strobes.patch`](../boards/tiliqua/patches/README.md)
+  compares against `N - 1` a cycle earlier and flops the result, which lands every strobe on exactly
+  the cycle it was on before. `test_0002_timer.py` asserts the strobe cycles against the spec
+  constants rather than a golden trace, so it passes **both** ways, and it does: 5/5 patched and 5/5
+  not. **One seed would have got this wrong.** Seed 7 alone read 53.17 against a 56.63 baseline,
+  which looks like a 3.5 MHz regression and is not one. Over the 22 seeds that routed both ways the
+  mean goes 53.90 → 54.76 (1.8σ, i.e. noise) but the ceiling goes **56.63 → 58.93** (seed 20) and
+  draws clearing 56 MHz go **1 of 22 → 5 of 22**. Nobody ships the mean: `build.sh` pins a swept
+  seed, so the maximum is the number that reaches a module. On seed 20 the targeted cone is gone —
+  the worst path becomes `channels_to_usb_stream.out_fifo.r_port__addr[1]` → `usb.data_crc.crc[0]`,
+  16.97 ns, still three quarters routing and no longer touching the timer. It costs 293 cells
+  (93.5 % → 94.8 %) and two seeds that used to route now diverge, so it also buys a wider sweep.
+  **Not applied and not shipped**, because luna is a library the vendor distributes and he asked
+  that those not be modified — which makes #34 item 3, upstreaming to `greatscottgadgets/luna`, the
+  whole issue rather than the third part of it. 58.93 is still a FAIL at 60, so
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) does not close either way.
+
   **The suite's first published `missing_frames` total is wrong**, and it is worth writing down
   before it becomes a baseline: 73,646,868 frames reported missing over 49 of 175 captures, when
   the whole run lasted 618 s and the device can only have produced ~29.7 M frames in it. Every
