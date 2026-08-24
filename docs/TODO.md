@@ -122,6 +122,16 @@ what happens.
 
 ## Known debt — recorded, not scheduled
 
+- **One of the three R5 modules here drops USB frames intermittently, on both builds**
+  ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), filed 2026-08-25). Die #3
+  (`E46534A1930F2E21`) stops delivering frames mid-capture — tens of thousands at a time, over 1–2
+  of the 175 captures — on 3 runs of 5, where dies #1 and #2 are 0 of 5 through the same cable and
+  the same hub port. It happens on the 24-voice archive and the 32-voice one alike, which is what
+  rules out the timing-margin reading and hands it to the module's `usb2` path. Nothing about it is
+  audible: gap rate 0.00 %, affected captures scoring 100, grade unchanged at 99.8. Recorded rather
+  than scheduled because the fix is not in this repo. The full working is under "all three modules"
+  below.
+
 - ~~**The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
   bit-exact**~~ ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)). **Paid off
   2026-08-22.** `290d00b` and `3aa0227` are `core/synth.x` changes and therefore belong to both
@@ -610,29 +620,35 @@ what happens.
   The transport labels those losses *"the host stalled"* and keeps them out of the gap rate, which
   is the right call for a counter discontinuity of unknown origin — but **a host stall has no reason
   to prefer one module.** The affected case is different each time (`preset_sostenuto`, then
-  `stress_32voice`), so it is not a property of one test either. The shape that fits is the one
-  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) predicts: the build with the least
-  timing margin — 98.3 % occupancy, 48.37 MHz against 60 — intermittently failing on the silicon
-  that has the least of it, in the USB path, which is where its failing cones are. The 1–2 MHz clock
-  spread is the same event seen through the frame counter, since the counter is what the clock
-  estimate is derived from.
+  `stress_32voice`), so it is not a property of one test either. The 1–2 MHz clock spread is the
+  same event seen through the frame counter, since the counter is what the clock estimate is
+  derived from.
+
+  The obvious reading was margin: the build with the least of it — 98.3 % occupancy, 48.37 MHz
+  against 60 — failing on the silicon with the least of it, in the USB path, which is where its
+  failing cones are. That reading was testable, and it is wrong.
+
+  **Later still: the 24-voice build stalls on die #3 too, so it is the module and not the build.**
+  Three more runs on die #3 from slot 7, and the third lost **12,998 frames** in `note_range` with a
+  2169 kHz clock spread — the same signature, on the archive that closes at 56.63 MHz and bets 6 %
+  rather than 24 %. Die #3 is 3 of 5 across both builds; dies #1 and #2 are 0 of 5. Two bitstreams a
+  milestone apart, both affected, one module. The cable, the hub port and the host were the same for
+  every run, and the ordering rules out host drift: die #3 stalled, then die #1 ran three times
+  clean, then die #3 stalled again. That leaves die #3's own `usb2` path — the ULPI PHY, its supply,
+  or the connector — and it leaves [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)
+  with nothing to answer for. Tracked separately as
+  [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49).
 
   What it is **not** is audible. Gap rate is 0.00 % on every run, the affected captures score 100
   with zero glitches, and the grade does not move. It is also not
   [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48) coming back: that bug reported
   tens of millions of frames on runs that could only hold 29.7 M, and reported them on every die.
-  This is tens of thousands, twice, on one.
-
-  Stated narrowly, because the sample is small: two runs on one die against six clean runs is a
-  pattern, not a proof, and nobody has captured what the device is doing during the stall. The next
-  step if it matters is more runs on die #3 with the 24-voice build in slot 7 — if that one never
-  stalls on the die that the 32-voice build stalls on, the margin reading is hard to avoid.
+  This is tens of thousands, on one.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
   module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,
-  kept in **slot 6** as experimental: it did not work on one of the vendor's two modules, and on the
-  third module here it drops frames the 24-voice build never drops. Anyone flashing slot 6 is
-  carrying that.
+  kept in **slot 6** as experimental for one reason only: it did not work on one of the vendor's two
+  modules. Anyone flashing slot 6 is carrying that.
 
   Both were verified this way — flashed or SRAM-loaded from the same archive and confirmed by the
   build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; both

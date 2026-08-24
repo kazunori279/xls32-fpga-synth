@@ -41,10 +41,10 @@ builds share. Since 2026-08-25 that grade holds on **all three R5 modules here**
 returning 99.8 or better with `missing_frames` 0 across all 175 captures. One of them returned the
 suite's first clean sweep for this build, 175 pass / 0 warn / 0 fail.
 
-The 32-voice build is graded A+ on all three too, but it is not clean on all three: on the third
-module it loses tens of thousands of frames twice per run, both times it was run, where the other
-two lose none. Nothing about it is audible — gap rate 0.00 %, affected captures scoring 100 — but it
-is one more reason slot 6 is labelled experimental. See `docs/TODO.md`.
+The 32-voice build is graded A+ on all three too. One of the three modules here drops tens of
+thousands of USB frames mid-capture every second run or so, but it does that on *both* builds, so it
+is a property of that module and not of either bitstream — nothing about it is audible, and it is
+tracked as [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49).
 
 The visualiser draws **6 × 4** here and 8 × 4 on the 32-voice build: one tile per voice either way,
 with the grid derived from the voice count rather than fixed at 32. Until M37 it was fixed, and the
