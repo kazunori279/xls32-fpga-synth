@@ -55,7 +55,7 @@ def pinned_seed(voices):
     """The placer seed `boards/tiliqua/build.sh` pins for this voice count.
 
     Read out of the script rather than written down again here. It was written down again here
-    until M40, and it drifted: the record said the 24-voice archive was seed 3 for two milestones
+    until M41, and it drifted: the record said the 24-voice archive was seed 3 for two milestones
     after the board started running seed 7. Nothing caught it, because both the record and the
     expectation came from the same stale literal and so agreed with each other.
     """

@@ -88,7 +88,7 @@ in from `$TILIQUA_SDK`. That lives outside this repo, so it is recorded by **com
 hash, and the check reports it changing since the build as staleness like any other source. One
 caveat, which the output states rather than papers over: with no checkout on the machine (CI, or a
 fresh clone) it can only say it could not verify. Both archives now carry the SDK commit they were
-built against; the 32-voice one predated that field until M40.
+built against; the 32-voice one predated that field until M41.
 
 Neither archive is waived. The 32-voice one was, for three milestones: M37's four changes —
 `voices.py`, the tile index, the panel strings and the router options — were rebuilt against at 24

@@ -222,7 +222,7 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # -- seed 7 was 50.90 on the old netlist, near the bottom of that draw, and old-winner seed 20
 # reads 54.54 here.
 #
-# M40 (#46): the 32-voice build is finally re-swept, four milestones after it was last built. Its
+# M41 (#46): the 32-voice build is finally re-swept, four milestones after it was last built. Its
 # netlist carries everything 24 has had since M37 -- voices.py, the tile index, the panel strings,
 # `--router2-tmg-ripup` -- and at 98.9% occupancy that is a fresh lottery, which is why the rebuild
 # was deferred this long. Thirteen seeds, seven converged:
