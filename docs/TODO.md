@@ -721,8 +721,28 @@ what happens.
   slice on its own with `frame_align`, measured 0–12 against whole-buffer `frame_align`'s 19–53.
   It also runs in 2.9 s instead of 6.2, since the 50 ms pause was longer than the 45 ms read.
 
+  **2026-08-24: the UAC2 half is answered, and the answer is no.** Nobody had checked whether the
+  Tiliqua's path does the same thing, so `host/probe_uac2_pause.py` does. The analogue of `tcflush`
+  + pause is `record_stop` → pause → `record_start`: while `_recording` is false the PortAudio
+  callback still fires and throws `indata` away, so the host discards exactly the way `tcflush`
+  discards and then resumes after a pause. Seven pause lengths spanning the range that produced the
+  UART's dose response — 0, 2, 5, 10, 20, 50, 200 ms, three one-second captures each —
+  give **1,155,072 frames, zero dropped, no trend**, with nothing in the first 10 ms of any capture
+  and nothing in the first capture after open. 50 ms, which breaks the UART 4 times in 4, is
+  indistinguishable from 0 ms here.
+
+  That is negative on the mechanism and not only on the symptom, and the two paths differ in a way
+  that predicts it: `usbaudio.py` opens one `InputStream` and never stops it, because nine
+  open/close cycles once wedged the device, so `record_start`/`record_stop` only move a buffer
+  pointer. There is no layer between the device and the host that is ever told to stop and start.
+  The UART path has one, the tty, and that is where the bytes go. One trap worth recording, since it
+  cost the probe's first run: `get_board()` defaults to `basys3` at 32 kHz, and opening the
+  Tiliqua's 48 kHz stream at 32 kHz makes the OS resample and reads back a flat **1.56 % of frames
+  dead at every pause length** — a number that looks like a finding and is a rate mismatch.
+
   What is left: *which layer* discards on the UART side, still unidentified — only the condition
-  that provokes it. ~~And `test/analysis.py` still picks the loudest window, deliberately: the
+  that provokes it, and that half needs a Basys 3 on the bench.
+  ~~And `test/analysis.py` still picks the loudest window, deliberately: the
   graded suite's published 0–100 scores would move and re-running it is a board-day.~~
   **Settled 2026-08-22, and the board-day was never needed** ([#11](https://github.com/kazunori279/xls32-fpga-synth/issues/11)).
   `run_tests.py` saves every graded take to `test/out/wav/`, and `check(samples)` is a pure
