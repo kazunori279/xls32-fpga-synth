@@ -8,15 +8,15 @@
       "slot": 7,
       "status": "formal",
       "artefact": "boards/tiliqua/firmware/xls24-r5.tar.gz",
-      "built": "2026-08-21 23:29",
+      "built": "2026-08-22 06:35",
       "tz": "UTC",
       "source": "tar entry mtime of the inner top.bit",
       "part": "LFE5U-25F",
       "toolchain": "yosys + nextpnr-ecp5",
-      "manifest_tag": "9976c4e",
-      "bytes": 421124,
-      "sha256": "f868d41da472",
-      "commit": "9976c4e",
+      "manifest_tag": "76401a5",
+      "bytes": 418067,
+      "sha256": "e29a81629d85",
+      "commit": "76401a5",
       "reports_over_usb": true
     },
     {
@@ -26,15 +26,15 @@
       "slot": 6,
       "status": "experimental",
       "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
-      "built": "2026-08-20 05:49",
+      "built": "2026-08-24 08:19",
       "tz": "UTC",
       "source": "tar entry mtime of the inner top.bit",
       "part": "LFE5U-25F",
       "toolchain": "yosys + nextpnr-ecp5",
-      "manifest_tag": "f7b52c4",
-      "bytes": 439168,
-      "sha256": "11552b9d4a5e",
-      "commit": "cd2e2c2",
+      "manifest_tag": "b9b2345",
+      "bytes": 438876,
+      "sha256": "f1f84986a03b",
+      "commit": "5760d9f",
       "reports_over_usb": true
     },
     {
@@ -51,5 +51,5 @@
       "reports_over_usb": false
     }
   ],
-  "generated_at_commit": "63e3450"
+  "generated_at_commit": "5760d9f"
 }

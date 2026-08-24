@@ -57,38 +57,33 @@
   },
   "tiliqua-32": {
     "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
-    "artefact_sha256": "11552b9d4a5e13d18637f57837b2bc5ce4138d6c3a656c7a7d49a0e0f4b0eb39",
-    "built_from_commit": "cd2e2c2",
-    "built_on": "2026-08-20",
+    "artefact_sha256": "f1f84986a03b0bc259b663c187e656cf0eb7ded7acc7c5b28b730b642d5f83b8",
+    "built_from_commit": "5760d9f",
+    "built_on": "2026-08-24",
     "hash_scheme": "normalized-v1",
-    "known_stale": {
-      "reason": "#46 -- M37 rewrote the voice count as a parameter (voices.py, #40/#43) and changed the router options (#39), M38 removed the echo tap's constant multiply (fx.py), and the experimental build has not been re-run against any of it. At 32 voices the design fills 98.9 % of the die, so a rebuild is a fresh six-seed sweep of which historically about half converge, and the 24-voice build is the one this repo asks you to flash. What the flashed archive is missing is the wording of the bootloader strings, a differently-routed placement, and one MULT18X18D spent on two adds -- not the picture, which is 8x4 at 32 voices before and after, and not the audio, which test_fx.py holds bit-exact across the M38 change. Waives exactly the five sources M37 and M38 moved: anything else changing here is new and should fail.",
-      "sources": [
-        "boards/tiliqua/build.sh",
-        "boards/tiliqua/gateware/fx.py",
-        "boards/tiliqua/gateware/viz.py",
-        "boards/tiliqua/gateware/voices.py",
-        "boards/tiliqua/gateware/xls_core.py"
-      ]
-    },
     "params": {
-      "SEED": "5",
+      "SEED": "10",
       "STAGES": "12",
       "WCT": "12",
       "hw_rev": "5",
       "voices": "32"
     },
+    "sdk": {
+      "commit": "d760756",
+      "path": "/Users/kaz/Documents/GitHub/tiliqua"
+    },
     "sources": {
-      "boards/tiliqua/build.sh": "4bc89607c82c3eeb4db2aa580a3e56e0ad1f57a9105de6b712550f52e60ab710",
+      "boards/tiliqua/build.sh": "ddd5ca68d4c2035e92c7751bcc13f6bd8d8bc03642b9acba681890337be25a46",
       "boards/tiliqua/gateware/build_id.py": "c39bc105a6c853606a3b85a48b519ccf5fc1efa69ad4fa31b403ee754e8d7958",
       "boards/tiliqua/gateware/dc_block.py": "b9720b2b0e8d4cb349b5babb08da71efd523865dac2ed2fd2d26b17b6eea157d",
-      "boards/tiliqua/gateware/fx.py": "64ee38a04755d50de406aebca4935805f556eae683c0e0316a5362ef0dc2590f",
+      "boards/tiliqua/gateware/fx.py": "794fd1e49ebec566757d3898d044d9d5af234b6facf3dddeb7bf36f482caba93",
       "boards/tiliqua/gateware/midi_arb.py": "1b2a2a073f259e2cafeb033cb15daea4636760d1bb7d77b1f9cd9923de76a790",
       "boards/tiliqua/gateware/midi_filter.py": "096d240ab34168bfca191a108ec7a435199199ab6574e4986cc29f9a9455ad49",
-      "boards/tiliqua/gateware/top.py": "f9755b7f8057b8a6cecdb0c00da76bed143b599f98da3d77d7ffdef4353d0579",
+      "boards/tiliqua/gateware/top.py": "94fab697e82a8366d6ac9d7c51507b73d03010ae400edb9dba369e1384f85b49",
       "boards/tiliqua/gateware/usb_iface.py": "2811265d2f3995f9e56c244508fbc2cdcee612575ccbcc6276a73fbd825f9091",
-      "boards/tiliqua/gateware/viz.py": "864e2f3a15c5e43a0cff1fa85fa950ba8fda6d1e6abb4d7118a5aa5614cff980",
-      "boards/tiliqua/gateware/xls_core.py": "aef7060b81b471756a54d1a7c43dfae201a509fa629620e2312c05309170d87e",
+      "boards/tiliqua/gateware/viz.py": "dff8d4ad2d9478e4f33617b1940e699f4e6d401b61bbf49601f795d1acb77dce",
+      "boards/tiliqua/gateware/voices.py": "1e697c7d77b2b0d94c9d044d17554e65f5f86da1cfe8b99e805fdb26722760d3",
+      "boards/tiliqua/gateware/xls_core.py": "5e753346a4a4658e62280d2c3a89988bfe246ae0dd9f0c0616b6e99f181f4029",
       "core/codegen.sh": "1b225060370115699164c0bca82c7a694fb99a8e8edf0054059ffd0a02d217a0",
       "core/fix_verilog.py": "6bf024266dd8b9e1abc37d0bbdcd9d86b73ed3040aad448033e51b6543262f4e",
       "core/synth.x": "500be3177dd0ce6cfdc63343e5b1308fef0f073cc7712b58563535562f332207"
