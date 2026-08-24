@@ -560,9 +560,11 @@ what happens.
   The count now comes from `gateware/voices.py`, which reads `$VOICES` and picks the grid from it.
   The cost estimate here was right about the seed sweep and wrong about what else was lurking: at
   COLS = 6 the tile index stops being a free `Cat(col, row)` and `row * COLS + col` costs a
-  MULT18X18D, of which this die has none to spare
+  MULT18X18D, of which this die had none to spare at the time
   ([#6](https://github.com/kazunori279/xls32-fpga-synth/issues/6)). The build fails in the placer
-  with "no BELs remaining", which points nowhere near `viz.py`.
+  with "no BELs remaining", which points nowhere near `viz.py`. M38 has since freed one, so that
+  exact build would survive today — by spending 3.93 ns and a DSP on two adds, which is the
+  mistake M38 undid. It is written as `(row << 1) + (row << 2)` either way.
 - **Reduced-voice variants were unmeasurable for four milestones and nobody noticed.**
   `voices_variant.py` asserted a match count for every substitution it knew about and had no rule
   for one site — `rotate_in`'s tail writeback — so a 24-voice copy wrote the new voice to index 31
