@@ -24,16 +24,19 @@ export PATH="$TILIQUA_SDK/.venv/bin:$PATH"
 [ -s "$DIR/top.json" ] || { echo "no netlist at $DIR/top.json -- run build.sh first" >&2; exit 1; }
 
 if [ "${1:-}" = "--report" ]; then
-  # Two frequency summaries get printed per run: one after placement, one after routing. The
-  # routed one is last, and a file that only has the first never finished routing.
+  # Two frequency summaries get printed per run: one after placement, one after routing, one line
+  # per clock in each. So a run that finished routing has printed every clock name twice, and one
+  # that has not has printed each once -- count one clock rather than all of them, because how
+  # many clocks the design has depends on the netlist (four here, five with XLS32_SPLIT_CLOCKS).
   printf '%-6s %-10s %-10s %s\n' seed usb sync state
   for f in "$DIR"/x*.tim; do
     [ -e "$f" ] || continue
     s=$(basename "$f" .tim); s=${s#x}
-    n=$(grep -c "Max frequency for clock" "$f")
+    first=$(grep -m1 -oE "Max frequency for clock +'[^']*'" "$f")
+    n=$([ -n "$first" ] && grep -cF "$first" "$f" || echo 0)
     usb=$(grep "Max frequency.*ulpi" "$f" | tail -1 | grep -oE "[0-9]+\.[0-9]+ MHz" | head -1)
     syn=$(grep "Max frequency.*glbnet.clk'" "$f" | tail -1 | grep -oE "[0-9]+\.[0-9]+ MHz" | head -1)
-    [ "$n" -ge 10 ] && state=routed || state=runaway
+    [ "$n" -ge 2 ] && state=routed || state=runaway
     printf '%-6s %-10s %-10s %s\n' "$s" "${usb:-—}" "${syn:-—}" "$state"
   done
   exit 0

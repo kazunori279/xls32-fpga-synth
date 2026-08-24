@@ -222,10 +222,21 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # -- seed 7 was 50.90 on the old netlist, near the bottom of that draw, and old-winner seed 20
 # reads 54.54 here.
 #
-# The 32-voice seed below is still the M36 draw and has *not* been re-swept on this netlist. Sweep
-# before trusting it.
+# M40 (#46): the 32-voice build is finally re-swept, four milestones after it was last built. Its
+# netlist carries everything 24 has had since M37 -- voices.py, the tile index, the panel strings,
+# `--router2-tmg-ripup` -- and at 98.9% occupancy that is a fresh lottery, which is why the rebuild
+# was deferred this long. Thirteen seeds, seven converged:
+# 46.97* (1), 49.23* (2), 46.41 (3), 45.36 (4), 46.34 (5), 46.81* (6), 46.45* (7), 43.76 (8),
+# 50.38* (9), **48.37 (10)**, 47.06 (11), 48.18* (12), 45.31 (13).   (* = ran away, placement
+# estimate only -- do not read those as results; seed 9's 50.38 never routed.)
+#
+# Seed 10 is pinned and ships: 48.37 MHz against the old archive's 46.35, so the 32-voice bet
+# improves from "the silicon is 29% faster than nextpnr models it" to 24%. Seven of thirteen
+# converging matches the historical half-of-them at this occupancy, and the old pin (seed 5) is
+# still fine at 46.34 -- the netlist moved under it by 0.01 MHz, which is the clearest measurement
+# yet that the rankings and not the seeds are what fail to transfer.
 case "$VOICES" in
-  32) SEED="${SEED:-5}" ;;
+  32) SEED="${SEED:-10}" ;;
   *)  SEED="${SEED:-7}" ;;
 esac
 PNR_OPTS="--timing-allow-fail --router router2 --router2-tmg-ripup --seed $SEED"
