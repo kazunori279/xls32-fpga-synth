@@ -12,6 +12,20 @@ git -C ~/Documents/GitHub/tiliqua checkout -- gateware/src/tiliqua/usb_audio/__i
 
 Applied against `tiliqua` at `d760756`.
 
+`0002` is against **luna**, not the Tiliqua checkout, and luna is a wheel in the SDK's venv rather
+than a git tree — so `git apply` has nothing to apply into. Patch the installed file and put it
+back by reinstalling:
+
+```bash
+V=~/Documents/GitHub/tiliqua/gateware/.venv/lib/python3.13/site-packages
+cp $V/luna/gateware/usb/usb2/packet.py /tmp/packet.orig.py          # keep the original
+patch -p3 -d $V < boards/tiliqua/patches/0002-*.patch
+# ... build, measure ...
+cp /tmp/packet.orig.py $V/luna/gateware/usb/usb2/packet.py
+```
+
+Against `luna-usb` 0.2.3, `greatscottgadgets/luna` at `6771b6d` — the revision `pdm.lock` pins.
+
 ## 0001-usb-in-skid-buffer.patch
 
 A two-deep `SyncFIFOBuffered` between `ChannelsToUSBStream` and the isochronous IN endpoint, so
@@ -51,3 +65,29 @@ buffer, not in front of it.
 So the patch is kept for the record and not applied. It also answers the question the vendor
 raised, which was whether his libraries needed changing at all: **they did not.** The two paths
 that were actually costing us the clock were both ours.
+
+## 0002-luna-register-interpacket-strobes.patch
+
+`USBInterpacketTimer`'s three strobes — `tx_allowed`, `tx_timeout`, `rx_timeout` — are
+`counter == N` comparators driven straight into every endpoint interface. `tx_allowed` gates the
+decision to transmit, so on a design that fills its device the comparator and its fanout are the
+first two LUT levels of the longest path in it. On the M41 24-voice build the worst `clk` path is
+17.66 ns and it starts at `usbif.usb.timer.counter[7]`, reaching `setup_decoder.received` 3.16 ns
+later and ending in `data_crc.crc[1]`.
+
+The patch compares against `N - 1` a cycle earlier and flops the result, which lands each strobe
+on exactly the cycle it was on before with the comparator behind a register. Two things keep that
+"exactly" honest: the strobes are cleared each cycle, because an undriven combinational signal
+reads 0 where an undriven register holds and the `fs_only` build leaves two branches empty; and
+`~any_reset` suppresses the strobe when an interface restarts the timer on the cycle the register
+was loaded, which is the one case where a register and a comparator disagree.
+
+**Equivalence, `boards/tiliqua/patches/test_0002_timer.py`.** Five cases — first strobe at HS and
+FS, a restart that cancels a pending timeout, a start colliding with the load cycle, and a 900-cycle
+idle — asserted against the spec constants rather than a golden trace, so the file passes **both**
+with the patch and without it. It does: 5/5 either way. Drop the `& ~any_reset` and case 4 gains a
+spurious `tx_allowed` at cycle 0, which is how you can tell the guard is load-bearing.
+
+```bash
+~/Documents/GitHub/tiliqua/gateware/.venv/bin/python boards/tiliqua/patches/test_0002_timer.py
+```

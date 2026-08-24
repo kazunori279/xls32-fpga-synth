@@ -1,0 +1,60 @@
+--- a/luna/gateware/usb/usb2/packet.py
++++ b/luna/gateware/usb/usb2/packet.py
+@@ -1428,26 +1428,45 @@
+         # Create our counter-progress strobes.
+         # This could be made less repetitive, but spreading it out here
+         # makes the documentation above clearer.
++        #
++        # These are registered rather than combinational. `tx_allowed` fans out to every endpoint
++        # interface and gates the decision to transmit, so a combinational `counter == N` puts the
++        # comparator and its whole fanout at the head of the transmit cone -- on a design that
++        # fills its device, that is the first two LUT levels of the longest path in it. Comparing
++        # against N - 1 a cycle earlier and flopping the result places each strobe on exactly the
++        # cycle it was on before, with the comparator behind a register.
+         #
++        # Two details keep it exact rather than nearly so. The strobes are cleared every cycle
++        # first, because an undriven combinational signal reads 0 where an undriven register would
++        # hold -- and the `fs_only` build leaves two of these branches empty. And `~any_reset`
++        # suppresses a strobe when an interface restarts the timer on the cycle the register would
++        # have fired: the combinational version re-reads a `counter` that is already back at 0,
++        # and this is how the registered one says the same thing.
++        m.d.usb += [
++            rx_to_tx_at_min   .eq(0),
++            rx_to_tx_at_max   .eq(0),
++            tx_to_rx_timeout  .eq(0)
++        ]
++
+         with m.If(self.speed == USBSpeed.HIGH):
+             if not self._fs_only:
+-                m.d.comb += [
+-                    rx_to_tx_at_min   .eq(counter == self._hs_rx_to_tx_delay[0]),
+-                    rx_to_tx_at_max   .eq(counter == self._hs_rx_to_tx_delay[1]),
+-                    tx_to_rx_timeout  .eq(counter == self._hs_tx_to_rx_timeout)
++                m.d.usb += [
++                    rx_to_tx_at_min   .eq((counter == self._hs_rx_to_tx_delay[0] - 1) & ~any_reset),
++                    rx_to_tx_at_max   .eq((counter == self._hs_rx_to_tx_delay[1] - 1) & ~any_reset),
++                    tx_to_rx_timeout  .eq((counter == self._hs_tx_to_rx_timeout   - 1) & ~any_reset)
+                 ]
+         with m.Elif(self.speed == USBSpeed.FULL):
+-            m.d.comb += [
+-                rx_to_tx_at_min   .eq(counter == self._fs_rx_to_tx_delay[0]),
+-                rx_to_tx_at_max   .eq(counter == self._fs_rx_to_tx_delay[1]),
+-                tx_to_rx_timeout  .eq(counter == self._fs_tx_to_rx_timeout)
++            m.d.usb += [
++                rx_to_tx_at_min   .eq((counter == self._fs_rx_to_tx_delay[0] - 1) & ~any_reset),
++                rx_to_tx_at_max   .eq((counter == self._fs_rx_to_tx_delay[1] - 1) & ~any_reset),
++                tx_to_rx_timeout  .eq((counter == self._fs_tx_to_rx_timeout   - 1) & ~any_reset)
+             ]
+         with m.Else():
+             if not self._fs_only:
+-                m.d.comb += [
+-                    rx_to_tx_at_min   .eq(counter == self._hs_rx_to_tx_delay[0]),
+-                    rx_to_tx_at_max   .eq(counter == self._hs_rx_to_tx_delay[1]),
+-                    tx_to_rx_timeout  .eq(counter == self._hs_tx_to_rx_timeout)
++                m.d.usb += [
++                    rx_to_tx_at_min   .eq((counter == self._hs_rx_to_tx_delay[0] - 1) & ~any_reset),
++                    rx_to_tx_at_max   .eq((counter == self._hs_rx_to_tx_delay[1] - 1) & ~any_reset),
++                    tx_to_rx_timeout  .eq((counter == self._hs_tx_to_rx_timeout   - 1) & ~any_reset)
+                 ]
+ 
+         # Tie our strobes to each of our consumers.
