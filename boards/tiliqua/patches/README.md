@@ -91,3 +91,41 @@ spurious `tx_allowed` at cycle 0, which is how you can tell the guard is load-be
 ```bash
 ~/Documents/GitHub/tiliqua/gateware/.venv/bin/python boards/tiliqua/patches/test_0002_timer.py
 ```
+
+### Measured: the mean does not move, the ceiling does
+
+One seed cannot answer this. The patch adds cells, the design is at 93.5 % of the die, and at that
+occupancy the placer seed is worth ±1.8 MHz on its own — so a changed netlist is a fresh lottery
+draw rather than a comparison. Seed 7 alone said 53.17 against a 56.63 baseline, which would have
+read as a 3.5 MHz regression and was not one. Both columns below are 24 voices, M41 sources, the
+same 24 seeds, `--timing-allow-fail --router router2 --router2-tmg-ripup`, post-route `clk`:
+
+| over the 22 seeds that routed both ways | baseline  | with this patch |
+|-----------------------------------------|-----------|-----------------|
+| mean                                     | 53.90 MHz | 54.76 MHz       |
+| sd                                       | 1.42      | 1.81            |
+| floor                                    | 51.60 MHz | 51.05 MHz       |
+| **ceiling**                              | **56.63 MHz** | **58.93 MHz** (seed 20) |
+| draws at or above 56 MHz                 | 1 of 22   | 5 of 22         |
+| TRELLIS_COMB                             | 22,722 (93.5 %) | 23,015 (94.8 %) |
+
+**+0.85 MHz on the mean is not a result** — it is about 1.8σ, which on 22 draws is what noise looks
+like. The ceiling is the result: 58.93 MHz is 2.30 MHz above anything this design has reached on
+this die, and the count of draws that clear 56 goes from one to five. That distinction matters
+because nobody ships the mean. `build.sh` pins a seed found by sweeping, so the number that reaches
+a module is the maximum of the draw, and the patch moves the maximum while widening the spread it
+comes from.
+
+On seed 20 the cone the patch was aimed at is gone. The worst path becomes
+`channels_to_usb_stream.out_fifo.r_port__addr[1]` → `usb.data_crc.crc[0]`, 16.97 ns, 4.60 ns logic
+and 12.37 ns routing — still inside the USB stack, still three quarters routing, and no longer
+touching `USBInterpacketTimer`.
+
+It is not free. The 293 extra cells cost 1.3 points of occupancy, and two seeds that routed at
+baseline (6 at 53.90, 16 at 55.94) now diverge instead: `overused` climbs across router iterations
+and never comes back down. So the patch also buys a wider sweep, because two draws in 24 stop
+producing a bitstream at all.
+
+**Not applied.** The vendor asked that his distributed libraries not be modified, and luna is one of
+them. The place this belongs is upstream in `greatscottgadgets/luna`, which is issue #34's third
+item — if luna takes it, Tiliqua gets it through a version bump and nothing here is patched.
