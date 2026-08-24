@@ -511,8 +511,10 @@ what happens.
   **The vendor has now run the 24-voice build on more than one die, and it held.** Sebastian
   Holzapfel, 2026-08-22, on merging the webflasher PR: *"I have tested it on a couple of Tiliquas
   and with the timing fixes now it seems to be robust, and I think it should work everywhere."*
-  That is the measurement this project could not make — every other result on this risk comes from
-  the one module on this desk, which has always worked. It is evidence about **M37's 54.30 MHz
+  That is the measurement this project could not make — at the time, every other result on this risk
+  came from the one module on this desk, which has always worked. (Two more modules arrived since,
+  and both shipped builds have been graded on a second one; the paragraphs below record that.) It is
+  evidence about **M37's 54.30 MHz
   24-voice build specifically**: the 32-voice archive is unchanged and untested by him since the
   failure, and he did not say which of his modules were in the "couple", so the die that failed is
   not named as having passed.

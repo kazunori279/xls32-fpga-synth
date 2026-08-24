@@ -1492,6 +1492,13 @@ as a risk being carried on the strength of a loop that kept passing. That loop w
 risk is no longer hypothetical, and this section is now a bug report** — see
 [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).
 
+**The loop is no longer one die, and that does not settle it.** Both R5 modules on this desk now run
+both shipped builds clean from flash: die #2 graded the 32-voice archive 99.8/100 on 2026-08-24 and
+the 24-voice archive 99.8/100 on 2026-08-25, matching die #1 to the tenth on each. Two winners do
+not refute a marginal path — a path some silicon loses is not required to lose often — and the die
+that actually failed is the vendor's and is not here. What it removes is the reading that die #1 is
+unusually good.
+
 **`sync` and `usb` are one net.** `pll.py` drives both from `feedback60`, so yosys merges them and
 nextpnr reports a single `$glbnet$clk`. The engine cannot be given a slower clock than luna, and
 luna's 60 MHz is fixed by ULPI. (This is also why the engine gets an entirely separate, off-chip
