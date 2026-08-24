@@ -2257,6 +2257,85 @@ in `usbaudio.py`, not the audio. The order of magnitude matches the 75 M the fir
 by reading the counter's wrap unsigned, which suggests the signed fix is incomplete rather than
 missing. [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48).
 
+## Milestone 39 — splitting `sync` from `usb`, and the answer being no
+
+[#47](https://github.com/kazunori279/xls32-fpga-synth/issues/47) proposed the last cheap lever on
+the 60 MHz shortfall. `sync` and `usb` are the same physical net on Tiliqua — the vendor's generator
+drives both from one PLL output (`pll.py:604`) — so nextpnr applies one 60 MHz constraint to all
+22,722 cells. Only `usb` has a reason to be 60: ULPI carries high speed as 8 bits at 60 MHz and
+luna's turnaround tables are keyed on that constant. Nothing pins `sync`. Split them and the
+constraint would cover `usbif` and its wrappers, 2,429 cells, about 11 % of the design.
+
+The premise was that luna is slow here because it is *spread out*, not because it is deep: the
+shipping build's worst path is 4.62 ns logic against **13.04 ns routing**, and the vendor's stock
+`usb_audio` shell makes 66.49 MHz with the same luna at ~20 % occupancy. If 20,000 of our cells were
+crowding it, shrinking the constrained region should hand the placer back the freedom to put luna
+somewhere tight.
+
+**It cost no new PLL.** Both ECP5 PLLs are already spoken for, but `CLKOS` on the main one makes
+120 MHz for a PSRAM DQS that M29 deleted, and nothing in the SDK or in this repo reads the `fast`
+domain. The VCO is 600 MHz, so `CLKOS_DIV` 5 → 12 turns that dead output into 50 MHz, and `sync`
+moves onto it while `usb` keeps `CLKOP`. nextpnr-ecp5 reads EHXPLLL parameters itself, so both
+domains get constrained correctly with no `create_clock` on our side. The code is
+`boards/tiliqua/gateware/clocks.py`, behind `XLS32_SPLIT_CLOCKS=1`, and it is a copy of the vendor
+generator rather than an edit: the SDK is read-only for us and the two lines are in the middle of a
+monolithic `elaborate`.
+
+**Twelve seeds, and it is not enough.** Ten routed, two ran away.
+
+| | usb (constraint 60) | sync (constraint 50) |
+|---|---|---|
+| best | **59.40** (seed 2) | 57.84 (seed 4) |
+| mean of 10 | 55.26 | 54.59 |
+| worst | 51.32 | 51.55 |
+
+Against M38's 24-seed draw on the unsplit netlist — one domain, mean 53.99, best 56.63, worst 51.60
+— the split moves the mean **+1.27 MHz** and the best draw **+2.77**. Both are real and neither
+clears 60. On ten samples with an sd of 2.18 the mean shift is about 1.7σ, which is suggestive
+rather than settled; the best-of comparison is if anything conservative, since the baseline had 24
+draws to our 10. Routability got slightly worse, not better: 10 of 12 converged against M38's
+24 of 24.
+
+**The critical path says why, and it is not congestion.** On the best seed the usb domain's worst
+path is 16.84 ns — 4.34 ns logic, 12.49 ns routing — and it runs
+
+```
+usb.token_detector.timer.counter[0]
+  -> USBControlEndpoint.request_mux.stall
+  -> USBControlEndpoint.request[7]
+  -> endpoint_mux.valid
+  -> translator.phy_ready
+  -> request_mux.stall            (back through the mux)
+  -> USBIsochronousStreamInEndpoint.bytes_left_in_frame[2]
+  -> channels_to_usb_stream.fifo_postprocess_state[0]
+  -> channels_to_usb_stream.level[6]
+```
+
+Seventeen LUT levels across four modules — luna's token detector, its control endpoint, its
+transmit translator, and the SDK's `channels_to_usb_stream` — with **not one of our cells in it**.
+The routing is still three quarters of the path, but now for a reason that occupancy cannot fix: a
+seventeen-level cone spanning four modules has no local placement to find. Give it the whole die and
+it would still have to walk.
+
+So #47's premise was wrong and the measurement that refutes it is the useful part. The 60 MHz
+shortfall is depth inside luna, exactly what
+[#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34) item 3 proposed to fix with a
+register, and this now names where to put one: the `endpoint_mux.valid` → `translator.phy_ready` →
+`request_mux.stall` loop is the middle of the cone. That is vendor code and upstreaming it is the
+only route, which is the answer #47 was hoping to avoid.
+
+One thing the split did earn on its own: `sync` clears its 50 MHz on every seed that routed, by
+1.55 MHz at worst and 7.84 at best, which is the first direct evidence that the engine side was
+never the constraint. Read those numbers as a floor, not a ceiling: nextpnr stops optimising a
+domain once it meets its constraint, so 57.84 is where the placer happened to land and not where
+the logic tops out. The split is
+kept in the tree, off by default, because turning it on is a different netlist with its own seed
+lottery and it buys a megahertz on a domain that still fails.
+
+The sweep tooling is `boards/tiliqua/seed_sweep.sh` — re-place an existing `top.json` under N seeds
+in parallel, then `--report`. It exists because this measurement needed twelve draws and build.sh's
+header had been describing the manual command for four milestones.
+
 ---
 
 # Friction logs & learnings (Tiliqua)

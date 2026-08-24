@@ -159,10 +159,10 @@ echo "==> build stamp: $XLS32_BUILD_UTC-$XLS32_BUILD_COMMIT"
 # draw than the one in four above, but do not read anything into that; it is the same lottery.
 #
 # Redrawing costs an afternoon unless you skip the front of the build. nextpnr reads `top.json`,
-# which yosys already wrote, so run it by hand out of `build/tiliqua/build/xls<N>-r5/` with
-# `--log x$S.tim --textcfg x$S.config` per seed and the inputs shared read-only. Four at once
-# finish in about fifteen minutes on an M-series laptop; one process still cannot take two seeds.
-# A losing seed never terminates on its own -- watch `overused=` and kill the ones that climb.
+# which yosys already wrote, so `boards/tiliqua/seed_sweep.sh 1 2 3 4 5 6` re-places it without
+# re-synthesising, and `seed_sweep.sh --report` reads the draws back. Six at once finish in about
+# fifteen minutes on an M-series laptop; one process still cannot take two seeds. A losing seed
+# never terminates on its own -- `--report` marks those `runaway` and you kill them yourself.
 # See DEVELOPMENT_tiliqua.md M34 "The area squeeze".
 #
 # M36: the 24-voice netlist has its own lottery and its own winner. Converged seeds measured

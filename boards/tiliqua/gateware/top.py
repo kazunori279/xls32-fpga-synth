@@ -31,6 +31,7 @@ from tiliqua.platform import RebootProvider
 from tiliqua.video import dvi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import clocks
 from dc_block import TeeDcBlock
 from fx import StereoFx
 from midi_arb import MidiArbiter, MidiChanWatch, MidiPartSelect, TrsPanicInject
@@ -43,6 +44,11 @@ from xls_core import XlsSynth
 # accordingly on every cold boot -- so a bitstream built against it inherits a live pixel clock
 # without writing anything to flash. See ARCHITECTURE_tiliqua.md A1.
 MODELINE = "720x720p60r2"
+
+# M39 (#47): drive `sync` off a slower PLL output so the 60 MHz constraint applies to luna and not
+# to the whole die. Off by default -- the shipping archives are built without it, and turning it on
+# is a different netlist with its own seed lottery. See gateware/clocks.py.
+SPLIT_CLOCKS = os.environ.get("XLS32_SPLIT_CLOCKS", "") not in ("", "0")
 
 
 def stream_buf(m, src, dst, name):
@@ -96,7 +102,10 @@ class CoreTop(Elaboratable):
         # (pll.py:353).
         self.video = clock_settings.modeline is not None
         self.core = XlsSynth(viz=self.video)
-        self.clock_settings = clock_settings
+        # Before anything reads `frequencies.sync`: the baud divider below, RebootProvider, and the
+        # sim harness all take it as given, so the split has to be recorded on the settings object
+        # rather than only in the PLL parameters.
+        self.clock_settings = clocks.apply_to(clock_settings) if SPLIT_CLOCKS else clock_settings
         self.pmod0 = eurorack_pmod.EurorackPmod(clock_settings.audio_clock)
         self.bitstream_help = self.core.bitstream_help
         # In `sync`, where 60 MHz / 31250 baud = 1920 exactly -- no baud error at all. Built here
@@ -115,7 +124,9 @@ class CoreTop(Elaboratable):
         m = Module()
         m.submodules.pmod0 = pmod0 = self.pmod0
         if sim.is_hw(platform):
-            m.submodules.car = platform.clock_domain_generator(self.clock_settings)
+            car_cls = (clocks.SplitDomainGenerator if SPLIT_CLOCKS
+                       else platform.clock_domain_generator)
+            m.submodules.car = car_cls(self.clock_settings)
             m.submodules.provider = provider = eurorack_pmod.FFCProvider()
             wiring.connect(m, pmod0.pins, provider.pins)
             m.submodules.reboot = reboot = RebootProvider(
@@ -261,10 +272,12 @@ class CoreTop(Elaboratable):
         m.submodules.usbif = usbif = XlsUsbInterface(
             audio_clock=self.clock_settings.audio_clock, nr_channels=4)
 
-        # `usb` and `sync` are both 60 MHz but they are separate domains -- `usb` is recovered
-        # from the ULPI's own 60 MHz clock -- so the bytes need a real crossing. Depth 4 matches
-        # the engine-side CDC in xls_core.py, and for the same reason: MIDI is slow and the
-        # consumer drains a byte per cycle.
+        # `usb` and `sync` are separate domains, so the bytes need a real crossing. Both come out
+        # of the same ECP5 PLL -- nothing here is recovered from the ULPI's own clock -- and by
+        # default off the same 60 MHz output, which makes the crossing look like a formality. With
+        # XLS32_SPLIT_CLOCKS they are genuinely different frequencies. Depth 4 matches the
+        # engine-side CDC in xls_core.py, and for the same reason: MIDI is slow and the consumer
+        # drains a byte per cycle.
         m.submodules.usb_midi_cdc = usb_midi_cdc = AsyncFIFO(
             width=8, depth=4, w_domain="usb", r_domain="sync")
         m.d.comb += [

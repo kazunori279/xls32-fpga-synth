@@ -392,6 +392,31 @@ wrong, only old in its wording and its routing. It is waived by name in
   bought no audible change, which is what a design that already met its own rates should show.
   `xls24-r5.tar.gz` is now that build and `check_artefacts.py` reports tiliqua-24 clean again;
   #46's waiver on the 32-voice archive stands, since that one still has not been rebuilt.
+  **M39, 2026-08-24: splitting `sync` from `usb` was the last cheap lever, and it is not enough.**
+  Both were the same physical net — one PLL output driving both, so one 60 MHz constraint over all
+  22,722 cells — and only `usb` has a reason to be 60. `CLKOS` was already making 120 MHz for a
+  PSRAM DQS that M29 deleted, so `CLKOS_DIV` 5 → 12 gives `sync` its own 50 MHz off the same VCO
+  with no new PLL (`boards/tiliqua/gateware/clocks.py`, behind `XLS32_SPLIT_CLOCKS=1`). Twelve
+  seeds, ten routed: usb **mean 55.26, best 59.40, worst 51.32**, against M38's 24-seed unsplit
+  draw of mean 53.99 / best 56.63 / worst 51.60. So **+1.27 on the mean and +2.77 on the best draw,
+  and still a FAIL at 60** — with routability slightly worse, 10 of 12 converging against 24 of 24.
+
+  The critical path is the finding. On the best seed it is 16.84 ns, 4.34 logic / 12.49 routing,
+  and it runs seventeen LUT levels across four modules — `usb.token_detector.timer.counter` into
+  `USBControlEndpoint.request_mux.stall`, out through `endpoint_mux.valid` and
+  `translator.phy_ready`, back through the same mux, then `IsoStreamInEndpoint.bytes_left_in_frame`
+  into the SDK's `channels_to_usb_stream.fifo_postprocess_state` and its level counter — with **not
+  one cell of ours in it**. Routing is still three quarters of it, but for a reason occupancy
+  cannot fix: a seventeen-level cone spanning four modules has no local placement to find at any
+  occupancy. #47's premise was congestion and the answer is depth, which puts the whole shortfall
+  back on #34 item 3 and now names where the register goes. That is vendor code, so upstreaming it
+  is the only route. The split stays in the tree, off by default: it buys a megahertz on a domain
+  that still fails, and turning it on is a different netlist with its own seed lottery. What it did
+  prove on its own is that the engine side was never the constraint — `sync` clears its 50 on every
+  seed that routed, by 1.55 MHz at worst and 7.84 at best, and those are floors rather than
+  ceilings, since nextpnr stops optimising a domain that already meets its constraint.
+  [#47](https://github.com/kazunori279/xls32-fpga-synth/issues/47).
+
   **The suite's first published `missing_frames` total is wrong**, and it is worth writing down
   before it becomes a baseline: 73,646,868 frames reported missing over 49 of 175 captures, when
   the whole run lasted 618 s and the device can only have produced ~29.7 M frames in it. Every
