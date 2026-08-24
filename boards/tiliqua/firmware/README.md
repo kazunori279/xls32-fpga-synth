@@ -50,7 +50,7 @@ means you can A/B the two without reflashing.
 
 The 24-voice build is also **in the flasher's own Community list as `XLS24`**, merged upstream on
 2026-08-22, so flashing it needs no file at all. That entry is `xls24-9976c4e-r5.tar.gz` — M37's
-archive at 54.30 MHz — and it is deliberately one build behind the `.tar.gz` here: it is the copy
+archive at 54.30 MHz — and it is deliberately one netlist behind the `.tar.gz` here: it is the copy
 the module's maker tested across several of his own Tiliquas before merging, and it is the only
 build with evidence from more than one die. Upload the file below to flash what is committed here.
 
@@ -94,8 +94,15 @@ Neither archive is waived. The 32-voice one was, for three milestones: M37's fou
 `voices.py`, the tile index, the panel strings and the router options — were rebuilt against at 24
 voices only, because at this occupancy re-running the 32-voice build means a fresh seed sweep and
 the flashed bitstream was not wrong, only routed with the old options and announcing itself with
-the old wording. M40 ran the sweep and the waiver is gone
+the old wording. M41 ran the sweep and the waiver is gone
 ([#46](https://github.com/kazunori279/xls32-fpga-synth/issues/46)).
+
+The 24-voice archive was rebuilt in the same milestone, for the record rather than for the
+bitstream: M39 touched `build.sh` and `top.py`, which is enough to report it stale even though
+`XLS32_SPLIT_CLOCKS` is off by default and neither edit reaches the netlist. It came back at
+**22,722 cells and 56.63 MHz** — the shipped numbers to the cell and the megahertz — and graded the
+same 99.8/100 (A+), 174/1/0. A rebuild that reproduces its own numbers exactly is the cheapest
+evidence there is that the seed pin and the build script still mean what they say.
 
 One thing the record has to work harder at since there are two archives. They are built from *the
 same committed sources*: the voice count is not in the tree, it is rewritten into a throwaway copy

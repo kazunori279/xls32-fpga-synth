@@ -518,10 +518,10 @@ what happens.
   two modules. Anyone flashing slot 6 is carrying that.
 
   Both were verified this way — flashed or SRAM-loaded from the same archive and confirmed by the
-  build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; the
-  24-voice run was 2026-08-22, after M38 replaced the archive, and the 32-voice one 2026-08-24,
-  after M41 did. They grade the same to a tenth: **99.8/100 (A+)**, 175 cases in ~615 s, 0.00 % USB
-  frame gaps. The 24-voice run is 174/1/0 with `filter_sweep` at 82; the 32-voice one is **175/0/0**,
+  build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; both
+  runs are 2026-08-24, on the archives M41 rebuilt. They grade the same to a tenth: **99.8/100
+  (A+)**, 175 cases in ~615 s, 0.00 % USB
+  frame gaps. The 24-voice run is 174/1/0 with `filter_sweep` at 83.4; the 32-voice one is **175/0/0**,
   the suite's first clean sweep, with the same case at 89.4 — which is
   [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) sitting near its 85 threshold and
   not a timing symptom either way. Worth stating plainly what that is and is not evidence of: the
@@ -532,7 +532,7 @@ what happens.
   ([#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3),
   [#34](https://github.com/kazunori279/xls32-fpga-synth/issues/34)).
 
-  **There is now a third copy, and it is deliberately one build behind.** The webflasher carries
+  **There is now a third copy, and it is deliberately one netlist behind.** The webflasher carries
   `xls24-9976c4e-r5.tar.gz` — M37's archive at 54.30 MHz — merged into `apfaudio/tiliqua-webflash`
   on 2026-08-22 ([PR #5](https://github.com/apfaudio/tiliqua-webflash/pull/5),
   [#32](https://github.com/kazunori279/xls32-fpga-synth/issues/32)). M38's 56.63 MHz archive has

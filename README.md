@@ -87,7 +87,7 @@ want the panel.
    same list as the factory bitstreams. Power-cycle the case; the bootloader counts down for five
    seconds — pick slot 7 from the menu once, and every cold boot after that goes straight there.
 
-The list entry is deliberately one build behind this repo. `XLS24` in the flasher is the archive
+The list entry is deliberately one netlist behind this repo. `XLS24` in the flasher is the archive
 that closes at **54.30 MHz**, and it is the copy the maker tested across several of his own
 Tiliquas before merging — the only build with evidence from more than one die.
 [`xls24-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz)
@@ -348,7 +348,7 @@ Then write it to a slot.
 **A · The web flasher — the default, and nothing to install.** Open
 [**tiliqua-webflash**](https://apfaudio.github.io/tiliqua-webflash/) in Chrome, pick the module over
 WebUSB, and choose **slot 7**. `XLS24` is in the **Community** list, so for the 24-voice build
-there is nothing to download — but that entry is the 54.30 MHz archive, one build behind this repo
+there is nothing to download — but that entry is the 54.30 MHz archive, one netlist behind this repo
 (see [§1 above](#1--flash-it--once-from-chrome)). To flash what is committed here, or to flash the
 32-voice build at all, upload the `.tar.gz` instead.
 

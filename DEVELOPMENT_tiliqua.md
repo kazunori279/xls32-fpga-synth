@@ -69,7 +69,7 @@ graded automatically, everything before it by hand or by simulation.
 | **38 ✅** | **The echo tap stops spending a multiplier on a constant**, found by sweeping seeds rather than by reading the code: on the seed that won the sweep the critical path had left luna and landed in `fx.py` | **22,985 → 22,722 cells and 28/28 → 27/28 MULT18X18D** — the first spare multiplier this design has had. Re-sweeping 24 seeds on the new netlist: mean 53.15 → **53.99**, worst 49.12 → **51.60**, best **56.63** (seed 7), 6 of 24 at or above 55 where M37 had 2. On the module `xls24-76401a5-r5.tar.gz` grades **99.8/100 (A+)**, 174/1/0 — the same grade and the same lone WARN as M37, so the 2.33 MHz is margin and nothing else. `test_fx.py` is bit-exact across the change |
 | **39 ✅** | **Splitting `sync` from `usb`** (#47): the dead 120 MHz `fast` PLL output becomes 50 MHz and carries `sync`, leaving the 60 MHz ULPI constraint on the 2,429 cells that need it | **measured, and the answer is no.** 12 seeds, 10 routed: usb mean 55.26 / best **59.40** against the unsplit 53.99 / 56.63, so +1.27 and +2.77 and still FAIL at 60. The best seed's critical path is 16.84 ns over seventeen LUT levels with none of our cells in it, which makes the shortfall depth and not congestion, and hands [#34 item 3](https://github.com/kazunori279/xls32-fpga-synth/issues/34) a named location. Kept behind `XLS32_SPLIT_CLOCKS=1`, off by default |
 | **40 ✅** | **The frame counter was measuring PortAudio, not the board** (#48): `missing_frames` published 73.6 M and 83.8 M out of runs that can hold 29.7 M | **`>> 16` → `(x + 0x8000) >> 16` in `usbaudio.py`, and 22,641,160 phantom missing frames over 24 captures become 0.** CoreAudio's float32 conversion lands three LSBs either side of the written value, and ch3 carries the counter's high bits, so truncating read it 32768 cycles low — 128 frames per flip in a counter that steps 256 per frame. `rec_audio.py` had rounded all along |
-| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing |
+| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing. The 24-voice archive was rebuilt alongside it for the record — M39 had touched `build.sh` and `top.py` — and came back at **22,722 cells and 56.63 MHz**, its own numbers to the cell, grading 174/1/0 |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -2432,6 +2432,17 @@ threshold of 85, where it has been warning for a dozen runs. One score above the
 above the line — the case is marginal by construction and this does not close the issue — but it is
 the first evidence that what it measures moves with the build rather than being a fixed property of
 the engine.
+
+**The 24-voice archive was rebuilt in the same pass**, for the record and not for the bitstream:
+M39 touched `build.sh` and `top.py`, which is enough to report it stale, though `XLS32_SPLIT_CLOCKS`
+is off by default and neither edit reaches the netlist. It came back at **22,722 cells and 56.63
+MHz** — the shipped numbers to the cell and the megahertz — and graded **99.8/100 (A+), 174/1/0**
+with `filter_sweep` at 83.4. So no published 24-voice figure moves, and the two archives are now
+recorded against the same commit and the same SDK checkout. A rebuild that reproduces its own
+numbers exactly is the cheapest evidence available that the seed pin and the build script still
+mean what they say.
+
+Both suites agreed on the thing M40 had just fixed: **0 frames missing across 350 captures**.
 
 One thing fell out of the provenance record while checking it. `check_artefacts.py` wrote the
 placer seed down a second time, as a literal beside the artefact spec, and it had drifted: the

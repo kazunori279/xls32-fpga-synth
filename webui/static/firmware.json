@@ -8,15 +8,15 @@
       "slot": 7,
       "status": "formal",
       "artefact": "boards/tiliqua/firmware/xls24-r5.tar.gz",
-      "built": "2026-08-22 06:35",
+      "built": "2026-08-24 08:55",
       "tz": "UTC",
       "source": "tar entry mtime of the inner top.bit",
       "part": "LFE5U-25F",
       "toolchain": "yosys + nextpnr-ecp5",
-      "manifest_tag": "76401a5",
-      "bytes": 418067,
-      "sha256": "e29a81629d85",
-      "commit": "76401a5",
+      "manifest_tag": "3cc9951",
+      "bytes": 418075,
+      "sha256": "fcd8966a0ced",
+      "commit": "3cc9951",
       "reports_over_usb": true
     },
     {
@@ -51,5 +51,5 @@
       "reports_over_usb": false
     }
   ],
-  "generated_at_commit": "5760d9f"
+  "generated_at_commit": "3cc9951"
 }
