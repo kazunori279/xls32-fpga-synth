@@ -563,6 +563,25 @@ what happens.
   — a path some silicon loses is not required to lose often. What it does remove is the reading that
   die #1 is unusually good. Die #2 came out of the box, was never flashed, and grades within 0.1 of
   it across four runs.
+
+  **2026-08-25: and now the 24-voice build has too, which is what the webflasher was waiting on.**
+  Die #2 already had `xls24-r5.tar.gz` in slot 7 — `pdm run flash status` reads `XLS24` / tag
+  `3cc9951` there and `XLS32` / `b9b2345` in slot 6, both matching the committed archives byte for
+  byte — and it was booted from that slot, USB stamp `apf.audio XLS32/2026-08-24T08:48Z-3cc9951`.
+  So this is the user's path and not an SRAM load. `check_loop.py` read 440.01 Hz (+0.0 cents) and
+  0.000 % gaps; the full suite returned **99.8/100 (A+), 174 pass / 1 warn / 0 fail** over 175
+  captures, frame gaps mean and worst 0.00 %, audio clock 12.288 MHz (spread 11.5 kHz), and the
+  lone WARN is `filter_sweep` at 82.3 — [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7)
+  again, the same one die #1 shows on both bitstreams. That is the same grade die #1 gives the same
+  archive, to the tenth.
+
+  **`missing_frames` is 0 across all 175 captures**, where the run before the host fix reported
+  83,844,053 over 55 of them. [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48) is
+  confirmed fixed on a full run rather than on a probe.
+
+  One thing this exposed: **nothing in the repo records which physical module is which.** Die #2 is
+  apfbug serial `E46534A193473021`, written down here because the multi-die claim is unverifiable
+  without it and a search for that string returned nothing before today.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
   module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz, kept
@@ -595,6 +614,16 @@ what happens.
   lone WARN. So it waits and goes up with the next change that is worth a stranger reflashing for.
   The corollary is that the number a webflasher user sees is 54.30 until then, and the repo should
   not quietly start claiming otherwise.
+
+  **2026-08-25: the reason it waited no longer holds.** The current archive has now been booted from
+  flash on die #2 and graded 99.8/100 (A+), 174/1/0 — the same grade die #1 gives it — so "graded on
+  exactly the die that has always worked" is out of date and both copies have multi-die evidence.
+  What has not changed is the second half of the argument: the swap still buys nothing audible, and
+  a stranger reflashing gets 2.33 MHz of static-timing margin they cannot hear. Two dies on one desk
+  is also not what the vendor's several modules were worth, and the module that actually failed to
+  enumerate is his and is not here. So the swap is now a decision rather than a blocked item, and it
+  is one for a human to take: `apfaudio/tiliqua-webflash` requires hand-written PR text, and its AI
+  disclosure accepts a bitstream only on the footing that the design is proven to work.
 
   The two differ only in the voice count, which
   is generated into a throwaway copy of `core/synth.x` rather than living in the tree, so

@@ -36,7 +36,9 @@ drops audio intermittently, or gets worse as it warms up, try slot 7 before you 
 The 24-voice build is graded **99.8/100 (A+)** on the module — 174 pass / 1 warn / 0 fail over the
 175-case suite, frame gaps 0.00 % across 175 captures, audio clock 12.288 MHz. The one warn is
 `filter_sweep`, [issue #7](https://github.com/kazunori279/xls32-fpga-synth/issues/7), which both
-builds share.
+builds share. Since 2026-08-25 that grade holds on **two dies**: a second R5 module (apfbug serial
+`E46534A193473021`) booted this archive from slot 7 and returned the same 99.8 and the same lone
+warn, with `missing_frames` 0 across all 175 captures.
 
 The visualiser draws **6 × 4** here and 8 × 4 on the 32-voice build: one tile per voice either way,
 with the grid derived from the voice count rather than fixed at 32. Until M37 it was fixed, and the
@@ -51,8 +53,10 @@ means you can A/B the two without reflashing.
 The 24-voice build is also **in the flasher's own Community list as `XLS24`**, merged upstream on
 2026-08-22, so flashing it needs no file at all. That entry is `xls24-9976c4e-r5.tar.gz` — M37's
 archive at 54.30 MHz — and it is deliberately one netlist behind the `.tar.gz` here: it is the copy
-the module's maker tested across several of his own Tiliquas before merging, and it is the only
-build with evidence from more than one die. Upload the file below to flash what is committed here.
+the module's maker tested across several of his own Tiliquas before merging. Since 2026-08-25 the
+archive here has multi-die evidence too, but only two dies and both on one desk, and the swap buys
+2.33 MHz of static-timing margin that nobody can hear. Upload the file below to flash what is
+committed here.
 
 ```bash
 # A) No toolchain — open https://apfaudio.github.io/tiliqua-webflash/ in Chrome, pick the module
