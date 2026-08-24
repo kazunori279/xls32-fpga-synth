@@ -23,7 +23,7 @@
   "tiliqua-24": {
     "artefact": "boards/tiliqua/firmware/xls24-r5.tar.gz",
     "artefact_sha256": "fcd8966a0cedb9e830b76f9913b1ff88ee8e9612683150fd0e29cb801eb88982",
-    "built_from_commit": "3cc9951",
+    "built_from_commit": "730a1f3",
     "built_on": "2026-08-24",
     "hash_scheme": "normalized-v1",
     "params": {
@@ -38,7 +38,7 @@
       "path": "/Users/kaz/Documents/GitHub/tiliqua"
     },
     "sources": {
-      "boards/tiliqua/build.sh": "ddd5ca68d4c2035e92c7751bcc13f6bd8d8bc03642b9acba681890337be25a46",
+      "boards/tiliqua/build.sh": "074854f86ba057a4c095c100e6a07522257af334273b74d0485e67bb8db0a557",
       "boards/tiliqua/gateware/build_id.py": "c39bc105a6c853606a3b85a48b519ccf5fc1efa69ad4fa31b403ee754e8d7958",
       "boards/tiliqua/gateware/dc_block.py": "b9720b2b0e8d4cb349b5babb08da71efd523865dac2ed2fd2d26b17b6eea157d",
       "boards/tiliqua/gateware/fx.py": "794fd1e49ebec566757d3898d044d9d5af234b6facf3dddeb7bf36f482caba93",
@@ -58,7 +58,7 @@
   "tiliqua-32": {
     "artefact": "boards/tiliqua/firmware/xls32-r5.tar.gz",
     "artefact_sha256": "f1f84986a03b0bc259b663c187e656cf0eb7ded7acc7c5b28b730b642d5f83b8",
-    "built_from_commit": "5760d9f",
+    "built_from_commit": "730a1f3",
     "built_on": "2026-08-24",
     "hash_scheme": "normalized-v1",
     "params": {
@@ -73,7 +73,7 @@
       "path": "/Users/kaz/Documents/GitHub/tiliqua"
     },
     "sources": {
-      "boards/tiliqua/build.sh": "ddd5ca68d4c2035e92c7751bcc13f6bd8d8bc03642b9acba681890337be25a46",
+      "boards/tiliqua/build.sh": "074854f86ba057a4c095c100e6a07522257af334273b74d0485e67bb8db0a557",
       "boards/tiliqua/gateware/build_id.py": "c39bc105a6c853606a3b85a48b519ccf5fc1efa69ad4fa31b403ee754e8d7958",
       "boards/tiliqua/gateware/dc_block.py": "b9720b2b0e8d4cb349b5babb08da71efd523865dac2ed2fd2d26b17b6eea157d",
       "boards/tiliqua/gateware/fx.py": "794fd1e49ebec566757d3898d044d9d5af234b6facf3dddeb7bf36f482caba93",

@@ -16,7 +16,7 @@
       "manifest_tag": "3cc9951",
       "bytes": 418075,
       "sha256": "fcd8966a0ced",
-      "commit": "3cc9951",
+      "commit": "730a1f3",
       "reports_over_usb": true
     },
     {
@@ -34,7 +34,7 @@
       "manifest_tag": "b9b2345",
       "bytes": 438876,
       "sha256": "f1f84986a03b",
-      "commit": "5760d9f",
+      "commit": "730a1f3",
       "reports_over_usb": true
     },
     {
@@ -51,5 +51,5 @@
       "reports_over_usb": false
     }
   ],
-  "generated_at_commit": "3cc9951"
+  "generated_at_commit": "730a1f3"
 }
