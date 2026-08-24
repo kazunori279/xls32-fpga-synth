@@ -19,7 +19,7 @@ back by reinstalling:
 ```bash
 V=~/Documents/GitHub/tiliqua/gateware/.venv/lib/python3.13/site-packages
 cp $V/luna/gateware/usb/usb2/packet.py /tmp/packet.orig.py          # keep the original
-patch -p3 -d $V < boards/tiliqua/patches/0002-*.patch
+patch -p1 -d $V < boards/tiliqua/patches/0002-*.patch
 # ... build, measure ...
 cp /tmp/packet.orig.py $V/luna/gateware/usb/usb2/packet.py
 ```
