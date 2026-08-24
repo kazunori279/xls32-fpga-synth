@@ -35,11 +35,13 @@ other slot silently detunes everything. See the rate note in
 ``boards/tiliqua/board.py``.
 
 Scale: PortAudio hands back 24-bit samples left-justified in ``int32``, and the
-gateware's ASQ word is the engine's own signed 1.15 sample shifted left by 8. So
-``int32 >> 16`` recovers the engine's 16-bit sample exactly, and one more doubling
+gateware's ASQ word is the engine's own signed 1.15 sample shifted left by 8. So the
+engine's 16-bit sample is the top 16 bits of the ``int32``, and one more doubling
 undoes the 6 dB Eurorack pad that ``xls_core.py`` applies on the way out. That lands
 the result in the same +-32768 domain as the Basys 3 UART, which is what every
-threshold in ``test/`` is calibrated against.
+threshold in ``test/`` is calibrated against. Recovering those top 16 bits takes
+``_ch16`` and not a shift: the conversion into ``int32`` is a few LSBs noisy, which
+costs the audio nothing and cost the frame counter a factor of 2.5 (issue #48).
 """
 import os
 import sys
@@ -68,6 +70,32 @@ CYCLES_PER_FRAME = 256
 #: where the message can name the cause; and loose enough not to trip on the ~0.3% the
 #: wall-clock reference itself is worth over a two-second capture.
 CLOCK_TOL = 0.02
+
+
+def _ch16(col):
+    """The gateware's 16-bit word for one channel, rounded rather than truncated.
+
+    PortAudio does not hand back the device's bits. CoreAudio delivers float32 and the
+    conversion to `int32` lands a few LSBs either side of the exact value: measured on
+    a live capture, ch2 reads `0x80fd0003` where the gateware wrote `0x80fd`, and ch3
+    reads `0x25c6ffff` where it wrote `0x25c7`. A plain `>> 16` truncates toward minus
+    infinity, so the second one comes back **one low** -- 56,338 frames of 57,344 in
+    that capture.
+
+    On the audio channels that is a half-LSB of bias nobody can hear. On the counter it
+    was #48: ch3 carries the counter's *high* bits, so reading it one low subtracts
+    32768 cycles, and every frame where the error flipped on or off looked like a
+    +/-128-frame jump in a counter that had in fact stepped by exactly 256. Rounding to
+    the nearest multiple of 65536 recovers the written value exactly -- the conversion
+    error is three LSBs against a 32768 LSB spacing.
+
+    ``scripts/rec_audio.py`` has always read the same channels this way
+    (``(raw + 0x8000) >> 16``) and its counter check has never over-reported. This file
+    was the odd one out.
+    """
+    import numpy as np
+
+    return (col.astype(np.int64) + (1 << 15)) >> 16
 
 
 def _match(want, names):
@@ -266,19 +294,22 @@ class UsbAudioTransport(Transport):
             return []
 
         frames = np.concatenate(blocks)
-        # A delivered frame is never all zero, because channel 2 is never zero; an
-        # all-zero frame is a dropout. Both facts come from the gateware -- see the
-        # comment on the tee in boards/tiliqua/gateware/top.py.
-        alive = frames[:, 2] != 0 if frames.shape[1] > 2 else np.any(frames != 0, axis=1)
+        # Bit 15 of channel 2 is the gateware's alive marker, forced high on every frame it
+        # sends -- see the comment on the tee in boards/tiliqua/gateware/top.py. A dropout is
+        # the absence of that bit. Testing the marker rather than "the channel is nonzero"
+        # matters because PortAudio's int32 conversion is a few LSBs noisy (see `_ch16`), so a
+        # frame of true zeros can come back as 1 or 2 and read as delivered.
+        alive = (_ch16(frames[:, 2]) & 0x8000) != 0 if frames.shape[1] > 2 \
+            else np.any(frames != 0, axis=1)
 
         self.gap_rate = float(1.0 - alive.mean())
         self.longest_clean = int(_longest_run(alive))
         self.longest_gap = int(_longest_run(~alive))
         self._measure_clock(frames, alive, blocks, stamps)
 
-        # >> 16 to undo the 24-bit-in-int32 left justification and ASQ's 8-bit shift,
-        # then * 2 to undo the board's 6 dB output pad.
-        audio = (frames[:, 0].astype(np.int64) >> 16) * 2
+        # `_ch16` undoes the 24-bit-in-int32 left justification and ASQ's 8-bit shift,
+        # then * 2 undoes the board's 6 dB output pad.
+        audio = _ch16(frames[:, 0]) * 2
 
         if select_clean:
             lo, hi = _longest_span(alive)
@@ -324,10 +355,10 @@ class UsbAudioTransport(Transport):
                 except queue.Empty:
                     continue
                 try:
-                    # ch 0/1 only: 2/3 carry the clock counter, not audio. >> 16 recovers
+                    # ch 0/1 only: 2/3 carry the clock counter, not audio. `_ch16` recovers
                     # the engine's 16-bit sample from the 24-bit-left-justified int32 and
                     # * 2 undoes the 6 dB Eurorack pad -- the same scaling record_stop uses.
-                    pend.append(((block[:, :2].astype(np.int64) >> 16) * 2).astype(np.int32))
+                    pend.append((_ch16(block[:, :2]) * 2).astype(np.int32))
                     have += len(pend[-1])
                     while have >= chunk:
                         buf = np.concatenate(pend) if len(pend) > 1 else pend[0]
@@ -398,8 +429,8 @@ class UsbAudioTransport(Transport):
         if len(live) < 2:
             return
         lo, hi = int(live[0]), int(live[-1])
-        word = (frames[:, 2].astype(np.int64) >> 16) & 0x7FFF
-        word |= ((frames[:, 3].astype(np.int64) >> 16) & 0xFFFF) << 15
+        word = _ch16(frames[:, 2]) & 0x7FFF
+        word |= (_ch16(frames[:, 3]) & 0xFFFF) << 15
 
         # Frames that never arrived. `gap_rate` cannot see these and never could: a dropped frame
         # *arrives* as zeros and holds its slot, so the timeline stays intact, which is the whole
@@ -414,6 +445,13 @@ class UsbAudioTransport(Transport):
         # -1 is not a lost frame: the count is latched crossing into the frame's own domain, so a
         # boundary can be seen one cycle early. It happens a few hundred times per second and only
         # ever downwards. Only positive jumps are counted.
+        #
+        # This is also where #48 lived, and the fix is in `_ch16` rather than here. Reading ch3
+        # with a truncating shift made it one low on most frames, which put the reassembled
+        # counter 32768 cycles under; each frame where that error switched on or off then read as
+        # a 128-frame jump. Measured on one 2.048 s capture the total was 1,127,790 frames
+        # "missing" out of 102,400 that exist, and 0 with the rounded read. Nothing about the
+        # arithmetic below changed.
         step = ((np.diff(word[live].astype(np.int64)) + (1 << 30)) % (1 << 31)) - (1 << 30)
         short = (step - np.diff(live) * CYCLES_PER_FRAME) // CYCLES_PER_FRAME
         self.missing_frames = int(short[short > 0].sum())

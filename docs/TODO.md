@@ -427,6 +427,27 @@ wrong, only old in its wording and its routing. It is waived by name in
   separately from [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9): that one is the
   dropouts, this one is the instrument built to measure them.
 
+  **2026-08-24: found, and it was neither the wrap nor the audio.** PortAudio does not hand back
+  the device's bits. CoreAudio delivers float32 and the conversion into `int32` lands a few LSBs
+  either side of the exact value — measured live, ch2 reads `0x80fd0003` where the gateware wrote
+  `0x80fd`, ch3 reads `0x25c6ffff` where it wrote `0x25c7`. A truncating `>> 16` therefore reads
+  ch3 **one low**, and ch3 carries the counter's high bits, so the reassembled counter sits 32768
+  cycles under. Every frame where that error switched on or off then looked like a 128-frame jump
+  in a counter that had in fact stepped by exactly 256. The fix is `_ch16` in `usbaudio.py`:
+  round to the nearest multiple of 65536 instead of truncating, which recovers the written value
+  exactly, since the conversion error is three LSBs against a 32768 LSB spacing. A/B on 24
+  identical captures, 1,851,392 frames delivered: truncating reports **22,641,160 missing over
+  24 of 24 captures**, rounding reports **0 over 0**. The per-capture totals decay monotonically
+  from 3.19 M to 640 across the run, which is the tell — the conversion's rounding direction
+  depends on the sample's magnitude, so the error sweeps in and out as the counter climbs, and
+  that is also why the suite saw it on 49 of 175 captures and not on all of them.
+
+  Two things came with it. `alive` now tests the gateware's bit-15 marker rather than "channel 2
+  is nonzero", because with a few LSBs of noise a frame of true zeros can come back as 1 and read
+  as delivered. And the audio channels get the same rounded read, where it is worth half an LSB
+  and nothing else. Published `missing_frames` totals from before this date are the instrument
+  and not the transport; the graded runs they came from are unaffected.
+
   **The vendor has now run the 24-voice build on more than one die, and it held.** Sebastian
   Holzapfel, 2026-08-22, on merging the webflasher PR: *"I have tested it on a couple of Tiliquas
   and with the timing fixes now it seems to be robust, and I think it should work everywhere."*
@@ -465,7 +486,8 @@ wrong, only old in its wording and its routing. It is waived by name in
   [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) that die #1 shows, on both
   bitstreams, so it travels with the design and not with the silicon. The 83,844,053 `missing_frames`
   over 55 of 175 captures is [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48)
-  re-confirmed, not audio.
+  re-confirmed, not audio — since fixed, and the number was the host's `int32` conversion rounding
+  the counter's high half down.
 
   **Then the same die was flashed to slot 6 and booted from it, which is the path a user takes.**
   `pdm flash archive` wrote the bitstream to `0x700000` and the manifest to `0x7f0000`, and the cold
@@ -723,6 +745,13 @@ wrong, only old in its wording and its routing. It is waived by name in
   it is now recorded, zeros included, as `missing_frames_total` / `missing_frames_captures` in
   `report.json` and one line in `report.md`. `null` means the transport cannot measure it (the
   Basys 3 UART); `0` means it measured none.
+
+  **2026-08-24: and publishing it is what caught it being wrong.** The first two published totals
+  read 73.6 M and 83.8 M frames missing out of runs that could contain 29.7 M, which is
+  [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48) — fixed above. Worth the note
+  here because it is the argument in this entry running the other way: the figure that only shows
+  when it is bad cannot be watched, and the figure that is always published gets read, and a
+  number that is read gets checked against what it can physically be.
 
   The drift is now *detected*, at least: `scripts/check_artefacts.py` hashes the sources that feed
   each artefact into `scripts/artefact_hashes.json` and compares on demand, catching uncommitted

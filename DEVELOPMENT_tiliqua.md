@@ -2336,6 +2336,58 @@ The sweep tooling is `boards/tiliqua/seed_sweep.sh` — re-place an existing `to
 in parallel, then `--report`. It exists because this measurement needed twelve draws and build.sh's
 header had been describing the manual command for four milestones.
 
+## Milestone 40 — the frame counter was measuring PortAudio, not the board
+
+`missing_frames` exists so a silently-short capture cannot pass as clean, and the first two suite
+runs to publish it reported 73.6 M and 83.8 M frames missing out of runs that could physically
+contain 29.7 M. Everything around it read clean — 99.8/100, `gap_rate` 0.00 %, audio clock 12.288
+MHz — so it was the instrument
+([#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48)).
+
+**PortAudio does not hand back the device's bits.** That is the whole of it. CoreAudio delivers
+float32 and the conversion into `int32` lands a few LSBs either side of the exact value. Measured
+on a live capture, ch2 comes back as `0x80fd0003` where the gateware wrote `0x80fd`, and ch3 as
+`0x25c6ffff` where it wrote `0x25c7`. A `>> 16` truncates toward minus infinity, so the second one
+reads **one low** — and ch3 carries the counter's high bits, so the reassembled 31-bit value sits
+32768 cycles under. In one 57,344-frame capture that happened on 56,338 frames.
+
+A uniform offset would be harmless; the counter is only ever read as a difference. What is not
+harmless is the offset switching on and off, because each switch is a 32768-cycle step in a counter
+that steps by 256 per frame, and 32768/256 is 128 frames that look like they never arrived.
+
+The A/B, on 24 identical captures with 1,851,392 frames delivered:
+
+| read | frames "missing" | captures affected |
+|---|---|---|
+| `>> 16` | 22,641,160 | 24 of 24 |
+| `(x + 0x8000) >> 16` | 0 | 0 of 24 |
+
+The per-capture totals are the tell. They decay monotonically across the run — 3.19 M, 2.99 M, 2.78
+M, down to 640 on the last — because the conversion's rounding direction depends on the sample's
+magnitude, so the error sweeps in and out as the counter climbs. That is also the answer to why the
+suite saw it on 49 of 175 captures rather than on all of them, which was the fact that made it look
+like a rare event with a rare cause.
+
+The fix is one helper, `_ch16` in `host/transport/usbaudio.py`: round to the nearest multiple of
+65536 instead of truncating. The conversion error is three LSBs against a 32768 LSB spacing, so
+rounding recovers the written value exactly. None of the arithmetic underneath changed.
+
+Two things travelled with it. `alive` now tests the gateware's bit-15 marker instead of "channel 2
+is nonzero" — with a few LSBs of noise a frame of true zeros can come back as 1 and read as
+delivered — and the audio channels take the same rounded read, where it is worth half an LSB and
+nothing at all audible.
+
+The lesson is narrower than "check your bit twiddling". `scripts/rec_audio.py` reads the same four
+channels and has always written `(raw + 0x8000) >> 16`; its counter check has never over-reported.
+Two readers of one wire format, one of them right for two months, and nothing compared them. The
+comment in `usbaudio.py` claiming `>> 16` "recovers the engine's 16-bit sample exactly" is what
+made the wrong one look settled.
+
+And the reason it was caught at all is the argument from M38 running in reverse. The number had
+just been changed from "printed when non-zero" to "published every run", and a published number
+gets read, and a number that is read gets checked against what it can physically be. It had been
+wrong for as long as it had existed.
+
 ---
 
 # Friction logs & learnings (Tiliqua)
