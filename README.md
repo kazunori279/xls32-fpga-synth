@@ -91,8 +91,8 @@ The list entry is deliberately one netlist behind this repo. `XLS24` in the flas
 that closes at **54.30 MHz**, and it is the copy the maker tested across several of his own
 Tiliquas before merging.
 [`xls24-r5.tar.gz`](https://github.com/kazunori279/xls32-fpga-synth/raw/main/boards/tiliqua/firmware/xls24-r5.tar.gz)
-here (408 KB) is newer and closes at **56.63 MHz**; since 2026-08-25 it has been graded on two
-modules rather than one, both of them on the same desk. They grade identically and sound identical,
+here (408 KB) is newer and closes at **56.63 MHz**; since 2026-08-25 it has been graded on all
+three modules on this desk rather than one. They grade identically and sound identical,
 so take the list unless you specifically want the newer routing — in which case download that file
 and use the flasher's upload button instead.
 

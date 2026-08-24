@@ -1492,12 +1492,19 @@ as a risk being carried on the strength of a loop that kept passing. That loop w
 risk is no longer hypothetical, and this section is now a bug report** — see
 [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).
 
-**The loop is no longer one die, and that does not settle it.** Both R5 modules on this desk now run
-both shipped builds clean from flash: die #2 graded the 32-voice archive 99.8/100 on 2026-08-24 and
-the 24-voice archive 99.8/100 on 2026-08-25, matching die #1 to the tenth on each. Two winners do
-not refute a marginal path — a path some silicon loses is not required to lose often — and the die
-that actually failed is the vendor's and is not here. What it removes is the reading that die #1 is
-unusually good.
+**The loop is no longer one die, and the third one is not like the other two.** All three R5 modules
+on this desk now carry the same two archives and boot them from flash. Every one of eight graded
+runs on 2026-08-25 came back A+ with zero failures, and the 24-voice build is clean on all three.
+The 32-voice build is clean on dies #1 and #2 and **loses tens of thousands of frames twice per run
+on die #3, both times it was run** — 2 of 2 there against 0 of 3 elsewhere on the same build.
+
+The transport files those losses as a host stall and keeps them out of the gap rate. A host stall
+has no reason to prefer one module. The reading this section predicts is the other one: the build
+with the least margin (98.3 % occupancy, 48.37 MHz against 60) intermittently failing on the die
+with the least of it, in the USB path, where its failing cones are. Nothing about it is audible —
+gap rate 0.00 %, affected captures scoring 100 with zero glitches — and two runs on one die is a
+pattern rather than a proof. The full matrix and the argument are in `docs/TODO.md`; the die that
+actually failed to enumerate is still the vendor's and is still not here.
 
 **`sync` and `usb` are one net.** `pll.py` drives both from `feedback60`, so yosys merges them and
 nextpnr reports a single `$glbnet$clk`. The engine cannot be given a slower clock than luna, and

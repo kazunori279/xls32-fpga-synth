@@ -584,11 +584,55 @@ what happens.
   One thing this exposed: **nothing in the repo records which physical module is which.** Die #2 is
   apfbug serial `E46534A193473021`, written down here because the multi-die claim is unverifiable
   without it and a search for that string returned nothing before today.
+
+  **2026-08-25, later: all three modules, both builds, and one of them is not like the others.**
+  Die #3 was flashed for the first time (its slots 6 and 7 held the factory `DSP-MDIFF` and
+  `VSYNTH`) and die #1 was brought up from M37's `9976c4e` / `f7b52c4`, so all three now carry the
+  same two archives — `XLS24` / `3cc9951` on slot 7, `XLS32` / `b9b2345` on slot 6 — and every run
+  below booted from flash by the documented procedure.
+
+  | die | apfbug serial | build | overall | pass/warn/fail | frames missing | clock spread | `filter_sweep` |
+  |---|---|---|---|---|---|---|---|
+  | #1 | `E46534A1931C2D21` | 24 v | 99.8 | 174/1/0 | 0 | 14.0 kHz | 81.5 |
+  | #2 | `E46534A193473021` | 24 v | 99.8 | 174/1/0 | 0 | 11.5 kHz | 82.3 |
+  | #3 | `E46534A1930F2E21` | 24 v | 99.7 | **175/0/0** | 0 | 10.1 kHz | 85.5 |
+  | #1 | | 32 v | 99.8 | 174/1/0 | 0 | 13.8 kHz | 82.2 |
+  | #1 | | 32 v, again | 99.8 | 174/1/0 | 0 | 12.5 kHz | 81.3 |
+  | #2 | | 32 v (08-24) | 99.8 | **175/0/0** | 0 | — | 89.4 |
+  | #3 | | 32 v | 99.8 | 174/1/0 | **22,178 over 2 of 175** | **1036 kHz** | 82.0 |
+  | #3 | | 32 v, again | 99.8 | 174/1/0 | **31,318 over 2 of 175** | **2156 kHz** | 80.1 |
+
+  Every one of the eight runs graded A+ with zero failures, and the 24-voice build is clean on all
+  three dies. **The 32-voice build is not.** On die #3 it loses tens of thousands of frames twice in
+  a run, both times, and it does that on no other module: 2 of 2 on die #3 against 0 of 3 elsewhere
+  on the same build and 0 of 3 on the 24-voice build.
+
+  The transport labels those losses *"the host stalled"* and keeps them out of the gap rate, which
+  is the right call for a counter discontinuity of unknown origin — but **a host stall has no reason
+  to prefer one module.** The affected case is different each time (`preset_sostenuto`, then
+  `stress_32voice`), so it is not a property of one test either. The shape that fits is the one
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) predicts: the build with the least
+  timing margin — 98.3 % occupancy, 48.37 MHz against 60 — intermittently failing on the silicon
+  that has the least of it, in the USB path, which is where its failing cones are. The 1–2 MHz clock
+  spread is the same event seen through the frame counter, since the counter is what the clock
+  estimate is derived from.
+
+  What it is **not** is audible. Gap rate is 0.00 % on every run, the affected captures score 100
+  with zero glitches, and the grade does not move. It is also not
+  [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48) coming back: that bug reported
+  tens of millions of frames on runs that could only hold 29.7 M, and reported them on every die.
+  This is tens of thousands, twice, on one.
+
+  Stated narrowly, because the sample is small: two runs on one die against six clean runs is a
+  pattern, not a proof, and nobody has captured what the device is doing during the stall. The next
+  step if it matters is more runs on die #3 with the 24-voice build in slot 7 — if that one never
+  stalls on the die that the 32-voice build stalls on, the margin reading is hard to avoid.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
-  the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on the
-  module — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz, kept
-  in **slot 6** as experimental: it works on this desk, and it did not work on one of the vendor's
-  two modules. Anyone flashing slot 6 is carrying that.
+  the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
+  module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,
+  kept in **slot 6** as experimental: it did not work on one of the vendor's two modules, and on the
+  third module here it drops frames the 24-voice build never drops. Anyone flashing slot 6 is
+  carrying that.
 
   Both were verified this way — flashed or SRAM-loaded from the same archive and confirmed by the
   build stamp in `iManufacturer` before any test ran, so neither number is off a stale image; both

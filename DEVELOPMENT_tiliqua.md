@@ -69,7 +69,7 @@ graded automatically, everything before it by hand or by simulation.
 | **38 ✅** | **The echo tap stops spending a multiplier on a constant**, found by sweeping seeds rather than by reading the code: on the seed that won the sweep the critical path had left luna and landed in `fx.py` | **22,985 → 22,722 cells and 28/28 → 27/28 MULT18X18D** — the first spare multiplier this design has had. Re-sweeping 24 seeds on the new netlist: mean 53.15 → **53.99**, worst 49.12 → **51.60**, best **56.63** (seed 7), 6 of 24 at or above 55 where M37 had 2. On the module `xls24-76401a5-r5.tar.gz` grades **99.8/100 (A+)**, 174/1/0 — the same grade and the same lone WARN as M37, so the 2.33 MHz is margin and nothing else. `test_fx.py` is bit-exact across the change |
 | **39 ✅** | **Splitting `sync` from `usb`** (#47): the dead 120 MHz `fast` PLL output becomes 50 MHz and carries `sync`, leaving the 60 MHz ULPI constraint on the 2,429 cells that need it | **measured, and the answer is no.** 12 seeds, 10 routed: usb mean 55.26 / best **59.40** against the unsplit 53.99 / 56.63, so +1.27 and +2.77 and still FAIL at 60. The best seed's critical path is 16.84 ns over seventeen LUT levels with none of our cells in it, which makes the shortfall depth and not congestion, and hands [#34 item 3](https://github.com/kazunori279/xls32-fpga-synth/issues/34) a named location. Kept behind `XLS32_SPLIT_CLOCKS=1`, off by default |
 | **40 ✅** | **The frame counter was measuring PortAudio, not the board** (#48): `missing_frames` published 73.6 M and 83.8 M out of runs that can hold 29.7 M | **`>> 16` → `(x + 0x8000) >> 16` in `usbaudio.py`, and 22,641,160 phantom missing frames over 24 captures become 0.** CoreAudio's float32 conversion lands three LSBs either side of the written value, and ch3 carries the counter's high bits, so truncating read it 32768 cycles low — 128 frames per flip in a counter that steps 256 per frame. `rec_audio.py` had rounded all along |
-| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing. The 24-voice archive was rebuilt alongside it for the record — M39 had touched `build.sh` and `top.py` — and came back at **22,722 cells and 56.63 MHz**, its own numbers to the cell, grading 174/1/0. On 2026-08-25 that archive was graded on die #2 as well, booted from slot 7: **99.8/100 (A+), 174/1/0**, gaps 0.00 %, 0 frames missing — so both shipped builds now have two dies under them |
+| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing. The 24-voice archive was rebuilt alongside it for the record — M39 had touched `build.sh` and `top.py` — and came back at **22,722 cells and 56.63 MHz**, its own numbers to the cell, grading 174/1/0. On 2026-08-25 that archive was graded on die #2 as well, booted from slot 7: **99.8/100 (A+), 174/1/0**, gaps 0.00 %, 0 frames missing. Later that day both archives ran on all three modules here: the 24-voice build is clean on every one, the 32-voice build is clean on two and loses frames on the third |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -1454,8 +1454,9 @@ That format paid off again on 2026-08-22, when the 24-voice archive was merged i
 byte for byte — nothing was repacked in between. What was merged is M37's archive at 54.30 MHz,
 and it stays that way on purpose: it is the copy Seb tested across several of his own modules
 before merging, and M38's 56.63 MHz swap buys margin rather than anything audible. The multi-die
-half of that argument expired on 2026-08-25, when the 56.63 archive was booted from slot 7 on die #2
-and graded 99.8/100 — but two dies on one desk is not several modules in the maker's hands, so the
+half of that argument expired on 2026-08-25, when the 56.63 archive was booted from slot 7 on all
+three modules here and graded 99.8, 99.8 and 99.7 — but three dies on one desk are not several
+modules in the maker's hands, so the
 swap is a decision and not an upgrade. See `docs/TODO.md`.
 
 *The manifest was describing a different module.* `BitstreamHelp` is what the bootloader prints
@@ -2461,6 +2462,31 @@ That was the condition the webflasher swap had been waiting on, and it is now me
 
 While setting that up: **the repo had no record of which physical module is which**, which makes
 any multi-die claim unverifiable a month later. Die #2 is apfbug serial `E46534A193473021`.
+
+**2026-08-25, later: all three modules, both builds, eight graded runs.** Die #3 was flashed for the
+first time — its slots 6 and 7 held the factory `DSP-MDIFF` and `VSYNTH`, now overwritten — and die
+#1 was brought up from M37's `9976c4e` / `f7b52c4`, so all three carry `XLS24` / `3cc9951` on slot 7
+and `XLS32` / `b9b2345` on slot 6.
+
+| die | apfbug serial |
+|---|---|
+| #1 | `E46534A1931C2D21` |
+| #2 | `E46534A193473021` |
+| #3 | `E46534A1930F2E21` |
+
+Every run graded A+ with zero failures and the 24-voice build is clean on all three dies. The
+32-voice build loses **22,178 and then 31,318 frames, each time over 2 of 175 captures, on die #3
+only** — 2 of 2 there against 0 of 3 elsewhere on the same build. The affected case differs between
+runs (`preset_sostenuto`, then `stress_32voice`) and the audio clock spread blows out to 1–2 MHz
+against a usual 10–15 kHz, which is the same event read through the frame counter. Gap rate stays
+0.00 % and the affected captures still score 100, so none of it is audible. `docs/TODO.md` has the
+full matrix and why "the host stalled" does not explain a loss that prefers one module.
+
+**Flashing three modules: the one-cable rule is not optional.** `--busdev-num` does not select
+between dirtyJtag probes (see below), so every flash above was done with exactly one `dbg` cable
+attached and the serial confirmed by `openFPGALoader --scan-usb` first. The build stamp in
+`iManufacturer` names the commit but not the die, and the USB product string is `Tiliqua XLS32` for
+both builds — `3cc9951` means slot 7's 24-voice build and `b9b2345` means slot 6's 32-voice one.
 
 One thing fell out of the provenance record while checking it. `check_artefacts.py` wrote the
 placer seed down a second time, as a literal beside the artefact spec, and it had drifted: the

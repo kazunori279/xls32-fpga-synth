@@ -36,9 +36,15 @@ drops audio intermittently, or gets worse as it warms up, try slot 7 before you 
 The 24-voice build is graded **99.8/100 (A+)** on the module — 174 pass / 1 warn / 0 fail over the
 175-case suite, frame gaps 0.00 % across 175 captures, audio clock 12.288 MHz. The one warn is
 `filter_sweep`, [issue #7](https://github.com/kazunori279/xls32-fpga-synth/issues/7), which both
-builds share. Since 2026-08-25 that grade holds on **two dies**: a second R5 module (apfbug serial
-`E46534A193473021`) booted this archive from slot 7 and returned the same 99.8 and the same lone
-warn, with `missing_frames` 0 across all 175 captures.
+builds share. Since 2026-08-25 that grade holds on **all three R5 modules here** — serials
+`E46534A1931C2D21`, `E46534A193473021` and `E46534A1930F2E21` — each booted from slot 7 and each
+returning 99.8 or better with `missing_frames` 0 across all 175 captures. One of them returned the
+suite's first clean sweep for this build, 175 pass / 0 warn / 0 fail.
+
+The 32-voice build is graded A+ on all three too, but it is not clean on all three: on the third
+module it loses tens of thousands of frames twice per run, both times it was run, where the other
+two lose none. Nothing about it is audible — gap rate 0.00 %, affected captures scoring 100 — but it
+is one more reason slot 6 is labelled experimental. See `docs/TODO.md`.
 
 The visualiser draws **6 × 4** here and 8 × 4 on the 32-voice build: one tile per voice either way,
 with the grid derived from the voice count rather than fixed at 32. Until M37 it was fixed, and the
@@ -54,7 +60,8 @@ The 24-voice build is also **in the flasher's own Community list as `XLS24`**, m
 2026-08-22, so flashing it needs no file at all. That entry is `xls24-9976c4e-r5.tar.gz` — M37's
 archive at 54.30 MHz — and it is deliberately one netlist behind the `.tar.gz` here: it is the copy
 the module's maker tested across several of his own Tiliquas before merging. Since 2026-08-25 the
-archive here has multi-die evidence too, but only two dies and both on one desk, and the swap buys
+archive here has multi-die evidence too, but three dies on one desk are not several in his hands,
+and the swap buys
 2.33 MHz of static-timing margin that nobody can hear. Upload the file below to flash what is
 committed here.
 
