@@ -125,11 +125,13 @@ what happens.
 - **One of the three R5 modules here drops USB frames intermittently, on both builds**
   ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), filed 2026-08-25). Die #3
   (`E46534A1930F2E21`) stops delivering frames mid-capture — tens of thousands at a time, over 1–2
-  of the 175 captures — on 3 runs of 5, where dies #1 and #2 are 0 of 5 through the same cable and
-  the same hub port. It happens on the 24-voice archive and the 32-voice one alike, which is what
-  rules out the timing-margin reading and hands it to the module's `usb2` path. Nothing about it is
-  audible: gap rate 0.00 %, affected captures scoring 100, grade unchanged at 99.8. Recorded rather
-  than scheduled because the fix is not in this repo. The full working is under "all three modules"
+  of the 175 captures — where dies #1 and #2 never do through the same cable and the same hub port.
+  It happens on the 24-voice archive as well as the 32-voice one, so the timing-margin reading
+  cannot carry it alone; the module's `usb2` path is the necessary ingredient. The rates are not
+  equal, though — **2 of 2 on the 32-voice build against 1 of 8 on the 24-voice one** — which leaves
+  an interaction on the table that two runs are far too few to call. Nothing about it is audible:
+  gap rate 0.00 %, affected captures scoring 100, grade unchanged at 99.8. Recorded rather than
+  scheduled because the fix is not in this repo. The full working is under "all three modules"
   below.
 
 - ~~**The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
@@ -628,16 +630,23 @@ what happens.
   against 60 — failing on the silicon with the least of it, in the USB path, which is where its
   failing cones are. That reading was testable, and it is wrong.
 
-  **Later still: the 24-voice build stalls on die #3 too, so it is the module and not the build.**
-  Three more runs on die #3 from slot 7, and the third lost **12,998 frames** in `note_range` with a
-  2169 kHz clock spread — the same signature, on the archive that closes at 56.63 MHz and bets 6 %
-  rather than 24 %. Die #3 is 3 of 5 across both builds; dies #1 and #2 are 0 of 5. Two bitstreams a
-  milestone apart, both affected, one module. The cable, the hub port and the host were the same for
+  **Later still: the 24-voice build stalls on die #3 too, so the module is the necessary
+  ingredient.** Eight runs on die #3 from slot 7, and one of them lost **12,998 frames** in
+  `note_range` with a 2169 kHz clock spread — the same signature, on the archive that closes at
+  56.63 MHz and bets 6 % rather than 24 %. Two bitstreams a milestone apart, both affected, one
+  module; dies #1 and #2 stay at 0 of 5. The cable, the hub port and the host were the same for
   every run, and the ordering rules out host drift: die #3 stalled, then die #1 ran three times
-  clean, then die #3 stalled again. That leaves die #3's own `usb2` path — the ULPI PHY, its supply,
-  or the connector — and it leaves [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3)
-  with nothing to answer for. Tracked separately as
+  clean, then die #3 stalled again. That points at die #3's own `usb2` path — the ULPI PHY, its
+  supply, or the connector. Tracked as
   [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49).
+
+  What that does **not** establish is that the build is irrelevant, and the first write-up of this
+  claimed it did. On die #3 the 32-voice archive stalled 2 of 2 and the 24-voice one 1 of 8. The
+  24-voice stall proves the 32-voice build is not *required*; it says nothing about whether the
+  32-voice build makes the stall likelier once the module allows it. Two runs cannot support a rate,
+  so the honest shape is an interaction — die #3 makes it possible, and the occupancy may make it
+  frequent — with [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) holding a narrow
+  piece of it rather than the whole thing. Six more 32-voice runs on die #3 settle which.
 
   What it is **not** is audible. Gap rate is 0.00 % on every run, the affected captures score 100
   with zero glitches, and the grade does not move. It is also not

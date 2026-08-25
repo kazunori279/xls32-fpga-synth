@@ -2476,16 +2476,19 @@ and `XLS32` / `b9b2345` on slot 6.
 
 Every run graded A+ with zero failures. **Die #3 drops USB frames and the other two never do** —
 22,178 then 31,318 on the 32-voice build, then 12,998 on the 24-voice one, always over 1–2 of the
-175 captures, 3 runs out of 5 against 0 of 5 on dies #1 and #2. The affected case differs every time
+175 captures, against 0 of 5 on dies #1 and #2. The affected case differs every time
 (`preset_sostenuto`, `stress_32voice`, `note_range`) and the audio clock spread blows out to 1–2 MHz
 against a usual 10–15 kHz, which is the same event read through the frame counter.
 
-Both builds being affected is what settles it. The 32-voice-only version of this looked like
-[#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) — least margin on least silicon — and
-the 24-voice archive at 56.63 MHz was the control. It stalled too, on the same cable and the same
-hub port, with die #1's three clean runs sitting between die #3's stalls in the run order. So it is
-the module, not the netlist and not the host: [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49).
-Gap rate stays 0.00 % and the affected captures still score 100, so none of it is audible.
+Both builds being affected is what makes the module the necessary ingredient. The 32-voice-only
+version of this looked like [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) — least
+margin on least silicon — and the 24-voice archive at 56.63 MHz was the control. It stalled too, on
+the same cable and the same hub port, with die #1's three clean runs sitting between die #3's stalls
+in the run order, so neither the netlist alone nor the host explains it. But the rates are not
+equal: 2 of 2 on the 32-voice build, 1 of 8 on the 24-voice one. Whether occupancy makes the stall
+frequent once the hardware makes it possible is open, and two runs cannot answer it. Tracked in
+[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49). Gap rate stays 0.00 % and the
+affected captures still score 100, so none of it is audible.
 
 **Flashing three modules: the one-cable rule is not optional.** `--busdev-num` does not select
 between dirtyJtag probes (see below), so every flash above was done with exactly one `dbg` cable

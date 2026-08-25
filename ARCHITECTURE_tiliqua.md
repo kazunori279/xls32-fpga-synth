@@ -1499,14 +1499,18 @@ boot them from flash. Every graded run on 2026-08-25 came back A+ with zero fail
 third module.
 
 Die #3 does something the other two never do: it intermittently stops delivering USB frames
-mid-capture, tens of thousands at a time, 3 runs out of 5. The first two were on the 32-voice build
-and looked exactly like this section coming true — the build with the least margin failing on the
-die with the least of it, in the USB path, where its failing cones are. Then the 24-voice build,
-which bets 6 % rather than 24 %, did it too on the same module. Two bitstreams a milestone apart,
-both affected, one module, same host and same cable throughout: that correlates with the hardware
-and not with the netlist, so it says nothing about whether 48.37 MHz is enough. It is
-[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), and nothing about it is audible —
-gap rate 0.00 %, affected captures scoring 100 with zero glitches.
+mid-capture, tens of thousands at a time. The first two occurrences were on the 32-voice build and
+looked exactly like this section coming true — the build with the least margin failing on the die
+with the least of it, in the USB path, where its failing cones are. Then the 24-voice build, which
+bets 6 % rather than 24 %, did it too on the same module, and dies #1 and #2 have never done it on
+either build through the same cable and host. So the module is the necessary ingredient and this
+section cannot claim the whole finding.
+
+It may still hold a piece of it. On die #3 the 32-voice build stalled 2 of 2 runs and the 24-voice
+build 1 of 8 — a wide enough gap to suspect that occupancy makes the stall frequent once the
+hardware makes it possible, and far too few runs to say so. That is
+[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49). Nothing about it is audible — gap
+rate 0.00 %, affected captures scoring 100 with zero glitches.
 
 The die that actually failed to enumerate is still the vendor's and is still not here.
 
