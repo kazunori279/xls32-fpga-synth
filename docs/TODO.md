@@ -122,6 +122,18 @@ what happens.
 
 ## Known debt — recorded, not scheduled
 
+- **Every module reports the same USB serial, so the host cannot tell two apart**
+  ([#50](https://github.com/kazunori279/xls32-fpga-synth/issues/50)). `iSerialNumber = "beta-0000"`
+  is a constant in `boards/tiliqua/gateware/usb_iface.py:178`, and with VID, PID and `iProduct`
+  shared too, three attached modules are byte-identical on the wire. macOS papers over it by
+  substituting the USB locationID for the serial on all but the first-enumerated device, which
+  means a module's CoreAudio UID depends on plug order. **Deliberately not fixed.** The string is
+  baked into a ROM, so a per-module serial changes the netlist width and forces a fresh seed sweep
+  at 98.3% occupancy; `check_descriptors.py` pins the strings; and every machine that has ever seen
+  a board would forget its volume, sample rate and panel OUT selection. The host-side fix in #50 —
+  select by device index or CoreAudio UID — costs none of that, and the multi-board design in
+  [#52](https://github.com/kazunori279/xls32-fpga-synth/issues/52) does not need the serial at all.
+
 - ~~**One of the three R5 modules here drops USB frames intermittently, on both builds**~~
   ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), filed and closed 2026-08-25).
   **There was no module defect.** Every stall happened in a run during which some *other* USB device
