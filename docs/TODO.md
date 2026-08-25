@@ -126,7 +126,11 @@ what happens.
    on board 1, 2 and 3 with a clean diagonal, `send_all` lights all three, and CC7 at 0 on part 4
    against 127 on part 5 silences one part of one board — so the channel nibble is being rewritten
    and not merely the destination picked. Every one of those readings came off the **USB capture**
-   the rig itself declines to use, opened separately as a witness. The analog half — three TRS
+   the rig itself declines to use, opened separately as a witness. The browser panel has since been
+   driven against the same three modules and behaves: `NBOARDS` reads 3 at load, the PART bar draws
+   P1–P12 in three rows, each row's IDENTIFY sounds its own module, and all three now reach the
+   mix — the last of those only after `realInputs` in `webui/static/transport.js` stopped counting
+   the macOS `deviceId: 'default'` alias as a fourth Tiliqua input. The analog half — three TRS
    jacks into a hardware mixer, summed headroom, whether independent SI5351s drifting apart is
    audible on a layered note — has not been set up. The host cannot close this one: a bare XLS32
    top has no SoC to read the AK4619's calibration EEPROM, so it has never graded the jacks

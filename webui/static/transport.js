@@ -214,6 +214,35 @@ class TiliquaTransport {
   }
 }
 
+// One entry per physical capture device, with the OS's aliases for them removed.
+//
+// `enumerateDevices()` does not return a list of hardware. It returns a list of things you may pass
+// to `getUserMedia`, and on macOS/Chrome that includes an alias entry with `deviceId: 'default'`
+// standing for whatever the OS has selected as the default input, labelled `Default - <the real
+// label>`. Windows adds a second alias, `'communications'`. When the OS default happens to be a
+// Tiliqua, that alias carries the board's own name and passes any label filter, so with three
+// modules attached the list holds four matching entries and one of them is a duplicate.
+//
+// That is not cosmetic. The caller pairs the Nth input with the Nth MIDI output, so a duplicate
+// takes a slot: measured with three modules here, the alias sorted into the middle of the list, one
+// module was captured twice and the third was never captured at all -- it played, and nothing the
+// browser mixed contained it. `groupId` is what proves the duplication rather than infers it: the
+// alias and the real entry it stands for report the same one.
+//
+// Both filters are needed. Dropping the aliases alone leaves nothing to dedupe *today*, but the
+// groupId pass is what makes the bijection a property of the list rather than of Chrome's current
+// habits, and it is one line.
+function realInputs(devices) {
+  const seen = new Set();
+  return devices.filter((d) => {
+    if (d.kind !== 'audioinput') return false;
+    if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
+    if (d.groupId && seen.has(d.groupId)) return false;
+    if (d.groupId) seen.add(d.groupId);
+    return true;
+  });
+}
+
 // Every Tiliqua on the bus, as connected transports in board order. Four boards on four USB cables
 // is the supported way to play more than four parts: the engine folds MIDI channels onto parts with
 // `ch = ps[0:2]` (core/synth.x), so every board owns channels 1-4 of its own cable, and the panel
@@ -230,7 +259,8 @@ class TiliquaTransport {
 // one output, so "my stream" and "the next board's stream" are the same sound arriving twice; the
 // only property that has to hold is that the assignment is a bijection -- which the single `find`
 // this replaced got wrong, handing all four transports one deviceId and capturing one board four
-// times while three played to nobody.
+// times while three played to nobody. `realInputs` below is what keeps it a bijection now; the
+// first version of this function did not, and three boards on the desk showed it.
 async function discoverTiliquas() {
   const access = await midiAccess();
   const outs = [...access.outputs.values()].filter((o) => matches(o.name))
@@ -241,8 +271,8 @@ async function discoverTiliquas() {
   // first and only then goes looking for the boards by name. One probe covers all of them.
   const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
   probe.getTracks().forEach((t) => t.stop());
-  const ins = (await navigator.mediaDevices.enumerateDevices())
-    .filter((d) => d.kind === 'audioinput' && matches(d.label))
+  const ins = realInputs(await navigator.mediaDevices.enumerateDevices())
+    .filter((d) => matches(d.label))
     .sort((a, b) => (a.deviceId < b.deviceId ? -1 : a.deviceId > b.deviceId ? 1 : 0));
   if (!ins.length) throw new Error('no "Tiliqua XLS32" audio input — check the OS sound settings');
   // Fewer inputs than outputs means something else holds one (another tab, a DAW). That board
