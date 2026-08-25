@@ -705,6 +705,45 @@ what happens.
   [#48](https://github.com/kazunori279/xls32-fpga-synth/issues/48) coming back: that bug reported
   tens of millions of frames on runs that could only hold 29.7 M, and reported them on every die.
   This is tens of thousands, on one.
+
+  **2026-08-25, overnight: 32 consecutive runs, and the module does not drift.** Every grade above
+  is a cold-start reading — nothing here had measured the same board twice in a row, let alone for
+  five hours. Die #3 ran the suite 32 times back to back on the 32-voice archive, 18:25 to 23:57,
+  5,600 captures:
+
+      for i in $(seq -w 1 32); do uv run python test/run_tests.py --board tiliqua \
+        --no-reflash --skip-video > /tmp/soak/run$i.log 2>&1; done
+
+  The USB tree was quiet for the whole window — `usb_watch.log` holds 330 heartbeats over it and
+  not one transition, which is what makes the numbers readable at all. Every run returned A+ with
+  zero failures, and **`missing_frames` is 0 across all 5,600 captures**.
+
+  Split into quarters, nothing moves:
+
+  | runs | grade | audio clock | spread | `filter_sweep` centroid | glitches, all cases |
+  |---|---|---|---|---|---|
+  | 1–8 | 99.800 | 12.2889 MHz | 7.3 kHz | 1023→1699 Hz | 8 |
+  | 9–16 | 99.800 | 12.2888 | 8.0 | 1019→1702 | 8 |
+  | 17–24 | 99.787 | 12.2890 | 6.3 | 1023→1700 | 1 |
+  | 25–32 | 99.787 | 12.2890 | 6.4 | 1030→1704 | 25 |
+
+  The clock's quarter-to-quarter movement is 0.2 kHz, or 16 ppb, against a within-run spread of
+  5.0–11.3 kHz — steadier over five hours than a single ten-minute run's own scatter.
+  `filter_sweep` warned in 29 of the 32 ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7)
+  again) and its centroid is flat, so that case is not drifting either; it sits on its threshold and
+  falls on both sides of it.
+
+  One thread is left, and it is recorded as something for the next soak to check rather than as a
+  finding. `preset_analog_low` returned 0 glitches and 0.0 % clip in all of runs 1–24, then departed
+  in three of the last eight: run 25 (10 glitches, clip 0.1 %), run 28 (5 glitches), run 32 (clip
+  0.1 %). Three events landing in the final quarter is p = 0.011 on its own, which is worth nothing
+  after picking one case out of 175, and peak level does not sort them — the loudest reading of the
+  32 (35,125 in run 20) is clean. If it recurs in the tail of another 32, it is real.
+
+  What this does **not** cover: the ECP5's die temperature is not readable from this gateware, so it
+  measures behaviour over time and not over temperature. It also says nothing about
+  [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51) — the module that loses frames
+  sits on hub port `0x130000`, and the one that ran all night was on `0x120000`.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
   module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,
