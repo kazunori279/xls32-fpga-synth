@@ -120,6 +120,18 @@ what happens.
    run, so the check has teeth. What it does **not** cover is live Web Serial: choosing a port is a
    permission prompt behind a user gesture and cannot be driven headlessly.
 
+1. **Nobody has heard three boards through a mixer.** `host/rig.py`
+   ([#52](https://github.com/kazunori279/xls32-fpga-synth/issues/52)) has been verified on the
+   routing it controls and nothing further: three modules attached, a note to part 0, 4 and 8 lands
+   on board 1, 2 and 3 with a clean diagonal, `send_all` lights all three, and CC7 at 0 on part 4
+   against 127 on part 5 silences one part of one board — so the channel nibble is being rewritten
+   and not merely the destination picked. Every one of those readings came off the **USB capture**
+   the rig itself declines to use, opened separately as a witness. The analog half — three TRS
+   jacks into a hardware mixer, summed headroom, whether independent SI5351s drifting apart is
+   audible on a layered note — has not been set up. The host cannot close this one: a bare XLS32
+   top has no SoC to read the AK4619's calibration EEPROM, so it has never graded the jacks
+   (`ARCHITECTURE_tiliqua.md` A3). It ends with a mixer on the desk and a listener.
+
 ## Known debt — recorded, not scheduled
 
 - **Every module reports the same USB serial, so the host cannot tell two apart**

@@ -669,6 +669,27 @@ make them play in unison — the engine reads only the low two bits of the chann
 (`ch = ps[0:2]` in `core/synth.x`), so every board would answer to the same four channels. Four
 cables sidestep all of it, and the gateware never learns that any of this is happening.
 
+**Mixing outside the computer**, from Python rather than the browser: `host/rig.py` fans notes and
+CC out to every board over USB and takes no audio back, leaving each board's TRS jack to feed a
+hardware mixer. Same part arithmetic as the panel — part `p` is board `p // 4`, channel `p % 4`.
+
+```bash
+uv run python host/rig.py                     # what is attached, in board order
+uv run python host/rig.py --identify          # arpeggio on each board in turn
+uv run python host/rig.py --play 60 64 67 72  # one note per part, spread over the rig
+XLS32_RIG=2,0,1 uv run python host/rig.py     # pin board order to those MIDI ports
+```
+
+Board order is enumeration order and means nothing beyond being stable for an unchanged set of
+cables; `--identify` is how the ear settles which box is which, for the same reason the panel has
+the button. Not taking audio back is deliberate, not a shortcut — capture is the only part of the
+link that misbehaved with three modules attached
+([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)), USB loss cannot reach the jacks
+because `usb_tee` drops rather than stalling the codec, and MIDI rides a bulk endpoint the host
+controller retries where capture is isochronous and unprotected. The graded suite still runs one
+board at a time over USB, and that is what a board passes before it joins a rig
+([#52](https://github.com/kazunori279/xls32-fpga-synth/issues/52)).
+
 ### Anything else that speaks MIDI CC
 
 The panel is convenient, not privileged. **Every control on it is one plain MIDI CC message** — no

@@ -64,7 +64,11 @@ addition rather than a rewrite.
   check — reads a simulation on stdin or a board with `--serial`, and since 2026-08-10 it is what
   README §3's iverilog run pipes into; the `analyze.py` that used to sit here graded every
   bitstream and every simulation the same and was deleted), `play.py` (host sends
-  MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`; and
+  MIDI → FFT-verifies), `record_wav.py` (capture stream → .wav), `filter_demo.py`,
+  `rig.py` (several modules at once: MIDI fanned out over one USB cable each, no audio
+  taken back, mixing done on the analog jacks — part `p` is board `p // 4` channel
+  `p % 4`, the same arithmetic the web UI uses, and it is the only file outside
+  `transport/` that opens a MIDI port of its own); and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over
   Web MIDI / Web Serial, with no server behind it (`synthspec.py` is the CC map/preset source,

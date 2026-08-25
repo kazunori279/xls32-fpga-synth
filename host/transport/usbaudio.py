@@ -257,13 +257,17 @@ def find_audio_device(want=None, min_channels=4):
           "  is not digits alone -- ':140000:' rather than '140000'.")
 
 
-def find_midi_port(want=None):
+def find_midi_port(want=None, var="XLS32_MIDI_DEV"):
     """rtmidi port index of the board's MIDI destination. Set XLS32_MIDI_DEV to pick one.
 
     An index and not a name, on purpose. mido keys its device dict on the port name, so
     several destinations called `Tiliqua XLS32` collapse into one entry and
     `mido.open_output` binds whichever rtmidi enumerated first -- with no ambiguity left
     for anyone to report. That was #50, and it is why this reads rtmidi's list directly.
+
+    `var` names the setting the errors tell the reader to change. `host/rig.py` resolves
+    each entry of its own `XLS32_RIG` through here, and an error naming the variable the
+    reader did not set sends them looking in the wrong place.
     """
     rtmidi = _import_rtmidi()
     want = want or os.environ.get("XLS32_MIDI_DEV") or DEFAULT_MATCH
@@ -275,7 +279,7 @@ def find_midi_port(want=None):
     i = _index(want)
     if i is not None:
         if not 0 <= i < len(names):
-            raise SystemExit(f"XLS32_MIDI_DEV={want} is not a MIDI destination.\n"
+            raise SystemExit(f"{var}={want} is not a MIDI destination.\n"
                              "  destinations seen:\n" + rows(range(len(names))))
         return i
 
@@ -286,10 +290,10 @@ def find_midi_port(want=None):
         raise SystemExit(
             f"no MIDI output matching {want!r}.\n  destinations seen:\n"
             + rows(range(len(names)))
-            + "  set XLS32_MIDI_DEV to a substring of the right one, or to its index.")
+            + f"  set {var} to a substring of the right one, or to its index.")
     raise SystemExit(
         f"{want!r} matched {len(hits)} MIDI outputs:\n" + rows(hits) + _IDENTICAL
-        + "  set XLS32_MIDI_DEV to one of the indices above.")
+        + f"  set {var} to one of the indices above.")
 
 
 def _import_rtmidi():
