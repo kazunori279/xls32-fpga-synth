@@ -20,7 +20,7 @@ multitimbral selector, preset browser, and demo player.*
 
 [![Watch the XLS32 demo video](https://img.youtube.com/vi/sWc6g7cgsd4/hqdefault.jpg)](https://youtu.be/sWc6g7cgsd4)
 
-*▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube). For sound alone: **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)**, 2:18, off a Basys 3; **[Bach · Goldberg Aria](https://youtu.be/UPpt41BPEH8)**, 1:45, and **[Vivaldi · Winter, Largo](https://youtu.be/Qv_raL9kz5I)**, 1:45, both off a Tiliqua. 4 parts each, recorded over USB — no room mic, no software instruments, and the picture is a spectrogram of that same signal.*
+*▶️ **[Demo video](https://youtu.be/sWc6g7cgsd4)** — the panel played live over the Tiliqua module's four-part Prelude in C, with the synth's own audio (click to watch on YouTube). For sound alone: **[Saint-Saëns · Le Cygne](https://youtu.be/tL7N2eV9pn8)**, 2:18, off a Basys 3; **[Bach · Goldberg Aria](https://youtu.be/UPpt41BPEH8)**, 1:45, and **[Vivaldi · Winter, Largo](https://youtu.be/Qv_raL9kz5I)**, 1:45, both off a Tiliqua. 4 parts each, recorded over USB — no room mic, no software instruments, and the picture is a spectrogram of that same signal. For three modules driven from the one panel: **[multi-board & multipart demo](https://youtube.com/shorts/I3TEsHku3zc)**.*
 
 ## At a glance
 
@@ -636,6 +636,9 @@ USB cables, **the same bitstream on every board** — nothing to configure, noth
 differently, no MIDI channel to set. The PART bar grows a row per board, `P1`…`P16`, and the four
 audio streams are summed in the browser, so the whole rig still comes out of the computer's
 speakers with nothing on the desk between them.
+
+▶️ **[Three modules, one panel](https://youtube.com/shorts/I3TEsHku3zc)** — what this section
+describes, running.
 
 ```
 PART   BOARD 1 🔊  ●P1  ●P2  ●P3  ●P4
