@@ -510,8 +510,18 @@ what happens.
   23 of 23 pass, mean 56.45, worst 51.57, and those are floors rather than ceilings for the same
   reason.
 
-  **60 MHz is not reachable by stacking what exists.** #3 stays open on that, and #34's case for
-  upstreaming rests on the unsplit measurement, which is the one that ships.
+  **60 MHz is not reachable by stacking what exists.** #34's case for upstreaming rests on the
+  unsplit measurement, which is the one that ships.
+
+  **2026-08-25: both issues closed, and the risk is carried here instead.** The only lever left is
+  the depth inside luna, and this repo does not modify the libraries the vendor distributes — so
+  #34 reduces to "someone opens a PR against `greatscottgadgets/luna`", which no build can do, and
+  #3 waits on that PR landing. Neither is a fix, and closing them does not make the shortfall go
+  away: what ships still misses 60 MHz, and one vendor die out of two did not enumerate on a build a
+  megahertz away from it. Everything an upstream reviewer would want is in
+  `boards/tiliqua/patches/` — the register, the test that passes both ways, and the 24-seed sweep.
+  Reopen #34 when someone is ready to send it; reopen #3 if a module fails to enumerate on a
+  bitstream shipped from here.
 
   **The suite's first published `missing_frames` total is wrong**, and it is worth writing down
   before it becomes a baseline: 73,646,868 frames reported missing over 49 of 175 captures, when
