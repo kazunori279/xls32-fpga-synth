@@ -742,8 +742,33 @@ what happens.
 
   What this does **not** cover: the ECP5's die temperature is not readable from this gateware, so it
   measures behaviour over time and not over temperature. It also says nothing about
-  [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51) — the module that loses frames
-  sits on hub port `0x130000`, and the one that ran all night was on `0x120000`.
+  [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51) — the link that loses frames is
+  hub port `0x130000`, and the module that ran all night was on `0x120000`.
+
+  **2026-08-26: #51 was one bad port on the desk hub, and nothing else.**
+  [Closed](https://github.com/kazunori279/xls32-fpga-synth/issues/51) after four configurations of
+  12 rounds each, all three streams open in the same windows, USB tree quiet throughout. The chain
+  is `module — cable — port`; swapping at the module end moves only the module and swapping at the
+  hub end moves only the port, so two swaps separate all three:
+
+  | config | what moved | port `0x130000` | port `0x120000` | `0x140000` control |
+  |---|---|---|---|---|
+  | A baseline | — | cable b + module 2 — **11/12 short** | cable g + module 1 — 0/12 | 0/12 |
+  | B | module end | cable b + **module 1** — **11/12** | cable g + **module 2** — 0/12 | 0/12 |
+  | C | hub end | **cable g** + module 2 — **12/12** | **cable b** + module 1 — 0/12 | 0/12 |
+  | D | onto free port `0x110000` | unused | 0/12 | 0/12 |
+
+  The port loses frames with either module and either cable, and both of those read 0/12 the moment
+  they go anywhere else. Config D put the chain on the hub's fourth port and **all three modules
+  measured clean at once for the first time** — 0/12 each, 12.29 MHz every round. The fix is to stop
+  using that socket; no bitstream, module or cable is implicated, and nothing in the repo changes.
+
+  Two things are worth keeping from it. The port got measurably worse over the twenty minutes of the
+  session: config C's twelve rounds are effectively 12/12, since three of them returned fewer than
+  two live samples and could not be scored at all and a fourth read 0.29 MHz. And the original report
+  was right about the device and wrong only in reading a device index as a module — with every module
+  answering to the same USB serial ([#50](https://github.com/kazunori279/xls32-fpga-synth/issues/50)),
+  the index had been naming a socket the whole time.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
   module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,

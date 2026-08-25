@@ -33,6 +33,14 @@ produced three false hardware findings before anyone checked the USB log
 ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49)). The offending device does not
 have to share a hub with the board.
 
+**A hub port can also be bad on its own, and it does not look any different.** One port of the
+desk hub here loses frames with any module and any cable plugged into it, while the hub's other
+three ports are clean — so a device that comes up short is not necessarily a device
+([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). `host/probe_capture.py` is what
+tells the two apart: it opens every attached module at once and reads them over the same window,
+where a host stall shows up on all of them and a bad link shows up on one. A sequential table
+cannot make that distinction.
+
 **One board at a time, or say which one.** Several modules of the same build are indistinguishable
 on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one
 attached the suite stops and lists what it found. Pick with `XLS32_AUDIO_DEV` and `XLS32_MIDI_DEV`,
