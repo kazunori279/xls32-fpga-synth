@@ -68,7 +68,10 @@ addition rather than a rewrite.
   `rig.py` (several modules at once: MIDI fanned out over one USB cable each, no audio
   taken back, mixing done on the analog jacks — part `p` is board `p // 4` channel
   `p % 4`, the same arithmetic the web UI uses, and it is the only file outside
-  `transport/` that opens a MIDI port of its own); and
+  `transport/` that opens a MIDI port of its own),
+  `probe_capture.py` (every attached module captured over the *same* window, so a device losing
+  USB frames can be compared against its neighbours at the same instant — all short together is
+  a host stall, one short alone is that link); and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over
   Web MIDI / Web Serial, with no server behind it (`synthspec.py` is the CC map/preset source,
