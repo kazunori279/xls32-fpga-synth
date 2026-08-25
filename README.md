@@ -647,6 +647,11 @@ PART   BOARD 1 🔊  ●P1  ●P2  ●P3  ●P4
 Everything on one board's row behaves as the four parts always have, and the layer crosses boards:
 ⇧-click P1 and P13 and one key press sounds both, on two different chips.
 
+**Every cable carries channels 1–4.** There is no rig-wide channel numbering — board 2 is not
+channels 5–8, it is another board's channels 1–4 on a second cable. `P7` is a part number, and the
+panel writes the destination board's own channel into the status byte on the way out. Driving the
+rig from a DAW instead means one port per board, counting from channel 1 again on each.
+
 - **The board numbers are arbitrary.** All four enumerate under the same name, with no serial
   number to tell them apart, and the browser cannot ask which USB port a device is on. The order
   is stable across reloads for an unchanged set of cables, and that is all it is. **🔊 IDENTIFY**
@@ -656,7 +661,18 @@ Everything on one board's row behaves as the four parts always have, and the lay
   in step. Everything else is per part.
 - **Each board keeps its own TRS jack.** Clicking a PART chip points that board's jack at that
   part and leaves the others alone, so a keyboard plugged into board 3 is not stolen by a click on
-  board 1's row. Two players, two instruments, one panel.
+  board 1's row. Two players, two instruments, one panel. It also means the panel can only aim a
+  jack while a part on *that* board is selected.
+- **Where you plug the keyboard changes what it can do.** Into a board's TRS jack it plays one part
+  on that one board, and works with the computer switched off
+  ([which part, and who decides](#midi-in--usb2-the-trs-jack-or-both)). Into the computer, the
+  panel re-addresses every message before forwarding it: the keyboard's transmit channel is ignored
+  outright, the PART chips always decide, and the layer crosses boards, so one key press can sound
+  P1, P5 and P9 on three chips at once. That last one the jack cannot do — it is a single stream,
+  and the gateware routes it rather than copying it.
+- **A board whose capture device is taken still plays.** If another tab or a DAW holds one of the
+  audio inputs, that board keeps its MIDI and its own jacks and is only unheard through the
+  browser; the status line reads `3 boards · audio 2/3` rather than dropping the row.
 - **A demo plays on one board** — the board the selected part belongs to. Select a chip on board 3,
   press ▶ DEMO, and the song fills board 3's four parts while the other twelve stay yours to play
   over the top.
