@@ -104,70 +104,224 @@ def _match(want, names):
     return [i for i, n in enumerate(names) if w in n.lower()]
 
 
+def _index(want):
+    """`want` as a device index if it is written as one, else None.
+
+    Digits alone always mean an index, never a UID fragment, even though the useful
+    fragments of a CoreAudio UID -- the substituted locationIDs, `120000` and `140000` --
+    are digits too. Guessing between the two would make the common case ambiguous to
+    read; a UID fragment just has to include a neighbouring colon.
+    """
+    s = str(want).strip()
+    return int(s) if s.isdigit() else None
+
+
+def _ca_uids():
+    """CoreAudio UID for each PortAudio device index, on macOS. Empty everywhere else.
+
+    Two modules of the same build are byte-identical on the wire -- same VID, same PID,
+    same `iProduct`, and `iSerialNumber` is a constant in `usb_iface.py` -- so PortAudio
+    reports them under one identical name and no substring can separate them (#50).
+    macOS hits the same collision building CoreAudio UIDs and resolves it by
+    substituting the USB locationID for the serial on every device but the
+    first-enumerated, which leaves the UID as the only string on this host that names
+    one module rather than three:
+
+        AppleUSBAudioEngine:apf.audio XLS32/...:Tiliqua XLS32:120000:1,2
+        AppleUSBAudioEngine:apf.audio XLS32/...:Tiliqua XLS32:beta-0000:1,2
+
+    Note what that does *not* buy: which module keeps `beta-0000` depends on plug order,
+    so a UID identifies a hub port for the length of a session and not a module for the
+    length of a project.
+
+    PortAudio's CoreAudio backend walks `kAudioHardwarePropertyDevices` in order and
+    makes one device per entry, so the Nth PortAudio device called X is the Nth
+    CoreAudio device called X. That is an assumption, so it was measured rather than
+    believed: opening a stream on each index in turn and reading
+    `kAudioDevicePropertyDeviceIsRunningSomewhere` lit the positionally-matching device
+    three times out of three.
+
+    Anything unexpected returns `{}`, and every caller falls back to the name alone.
+    """
+    if sys.platform != "darwin":
+        return {}
+    try:
+        import ctypes
+        import ctypes.util
+        import struct
+
+        import sounddevice as sd
+
+        ca = ctypes.CDLL(ctypes.util.find_library("CoreAudio"))
+        cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
+        cf.CFStringGetCStringPtr.restype = ctypes.c_char_p
+        cf.CFStringGetCStringPtr.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+
+        def four(s):
+            return struct.unpack(">I", s.encode())[0]
+
+        class Addr(ctypes.Structure):
+            _fields_ = [("sel", ctypes.c_uint32), ("scope", ctypes.c_uint32),
+                        ("elem", ctypes.c_uint32)]
+
+        def read(obj, sel, size, buf):
+            a = Addr(four(sel), four("glob"), 0)
+            n = ctypes.c_uint32(size)
+            return ca.AudioObjectGetPropertyData(ctypes.c_uint32(obj), ctypes.byref(a),
+                                                 0, None, ctypes.byref(n), buf)
+
+        def text(ptr):
+            s = cf.CFStringGetCStringPtr(ptr, 0x08000100)      # kCFStringEncodingUTF8
+            return s.decode() if s else None
+
+        size = ctypes.c_uint32()
+        addr = Addr(four("dev#"), four("glob"), 0)
+        ca.AudioObjectGetPropertyDataSize(ctypes.c_uint32(1),   # kAudioObjectSystemObject
+                                          ctypes.byref(addr), 0, None, ctypes.byref(size))
+        ids = (ctypes.c_uint32 * (size.value // 4))()
+        read(1, "dev#", size.value, ids)
+
+        by_name = {}
+        for dev in ids:
+            name, uid = ctypes.c_void_p(), ctypes.c_void_p()
+            if read(dev, "lnam", 8, ctypes.byref(name)) or read(dev, "uid ", 8, ctypes.byref(uid)):
+                continue
+            by_name.setdefault(text(name), []).append(text(uid))
+
+        out, seen = {}, {}
+        for i, d in enumerate(sd.query_devices()):
+            nth = seen.get(d["name"], 0)
+            uids = by_name.get(d["name"], ())
+            if nth < len(uids):
+                out[i] = uids[nth]
+            seen[d["name"]] = nth + 1
+        return out
+    except Exception:
+        return {}
+
+
+def _listing(rows):
+    """One indented `index  name  uid` line per candidate, for an error message."""
+    if not rows:
+        return "    (none)\n"
+    return "".join(f"    {i:>3}  {name!r}" + (f"  {uid}" if uid else "") + "\n"
+                   for i, name, uid in rows)
+
+
+#: Both selectors say this when the name has stopped being an identifier.
+_IDENTICAL = ("  modules of the same build are identical on the wire, so the name cannot\n"
+              "  separate them -- see issue #50.\n")
+
+
 def find_audio_device(want=None, min_channels=4):
-    """PortAudio index of the board's input. Set XLS32_AUDIO_DEV to disambiguate."""
+    """PortAudio index of the board's input. Set XLS32_AUDIO_DEV to disambiguate.
+
+    `want` is a substring of the device name or of its CoreAudio UID, or digits, which
+    mean the PortAudio device index itself. The index is the only form that always
+    works: with several modules attached the names are one identical string, and the
+    UIDs are only distinct because macOS broke the tie for us. A UID fragment therefore
+    has to contain something other than digits -- `:140000:` rather than `140000`.
+    """
     import sounddevice as sd
 
     want = want or os.environ.get("XLS32_AUDIO_DEV") or DEFAULT_MATCH
     devices = sd.query_devices()
     usable = [i for i, d in enumerate(devices) if d["max_input_channels"] >= min_channels]
-    hits = [i for i in usable if want.lower() in devices[i]["name"].lower()]
+    uids = _ca_uids()
+
+    def rows(idxs):
+        return _listing([(i, devices[i]["name"], uids.get(i)) for i in idxs])
+
+    i = _index(want)
+    if i is not None:
+        if i not in usable:
+            raise SystemExit(
+                f"XLS32_AUDIO_DEV={want} is not an input with >= {min_channels} channels.\n"
+                "  candidates:\n" + rows(usable))
+        return i
+
+    hits = [i for i in usable
+            if want.lower() in devices[i]["name"].lower()
+            or want.lower() in (uids.get(i) or "").lower()]
     if len(hits) == 1:
         return hits[0]
     if not hits:
         raise SystemExit(
             f"no audio input device matching {want!r} with >= {min_channels} channels.\n"
             "  is the board powered on and loaded with the XLS32 bitstream?\n"
-            "  inputs seen: "
-            + (", ".join(f"{devices[i]['name']!r}" for i in usable) or "(none)")
-            + "\n  set XLS32_AUDIO_DEV to a substring of the right one."
-        )
+            "  inputs seen:\n" + rows(usable)
+            + "  set XLS32_AUDIO_DEV to a substring of the right one, or to its index.")
     raise SystemExit(
-        f"{want!r} matched {len(hits)} input devices: "
-        + ", ".join(f"{devices[i]['name']!r}" for i in hits)
-        + "\n  set XLS32_AUDIO_DEV to something more specific."
-    )
+        f"{want!r} matched {len(hits)} input devices:\n" + rows(hits) + _IDENTICAL
+        + "  set XLS32_AUDIO_DEV to one of the indices above, or to a UID fragment that\n"
+          "  is not digits alone -- ':140000:' rather than '140000'.")
 
 
 def find_midi_port(want=None):
-    """Name of the board's MIDI destination. Set XLS32_MIDI_DEV to disambiguate."""
-    mido = _import_mido()
+    """rtmidi port index of the board's MIDI destination. Set XLS32_MIDI_DEV to pick one.
+
+    An index and not a name, on purpose. mido keys its device dict on the port name, so
+    several destinations called `Tiliqua XLS32` collapse into one entry and
+    `mido.open_output` binds whichever rtmidi enumerated first -- with no ambiguity left
+    for anyone to report. That was #50, and it is why this reads rtmidi's list directly.
+    """
+    rtmidi = _import_rtmidi()
     want = want or os.environ.get("XLS32_MIDI_DEV") or DEFAULT_MATCH
-    names = mido.get_output_names()
+    names = rtmidi.MidiOut().get_ports()
+
+    def rows(idxs):
+        return _listing([(i, names[i], None) for i in idxs])
+
+    i = _index(want)
+    if i is not None:
+        if not 0 <= i < len(names):
+            raise SystemExit(f"XLS32_MIDI_DEV={want} is not a MIDI destination.\n"
+                             "  destinations seen:\n" + rows(range(len(names))))
+        return i
+
     hits = _match(want, names)
     if len(hits) == 1:
-        return names[hits[0]]
+        return hits[0]
     if not hits:
         raise SystemExit(
-            f"no MIDI output matching {want!r}.\n"
-            "  destinations seen: " + (", ".join(repr(n) for n in names) or "(none)")
-            + "\n  set XLS32_MIDI_DEV to a substring of the right one."
-        )
+            f"no MIDI output matching {want!r}.\n  destinations seen:\n"
+            + rows(range(len(names)))
+            + "  set XLS32_MIDI_DEV to a substring of the right one, or to its index.")
     raise SystemExit(
-        f"{want!r} matched {len(hits)} MIDI outputs: "
-        + ", ".join(repr(names[i]) for i in hits)
-        + "\n  set XLS32_MIDI_DEV to something more specific."
-    )
+        f"{want!r} matched {len(hits)} MIDI outputs:\n" + rows(hits) + _IDENTICAL
+        + "  set XLS32_MIDI_DEV to one of the indices above.")
 
 
-def _import_mido():
-    """mido with a backend, or an error that says how to get one.
+def _import_rtmidi():
+    """python-rtmidi, or an error that says how to get it.
 
-    python-rtmidi lives in the optional `localmidi` extra because it needs a C
-    toolchain and the Basys 3 flow has never wanted it. Without it mido raises an
-    ImportError from inside its backend loader, which reads like a mido bug.
+    It lives in the optional `localmidi` extra because it needs a C toolchain and the
+    Basys 3 flow has never wanted it. Imported directly rather than through mido: mido's
+    port layer is what loses duplicate destinations (see `find_midi_port`).
     """
     try:
-        import mido
+        import rtmidi
 
-        mido.get_output_names()
-        return mido
+        return rtmidi
     except ImportError as e:
         raise SystemExit(
             f"MIDI backend unavailable ({e}).\n"
             "  the Tiliqua transport sends MIDI over USB, which needs python-rtmidi:\n"
             "    uv sync --extra localmidi"
         )
+
+
+def _import_mido():
+    """mido, for `Parser` alone -- the ports come from rtmidi.
+
+    No backend is loaded and none is needed; parsing is pure Python.
+    """
+    try:
+        import mido
+
+        return mido
+    except ImportError as e:
+        raise SystemExit(f"mido is required to parse outgoing MIDI ({e}).")
 
 
 class UsbAudioTransport(Transport):
@@ -189,6 +343,8 @@ class UsbAudioTransport(Transport):
         self._sink_q = None                  # continuous monitor; see stream_start
         self._sink_t = None
         self._sink_done = None
+        #: What `open()` bound to, as one human-readable line. See `_announce`.
+        self.selection = None
         #: Fraction of frames dropped in the most recent record_stop, or None.
         self.gap_rate = None
         #: Frames the device produced that never arrived at all, in the most recent capture.
@@ -211,13 +367,16 @@ class UsbAudioTransport(Transport):
             return self
         import sounddevice as sd
 
-        mido = _import_mido()
-        self._midi = mido.open_output(find_midi_port())
-        self._parser = mido.Parser()
+        rtmidi = _import_rtmidi()
+        port = find_midi_port()
+        self._midi = rtmidi.MidiOut()
+        self._midi.open_port(port)
+        self._parser = _import_mido().Parser()
 
         self._blocks = []
         self._stamps = []
         dev = find_audio_device(min_channels=self._dev_channels)
+        self._announce(dev, port)
 
         def cb(indata, frames, t, status):
             # Deliberately trivial: anything expensive here shows up as dropouts. The
@@ -245,6 +404,27 @@ class UsbAudioTransport(Transport):
         self._stream.start()
         return self
 
+    def _announce(self, dev, port):
+        """Say which board this is, once, on stderr.
+
+        #50 was a *silent* binding: with three modules attached the MIDI side picked one
+        and told nobody, so a capture could be graded against a board that never got the
+        notes. A fix that stays quiet is half a fix, and `open()` runs once per session
+        (see the note at the top of this file), so the line costs one line.
+        """
+        import sounddevice as sd
+
+        n_audio = sum(1 for d in sd.query_devices()
+                      if DEFAULT_MATCH.lower() in d["name"].lower()
+                      and d["max_input_channels"] >= self._dev_channels)
+        n_midi = len(_match(DEFAULT_MATCH, _import_rtmidi().MidiOut().get_ports()))
+        uid = _ca_uids().get(dev)
+        self.selection = (f"audio[{dev}]" + (f" {uid}" if uid else "")
+                          + f", midi[{port}]"
+                          + (f" -- {n_audio} audio / {n_midi} MIDI candidates attached"
+                             if max(n_audio, n_midi) > 1 else ""))
+        print(f"[usbaudio] {self.selection}", file=sys.stderr)
+
     def close(self):
         self.stream_stop()
         if self._stream is not None:
@@ -252,7 +432,7 @@ class UsbAudioTransport(Transport):
             self._stream.close()
             self._stream = None
         if self._midi is not None:
-            self._midi.close()
+            self._midi.close_port()
             self._midi = None
         self._blocks = None
 
@@ -265,7 +445,7 @@ class UsbAudioTransport(Transport):
         # engine's DSLX parser.
         self._parser.feed(bytes(data))
         for msg in self._parser:
-            self._midi.send(msg)
+            self._midi.send_message(msg.bytes())
 
     # ---- audio up ----
     def record_start(self):

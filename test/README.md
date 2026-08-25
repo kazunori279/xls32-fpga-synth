@@ -33,6 +33,20 @@ produced three false hardware findings before anyone checked the USB log
 ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49)). The offending device does not
 have to share a hub with the board.
 
+**One board at a time, or say which one.** Several modules of the same build are indistinguishable
+on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one
+attached the suite stops and lists what it found. Pick with `XLS32_AUDIO_DEV` and `XLS32_MIDI_DEV`,
+each taking a device index or a name/UID fragment:
+
+```bash
+XLS32_AUDIO_DEV=4 XLS32_MIDI_DEV=0 uv run python test/run_tests.py --board tiliqua
+```
+
+They have to agree: the audio device and the MIDI destination are two halves of one board, and
+nothing checks that you paired them. `[usbaudio] audio[4] ... midi[0] ...` on stderr at the start of
+the run is what was actually bound. The indices are enumeration order, not identity — they can move
+when cables do ([#50](https://github.com/kazunori279/xls32-fpga-synth/issues/50)).
+
 - `report.md` / `report.json` — per-test scores (0–100), verdicts, metrics, overall grade, plus
   what the transport measured about itself: `gap_rate_*`, `audio_clock_hz`, and
   `missing_frames_*` (frames the board produced that never arrived — the only loss no rate can
