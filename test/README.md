@@ -33,21 +33,25 @@ produced three false hardware findings before anyone checked the USB log
 ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49)). The offending device does not
 have to share a hub with the board.
 
-**A hub port or a half-seated plug looks exactly like a broken module.** A device that comes up
-short is not necessarily a device: on this desk one hub port lost frames with any module and any
-cable in it, and after that hub was replaced a plug that was not fully home did the same thing
-until it was reseated ([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). Two
-things separate these from a module fault, and neither is a sequential table of one device's
+**A hub port looks exactly like a broken module.** A device that comes up short is not necessarily
+a device: on this desk one hub port lost frames with either of two modules and either of two
+cables, its neighbours clean in the same windows, and the replacement hub then did it on the same
+port number — first as dropped frames, then, seven minutes later, refusing to enumerate at all
+([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). **Use ports 1, 2 and 4.**
+
+Two things separate a port from a module, and neither is a sequential table of one device's
 numbers. `host/probe_capture.py` opens every attached module at once and reads them over the same
 window — a host stall shows up on all of them, one bad link shows up on one. And `usb_watch.log`
-now covers the hub the modules sit on (bus `0-1`), so a link that is dropping and re-enumerating
-says so directly rather than arriving as missing frames:
+now covers the hub the modules sit on (bus `0-1`), so a link that is dropping says so directly
+rather than arriving as missing frames, and empty brackets mean the device never answered at all:
 
     0-1:3  ... connect [Tiliqua XLS32]  ->  0101 power connect
+    0-1:3  0101 power connect []  ->  0111 power reset connect []
 
 Check the log for the run's window before swapping anything, then swap at the module end and at the
 hub end — the first moves only the module, the second only the port, so two swaps separate module,
-cable and port.
+cable and port. Reseating is worth a try but do not trust it: on the new hub it held for three
+minutes, and moving the same module and cable to a free port fixed it in two seconds.
 
 **One board at a time, or say which one.** Several modules of the same build are indistinguishable
 on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one

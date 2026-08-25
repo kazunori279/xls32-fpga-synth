@@ -794,11 +794,27 @@ what happens.
   is exactly the repair that fixed the new hub, and the port got **worse** rather than better
   (12/12, three rounds unscorable). A half-seated plug does not survive that.
 
-  What would unify both, and has not been checked, is that the variable is the **location rather
-  than the hub** — whatever cable reaches port 3 on this desk may be the one under tension or bent
-  hard against something, and the hub-end swap that "fixed" the new hub also re-routed two cables.
-  Worth a look with the eyes before it is called a coincidence. Otherwise it cannot be resolved now
-  that the old hub is gone.
+  **The reseat did not hold, and port 3 on the new hub then failed outright.** Within seven minutes
+  of reading clean it stopped enumerating altogether — a hub resetting a port whose device never
+  answers, empty brackets where the descriptor belongs, twenty-one times in three minutes while
+  ports 1, 2 and 4 stayed silent:
+
+      0-1:3  0101 power connect []  ->  0111 power reset connect []
+      0-1:3  0111 power reset connect []  ->  0101 power connect []
+
+  Moving that chain to the free port 1, hub end only, ended it in two seconds — unplugged 05:17:44,
+  enumerated 05:17:46 — and three modules on ports 1, 2 and 4 then measured **0/60 rounds each at
+  12.29 MHz with zero transitions across the 90 s window**. Same module, same cable.
+
+  So the port is the fault on both hubs, and three explanations are dead. Cable tension was checked
+  by eye and the cables re-routed, with no change. Ordinality is not it: the module on port 1 was
+  the last to enumerate and is fine. Nor is it the power budget — the live modules hold
+  `UsbPowerSinkAllocation = 500` each, which a bus-powered hub could not grant.
+
+  **The coincidence is what is left, and it is not explained.** Two hubs, the same port number, and
+  on the new one a port that *degraded inside the session*: 60 clean rounds at 05:03, dead by 05:10.
+  What survives is untested either way — the two hubs sharing a model and a defect, or the third
+  socket on this desk taking stress that does not show from the outside. **Use ports 1, 2 and 4.**
   [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)
   stays closed because the symptom is not reproducible and the suspect hardware is off the desk;
   **reopen if `0-1:3` logs drops again, or if `missing_frames` returns on a module whose port is quiet
