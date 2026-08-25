@@ -1492,25 +1492,21 @@ as a risk being carried on the strength of a loop that kept passing. That loop w
 risk is no longer hypothetical, and this section is now a bug report** — see
 [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).
 
-**The loop is no longer one die, and the third one is not like the other two — but not in a way that
-belongs to this section.** All three R5 modules on this desk now carry the same two archives and
-boot them from flash. Every graded run on 2026-08-25 came back A+ with zero failures, and the
+**The loop is no longer one die.** All three R5 modules on this desk now carry the same two archives
+and boot them from flash. Every graded run on 2026-08-25 came back A+ with zero failures, and the
 24-voice build at 56.63 MHz is clean on all three, which is what this risk wanted from a second and
 third module.
 
-Die #3 does something the other two never do: it intermittently stops delivering USB frames
-mid-capture, tens of thousands at a time. The first two occurrences were on the 32-voice build and
-looked exactly like this section coming true — the build with the least margin failing on the die
-with the least of it, in the USB path, where its failing cones are. Then the 24-voice build, which
-bets 6 % rather than 24 %, did it too on the same module, and dies #1 and #2 have never done it on
-either build through the same cable and host. So the module is the necessary ingredient and this
-section cannot claim the whole finding.
+One of them briefly looked like this section coming true. Die #3 lost tens of thousands of USB
+frames mid-capture on two 32-voice runs out of two, where the other modules lost none — the build
+with the least margin failing on the die with the least of it, in the USB path, where its failing
+cones are. It was not that. Every stall on this desk coincided with an unrelated USB device
+re-enumerating, 3 of 6 such runs against 0 of 14 quiet ones, and with the tree quiet die #3 ran ten
+times without losing a frame. [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49) has
+the working, and `test/README.md` has the rule that came out of it.
 
-It may still hold a piece of it. On die #3 the 32-voice build stalled 2 of 2 runs and the 24-voice
-build 1 of 8 — a wide enough gap to suspect that occupancy makes the stall frequent once the
-hardware makes it possible, and far too few runs to say so. That is
-[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49). Nothing about it is audible — gap
-rate 0.00 %, affected captures scoring 100 with zero glitches.
+Nothing about the bet changed, in either direction. Twenty-one graded runs across three modules say
+48.37 MHz holds on all three; the module that lost to it is still the vendor's, and still not here.
 
 The die that actually failed to enumerate is still the vendor's and is still not here.
 

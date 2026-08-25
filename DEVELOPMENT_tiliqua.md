@@ -69,7 +69,7 @@ graded automatically, everything before it by hand or by simulation.
 | **38 ✅** | **The echo tap stops spending a multiplier on a constant**, found by sweeping seeds rather than by reading the code: on the seed that won the sweep the critical path had left luna and landed in `fx.py` | **22,985 → 22,722 cells and 28/28 → 27/28 MULT18X18D** — the first spare multiplier this design has had. Re-sweeping 24 seeds on the new netlist: mean 53.15 → **53.99**, worst 49.12 → **51.60**, best **56.63** (seed 7), 6 of 24 at or above 55 where M37 had 2. On the module `xls24-76401a5-r5.tar.gz` grades **99.8/100 (A+)**, 174/1/0 — the same grade and the same lone WARN as M37, so the 2.33 MHz is margin and nothing else. `test_fx.py` is bit-exact across the change |
 | **39 ✅** | **Splitting `sync` from `usb`** (#47): the dead 120 MHz `fast` PLL output becomes 50 MHz and carries `sync`, leaving the 60 MHz ULPI constraint on the 2,429 cells that need it | **measured, and the answer is no.** 12 seeds, 10 routed: usb mean 55.26 / best **59.40** against the unsplit 53.99 / 56.63, so +1.27 and +2.77 and still FAIL at 60. The best seed's critical path is 16.84 ns over seventeen LUT levels with none of our cells in it, which makes the shortfall depth and not congestion, and hands [#34 item 3](https://github.com/kazunori279/xls32-fpga-synth/issues/34) a named location. Kept behind `XLS32_SPLIT_CLOCKS=1`, off by default |
 | **40 ✅** | **The frame counter was measuring PortAudio, not the board** (#48): `missing_frames` published 73.6 M and 83.8 M out of runs that can hold 29.7 M | **`>> 16` → `(x + 0x8000) >> 16` in `usbaudio.py`, and 22,641,160 phantom missing frames over 24 captures become 0.** CoreAudio's float32 conversion lands three LSBs either side of the written value, and ch3 carries the counter's high bits, so truncating read it 32768 cycles low — 128 frames per flip in a counter that steps 256 per frame. `rec_audio.py` had rounded all along |
-| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing. The 24-voice archive was rebuilt alongside it for the record — M39 had touched `build.sh` and `top.py` — and came back at **22,722 cells and 56.63 MHz**, its own numbers to the cell, grading 174/1/0. On 2026-08-25 that archive was graded on die #2 as well, booted from slot 7: **99.8/100 (A+), 174/1/0**, gaps 0.00 %, 0 frames missing. Later that day both archives ran on all three modules here and graded A+ on every one; die #3 drops USB frames on both builds, which is [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49) and belongs to the module rather than to either netlist |
+| **41 ✅** | **The 32-voice archive catches up** (#46): rebuilt against M37 and M38 for the first time, on a 13-seed sweep of the netlist it ships on | **46.35 → 48.37 MHz** (seed 10), 24,023 → 23,870 cells (98.9 % → 98.3 %), 28/28 → 27/28 MULT18X18D; risk 3's bet against the silicon 29 % → 24 %. Seven of thirteen seeds converged, and seed 5 — the old pin — read 46.34 on the new netlist, keeping its number and losing its rank. On die #2 from slot 6: **99.8/100 (A+), 175 pass / 0 warn / 0 fail**, the suite's first clean sweep, frame gaps 0.00 %, 0 frames missing. The 24-voice archive was rebuilt alongside it for the record — M39 had touched `build.sh` and `top.py` — and came back at **22,722 cells and 56.63 MHz**, its own numbers to the cell, grading 174/1/0. On 2026-08-25 that archive was graded on die #2 as well, booted from slot 7: **99.8/100 (A+), 174/1/0**, gaps 0.00 %, 0 frames missing. Later that day both archives ran on all three modules here, 21 graded runs, A+ on every one. Three of those runs lost USB frames and none of it was the hardware — an unrelated device re-enumerating on the same host, [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49) |
 
 > **Where the cross-board milestones went.** M20 (the `core/` + `boards/` split), M28a (a host
 > decoder bug that affected both boards), the PART chips investigation and M31 all live in
@@ -2474,21 +2474,17 @@ and `XLS32` / `b9b2345` on slot 6.
 | #2 | `E46534A193473021` |
 | #3 | `E46534A1930F2E21` |
 
-Every run graded A+ with zero failures. **Die #3 drops USB frames and the other two never do** —
-22,178 then 31,318 on the 32-voice build, then 12,998 on the 24-voice one, always over 1–2 of the
-175 captures, against 0 of 5 on dies #1 and #2. The affected case differs every time
-(`preset_sostenuto`, `stress_32voice`, `note_range`) and the audio clock spread blows out to 1–2 MHz
-against a usual 10–15 kHz, which is the same event read through the frame counter.
+Every run graded A+ with zero failures. Three of the twenty-one lost frames outright — 22,178 and
+31,318 on die #3's 32-voice runs, then 12,998 on a 24-voice one — and it took eighteen extra runs
+and three wrong answers to establish that **none of it was the hardware**. Every stall landed in a
+run during which an unrelated USB device was re-enumerating on this machine: 3 of the 6 such runs
+stalled, 0 of the 14 quiet ones did, Fisher p = 0.018. With the USB tree left alone, die #3 ran ten
+consecutive clean runs.
 
-Both builds being affected is what makes the module the necessary ingredient. The 32-voice-only
-version of this looked like [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) — least
-margin on least silicon — and the 24-voice archive at 56.63 MHz was the control. It stalled too, on
-the same cable and the same hub port, with die #1's three clean runs sitting between die #3's stalls
-in the run order, so neither the netlist alone nor the host explains it. But the rates are not
-equal: 2 of 2 on the 32-voice build, 1 of 8 on the 24-voice one. Whether occupancy makes the stall
-frequent once the hardware makes it possible is open, and two runs cannot answer it. Tracked in
-[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49). Gap rate stays 0.00 % and the
-affected captures still score 100, so none of it is audible.
+The rule that came out of it is in `test/README.md`, and the working — including why 0 of 5 on the
+other two modules was never the evidence it looked like — is in
+[#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49) and `docs/TODO.md`. Gap rate stayed
+0.00 % and the affected captures still scored 100 throughout, so none of it was ever audible.
 
 **Flashing three modules: the one-cable rule is not optional.** `--busdev-num` does not select
 between dirtyJtag probes (see below), so every flash above was done with exactly one `dbg` cable

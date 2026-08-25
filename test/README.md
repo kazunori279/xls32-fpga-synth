@@ -24,6 +24,15 @@ The board must be connected and its link free — **close the web UI's browser t
 the port through Web Serial. A full run takes several minutes (all captures with best-of-N retry,
 plus ffmpeg). Outputs land in `test/out/` (gitignored):
 
+**Leave the host's USB alone for the duration.** Plugging, unplugging or re-flashing anything else
+on the machine makes `missing_frames` non-zero — the kernel handles enumeration synchronously,
+PortAudio's callback runs late, and the device's ring is overwritten while it keeps producing. The
+threshold measured in [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9) is one callback
+period, 85 ms here, and a re-enumeration costs well over a second. This is not theoretical: it
+produced three false hardware findings before anyone checked the USB log
+([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49)). The offending device does not
+have to share a hub with the board.
+
 - `report.md` / `report.json` — per-test scores (0–100), verdicts, metrics, overall grade, plus
   what the transport measured about itself: `gap_rate_*`, `audio_clock_hz`, and
   `missing_frames_*` (frames the board produced that never arrived — the only loss no rate can

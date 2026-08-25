@@ -122,17 +122,13 @@ what happens.
 
 ## Known debt — recorded, not scheduled
 
-- **One of the three R5 modules here drops USB frames intermittently, on both builds**
-  ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), filed 2026-08-25). Die #3
-  (`E46534A1930F2E21`) stops delivering frames mid-capture — tens of thousands at a time, over 1–2
-  of the 175 captures — where dies #1 and #2 never do through the same cable and the same hub port.
-  It happens on the 24-voice archive as well as the 32-voice one, so the timing-margin reading
-  cannot carry it alone; the module's `usb2` path is the necessary ingredient. The rates are not
-  equal, though — **2 of 2 on the 32-voice build against 1 of 8 on the 24-voice one** — which leaves
-  an interaction on the table that two runs are far too few to call. Nothing about it is audible:
-  gap rate 0.00 %, affected captures scoring 100, grade unchanged at 99.8. Recorded rather than
-  scheduled because the fix is not in this repo. The full working is under "all three modules"
-  below.
+- ~~**One of the three R5 modules here drops USB frames intermittently, on both builds**~~
+  ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), filed and closed 2026-08-25).
+  **There was no module defect.** Every stall happened in a run during which some *other* USB device
+  on the machine was re-enumerating; across 20 runs, 3 of the 6 runs with a re-enumeration in them
+  stalled and 0 of the 14 quiet ones did (Fisher p = 0.018). The rule that came out of it is in
+  `test/README.md`: leave the host's USB alone while the suite runs. The full working, including
+  three hypotheses that the data killed in order, is under "all three modules" below.
 
 - ~~**The shipped Basys 3 bitstream predates both engine DC fixes, so the two boards are no longer
   bit-exact**~~ ([#41](https://github.com/kazunori279/xls32-fpga-synth/issues/41)). **Paid off
@@ -597,8 +593,8 @@ what happens.
   apfbug serial `E46534A193473021`, written down here because the multi-die claim is unverifiable
   without it and a search for that string returned nothing before today.
 
-  **2026-08-25, later: all three modules, both builds, and one of them is not like the others.**
-  Die #3 was flashed for the first time (its slots 6 and 7 held the factory `DSP-MDIFF` and
+  **2026-08-25, later: all three modules, both builds, and a day spent chasing the measuring
+  apparatus.** Die #3 was flashed for the first time (its slots 6 and 7 held the factory `DSP-MDIFF` and
   `VSYNTH`) and die #1 was brought up from M37's `9976c4e` / `f7b52c4`, so all three now carry the
   same two archives — `XLS24` / `3cc9951` on slot 7, `XLS32` / `b9b2345` on slot 6 — and every run
   below booted from flash by the documented procedure.
@@ -615,38 +611,56 @@ what happens.
   | #3 | | 32 v, again | 99.8 | 174/1/0 | **31,318 over 2 of 175** | **2156 kHz** | 80.1 |
 
   Every one of the eight runs graded A+ with zero failures, and the 24-voice build is clean on all
-  three dies. **The 32-voice build is not.** On die #3 it loses tens of thousands of frames twice in
-  a run, both times, and it does that on no other module: 2 of 2 on die #3 against 0 of 3 elsewhere
-  on the same build and 0 of 3 on the 24-voice build.
+  three dies. The 32-voice build looked like it was not: on die #3 it lost tens of thousands of
+  frames twice in a run, both times it ran, and on no other module. That reading survived thirteen
+  more runs and three revisions before it turned out to be an artefact of the desk. The sequence is
+  worth keeping, because each step was a reasonable inference from what was in hand and each one was
+  wrong.
 
-  The transport labels those losses *"the host stalled"* and keeps them out of the gap rate, which
-  is the right call for a counter discontinuity of unknown origin — but **a host stall has no reason
-  to prefer one module.** The affected case is different each time (`preset_sostenuto`, then
-  `stress_32voice`), so it is not a property of one test either. The 1–2 MHz clock spread is the
-  same event seen through the frame counter, since the counter is what the clock estimate is
-  derived from.
+  **First reading — timing margin.** 2 of 2 on die #3 against 0 of 3 elsewhere on the same build
+  and 0 of 3 on the 24-voice build. The transport labels the losses *"the host stalled"* and keeps
+  them out of the gap rate, and a host stall has no reason to prefer one module, so the shape that
+  fit was [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) coming true: the build with
+  the least margin (98.3 % occupancy, 48.37 MHz against 60) failing on the silicon with the least of
+  it, in the USB path, where its failing cones are. **Killed by:** eight runs of the 24-voice
+  archive on die #3, one of which lost 12,998 frames in `note_range`. A 6 % bet and a 24 % bet do
+  not fail the same way.
 
-  The obvious reading was margin: the build with the least of it — 98.3 % occupancy, 48.37 MHz
-  against 60 — failing on the silicon with the least of it, in the USB path, which is where its
-  failing cones are. That reading was testable, and it is wrong.
+  **Second reading — the module, with the build as an aggravator.** Die #3 now had it on both
+  bitstreams while dies #1 and #2 had it on neither, so the module was the necessary ingredient and
+  the 2-of-2 versus 1-of-8 split suggested occupancy still made it likelier. **Killed by:** six more
+  32-voice runs on die #3, all clean. 2 of 8 against 1 of 8 is Fisher p = 1.0. The build does
+  nothing.
 
-  **Later still: the 24-voice build stalls on die #3 too, so the module is the necessary
-  ingredient.** Eight runs on die #3 from slot 7, and one of them lost **12,998 frames** in
-  `note_range` with a 2169 kHz clock spread — the same signature, on the archive that closes at
-  56.63 MHz and bets 6 % rather than 24 %. Two bitstreams a milestone apart, both affected, one
-  module; dies #1 and #2 stay at 0 of 5. The cable, the hub port and the host were the same for
-  every run, and the ordering rules out host drift: die #3 stalled, then die #1 ran three times
-  clean, then die #3 stalled again. That points at die #3's own `usb2` path — the ULPI PHY, its
-  supply, or the connector. Tracked as
-  [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49).
+  **Third reading — the module alone.** Also wrong, and it should have been obvious: the comparison
+  group was five runs. At die #3's observed 3-in-16, a clean 5-run block turns up **35 %** of the
+  time, and 3/16 versus 0/5 is p = 0.55. Three write-ups treated a coin flip as a defect.
 
-  What that does **not** establish is that the build is irrelevant, and the first write-up of this
-  claimed it did. On die #3 the 32-voice archive stalled 2 of 2 and the 24-voice one 1 of 8. The
-  24-voice stall proves the 32-voice build is not *required*; it says nothing about whether the
-  32-voice build makes the stall likelier once the module allows it. Two runs cannot support a rate,
-  so the honest shape is an interaction — die #3 makes it possible, and the occupancy may make it
-  frequent — with [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3) holding a narrow
-  piece of it rather than the whole thing. Six more 32-voice runs on die #3 settle which.
+  **What it actually was.** `usb_watch.log` on this machine records every USB port transition, and
+  lining the 20 runs up against it settles it in one table: **3 of the 6 runs that contained a USB
+  re-enumeration stalled, and 0 of the 14 that did not** (Fisher p = 0.018). The source was an
+  unrelated RP2350 project being reflashed on the same desk — each BOOTSEL cycle drops the port and
+  brings it back. The unexplained third stall matches to the second: the port went away at
+  08:28:44.612 and returned at 08:28:46.215, and `die3_slot7_run3` started at 08:28:37 and lost its
+  frames in `note_range`, the second capture of the run.
+
+  The mechanism was already measured in
+  [#9](https://github.com/kazunori279/xls32-fpga-synth/issues/9): the loss needs PortAudio's callback
+  to run more than one block period late — 85 ms here — and the kernel handles enumeration
+  synchronously. The offending device was not even on the same hub, so this is scheduling latency
+  and not bus contention. The 1–2 MHz clock spread on the affected runs is the same event seen
+  through the frame counter, since the counter is what the clock estimate is derived from.
+
+  So: **no module is defective, no build is implicated, and nothing here belongs to
+  [#3](https://github.com/kazunori279/xls32-fpga-synth/issues/3).** With the USB tree quiet, die #3
+  ran ten times without losing a frame. The durable output is one line in `test/README.md` — do not
+  touch the host's USB while the suite runs — and
+  [#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49), closed with the working.
+
+  Worth naming the failure mode, because it cost most of a day: the suite prints *"the host
+  stalled"* and I read past it three times looking for a hardware story, while the log that would
+  have settled it had been running since 2026-08-16. **When an instrument names its own failure,
+  check that first.**
 
   What it is **not** is audible. Gap rate is 0.00 % on every run, the affected captures score 100
   with zero glitches, and the grade does not move. It is also not
