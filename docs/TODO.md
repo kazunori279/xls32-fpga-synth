@@ -120,7 +120,8 @@ what happens.
    run, so the check has teeth. What it does **not** cover is live Web Serial: choosing a port is a
    permission prompt behind a user gesture and cannot be driven headlessly.
 
-1. **Nobody has heard three boards through a mixer.** `host/rig.py`
+1. **Three boards have now been heard through a mixer, and the rest of the analog half has not.**
+   `host/rig.py`
    ([#52](https://github.com/kazunori279/xls32-fpga-synth/issues/52)) has been verified on the
    routing it controls and nothing further: three modules attached, a note to part 0, 4 and 8 lands
    on board 1, 2 and 3 with a clean diagonal, `send_all` lights all three, and CC7 at 0 on part 4
@@ -130,11 +131,21 @@ what happens.
    driven against the same three modules and behaves: `NBOARDS` reads 3 at load, the PART bar draws
    P1–P12 in three rows, each row's IDENTIFY sounds its own module, and all three now reach the
    mix — the last of those only after `realInputs` in `webui/static/transport.js` stopped counting
-   the macOS `deviceId: 'default'` alias as a fourth Tiliqua input. The analog half — three TRS
-   jacks into a hardware mixer, summed headroom, whether independent SI5351s drifting apart is
-   audible on a layered note — has not been set up. The host cannot close this one: a bare XLS32
-   top has no SoC to read the AK4619's calibration EEPROM, so it has never graded the jacks
-   (`ARCHITECTURE_tiliqua.md` A3). It ends with a mixer on the desk and a listener.
+   the macOS `deviceId: 'default'` alias as a fourth Tiliqua input.
+
+   **2026-08-26: the three analog outs were summed and played through a headphone amp, and it
+   sounds good.** That is the reading this entry was waiting for and it is a listener's, not an
+   instrument's — the host cannot take it, because a bare XLS32 top has no SoC to read the AK4619's
+   calibration EEPROM and has therefore never graded the jacks (`ARCHITECTURE_tiliqua.md` A3).
+
+   Two questions the take does not answer. **Summed headroom** under a full 12-part load is
+   untested, and the same day's USB capture is a warning about the shape of it: with three boards
+   summed digitally at unity, one of the three peaked at 131% and clipped, so the analog sum has a
+   gain-staging answer somewhere and nobody has found where. And **whether the three SI5351s
+   drifting apart is audible** on one note layered across boards, which is the thing that only
+   analog summing exposes — Web Audio absorbs it in the browser. It needs a sustained layered note
+   and a listener who is asked about beating specifically, rather than asked whether it sounds
+   good.
 
 ## Known debt — recorded, not scheduled
 
