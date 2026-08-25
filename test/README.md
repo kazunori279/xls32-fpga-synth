@@ -33,13 +33,21 @@ produced three false hardware findings before anyone checked the USB log
 ([#49](https://github.com/kazunori279/xls32-fpga-synth/issues/49)). The offending device does not
 have to share a hub with the board.
 
-**A hub port can also be bad on its own, and it does not look any different.** One port of the
-desk hub here loses frames with any module and any cable plugged into it, while the hub's other
-three ports are clean — so a device that comes up short is not necessarily a device
-([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). `host/probe_capture.py` is what
-tells the two apart: it opens every attached module at once and reads them over the same window,
-where a host stall shows up on all of them and a bad link shows up on one. A sequential table
-cannot make that distinction.
+**A hub port or a half-seated plug looks exactly like a broken module.** A device that comes up
+short is not necessarily a device: on this desk one hub port lost frames with any module and any
+cable in it, and after that hub was replaced a plug that was not fully home did the same thing
+until it was reseated ([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). Two
+things separate these from a module fault, and neither is a sequential table of one device's
+numbers. `host/probe_capture.py` opens every attached module at once and reads them over the same
+window — a host stall shows up on all of them, one bad link shows up on one. And `usb_watch.log`
+now covers the hub the modules sit on (bus `0-1`), so a link that is dropping and re-enumerating
+says so directly rather than arriving as missing frames:
+
+    0-1:3  ... connect [Tiliqua XLS32]  ->  0101 power connect
+
+Check the log for the run's window before swapping anything, then swap at the module end and at the
+hub end — the first moves only the module, the second only the port, so two swaps separate module,
+cable and port.
 
 **One board at a time, or say which one.** Several modules of the same build are indistinguishable
 on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one

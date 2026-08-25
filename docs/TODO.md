@@ -769,6 +769,41 @@ what happens.
   was right about the device and wrong only in reading a device index as a module — with every module
   answering to the same USB serial ([#50](https://github.com/kazunori279/xls32-fpga-synth/issues/50)),
   the index had been naming a socket the whole time.
+
+  **Same day, an hour later: replacing the hub corrected the record twice.** The verdict above is
+  left standing because the swaps that produced it are internally controlled, but two things it
+  claimed were wrong.
+
+  The first is a check that was not a check. `usb_watch` had been blind to the hub the modules sit
+  on for the entire experiment — bus `0-1` does not appear in `/tmp/usb_watch.log` until 04:54:52,
+  which is the replacement hub being plugged in, and until then the watcher was polling an unrelated
+  one. "USB tree quiet, zero transitions" was reported for all four configurations and meant nothing
+  in any of them. This is the second time in two days that a log was read as evidence without
+  checking that it covered the thing under test.
+
+  The second is the conclusion. On the new hub, **port 3 dropped the device 22 times in the first
+  few minutes** — four of them in a 75 s window with nothing capturing, so it was never subtle frame
+  loss but a link re-enumerating (`0-1:3 ... connect [Tiliqua XLS32] -> 0101 power connect`), with
+  ports 1, 2 and 4 silent throughout. One swap at the hub end between ports 2 and 3 should have sent
+  the fault to port 2 or left it on port 3. It did neither: **the symptom vanished** — 90 s idle plus
+  60 probe rounds under load, three modules, 0/60 each at 12.29 MHz, zero transitions anywhere, which
+  against the preceding ~3/min is p ≈ 1e-4.
+
+  The old hub's port 3 still looks like a real fault, and seating is the thing that was tested there
+  without anyone meaning to: config C pulled its hub-end plug and put a *different* cable in, which
+  is exactly the repair that fixed the new hub, and the port got **worse** rather than better
+  (12/12, three rounds unscorable). A half-seated plug does not survive that.
+
+  What would unify both, and has not been checked, is that the variable is the **location rather
+  than the hub** — whatever cable reaches port 3 on this desk may be the one under tension or bent
+  hard against something, and the hub-end swap that "fixed" the new hub also re-routed two cables.
+  Worth a look with the eyes before it is called a coincidence. Otherwise it cannot be resolved now
+  that the old hub is gone.
+  [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)
+  stays closed because the symptom is not reproducible and the suspect hardware is off the desk;
+  **reopen if `0-1:3` logs drops again, or if `missing_frames` returns on a module whose port is quiet
+  in `usb_watch`.** The durable gain is that the watcher can see this hub at all, so `test/README.md`'s
+  rule — read the log before forming a hypothesis — is finally enforceable for the Tiliquas.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
   module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,
