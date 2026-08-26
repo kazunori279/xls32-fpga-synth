@@ -45,7 +45,7 @@ numbers:
 ```bash
 uv run python host/probe_capture.py     # every module over the SAME window: all short = host, one = that link
 uv run python host/hub_ports.py         # PortAudio index -> hub socket, so a result can name a plug
-uv run host/usb_watch.py --out /tmp/usb_watch.log     # in ../fpga-open-vocab — see below
+uv run host/usb_watch.py --out /tmp/usb_watch.log &   # leave running — see below
 ```
 
 `usb_watch.log` covers the hub the modules sit on (bus `0-1`), so a link that is dropping says so
@@ -65,16 +65,18 @@ to it, so a clean 90-second window says nothing; what settled #51 was 3 h 19 m i
 chain, moved intact to another port, stayed silent while a chain with clean history took its place
 and dropped twice.
 
-**`usb_watch.py` is not in this repo.** It lives in the sibling
-[`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab) under `host/`, polls `uhubctl`
-and appends a line whenever a port's state changes, plus a heartbeat every 60 s so a silent stretch
-is distinguishable from a dead watcher. It is left running permanently, because a witness started
-*after* the symptom explains nothing. Clone that repo alongside this one and start it before any
-measurement session:
+**Start the watcher before the session, not after the symptom.** `host/usb_watch.py` polls
+`uhubctl` once a second and appends a line whenever a port's state changes, plus a heartbeat every
+60 s so a silent stretch is distinguishable from a dead watcher. Both faults above are gone by the
+time a run finishes, so a witness started afterwards explains nothing — leave it running:
 
 ```bash
-uv run host/usb_watch.py --out /tmp/usb_watch.log &   # from the fpga-open-vocab checkout
+brew install uhubctl                                  # the only extra dependency
+uv run host/usb_watch.py --out /tmp/usb_watch.log &
 ```
+
+It was written for the sibling [`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab)
+project and copied here, since the rule that depends on it is in this repo.
 
 ### None of the port numbers above survive a change of desk
 

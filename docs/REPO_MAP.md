@@ -75,7 +75,10 @@ addition rather than a rewrite.
   `hub_ports.py` (PortAudio index → CoreAudio UID → `locationID`, which is what turns "audio[3] is
   short" into "port 3 of the hub" — the form the answer has to be in before a plug can test it),
   `record_rig.py` (taps every module's capture stream *while the web UI holds it*, one wav per
-  board, streamed to disk off the callback thread; unequal lengths mean a dropout, not drift); and
+  board, streamed to disk off the callback thread; unequal lengths mean a dropout, not drift),
+  `usb_watch.py` (the resident witness — polls `uhubctl` and logs every port transition plus a
+  60 s heartbeat, so a short capture can be alibied against the USB tree after the fact rather than
+  guessed at; needs `brew install uhubctl`, and came from the sibling `fpga-open-vocab` repo); and
   **`host/demos/`** — the per-milestone showcase scripts (`demo*.py`).
 - **`webui/`** — the browser synth UI: a **static page** that talks to either board itself over
   Web MIDI / Web Serial, with no server behind it (`synthspec.py` is the CC map/preset source,

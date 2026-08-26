@@ -251,6 +251,7 @@ Two of those crosses are worth a sentence more before you rely on a particular h
 
 - **[`uv`](https://docs.astral.sh/uv/)** (Python env + deps): `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - **[`openFPGALoader`](https://trabucayre.github.io/openFPGALoader/)** (flash over USB-JTAG): `brew install openfpgaloader` — required for Basys 3, and for Tiliqua only if you SRAM-load your own build instead of using the web flasher (≥ 0.12.1 for the Tiliqua's `dirtyJtag` probe).
+- **[`uhubctl`](https://github.com/mvp/uhubctl)** (read USB port state): `brew install uhubctl` — only for `host/usb_watch.py`, the background witness the test suite's diagnosis rules lean on ([test/README.md](test/README.md)). Worth having before the first odd capture, not after.
 
 Then, once per checkout:
 ```bash

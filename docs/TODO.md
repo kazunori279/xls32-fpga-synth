@@ -183,13 +183,15 @@ what happens.
    - **The port-3 verdict.** If the hub comes along, the bad socket comes with it and the finding
      holds; if it does not, the finding is void and re-deriving it costs the hours #51 took.
 
-   Two dependencies are easy to leave behind. **`usb_watch.py` is not in this repo** — it lives in
-   the sibling [`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab) under `host/`,
-   along with the archived logs in its `bench/soak/`, and the whole "read the log before forming a
-   hypothesis" rule is unenforceable without it. Clone it alongside and start the watcher before the
-   first measurement, not after the first symptom. And the multi-board recorder and the port
-   resolver had been living in `/tmp`, one reboot from gone; they are now `host/record_rig.py` and
-   `host/hub_ports.py`.
+   Three tools would have been left behind, and are not any more. The multi-board recorder and the
+   port resolver had been living in `/tmp`, one reboot from gone — they are now
+   `host/record_rig.py` and `host/hub_ports.py`. And **`usb_watch.py` was in the sibling
+   [`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab) repo**, which is not coming
+   to the new machine, so it is vendored here as `host/usb_watch.py` (the archived logs in that
+   repo's `bench/soak/` are staying behind; they are history, not baselines). Without it the whole
+   "read the log before forming a hypothesis" rule is unenforceable. It needs `brew install
+   uhubctl` and no Python dependencies. Start it before the first measurement, not after the first
+   symptom.
 
    Nothing here is broken, so this is an item rather than debt — but the first `missing_frames` on
    the new desk will be read against the old desk's numbers unless someone re-measures first.
