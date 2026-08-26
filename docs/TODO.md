@@ -138,14 +138,27 @@ what happens.
    instrument's — the host cannot take it, because a bare XLS32 top has no SoC to read the AK4619's
    calibration EEPROM and has therefore never graded the jacks (`ARCHITECTURE_tiliqua.md` A3).
 
-   Two questions the take does not answer. **Summed headroom** under a full 12-part load is
-   untested, and the same day's USB capture is a warning about the shape of it: with three boards
-   summed digitally at unity, one of the three peaked at 131% and clipped, so the analog sum has a
-   gain-staging answer somewhere and nobody has found where. And **whether the three SI5351s
-   drifting apart is audible** on one note layered across boards, which is the thing that only
-   analog summing exposes — Web Audio absorbs it in the browser. It needs a sustained layered note
-   and a listener who is asked about beating specifically, rather than asked whether it sounds
-   good.
+   **Summed headroom** under a full 12-part load is what is left, and the same day's USB capture is
+   a warning about the shape of it: with three boards summed digitally at unity, one of the three
+   peaked at 131% and clipped, so the analog sum has a gain-staging answer somewhere and nobody has
+   found where.
+
+   **The other question this entry used to hold — whether the three SI5351s drifting apart is
+   audible — is answered by arithmetic, and the answer is no.** The engine's own detune ladder is
+   3¢ / 7¢ / 13¢ (`webui/synthspec.py:28`), and one cent is 578 ppm, so the smallest musically
+   audible step here is 2,890 ppm. Board-to-board clock difference is tens of ppm: 16 ppm is
+   0.03¢, 100 ppm is 0.17¢. That is 20–200× under the smallest detune the instrument offers, and
+   on A440 it is a beat of 0.007–0.044 Hz — a 23-to-142-second cycle, on notes that last seconds.
+   Nothing to hear.
+
+   Which means the ensemble width three boards do have comes from somewhere else, and the
+   candidates are worth writing down because they are the levers: **the effects are per board**, so
+   three independent Freeverbs make three different sets of reflections; twelve parts are twelve
+   tones rather than four; each board's LFO runs from its own reset so their phases are unrelated;
+   and the panel sends one message per board, so note-ons land a few ms apart. None of that has
+   been separated experimentally. The practical consequence is settled either way: reach for
+   `detune` and the per-board effects, which repeat, rather than for the clocks, which move with
+   temperature and part.
 
 ## Known debt — recorded, not scheduled
 
