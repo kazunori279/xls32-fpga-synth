@@ -738,8 +738,12 @@ what happens.
   | 17–24 | 99.787 | 12.2890 | 6.3 | 1023→1700 | 1 |
   | 25–32 | 99.787 | 12.2890 | 6.4 | 1030→1704 | 25 |
 
-  The clock's quarter-to-quarter movement is 0.2 kHz, or 16 ppb, against a within-run spread of
-  5.0–11.3 kHz — steadier over five hours than a single ten-minute run's own scatter.
+  The clock's quarter-to-quarter movement is 0.2 kHz, or **16 ppm**, against a within-run spread of
+  5.0–11.3 kHz (410–920 ppm) — steadier over five hours than a single ten-minute run's own scatter.
+  (An earlier revision of this entry said 16 ppb, which is wrong by a thousand: 200 Hz on
+  12.288 MHz is 1.6e-5.) Both figures are the board measured against the **host's** crystal, which
+  is a ±20–50 ppm part itself, so neither is an absolute accuracy. The mean sits 73 ppm above
+  nominal and nothing here can say whose error that is.
   `filter_sweep` warned in 29 of the 32 ([#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7)
   again) and its centroid is flat, so that case is not drifting either; it sits on its threshold and
   falls on both sides of it.
