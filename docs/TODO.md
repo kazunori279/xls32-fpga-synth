@@ -160,6 +160,40 @@ what happens.
    `detune` and the per-board effects, which repeat, rather than for the clocks, which move with
    temperature and part.
 
+1. **The rig is moving to another Mac, and roughly half the USB findings are about the old desk.**
+   The instrument travels intact: the bitstreams live in the modules' own SPI flash, so nothing has
+   to be rebuilt or reflashed, and a cold boot on the new machine loads the same slot with the same
+   `clk0` it always did. The repo travels too — the working tree is clean, `build/` (1.6 GB) and
+   `test/out/` (81 MB) are gitignored and regenerable, and `uv sync` plus the prerequisites in
+   [README § What you need](../README.md#what-you-need) is the whole host setup.
+
+   What does **not** travel is every number that was measured against the old host or the old hub,
+   and those are load-bearing in `test/README.md` and in the #49/#51 entries below:
+
+   - **The hub map.** `0x110000`–`0x140000`, uhubctl `0-1:1`…`0-1:4`, and the rule to use ports 1,
+     2 and 4 describe one hub on one bus. Run `uv run python host/hub_ports.py` on the new machine
+     first; bus `0-1` may not even be the Tiliqua hub there, which is the exact mistake that made
+     four "USB tree quiet" reports meaningless (#51).
+   - **PortAudio indices**, which were never identity (#50) and are now not even the same integers.
+     Re-establish which box is which by ear with `uv run python host/rig.py --identify`.
+   - **The 85 ms callback period** and the missing-frame threshold derived from it (#9).
+   - **Every absolute clock figure**, including the 73 ppm the soak found the mean sitting above
+     nominal. Those are the board measured against the *old* host's crystal, itself a ±20–50 ppm
+     part, so they were never absolute and are now not even the same reference.
+   - **The port-3 verdict.** If the hub comes along, the bad socket comes with it and the finding
+     holds; if it does not, the finding is void and re-deriving it costs the hours #51 took.
+
+   Two dependencies are easy to leave behind. **`usb_watch.py` is not in this repo** — it lives in
+   the sibling [`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab) under `host/`,
+   along with the archived logs in its `bench/soak/`, and the whole "read the log before forming a
+   hypothesis" rule is unenforceable without it. Clone it alongside and start the watcher before the
+   first measurement, not after the first symptom. And the multi-board recorder and the port
+   resolver had been living in `/tmp`, one reboot from gone; they are now `host/record_rig.py` and
+   `host/hub_ports.py`.
+
+   Nothing here is broken, so this is an item rather than debt — but the first `missing_frames` on
+   the new desk will be read against the old desk's numbers unless someone re-measures first.
+
 ## Known debt — recorded, not scheduled
 
 - **Every module reports the same USB serial, so the host cannot tell two apart**

@@ -709,6 +709,19 @@ controller retries where capture is isochronous and unprotected. The graded suit
 board at a time over USB, and that is what a board passes before it joins a rig
 ([#52](https://github.com/kazunori279/xls32-fpga-synth/issues/52)).
 
+**Recording the rig while you play it.** macOS lets a second process open a capture device the
+browser already holds, so this takes the same streams the panel is listening to — one wav per
+board, no loopback device, panel unaffected:
+
+```bash
+uv run python host/record_rig.py --out ~/take   # until Ctrl-C; --secs 30 for a fixed length
+```
+
+Boards free-run on their own clocks, so mix the files rather than expecting them sample-locked.
+Files of *unequal* length are a different thing: that is a USB dropout, the missing audio is cut out
+rather than zero-filled, and everything after the gap has shifted earlier. The tool says so when it
+sees it.
+
 ### Anything else that speaks MIDI CC
 
 The panel is convenient, not privileged. **Every control on it is one plain MIDI CC message** — no

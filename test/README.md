@@ -39,11 +39,18 @@ cables, its neighbours clean in the same windows, and the replacement hub then d
 port number — first as dropped frames, then, seven minutes later, refusing to enumerate at all
 ([#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)). **Use ports 1, 2 and 4.**
 
-Two things separate a port from a module, and neither is a sequential table of one device's
-numbers. `host/probe_capture.py` opens every attached module at once and reads them over the same
-window — a host stall shows up on all of them, one bad link shows up on one. And `usb_watch.log`
-now covers the hub the modules sit on (bus `0-1`), so a link that is dropping says so directly
-rather than arriving as missing frames, and empty brackets mean the device never answered at all:
+Three tools separate a port from a module, and none of them is a sequential table of one device's
+numbers:
+
+```bash
+uv run python host/probe_capture.py     # every module over the SAME window: all short = host, one = that link
+uv run python host/hub_ports.py         # PortAudio index -> hub socket, so a result can name a plug
+uv run host/usb_watch.py --out /tmp/usb_watch.log     # in ../fpga-open-vocab — see below
+```
+
+`usb_watch.log` covers the hub the modules sit on (bus `0-1`), so a link that is dropping says so
+directly rather than arriving as missing frames, and empty brackets mean the device never answered
+at all:
 
     0-1:3  ... connect [Tiliqua XLS32]  ->  0101 power connect
     0-1:3  0101 power connect []  ->  0111 power reset connect []
@@ -57,6 +64,28 @@ Give the swap hours, not minutes. Port 3's own log has a 40-minute quiet stretch
 to it, so a clean 90-second window says nothing; what settled #51 was 3 h 19 m in which the failing
 chain, moved intact to another port, stayed silent while a chain with clean history took its place
 and dropped twice.
+
+**`usb_watch.py` is not in this repo.** It lives in the sibling
+[`fpga-open-vocab`](https://github.com/kazunori279/fpga-open-vocab) under `host/`, polls `uhubctl`
+and appends a line whenever a port's state changes, plus a heartbeat every 60 s so a silent stretch
+is distinguishable from a dead watcher. It is left running permanently, because a witness started
+*after* the symptom explains nothing. Clone that repo alongside this one and start it before any
+measurement session:
+
+```bash
+uv run host/usb_watch.py --out /tmp/usb_watch.log &   # from the fpga-open-vocab checkout
+```
+
+### None of the port numbers above survive a change of desk
+
+Everything in this section is a fact about one hub on one Mac. Move to another machine — or another
+hub, or another set of cables — and the port numbering, the PortAudio indices and the identity of
+the bad socket all have to be re-established from scratch. What travels is the *method*: probe every
+module over one window, resolve indices to sockets, keep a running USB log, and give a swap hours
+before believing it. What does not travel is "use ports 1, 2 and 4", the `0x1N0000` map, the 85 ms
+callback period, or any absolute clock figure measured against this host's crystal. On a new host,
+run `hub_ports.py` and a few hours of `usb_watch` against an idle rig before treating any of the
+recorded numbers as a baseline.
 
 **One board at a time, or say which one.** Several modules of the same build are indistinguishable
 on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one
