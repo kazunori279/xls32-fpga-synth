@@ -832,21 +832,32 @@ what happens.
 
   Moving that chain to the free port 1, hub end only, ended it in two seconds — unplugged 05:17:44,
   enumerated 05:17:46 — and three modules on ports 1, 2 and 4 then measured **0/60 rounds each at
-  12.29 MHz with zero transitions across the 90 s window**. Same module, same cable.
+  12.29 MHz with zero transitions across the 90 s window**. The module carried over; the cable did
+  not, and nobody wrote down which one went with it.
 
   So the port is the fault on both hubs, and three explanations are dead. Cable tension was checked
   by eye and the cables re-routed, with no change. Ordinality is not it: the module on port 1 was
   the last to enumerate and is fine. Nor is it the power budget — the live modules hold
   `UsbPowerSinkAllocation = 500` each, which a bus-powered hub could not grant.
 
+  **The cable was the one thing still standing, and a swap settled it.** Ninety seconds of quiet
+  proves nothing here — the log's own history has a 40.3-minute stretch on port 3 with no
+  intervention at all (05:46:17 → 06:26:34), so any window shorter than that is a coin toss. At
+  07:04:30 the hub end alone was rewired: the suspect chain, module *and* cable untouched, moved
+  from port 3 to port 1, and a chain with clean history took its place on port 3. Over the next
+  **3 h 19 m the log holds four transitions, all of them `0-1:3`** — 08:55:21/22 and 09:48:37/39,
+  each a drop and its recovery — with ports 1 and 4 silent. The chain that had been failing is now
+  199 minutes clean, five times its old best, and the chain that had never failed broke twice as
+  soon as it sat in that socket. The fault stays with the socket when everything else moves.
+
   **The coincidence is what is left, and it is not explained.** Two hubs, the same port number, and
   on the new one a port that *degraded inside the session*: 60 clean rounds at 05:03, dead by 05:10.
   What survives is untested either way — the two hubs sharing a model and a defect, or the third
   socket on this desk taking stress that does not show from the outside. **Use ports 1, 2 and 4.**
   [#51](https://github.com/kazunori279/xls32-fpga-synth/issues/51)
-  stays closed because the symptom is not reproducible and the suspect hardware is off the desk;
-  **reopen if `0-1:3` logs drops again, or if `missing_frames` returns on a module whose port is quiet
-  in `usb_watch`.** The durable gain is that the watcher can see this hub at all, so `test/README.md`'s
+  stays closed because the fault is located and avoidable, not because it went away — port 3 is
+  still dropping devices on demand. **Reopen if a port other than 3 logs drops, or if
+  `missing_frames` returns on a module whose port is quiet in `usb_watch`.** The durable gain is that the watcher can see this hub at all, so `test/README.md`'s
   rule — read the log before forming a hypothesis — is finally enforceable for the Tiliquas.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every

@@ -53,6 +53,11 @@ hub end — the first moves only the module, the second only the port, so two sw
 cable and port. Reseating is worth a try but do not trust it: on the new hub it held for three
 minutes, and moving the same module and cable to a free port fixed it in two seconds.
 
+Give the swap hours, not minutes. Port 3's own log has a 40-minute quiet stretch with nothing done
+to it, so a clean 90-second window says nothing; what settled #51 was 3 h 19 m in which the failing
+chain, moved intact to another port, stayed silent while a chain with clean history took its place
+and dropped twice.
+
 **One board at a time, or say which one.** Several modules of the same build are indistinguishable
 on the wire — same VID, PID and `iProduct`, and a shared `iSerialNumber` — so with more than one
 attached the suite stops and lists what it found. Pick with `XLS32_AUDIO_DEV` and `XLS32_MIDI_DEV`,
