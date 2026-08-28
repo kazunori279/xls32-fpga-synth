@@ -895,6 +895,53 @@ what happens.
   still dropping devices on demand. **Reopen if a port other than 3 logs drops, or if
   `missing_frames` returns on a module whose port is quiet in `usb_watch`.** The durable gain is that the watcher can see this hub at all, so `test/README.md`'s
   rule — read the log before forming a hypothesis — is finally enforceable for the Tiliquas.
+
+  **2026-08-26, new desk, new host: 32 runs again, clean, and one figure that cannot be reported.**
+  The rig moved to a different Mac, so every clock number above was measured against a crystal this
+  host does not have. The soak was repeated to re-establish a baseline: 32 consecutive runs, 16:12
+  to 21:59 JST, 5 h 48 m, 5,600 captures, on the module in hub port 4 (`124400`). Pinning matters
+  more than it did — three modules answer to one serial and the MIDI indices had already moved
+  twice that day — so the loop names the socket by CoreAudio UID rather than by index:
+
+      for i in $(seq -w 1 32); do XLS32_AUDIO_DEV=:124400: XLS32_MIDI_DEV=1 \
+        uv run python test/run_tests.py --board tiliqua --no-reflash --skip-video \
+        > /tmp/soak/run$i.log 2>&1; done
+
+  **Every run graded A+ and `missing_frames` is 0 across all 5,600 captures**, with zero failures:
+  99.8/100 in thirty runs, 99.7 in one, 99.9 in one. Each run's banner repeats the pin it resolved
+  (`Tiliqua XLS32:124400:1,2, midi[1]`), so all 32 are the same module.
+
+  The USB log needs reading with care this time. `usb_watch` holds **984 transitions inside the
+  window**, which looks alarming and is not: every one is `0-1:5` or `0-1.2:5`, a pair of VIA
+  Billboard devices on the dock that appear and suspend a few times a minute all session. The hub
+  the modules sit on, `0-1.2.4`, has **zero transitions** over the whole 5 h 48 m. Port 3 of it
+  carried a module throughout and never dropped it — the longest clean stretch a port 3 has managed
+  here, though on a different hub, so it settles nothing about the two above.
+
+  Then the clock: **the 16 ppm comparison cannot be repeated, because the suite does not print
+  enough digits.** `run_tests.py` gives the per-run mean to three decimals (12.288 MHz, a resolution
+  of 81 ppm) and the `ratio` field to three as well (1000 ppm), one sample per run. Quarters
+  computed from that come out in ±1000 ppm steps, which is quantization and not drift. What the logs
+  do support: 29 runs read 12.288 MHz and three (11, 25, 28) read 12.287, so every run sits within
+  ±1 kHz of nominal with no monotonic trend, and the within-run spread is 14.8–27.3 kHz. **Widen the
+  format before the next soak** or its clock section will say this again.
+
+  `filter_sweep` warned in 23 of the 32, and the distribution says what it is. The 32 scores run
+  75.6 to 92.3 with no gap in them, straddling the 85 threshold; the sweep's endpoint is steady at
+  1663–1710 Hz and only its start moves, 953 to 1028 Hz. That is
+  [#7](https://github.com/kazunori279/xls32-fpga-synth/issues/7) once more, on a new host, still a
+  threshold sitting in the middle of the case's own scatter.
+
+  **The `preset_analog_low` tail thread does not reproduce.** The 08-25 soak asked for this exact
+  check — three departures in its final quarter, real if it recurred in the tail of another 32. Here
+  the case glitched twice, run 20 and run 29, three glitches each, with clip 0.0 % in all 32. One
+  mid, one late, nothing in the last three runs. Peak level does not sort them on this host either:
+  the loudest reading of the 32 (34,848, run 23) is clean and run 29 glitched at 28,432. It is a
+  case that glitches at a low rate, not one that grows with time on.
+
+  What this cannot say is which module it was. `openFPGALoader --scan-usb` is empty with no dbg
+  cable attached, so the die behind `124400` is unknown and the result is recorded against the
+  socket. Attaching one dbg cable would put it in the die table.
 - **The repo ships two Tiliqua bitstreams, and only one of them is a claim.** `xls24-r5.tar.gz` is
   the formal build — 24 voices, 93.5 % of the die, `clk` at 56.63 MHz, graded 99.8/100 (A+) on every
   module here — and belongs in **slot 7**. `xls32-r5.tar.gz` is 32 voices at 98.3 % and 48.37 MHz,
